@@ -249,7 +249,7 @@ function TaskManagementPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
-  const [selectedType, setSelectedType] = useState<TaskType | 'all'>('all')
+  const [selectedType, setSelectedType] = useState<TaskType | 'all'>('subsidy') // 기본값: 보조금
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all')
@@ -592,6 +592,18 @@ function TaskManagementPage() {
       return false // 실패 시 false 반환
     }
   }, [mobileSelectedTask])
+
+  // 필터 초기화 함수
+  const handleResetFilters = useCallback(() => {
+    setSelectedType('subsidy') // 보조금으로 리셋
+    setSelectedPriority('all')
+    setSelectedAssignee('all')
+    setSelectedStatus('all')
+    setSelectedLocalGov('all')
+    setShowOnlyNoConstructionReport(false)
+    setShowCompletedTasks(false)
+    setSearchTerm('')
+  }, [])
 
   // 업무 완료 핸들러 (다음 단계로 자동 이동)
   const handleCompleteTask = useCallback(async (taskId: string) => {
@@ -1819,15 +1831,83 @@ function TaskManagementPage() {
 
           {/* 결과 요약 */}
           <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <span>총 {filteredTasks.length}개 업무</span>
+              {/* 타입 필터 라벨 */}
               {selectedType !== 'all' && (
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                  {selectedType === 'self' ? '자비' :
-                   selectedType === 'subsidy' ? '보조금' :
-                   selectedType === 'dealer' ? '대리점' :
-                   selectedType === 'etc' ? '기타' : 'AS'}
-                </span>
+                <button
+                  onClick={() => setSelectedType('subsidy')}
+                  className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs hover:bg-blue-200 transition-colors"
+                  title="타입 필터 제거"
+                >
+                  <span>
+                    {selectedType === 'self' ? '자비' :
+                     selectedType === 'subsidy' ? '보조금' :
+                     selectedType === 'dealer' ? '대리점' :
+                     selectedType === 'etc' ? '기타' : 'AS'}
+                  </span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {/* 우선순위 필터 라벨 */}
+              {selectedPriority !== 'all' && (
+                <button
+                  onClick={() => setSelectedPriority('all')}
+                  className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs hover:bg-yellow-200 transition-colors"
+                  title="우선순위 필터 제거"
+                >
+                  <span>
+                    {selectedPriority === 'high' ? '높음' :
+                     selectedPriority === 'medium' ? '보통' : '낮음'}
+                  </span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {/* 담당자 필터 라벨 */}
+              {selectedAssignee !== 'all' && (
+                <button
+                  onClick={() => setSelectedAssignee('all')}
+                  className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs hover:bg-purple-200 transition-colors"
+                  title="담당자 필터 제거"
+                >
+                  <span>{selectedAssignee}</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {/* 업무단계 필터 라벨 */}
+              {selectedStatus !== 'all' && (
+                <button
+                  onClick={() => setSelectedStatus('all')}
+                  className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-xs hover:bg-green-200 transition-colors"
+                  title="업무단계 필터 제거"
+                >
+                  <span>{currentSteps.find(step => step.status === selectedStatus)?.label || selectedStatus}</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {/* 지자체 필터 라벨 */}
+              {selectedLocalGov !== 'all' && (
+                <button
+                  onClick={() => setSelectedLocalGov('all')}
+                  className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs hover:bg-indigo-200 transition-colors"
+                  title="지자체 필터 제거"
+                >
+                  <span>{selectedLocalGov}</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {/* 전체 필터 초기화 버튼 */}
+              {(selectedType !== 'subsidy' || selectedPriority !== 'all' || selectedAssignee !== 'all' ||
+                selectedStatus !== 'all' || selectedLocalGov !== 'all' || showOnlyNoConstructionReport ||
+                showCompletedTasks || searchTerm) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded text-xs hover:bg-red-200 transition-colors font-medium"
+                  title="모든 필터 초기화"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>전체 초기화</span>
+                </button>
               )}
             </div>
             <div className="flex items-center gap-2">
