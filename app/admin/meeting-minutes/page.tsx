@@ -16,7 +16,8 @@ import {
   FileText,
   CheckCircle2,
   Clock,
-  Archive
+  Archive,
+  Trash2
 } from 'lucide-react'
 import {
   MeetingMinute,
@@ -84,8 +85,10 @@ export default function MeetingMinutesPage() {
         params.append('search', filters.search)
       }
 
-      // API 호출 (쿠키 기반 인증 사용)
-      const response = await fetch(`/api/meeting-minutes?${params}`)
+      // API 호출 (쿠키 기반 인증 사용, 캐시 비활성화)
+      const response = await fetch(`/api/meeting-minutes?${params}`, {
+        cache: 'no-store'
+      })
       const result = await response.json()
 
       if (result.success) {
@@ -352,18 +355,52 @@ function MeetingMinuteCard({ minute, onRefresh }: MeetingMinuteCardProps) {
     archived: '보관'
   }
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation() // 카드 클릭 이벤트 전파 방지
+
+    if (!confirm(`"${minute.title}" 회의록을 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/meeting-minutes/${minute.id}`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        alert('회의록이 삭제되었습니다.')
+        onRefresh() // 목록 새로고침
+      } else {
+        alert('회의록 삭제에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('[MEETING-MINUTE] Delete error:', error)
+      alert('회의록 삭제에 실패했습니다.')
+    }
+  }
+
   return (
     <div
       onClick={() => router.push(`/admin/meeting-minutes/${minute.id}`)}
-      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-200 overflow-hidden cursor-pointer"
+      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-200 overflow-hidden cursor-pointer relative"
     >
       {/* 상태 배지 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="flex items-center justify-between p-4 pr-12 border-b border-gray-100">
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[minute.status]}`}>
           {statusLabels[minute.status]}
         </span>
         <span className="text-xs text-gray-500">{minute.meeting_type}</span>
       </div>
+
+      {/* 삭제 버튼 */}
+      <button
+        onClick={handleDelete}
+        className="absolute top-4 right-4 p-1.5 bg-white rounded-full shadow-md hover:bg-red-50 transition-colors z-10 border border-gray-200"
+        title="삭제"
+      >
+        <Trash2 className="w-4 h-4 text-red-600" />
+      </button>
 
       {/* 메인 내용 */}
       <div className="p-4 space-y-3">
@@ -414,6 +451,31 @@ function MeetingMinutesTable({ minutes, onRefresh }: MeetingMinutesTableProps) {
     archived: '보관'
   }
 
+  const handleDelete = async (e: React.MouseEvent, minute: MeetingMinute) => {
+    e.stopPropagation() // 행 클릭 이벤트 전파 방지
+
+    if (!confirm(`"${minute.title}" 회의록을 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/meeting-minutes/${minute.id}`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        alert('회의록이 삭제되었습니다.')
+        onRefresh() // 목록 새로고침
+      } else {
+        alert('회의록 삭제에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('[MEETING-MINUTE] Delete error:', error)
+      alert('회의록 삭제에 실패했습니다.')
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
@@ -434,6 +496,9 @@ function MeetingMinutesTable({ minutes, onRefresh }: MeetingMinutesTableProps) {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 상태
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                작업
               </th>
             </tr>
           </thead>
@@ -463,6 +528,15 @@ function MeetingMinutesTable({ minutes, onRefresh }: MeetingMinutesTableProps) {
                   }`}>
                     {statusLabels[minute.status]}
                   </span>
+                </td>
+                <td className="px-6 py-4 text-center">
+                  <button
+                    onClick={(e) => handleDelete(e, minute)}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                    title="삭제"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </td>
               </tr>
             ))}
