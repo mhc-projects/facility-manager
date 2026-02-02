@@ -6,6 +6,8 @@ import { TASK_STATUS_KR, TASK_TYPE_KR } from '@/lib/task-status-utils';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { logDebug, logError } from '@/lib/logger';
 import { startNewStatus } from '@/lib/task-status-history';
+// 🔧 Phase 4: 공통 매핑 모듈 import
+import { convertTaskType, getInvalidTaskTypeMessage } from '@/lib/task-type-mappings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -55,17 +57,26 @@ async function checkAdminPermission(request: NextRequest) {
 }
 
 // 한글 → 영문 코드 변환 매핑
-const REVERSE_TASK_TYPE_MAP: { [key: string]: string } = {
-  '자가': 'self',
-  '자가시설': 'self',
-  '보조금': 'subsidy',
-  '대리점': 'dealer',
-  'AS': 'as',
-  'A/S': 'as'
-};
+// 🔧 Phase 4: REVERSE_TASK_TYPE_MAP 제거 - 공통 모듈 사용으로 대체
+// 이제 lib/task-type-mappings.ts의 convertTaskType() 함수 사용
 
 // 한글 상태명 → 영문 코드 변환 (역방향 매핑)
-function getStatusCodeFromKorean(koreanStatus: string): string | null {
+// 🔧 Phase 7: "확인필요"는 업무타입에 따라 다른 코드로 변환
+function getStatusCodeFromKorean(koreanStatus: string, taskType?: string | null): string | null {
+  // 특별 처리: "확인필요"는 업무타입에 따라 다른 코드로 변환
+  if (koreanStatus === '확인필요' && taskType) {
+    const needsCheckMap: { [key: string]: string } = {
+      'self': 'self_needs_check',
+      'subsidy': 'subsidy_needs_check',
+      'as': 'as_needs_check',
+      'dealer': 'dealer_needs_check',
+      'outsourcing': 'outsourcing_needs_check',
+      'etc': 'etc_needs_check'
+    };
+    return needsCheckMap[taskType] || null;
+  }
+
+  // 일반 매핑
   for (const [code, korean] of Object.entries(TASK_STATUS_KR)) {
     if (korean === koreanStatus) {
       return code;
@@ -116,32 +127,44 @@ async function validateTask(task: ParsedTask): Promise<ValidationResult> {
     errors.push(`사업장 조회 오류: ${error.message}`);
   }
 
-  // 2. 업무타입 검증 및 변환
-  taskTypeCode = REVERSE_TASK_TYPE_MAP[task.taskType];
+  // 2. 업무타입 검증 및 변환 (🔧 Phase 4: 공통 모듈 사용)
+  taskTypeCode = convertTaskType(task.taskType);
   if (!taskTypeCode) {
-    errors.push(`업무타입 "${task.taskType}"이 유효하지 않습니다. "자가", "보조금", "AS" 중 하나를 입력하세요.`);
+    errors.push(getInvalidTaskTypeMessage(task.taskType));
   }
 
   // 3. 현재단계 검증 및 변환
-  statusCode = getStatusCodeFromKorean(task.currentStatus);
+  // 🔧 Phase 7: "확인필요" 처리를 위해 taskTypeCode 전달
+  statusCode = getStatusCodeFromKorean(task.currentStatus, taskTypeCode);
   if (!statusCode) {
     errors.push(`현재단계 "${task.currentStatus}"이 유효하지 않습니다. 입력 가이드를 참고하세요.`);
   }
 
-  // 4. 담당자 검증
-  try {
-    const employee = await queryOne(
-      'SELECT id FROM employees WHERE name = $1 AND is_active = true AND is_deleted = false',
-      [task.assignee]
-    );
+  // 4. 담당자 검증 (선택사항)
+  // 🔧 Phase 5: 담당자 필드를 선택사항으로 변경
+  if (task.assignee && task.assignee.trim() !== '') {
+    try {
+      const employee = await queryOne(
+        'SELECT id FROM employees WHERE name = $1 AND is_active = true AND is_deleted = false',
+        [task.assignee.trim()]
+      );
 
-    if (!employee) {
-      errors.push(`담당자 "${task.assignee}"를 찾을 수 없습니다`);
-    } else {
-      assigneeId = employee.id;
+      if (!employee) {
+        // 경고만 하고 계속 진행 (담당자 미지정 상태로 생성)
+        logDebug('BULK-UPLOAD', `담당자 "${task.assignee}" 찾을 수 없음 - 담당자 미지정으로 진행`, {
+          businessName: task.businessName,
+          rowNumber: task.rowNumber
+        });
+      } else {
+        assigneeId = employee.id;
+      }
+    } catch (error: any) {
+      // 조회 오류도 경고만 하고 계속 진행
+      logDebug('BULK-UPLOAD', `담당자 조회 오류 - 담당자 미지정으로 진행`, {
+        assignee: task.assignee,
+        error: error.message
+      });
     }
-  } catch (error: any) {
-    errors.push(`담당자 조회 오류: ${error.message}`);
   }
 
   return {

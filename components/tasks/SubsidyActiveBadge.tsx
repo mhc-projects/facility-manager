@@ -35,20 +35,11 @@ export default function SubsidyActiveBadge({
   taskStatus,
   taskType
 }: SubsidyActiveBadgeProps) {
-  // 디버깅: props 확인
-  console.log('🔍 [SubsidyActiveBadge] Props:', {
-    localGovernment,
-    taskStatus,
-    taskType,
-    hasActiveSubsidy: !!activeSubsidies[localGovernment || '']
-  })
-
   // 지자체 정보가 없으면 배지 표시 안 함
   if (!localGovernment) return null
 
   // 보조금 업무가 아니면 배지 표시 안 함
   if (taskType !== 'subsidy') {
-    console.log('❌ [SubsidyActiveBadge] Not subsidy task, hiding badge. taskType:', taskType)
     return null
   }
 

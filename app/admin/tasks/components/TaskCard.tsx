@@ -24,7 +24,7 @@ interface SelectedAssignee {
   team?: string
 }
 
-type TaskType = 'self' | 'subsidy' | 'etc' | 'as'
+type TaskType = 'self' | 'subsidy' | 'dealer' | 'outsourcing' | 'etc' | 'as'
 type TaskStatus = string
 type Priority = 'high' | 'medium' | 'low'
 
@@ -91,6 +91,8 @@ export default function TaskCard({ task, onClick, onEdit, onComplete, activeSubs
   const typeColors = {
     self: 'bg-blue-50 text-blue-700 border-blue-200',
     subsidy: 'bg-green-50 text-green-700 border-green-200',
+    dealer: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    outsourcing: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     as: 'bg-orange-50 text-orange-700 border-orange-200',
     etc: 'bg-gray-50 text-gray-700 border-gray-200'
   }
@@ -130,6 +132,8 @@ export default function TaskCard({ task, onClick, onEdit, onComplete, activeSubs
   const typeLabels = {
     self: '자비 설치',
     subsidy: '보조금',
+    dealer: '대리점',
+    outsourcing: '외주설치',
     as: 'AS',
     etc: '기타'
   }

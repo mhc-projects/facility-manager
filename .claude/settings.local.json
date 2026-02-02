@@ -193,7 +193,10 @@
       "Bash(npx ts-node:*)",
       "mcp__serena__search_for_pattern",
       "Bash(timeout 30 bash:*)",
-      "Bash([ -f .next/BUILD_ID ])"
+      "Bash([ -f .next/BUILD_ID ])",
+      "mcp__serena__get_current_config",
+      "mcp__serena__list_dir",
+      "mcp__serena__think_about_whether_you_are_done"
     ],
     "deny": [],
     "ask": [],

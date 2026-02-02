@@ -70,7 +70,7 @@ export interface FacilityTask {
   description?: string;
   business_name: string;
   business_id?: string;
-  task_type: 'self' | 'subsidy' | 'etc' | 'as' | 'dealer';
+  task_type: 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing';
   status: string;
   priority: 'low' | 'medium' | 'high';
   assignee?: string; // 기존 호환성 유지
@@ -292,7 +292,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     }
 
     // 업무 타입 검증
-    if (!['self', 'subsidy'].includes(task_type)) {
+    if (!['self', 'subsidy', 'as', 'dealer', 'outsourcing', 'etc'].includes(task_type)) {
       return createErrorResponse('유효하지 않은 업무 타입입니다', 400);
     }
 
@@ -1273,6 +1273,8 @@ async function createTaskCreationNote(task: any) {
       'self': '자비 설치',
       'subsidy': '보조금',
       'as': 'AS',
+      'dealer': '대리점',
+      'outsourcing': '외주설치',
       'etc': '기타'
     };
 

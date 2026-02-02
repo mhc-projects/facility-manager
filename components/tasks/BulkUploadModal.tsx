@@ -3,6 +3,9 @@
 import { useState, useRef } from 'react'
 import { X, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { TokenManager } from '@/lib/api-client'
+// 🔧 Phase 4: 공통 매핑 모듈 import
+import { isValidTaskType, EXCEL_ALLOWED_TASK_TYPES, getInvalidTaskTypeMessage } from '@/lib/task-type-mappings'
 
 interface BulkUploadModalProps {
   onClose: () => void
@@ -33,7 +36,7 @@ export default function BulkUploadModal({ onClose, onSuccess }: BulkUploadModalP
     // Sheet 1: 데이터 입력 시트
     const dataSheet = [
       ['사업장명', '업무타입', '현재단계', '담당자', '메모'],
-      ['예시사업장', '자가', '고객 상담', '김철수', '첫 번째 업무 등록'],
+      ['예시사업장', '자비', '고객 상담', '김철수', '첫 번째 업무 등록'],
       ['', '', '', '', '']
     ]
     const ws1 = XLSX.utils.aoa_to_sheet(dataSheet)
@@ -55,28 +58,51 @@ export default function BulkUploadModal({ onClose, onSuccess }: BulkUploadModalP
       ['  - 시스템에 등록된 정확한 사업장명을 입력하세요'],
       ['  - 예: "서울지점", "부산센터" 등'],
       [''],
-      ['2. 업무타입'],
+      ['2. 업무타입 (선택사항)'],
       ['  - 다음 중 하나를 정확히 입력하세요:'],
-      ['    • 자가 (자가시설 업무)'],
+      ['    • 자비 (자비시설 업무)'],
       ['    • 보조금 (보조금 업무)'],
       ['    • AS (A/S 업무)'],
+      ['    • 대리점 (대리점 업무)'],
+      ['    • 외주설치 (외주설치 업무)'],
+      ['    • 기타 (기타 업무)'],
+      [''],
+      ['  ⚠️ 주의: "자가"와 "자비"는 동일하게 처리됩니다'],
       [''],
       ['3. 현재단계'],
       ['  - 업무타입에 따라 유효한 단계명을 입력하세요:'],
       [''],
+      ['  ⚠️ 모든 업무 타입에서 "확인필요"를 첫 단계로 사용 가능'],
+      ['  💡 신규 업무 등록 시 "확인필요" 사용을 권장합니다'],
+      [''],
       ['  [자가시설 단계]'],
+      ['  • 확인필요 (신규 업무 등록 시 권장)'],
       ['  • 고객 상담, 현장 실사, 견적서 작성, 계약 체결, 계약금 확인'],
       ['  • 제품 발주, 제품 출고, 설치예정, 설치완료, 잔금 입금, 서류 발송 완료'],
       [''],
       ['  [보조금 단계]'],
+      ['  • 확인필요 (신규 업무 등록 시 권장)'],
       ['  • 신청서 작성 필요, 신청서 제출, 보조금 승인대기, 보조금 승인, 보조금 탈락'],
       ['  • 신청서 보완, 착공 전 실사, 착공 보완 1차, 착공 보완 2차, 착공신고서 제출'],
       ['  • 준공도서 작성 필요, 준공 실사, 준공 보완 1차, 준공 보완 2차, 준공 보완 3차'],
       ['  • 보조금지급신청서 제출, 보조금 입금'],
       [''],
       ['  [A/S 단계]'],
+      ['  • 확인필요 (신규 업무 등록 시 권장)'],
       ['  • AS 고객 상담, AS 현장 확인, AS 견적 작성'],
       ['  • AS 계약 체결, AS 부품 발주, AS 완료'],
+      [''],
+      ['  [대리점 단계]'],
+      ['  • 확인필요 (신규 업무 등록 시 권장)'],
+      ['  • 발주 수신, 계산서 발행, 입금 확인, 제품 발주'],
+      [''],
+      ['  [외주설치 단계]'],
+      ['  • 확인필요 (신규 업무 등록 시 권장)'],
+      ['  • 외주 발주, 일정 조율, 설치 진행중, 설치 완료'],
+      [''],
+      ['  [기타 단계]'],
+      ['  • 확인필요 (신규 업무 등록 시 권장)'],
+      ['  • 기타'],
       [''],
       ['4. 담당자'],
       ['  - 시스템에 등록된 사용자명을 입력하세요'],
@@ -155,23 +181,14 @@ export default function BulkUploadModal({ onClose, onSuccess }: BulkUploadModalP
             validationErrors: []
           }
 
-          // 기본 유효성 검사
+          // 기본 유효성 검사 - 사업장명만 필수
           if (!task.businessName) {
             task.validationErrors.push('사업장명 필수')
           }
-          if (!task.taskType) {
-            task.validationErrors.push('업무타입 필수')
-          }
-          if (!task.currentStatus) {
-            task.validationErrors.push('현재단계 필수')
-          }
-          if (!task.assignee) {
-            task.validationErrors.push('담당자 필수')
-          }
 
-          // 업무타입 검증
-          if (task.taskType && !['자가', '보조금', 'AS'].includes(task.taskType)) {
-            task.validationErrors.push('업무타입은 "자가", "보조금", "AS" 중 하나여야 합니다')
+          // 🔧 Phase 4: 공통 매핑 모듈 사용
+          if (task.taskType && !isValidTaskType(task.taskType)) {
+            task.validationErrors.push(getInvalidTaskTypeMessage(task.taskType))
           }
 
           tasks.push(task)
@@ -211,34 +228,122 @@ export default function BulkUploadModal({ onClose, onSuccess }: BulkUploadModalP
     setIsUploading(true)
 
     try {
-      const response = await fetch('/api/admin/tasks/bulk-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ tasks: parsedTasks })
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || '업로드 실패')
+      const token = TokenManager.getToken()
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
       }
 
-      // 새로운 응답 구조에 맞춘 메시지 생성
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      // 🔧 Phase 6: 청크 단위 업로드 (50개씩 분할)
+      const CHUNK_SIZE = 50
+      const chunks: ParsedTask[][] = []
+      for (let i = 0; i < parsedTasks.length; i += CHUNK_SIZE) {
+        chunks.push(parsedTasks.slice(i, i + CHUNK_SIZE))
+      }
+
+      console.log(`📦 [BULK-UPLOAD] 총 ${parsedTasks.length}개 업무를 ${chunks.length}개 청크로 분할 처리`)
+
+      // 전체 결과 누적
+      let totalResults = {
+        totalCount: 0,
+        successCount: 0,
+        newCount: 0,
+        updateCount: 0,
+        skipCount: 0,
+        failCount: 0,
+        results: [] as any[]
+      }
+
+      // 청크별 순차 처리
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i]
+        const chunkNumber = i + 1
+
+        // 진행률 표시
+        setIsUploading(`업로드 중... (${chunkNumber}/${chunks.length})`)
+        console.log(`📤 [BULK-UPLOAD] Chunk ${chunkNumber}/${chunks.length} 처리 중 (${chunk.length}개)`)
+
+        const response = await fetch('/api/admin/tasks/bulk-upload', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ tasks: chunk })
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          console.error(`❌ [BULK-UPLOAD] Chunk ${chunkNumber} 실패:`, result)
+          throw new Error(result.error || `Chunk ${chunkNumber} 업로드 실패`)
+        }
+
+        // 🔧 Phase 5: result.data로 접근 (createSuccessResponse가 data로 감쌈)
+        const chunkResult = result.data || result
+
+        // 디버깅: 응답 구조 확인
+        if (chunkNumber === 1) {
+          console.log('📥 [BULK-UPLOAD] API 응답 구조:', result)
+          console.log('📥 [BULK-UPLOAD] 파싱된 데이터:', chunkResult)
+        }
+
+        // 결과 누적
+        totalResults.totalCount += chunkResult.totalCount || 0
+        totalResults.successCount += chunkResult.successCount || 0
+        totalResults.newCount += chunkResult.newCount || 0
+        totalResults.updateCount += chunkResult.updateCount || 0
+        totalResults.skipCount += chunkResult.skipCount || 0
+        totalResults.failCount += chunkResult.failCount || 0
+        totalResults.results.push(...(chunkResult.results || []))
+
+        console.log(`✅ [BULK-UPLOAD] Chunk ${chunkNumber} 완료: 성공 ${chunkResult.successCount}개, 실패 ${chunkResult.failCount}개`)
+      }
+
+      console.log('🎉 [BULK-UPLOAD] 전체 업로드 완료:', totalResults)
+
+      // 🔧 Phase 3: 상세한 결과 메시지 생성
       const successMessage = [
-        `✅ 총 ${result.successCount || 0}개 업무 처리 완료`,
-        result.newCount > 0 ? `   • 신규 생성: ${result.newCount}개` : null,
-        result.updateCount > 0 ? `   • 업데이트: ${result.updateCount}개` : null,
-        result.skipCount > 0 ? `   • 건너뛰기: ${result.skipCount}개` : null,
-        result.failCount > 0 ? `\n⚠️ ${result.failCount}개 업무 실패` : null
+        `📊 업로드 결과 (총 ${totalResults.totalCount}개)`,
+        '',
+        `✅ 성공: ${totalResults.successCount}개`,
+        totalResults.newCount > 0 ? `   └─ 신규 생성: ${totalResults.newCount}개` : null,
+        totalResults.updateCount > 0 ? `   └─ 업데이트: ${totalResults.updateCount}개` : null,
+        totalResults.skipCount > 0 ? `⏭️  건너뛰기: ${totalResults.skipCount}개 (이미 등록됨)` : null,
+        totalResults.failCount > 0 ? `❌ 실패: ${totalResults.failCount}개` : null,
+        '',
+        totalResults.failCount > 0 ? `⚠️ 실패한 항목은 개발자 도구(F12) 콘솔에서 확인하세요` : null
       ].filter(Boolean).join('\n')
+
+      // 🔧 Phase 3: 실패 항목 상세 정보를 콘솔에 출력
+      if (totalResults.failCount > 0 && totalResults.results) {
+        const failedItems = totalResults.results
+          .filter((r: any) => r.action === 'failed')
+          .map((item: any) => ({
+            행번호: item.row,
+            사업장: item.businessName,
+            업무타입: item.taskType || '-',
+            현재단계: item.currentStatus || '-',
+            담당자: item.assignee || '-',
+            오류내용: Array.isArray(item.errors) ? item.errors.join(', ') : (item.error || '알 수 없는 오류')
+          }));
+
+        console.group('❌ 업로드 실패 항목 상세');
+        console.table(failedItems);
+        console.groupEnd();
+
+        console.log('💡 실패 원인 해결 방법:');
+        console.log('1. 사업장명: DB에 등록된 정확한 이름 확인');
+        console.log('2. 업무타입: "자비", "보조금", "AS", "대리점", "외주설치", "기타" 중 하나');
+        console.log('3. 담당자: 선택사항 (비어있어도 됨)');
+        console.log('4. 현재단계: 업무타입에 맞는 올바른 단계명 입력');
+      }
 
       alert(successMessage)
       onSuccess()
       onClose()
     } catch (error: any) {
-      console.error('Upload error:', error)
+      console.error('❌ [BULK-UPLOAD] 업로드 오류:', error)
       alert(`업로드 중 오류가 발생했습니다: ${error.message}`)
     } finally {
       setIsUploading(false)
@@ -362,8 +467,19 @@ export default function BulkUploadModal({ onClose, onSuccess }: BulkUploadModalP
                             <div className="flex items-start gap-1 text-red-600">
                               <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                               <div className="text-xs">
+                                {/* 🔧 Phase 2: 오류 타입별 아이콘 표시 */}
                                 {task.validationErrors.map((err, i) => (
-                                  <div key={i}>{err}</div>
+                                  <div key={i} className="mb-1 flex items-start gap-1">
+                                    {/* 오류 타입에 따른 아이콘 */}
+                                    <span className="flex-shrink-0">
+                                      {err.includes('업무타입') && '🏷️'}
+                                      {err.includes('사업장') && '🏢'}
+                                      {err.includes('담당자') && '👤'}
+                                      {err.includes('현재단계') && '📋'}
+                                      {err.includes('필수') && '⚠️'}
+                                    </span>
+                                    <span>{err}</span>
+                                  </div>
                                 ))}
                               </div>
                             </div>

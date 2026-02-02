@@ -9,7 +9,7 @@ interface SelectedAssignee {
   team?: string
 }
 
-type TaskType = 'self' | 'subsidy' | 'etc' | 'as'
+type TaskType = 'self' | 'subsidy' | 'dealer' | 'outsourcing' | 'etc' | 'as'
 type TaskStatus = string
 type Priority = 'high' | 'medium' | 'low'
 

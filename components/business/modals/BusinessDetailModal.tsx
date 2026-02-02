@@ -1059,6 +1059,8 @@ export default function BusinessDetailModal({
                               ? 'bg-purple-100 text-purple-800 border-purple-200'
                               : business.progress_status === '대리점'
                               ? 'bg-cyan-100 text-cyan-800 border-cyan-200'
+                              : business.progress_status === '외주설치'
+                              ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
                               : business.progress_status === 'AS'
                               ? 'bg-orange-100 text-orange-800 border-orange-200'
                               : 'bg-gray-100 text-gray-600 border-gray-200'

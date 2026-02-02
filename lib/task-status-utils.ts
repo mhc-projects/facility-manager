@@ -4,6 +4,14 @@
 
 // 업무 상태 한글 매핑
 export const TASK_STATUS_KR: { [key: string]: string } = {
+  // 확인필요 단계 (각 업무 타입별)
+  'self_needs_check': '확인필요',
+  'subsidy_needs_check': '확인필요',
+  'as_needs_check': '확인필요',
+  'dealer_needs_check': '확인필요',
+  'outsourcing_needs_check': '확인필요',
+  'etc_needs_check': '확인필요',
+
   // 자비 업무 단계
   'customer_contact': '고객 상담',
   'site_inspection': '현장 실사',

@@ -3681,6 +3681,8 @@ function BusinessManagementPage() {
               return 'bg-emerald-100 text-emerald-800 border-emerald-200'
             case '대리점':
               return 'bg-cyan-100 text-cyan-800 border-cyan-200'
+            case '외주설치':
+              return 'bg-indigo-100 text-indigo-800 border-indigo-200'
             case 'AS':
               return 'bg-orange-100 text-orange-800 border-orange-200'
             case '진행불가':
@@ -4692,6 +4694,7 @@ function BusinessManagementPage() {
                         <option value="보조금 동시진행">보조금 동시진행</option>
                         <option value="보조금 추가승인">보조금 추가승인</option>
                         <option value="대리점">대리점</option>
+                        <option value="외주설치">외주설치</option>
                         <option value="AS">AS</option>
                         <option value="진행불가">진행불가</option>
                         <option value="확인필요">확인필요</option>

@@ -115,6 +115,8 @@ export default function TaskMobileModal({
     self: '자비 설치',
     subsidy: '보조금',
     as: 'AS',
+    dealer: '대리점',
+    outsourcing: '외주설치',
     etc: '기타'
   }
 

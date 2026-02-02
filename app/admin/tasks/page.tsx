@@ -51,10 +51,12 @@ import {
 } from 'lucide-react'
 
 // 업무 타입 정의
-type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer'
+type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing'
 type TaskStatus =
   // 공통 단계
   | 'pending' | 'site_survey' | 'customer_contact' | 'site_inspection' | 'quotation' | 'contract'
+  // 확인필요 단계 (각 업무 타입별)
+  | 'self_needs_check' | 'subsidy_needs_check' | 'as_needs_check' | 'dealer_needs_check' | 'outsourcing_needs_check' | 'etc_needs_check'
   // 자비 단계
   | 'deposit_confirm' | 'product_order' | 'product_shipment' | 'installation_schedule'
   | 'installation' | 'balance_payment' | 'document_complete'
@@ -74,6 +76,8 @@ type TaskStatus =
   // 대리점 단계 (단순화)
   | 'dealer_order_received' | 'dealer_invoice_issued'
   | 'dealer_payment_confirmed' | 'dealer_product_ordered'
+  // 외주설치 단계
+  | 'outsourcing_order' | 'outsourcing_schedule' | 'outsourcing_in_progress' | 'outsourcing_completed'
   // 기타 단계
   | 'etc_status'
 
@@ -134,6 +138,7 @@ interface BusinessOption {
 
 // 상태별 단계 정의 (자비)
 const selfSteps: Array<{status: TaskStatus, label: string, color: string}> = [
+  { status: 'self_needs_check', label: '확인필요', color: 'red' },
   { status: 'customer_contact', label: '고객 상담', color: 'blue' },
   { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
   { status: 'quotation', label: '견적서 작성', color: 'orange' },
@@ -149,6 +154,7 @@ const selfSteps: Array<{status: TaskStatus, label: string, color: string}> = [
 
 // 상태별 단계 정의 (보조금)
 const subsidySteps: Array<{status: TaskStatus, label: string, color: string}> = [
+  { status: 'subsidy_needs_check', label: '확인필요', color: 'red' },
   { status: 'customer_contact', label: '고객 상담', color: 'blue' },
   { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
   { status: 'quotation', label: '견적서 작성', color: 'orange' },
@@ -186,11 +192,13 @@ const subsidySteps: Array<{status: TaskStatus, label: string, color: string}> = 
 
 // 상태별 단계 정의 (기타)
 const etcSteps: Array<{status: TaskStatus, label: string, color: string}> = [
+  { status: 'etc_needs_check', label: '확인필요', color: 'red' },
   { status: 'etc_status', label: '기타', color: 'gray' }
 ]
 
 // 상태별 단계 정의 (AS)
 const asSteps: Array<{status: TaskStatus, label: string, color: string}> = [
+  { status: 'as_needs_check', label: '확인필요', color: 'red' },
   { status: 'as_customer_contact', label: 'AS 고객 상담', color: 'blue' },
   { status: 'as_site_inspection', label: 'AS 현장 확인', color: 'yellow' },
   { status: 'as_quotation', label: 'AS 견적 작성', color: 'orange' },
@@ -201,10 +209,20 @@ const asSteps: Array<{status: TaskStatus, label: string, color: string}> = [
 
 // 상태별 단계 정의 (대리점) - 단순화
 const dealerSteps: Array<{status: TaskStatus, label: string, color: string}> = [
+  { status: 'dealer_needs_check', label: '확인필요', color: 'red' },
   { status: 'dealer_order_received', label: '발주 수신', color: 'blue' },
   { status: 'dealer_invoice_issued', label: '계산서 발행', color: 'yellow' },
   { status: 'dealer_payment_confirmed', label: '입금 확인', color: 'green' },
   { status: 'dealer_product_ordered', label: '제품 발주', color: 'emerald' }
+]
+
+// 상태별 단계 정의 (외주설치)
+const outsourcingSteps: Array<{status: TaskStatus, label: string, color: string}> = [
+  { status: 'outsourcing_needs_check', label: '확인필요', color: 'red' },
+  { status: 'outsourcing_order', label: '외주 발주', color: 'blue' },
+  { status: 'outsourcing_schedule', label: '일정 조율', color: 'yellow' },
+  { status: 'outsourcing_in_progress', label: '설치 진행 중', color: 'orange' },
+  { status: 'outsourcing_completed', label: '설치 완료', color: 'green' }
 ]
 
 // 진행률 자동 계산 함수
@@ -212,6 +230,7 @@ const calculateProgressPercentage = (type: TaskType, status: TaskStatus): number
   const steps = type === 'self' ? selfSteps :
                 type === 'subsidy' ? subsidySteps :
                 type === 'dealer' ? dealerSteps :
+                type === 'outsourcing' ? outsourcingSteps :
                 type === 'etc' ? etcSteps : asSteps
 
   const currentStepIndex = steps.findIndex(step => step.status === status)
@@ -1862,7 +1881,7 @@ function TaskManagementPage() {
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800 w-32 sm:w-80 max-w-32 sm:max-w-80">업무 설명</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">업무 단계</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">담당자</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">상태</th>
+                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">업무 타입</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">우선순위</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">마감일</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">작업</th>
@@ -1873,6 +1892,7 @@ function TaskManagementPage() {
                     const step = (task.type === 'self' ? selfSteps :
                                    task.type === 'subsidy' ? subsidySteps :
                                    task.type === 'dealer' ? dealerSteps :
+                                   task.type === 'outsourcing' ? outsourcingSteps :
                                    task.type === 'etc' ? etcSteps : asSteps).find(s => s.status === task.status)
                     return (
                       <tr
@@ -1943,12 +1963,18 @@ function TaskManagementPage() {
                               ? 'bg-blue-100 text-blue-800'
                               : task.type === 'subsidy'
                               ? 'bg-purple-100 text-purple-800'
+                              : task.type === 'dealer'
+                              ? 'bg-cyan-100 text-cyan-800'
+                              : task.type === 'outsourcing'
+                              ? 'bg-indigo-100 text-indigo-800'
                               : task.type === 'etc'
                               ? 'bg-gray-100 text-gray-800'
                               : 'bg-orange-100 text-orange-800'
                           }`}>
                             {task.type === 'self' ? '자비' :
                              task.type === 'subsidy' ? '보조금' :
+                             task.type === 'dealer' ? '대리점' :
+                             task.type === 'outsourcing' ? '외주설치' :
                              task.type === 'etc' ? '기타' : 'AS'}
                           </span>
                         </td>
@@ -2237,12 +2263,18 @@ function TaskManagementPage() {
                       ? 'bg-blue-100 text-blue-800'
                       : createTaskForm.type === 'subsidy'
                       ? 'bg-purple-100 text-purple-800'
+                      : createTaskForm.type === 'dealer'
+                      ? 'bg-cyan-100 text-cyan-800'
+                      : createTaskForm.type === 'outsourcing'
+                      ? 'bg-indigo-100 text-indigo-800'
                       : createTaskForm.type === 'etc'
                       ? 'bg-gray-100 text-gray-800'
                       : 'bg-orange-100 text-orange-800'
                   }`}>
                     {createTaskForm.type === 'self' ? '자비' :
                      createTaskForm.type === 'subsidy' ? '보조금' :
+                     createTaskForm.type === 'dealer' ? '대리점' :
+                     createTaskForm.type === 'outsourcing' ? '외주설치' :
                      createTaskForm.type === 'etc' ? '기타' : 'AS'}
                   </span>
 
@@ -2280,6 +2312,8 @@ function TaskManagementPage() {
                     <p className="text-xs sm:text-xs font-medium text-gray-900 truncate">
                       {createTaskForm.type === 'self' ? '자비' :
                        createTaskForm.type === 'subsidy' ? '보조금' :
+                       createTaskForm.type === 'dealer' ? '대리점' :
+                       createTaskForm.type === 'outsourcing' ? '외주설치' :
                        createTaskForm.type === 'etc' ? '기타' : 'AS'}
                     </p>
                   </div>
@@ -2376,6 +2410,7 @@ function TaskManagementPage() {
                       <option value="self">자비</option>
                       <option value="subsidy">보조금</option>
                       <option value="dealer">대리점</option>
+                      <option value="outsourcing">외주설치</option>
                       <option value="as">AS</option>
                       <option value="etc">기타</option>
                     </select>
@@ -2410,6 +2445,7 @@ function TaskManagementPage() {
                     {(createTaskForm.type === 'self' ? selfSteps :
                      createTaskForm.type === 'subsidy' ? subsidySteps :
                      createTaskForm.type === 'dealer' ? dealerSteps :
+                     createTaskForm.type === 'outsourcing' ? outsourcingSteps :
                      createTaskForm.type === 'etc' ? etcSteps : asSteps).map(step => (
                       <option key={step.status} value={step.status}>{step.label}</option>
                     ))}
@@ -2532,12 +2568,18 @@ function TaskManagementPage() {
                       ? 'bg-blue-100 text-blue-800'
                       : editingTask.type === 'subsidy'
                       ? 'bg-purple-100 text-purple-800'
+                      : editingTask.type === 'dealer'
+                      ? 'bg-cyan-100 text-cyan-800'
+                      : editingTask.type === 'outsourcing'
+                      ? 'bg-indigo-100 text-indigo-800'
                       : editingTask.type === 'etc'
                       ? 'bg-gray-100 text-gray-800'
                       : 'bg-orange-100 text-orange-800'
                   }`}>
                     {editingTask.type === 'self' ? '자비' :
                      editingTask.type === 'subsidy' ? '보조금' :
+                     editingTask.type === 'dealer' ? '대리점' :
+                     editingTask.type === 'outsourcing' ? '외주설치' :
                      editingTask.type === 'etc' ? '기타' : 'AS'}
                   </span>
 
@@ -2589,6 +2631,7 @@ function TaskManagementPage() {
                       {(editingTask.type === 'self' ? selfSteps :
                        editingTask.type === 'subsidy' ? subsidySteps :
                        editingTask.type === 'dealer' ? dealerSteps :
+                       editingTask.type === 'outsourcing' ? outsourcingSteps :
                        editingTask.type === 'etc' ? etcSteps : asSteps)
                        .find(s => s.status === editingTask.status)?.label || editingTask.status}
                     </p>
@@ -2698,6 +2741,7 @@ function TaskManagementPage() {
                       <option value="self">자비</option>
                       <option value="subsidy">보조금</option>
                       <option value="dealer">대리점</option>
+                      <option value="outsourcing">외주설치</option>
                       <option value="as">AS</option>
                       <option value="etc">기타</option>
                     </select>
@@ -2732,6 +2776,7 @@ function TaskManagementPage() {
                     {(editingTask.type === 'self' ? selfSteps :
                      editingTask.type === 'subsidy' ? subsidySteps :
                      editingTask.type === 'dealer' ? dealerSteps :
+                     editingTask.type === 'outsourcing' ? outsourcingSteps :
                      editingTask.type === 'etc' ? etcSteps : asSteps).map(step => (
                       <option key={step.status} value={step.status}>{step.label}</option>
                     ))}
