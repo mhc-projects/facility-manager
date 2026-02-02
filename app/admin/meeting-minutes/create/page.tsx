@@ -389,27 +389,27 @@ export default function CreateMeetingMinutePage() {
 
             {/* 참석자 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold text-gray-900">참석자</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-gray-900">참석자</h2>
                 <button
                   onClick={handleAddParticipant}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3 h-3" />
                   <span>추가</span>
                 </button>
               </div>
 
               {participants.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-4 text-gray-500 text-sm">
                   참석자를 추가해주세요
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-1.5">
                   {participants.map((participant, index) => (
-                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
                       {/* 이름 자동완성 입력 */}
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <AutocompleteSelectInput
                           value={participant.employee_id || ''}
                           onChange={(selectedId, selectedName) => {
@@ -443,45 +443,41 @@ export default function CreateMeetingMinutePage() {
                             id: e.id,
                             name: `${e.name} (${e.department || ''} ${e.position || ''})`.trim()
                           }))}
-                          placeholder="참석자 이름 검색 또는 입력..."
+                          placeholder="이름..."
                           allowCustomValue={true}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
 
-                      {/* 직책/구분 배지 */}
+                      {/* 직책/구분 배지 - 컴팩트 */}
                       {participant.name && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {participant.is_internal ? (
-                            <>
-                              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">내부</span>
-                              {participant.role && (
-                                <span className="text-sm text-gray-600">{participant.role}</span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-xs font-medium text-gray-600 bg-gray-200 px-2 py-1 rounded">외부</span>
-                          )}
-                        </div>
+                        <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${
+                          participant.is_internal
+                            ? 'text-blue-600 bg-blue-50'
+                            : 'text-gray-600 bg-gray-200'
+                        }`}>
+                          {participant.is_internal ? '내부' : '외부'}
+                        </span>
                       )}
 
-                      {/* 참석 체크박스 */}
-                      <label className="flex items-center gap-2 text-sm text-gray-700 whitespace-nowrap flex-shrink-0">
+                      {/* 참석 체크박스 - 컴팩트 */}
+                      <label className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
                         <input
                           type="checkbox"
                           checked={participant.attended}
                           onChange={(e) => handleUpdateParticipant(index, 'attended', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500"
                         />
                         <span>참석</span>
                       </label>
 
-                      {/* 삭제 버튼 */}
+                      {/* 삭제 버튼 - 컴팩트 */}
                       <button
                         onClick={() => handleRemoveParticipant(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="삭제"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}

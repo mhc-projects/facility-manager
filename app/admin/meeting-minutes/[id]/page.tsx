@@ -36,7 +36,9 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
     try {
       setLoading(true)
 
-      const response = await fetch(`/api/meeting-minutes/${params.id}`)
+      const response = await fetch(`/api/meeting-minutes/${params.id}`, {
+        cache: 'no-store'  // 캐시 비활성화로 항상 최신 데이터 표시
+      })
       const result = await response.json()
 
       if (result.success) {
@@ -195,32 +197,32 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
         </div>
 
         {/* 참석자 */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center gap-2 mb-4">
-            <Users className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">참석자</h2>
-            <span className="text-sm text-gray-500">({minute.participants.length}명)</span>
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center gap-1.5 mb-3">
+            <Users className="w-4 h-4 text-blue-600" />
+            <h2 className="text-sm font-semibold text-gray-900">참석자</h2>
+            <span className="text-xs text-gray-500">({minute.participants.length}명)</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {minute.participants.map((participant, index) => (
               <div
                 key={index}
-                className={`flex items-center gap-3 p-3 rounded-lg border ${
+                className={`flex items-center gap-2 p-2 rounded-lg border ${
                   participant.attended
                     ? 'bg-green-50 border-green-200'
                     : 'bg-gray-50 border-gray-200'
                 }`}
               >
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
+                <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">
                   {participant.name[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{participant.name}</div>
-                  <div className="text-sm text-gray-500">{participant.role}</div>
+                  <div className="text-xs font-medium text-gray-900 truncate">{participant.name}</div>
+                  <div className="text-[10px] text-gray-500">{participant.role}</div>
                 </div>
                 {participant.attended && (
-                  <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                 )}
               </div>
             ))}
@@ -239,7 +241,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+                    <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{item.description}</p>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                       {item.assignee_name && (
                         <span>담당자: {item.assignee_name}</span>

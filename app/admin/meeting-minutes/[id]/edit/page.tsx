@@ -273,14 +273,17 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        cache: 'no-store'  // 캐시 비활성화로 항상 최신 데이터 반영
       })
 
       const result = await response.json()
 
       if (result.success) {
         alert('회의록이 수정되었습니다.')
+        // 페이지 새로고침 후 상세 페이지로 이동 (수정 내용 즉시 반영)
         router.push(`/admin/meeting-minutes/${params.id}`)
+        router.refresh()  // Next.js 캐시 강제 새로고침
       } else {
         alert(`수정 실패: ${result.error}`)
       }
@@ -419,107 +422,93 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
 
             {/* 참석자 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                  <UsersIcon className="w-5 h-5" />
-                  참석자 ({participants.length}명)
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                  <UsersIcon className="w-4 h-4" />
+                  참석자 ({participants.length})
                 </h2>
                 <button
                   onClick={handleAddParticipant}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3 h-3" />
                   <span>추가</span>
                 </button>
               </div>
 
               {participants.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                <div className="text-center py-4 text-gray-500 text-sm">
                   참석자를 추가해주세요
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {participants.map((participant, index) => {
-                    // 🔍 디버깅: 참석자 렌더링 시 데이터 확인
-                    if (index === 0) {
-                      console.log(`👤 참석자 #${index} 렌더링:`, {
-                        name: participant.name,
-                        employee_id: participant.employee_id,
-                        role: participant.role,
-                        is_internal: participant.is_internal
-                      })
-                      console.log('직원 options 개수:', employees.length)
-                      console.log('value prop:', participant.employee_id || '')
-                    }
+                <div className="space-y-1.5">
+                  {participants.map((participant, index) => (
+                    <div key={participant.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                      {/* 이름 autocomplete */}
+                      <div className="flex-1 min-w-0">
+                        {/* employee_id가 없는 경우(기존 데이터) name을 직접 표시 */}
+                        {!participant.employee_id && participant.name ? (
+                          <input
+                            type="text"
+                            value={participant.name}
+                            onChange={(e) => {
+                              const updated = [...participants]
+                              updated[index] = {
+                                ...updated[index],
+                                name: e.target.value
+                              }
+                              setParticipants(updated)
+                            }}
+                            placeholder="이름"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        ) : (
+                          <AutocompleteSelectInput
+                            value={participant.employee_id || ''}
+                            onChange={(id, name) => {
+                              const updated = [...participants]
+                              const employee = employees.find(emp => emp.id === id)
+                              updated[index] = {
+                                ...updated[index],
+                                name: name,
+                                employee_id: id,
+                                is_internal: !!id,
+                                role: employee?.department || updated[index].role
+                              }
+                              setParticipants(updated)
+                            }}
+                            options={employees.map((emp) => ({
+                              id: emp.id,
+                              name: emp.name
+                            }))}
+                            placeholder="이름..."
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            allowCustomValue={true}
+                          />
+                        )}
+                      </div>
 
-                    return (
-                      <div key={participant.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                        {/* 이름 autocomplete */}
-                        <div className="flex-1">
-                          {/* employee_id가 없는 경우(기존 데이터) name을 직접 표시 */}
-                          {!participant.employee_id && participant.name ? (
-                            <input
-                              type="text"
-                              value={participant.name}
-                              onChange={(e) => {
-                                const updated = [...participants]
-                                updated[index] = {
-                                  ...updated[index],
-                                  name: e.target.value
-                                }
-                                setParticipants(updated)
-                              }}
-                              placeholder="이름"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          ) : (
-                            <AutocompleteSelectInput
-                              value={participant.employee_id || ''}
-                              onChange={(id, name) => {
-                                const updated = [...participants]
-                                const employee = employees.find(emp => emp.id === id)
-                                updated[index] = {
-                                  ...updated[index],
-                                  name: name,
-                                  employee_id: id,
-                                  is_internal: !!id,
-                                  role: employee?.department || updated[index].role
-                                }
-                                setParticipants(updated)
-                              }}
-                              options={employees.map((emp) => ({
-                                id: emp.id,
-                                name: emp.name
-                              }))}
-                              placeholder="이름"
-                              className="w-full"
-                              allowCustomValue={true}
-                            />
-                          )}
-                        </div>
-
-                      {/* 참석 체크박스 */}
-                      <label className="flex items-center gap-1 text-sm whitespace-nowrap">
+                      {/* 참석 체크박스 - 컴팩트 */}
+                      <label className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
                         <input
                           type="checkbox"
                           checked={participant.attended}
                           onChange={(e) => handleUpdateParticipant(index, 'attended', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500"
                         />
-                        참석
+                        <span>참석</span>
                       </label>
 
-                      {/* 삭제 버튼 */}
+                      {/* 삭제 버튼 - 컴팩트 */}
                       <button
                         onClick={() => handleRemoveParticipant(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="삭제"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    )
-                  })}
+                  ))}
                 </div>
               )}
             </div>
