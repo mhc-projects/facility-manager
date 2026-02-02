@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { RecurringIssue, BusinessIssue } from '@/types/meeting-minutes'
 import RecurringIssueCard from './RecurringIssueCard'
-import { AlertCircle, RefreshCw, X } from 'lucide-react'
+import { AlertCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface RecurringIssuesPanelProps {
   onAddIssue: (issue: BusinessIssue) => void // 이슈를 회의록에 추가하는 콜백
@@ -114,15 +114,18 @@ export default function RecurringIssuesPanel({
     }
   }
 
-  // 패널이 닫혀있으면 아무것도 렌더링하지 않음
-  if (!isExpanded && filteredIssues.length === 0) {
+  // 이슈가 없으면 렌더링하지 않음 (접기/펼치기 상태와 무관)
+  if (filteredIssues.length === 0) {
     return null
   }
 
   return (
     <div className={`border border-blue-200 rounded-lg bg-blue-50 ${className}`}>
-      {/* 헤더 */}
-      <div className="flex items-center justify-between p-2 border-b border-blue-200 bg-blue-100">
+      {/* 헤더 - 항상 표시 */}
+      <div
+        className="flex items-center justify-between p-2 bg-blue-100 cursor-pointer hover:bg-blue-200 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
         <div className="flex items-center gap-1.5">
           <AlertCircle className="w-4 h-4 text-blue-600" />
           <h3 className="text-sm font-semibold text-blue-900">
@@ -135,20 +138,32 @@ export default function RecurringIssuesPanel({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {isExpanded && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation() // 헤더 클릭 이벤트 전파 방지
+                fetchRecurringIssues()
+              }}
+              disabled={loading}
+              className="p-1 text-blue-600 hover:bg-blue-300 rounded transition-colors disabled:opacity-50"
+              title="새로고침"
+            >
+              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          )}
           <button
-            onClick={fetchRecurringIssues}
-            disabled={loading}
-            className="p-1 text-blue-600 hover:bg-blue-200 rounded transition-colors disabled:opacity-50"
-            title="새로고침"
-          >
-            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 text-blue-600 hover:bg-blue-200 rounded transition-colors"
+            onClick={(e) => {
+              e.stopPropagation() // 헤더 클릭 이벤트 전파 방지
+              setIsExpanded(!isExpanded)
+            }}
+            className="p-1 text-blue-600 hover:bg-blue-300 rounded transition-colors"
             title={isExpanded ? '접기' : '펼치기'}
           >
-            <X className="w-3 h-3" />
+            {isExpanded ? (
+              <ChevronUp className="w-3 h-3" />
+            ) : (
+              <ChevronDown className="w-3 h-3" />
+            )}
           </button>
         </div>
       </div>
