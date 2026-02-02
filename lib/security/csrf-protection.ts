@@ -151,7 +151,11 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/admin/monthly-closing',  // 월 마감 관리 API (JWT 인증 사용)
     '/api/admin/monthly-closing/*',  // 월 마감 관리 API 전체 제외 (JWT 인증 사용)
     '/api/businesses/*/memos',  // 사업장별 메모 관리 API (JWT 인증 사용)
-    '/api/businesses/*/memos/*'  // 사업장별 메모 개별 API 전체 제외 (JWT 인증 사용)
+    '/api/businesses/*/memos/*',  // 사업장별 메모 개별 API 전체 제외 (JWT 인증 사용)
+    '/api/meeting-minutes',  // 회의록 관리 API (JWT 인증 사용)
+    '/api/meeting-minutes/*',  // 회의록 관리 API 전체 제외 (JWT 인증 사용)
+    '/api/meeting-templates',  // 회의록 템플릿 API (JWT 인증 사용)
+    '/api/meeting-templates/*'  // 회의록 템플릿 API 전체 제외 (JWT 인증 사용)
   ];
 
   if (excludePaths.includes(request.nextUrl.pathname)) {

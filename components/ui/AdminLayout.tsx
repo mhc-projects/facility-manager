@@ -24,7 +24,8 @@ import {
   DollarSign,
   Users,
   Package,
-  Calendar
+  Calendar,
+  FileEdit
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -97,6 +98,13 @@ const navigationItems: NavigationItem[] = [
     href: '/schedule',
     icon: Calendar,
     description: '업무 일정 및 파일 첨부 관리',
+    requiredLevel: 1
+  },
+  {
+    name: '회의록 관리',
+    href: '/admin/meeting-minutes',
+    icon: FileEdit,
+    description: '회의록 작성 및 관리',
     requiredLevel: 1
   },
   {

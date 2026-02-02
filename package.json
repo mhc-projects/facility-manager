@@ -14,7 +14,9 @@
     "type-check": "tsc --noEmit",
     "dev-mobile": "next dev --hostname 0.0.0.0",
     "health": "curl http://localhost:3000/api/health",
-    "migrate:photos": "node --experimental-modules scripts/migrate-existing-photos.js"
+    "migrate:photos": "node --experimental-modules scripts/migrate-existing-photos.js",
+    "migrate:remove-discussions": "tsx scripts/run-remove-discussions.ts",
+    "migrate:sample-employees": "tsx scripts/insert-sample-employees.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
