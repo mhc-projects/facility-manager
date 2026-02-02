@@ -118,8 +118,8 @@ export default function CreateMeetingMinutePage() {
         title: '',
         description: '',
         deadline: '',
-        assignee_id: '',
-        assignee_name: ''
+        assignee_id: undefined,    // undefined로 초기화 (AutocompleteSelectInput 안정성)
+        assignee_name: undefined   // undefined로 초기화
       }
     ])
   }

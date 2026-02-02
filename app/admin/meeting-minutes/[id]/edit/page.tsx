@@ -159,6 +159,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         id: crypto.randomUUID(),
         name: '',
         role: '',
+        employee_id: undefined,  // 명시적으로 undefined 설정 (리렌더링 시 상태 안정성 확보)
         attended: true,
         is_internal: false
       }
@@ -184,8 +185,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         title: '',
         description: '',
         deadline: '',
-        assignee_id: '',
-        assignee_name: ''
+        assignee_id: undefined,    // undefined로 초기화 (AutocompleteSelectInput 안정성)
+        assignee_name: undefined   // undefined로 초기화
       }
     ])
   }
