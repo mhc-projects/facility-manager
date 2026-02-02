@@ -93,6 +93,7 @@ export default function CreateMeetingMinutePage() {
         id: crypto.randomUUID(),
         name: '',
         role: '',
+        employee_id: undefined,  // 명시적으로 undefined 설정 (리렌더링 시 상태 안정성 확보)
         attended: true,
         is_internal: false  // 기본값: 외부 참석자
       }

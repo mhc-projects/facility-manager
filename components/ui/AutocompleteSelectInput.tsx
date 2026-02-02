@@ -39,11 +39,12 @@ export default function AutocompleteSelectInput({
     const selected = options.find(opt => opt.id === value)
     if (selected) {
       setInputValue(selected.name)
-    } else if (!value && !isOpen) {
-      // value가 명시적으로 비어있고 드롭다운이 닫혀있을 때만 초기화
+    } else if (!value && inputValue && !allowCustomValue) {
+      // allowCustomValue가 false일 때만 초기화 (수동 입력 보호)
+      // 단, inputValue가 있을 때만 초기화 (불필요한 초기화 방지)
       setInputValue('')
     }
-  }, [value, options, isOpen])
+  }, [value, options, allowCustomValue])
 
   // 옵션 필터링
   useEffect(() => {
