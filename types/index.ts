@@ -197,7 +197,9 @@ export interface Facility {
   
   // 게이트웨이 정보
   gatewayInfo?: {
-    id?: string;
+    id?: string; // 방지시설용: gateway1, gateway2, ...
+    gateway?: string; // 배출시설용: gateway1, gateway2, ...
+    vpn?: '유선' | '무선'; // VPN 연결 방식
     ip?: string;
     mac?: string;
     firmware?: string;
