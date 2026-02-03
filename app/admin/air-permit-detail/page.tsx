@@ -835,9 +835,8 @@ function AirPermitDetailContent() {
       }
 
       // gatewayAssignments는 위에서 재초기화되므로 여기서 초기화하지 않음
-      // 항상 편집모드이므로 종료하지 않음
-      // 즉시 편집모드 해제
-      setIsEditing(false)
+      // ✅ 편집모드 유지: 저장 후에도 계속 편집 가능하도록 유지 (실시간 UI 업데이트 보장)
+      // setIsEditing(false) // 제거: 항상 편집모드 유지하여 즉시 UI 반영
 
     } catch (error) {
       console.error('Error saving changes:', error);
@@ -1502,11 +1501,9 @@ function AirPermitDetailContent() {
           </div>
         ) : (
           permitDetail.outlets?.map((outlet) => {
-            // ✅ 편집 중일 때는 gatewayAssignments state 우선, 저장 후에는 DB 데이터(outlet.additional_info.gateway) 우선
+            // ✅ 항상 편집모드이므로 gatewayAssignments state 우선 참조 (실시간 편집 반영)
             // ?? (nullish coalescing) 사용으로 빈 문자열('')도 정상 처리
-            const currentGateway = isEditing
-              ? (gatewayAssignments[outlet.id] ?? outlet.additional_info?.gateway ?? '')
-              : (outlet.additional_info?.gateway ?? gatewayAssignments[outlet.id] ?? '')
+            const currentGateway = gatewayAssignments[outlet.id] ?? outlet.additional_info?.gateway ?? ''
             const gatewayColor = getGatewayColorClass(currentGateway)
 
             return (
