@@ -100,15 +100,17 @@ export default function EnhancedFacilityInfoSection({
       }
     });
 
-    // 방지시설에서 게이트웨이 수량 계산
+    // 방지시설에서 게이트웨이 수량 계산 (고유한 게이트웨이 번호 개수)
+    const gatewaySet = new Set<string>();
     facilities.prevention?.forEach(facility => {
-      if (facility.gatewayInfo?.id && facility.gatewayInfo.id !== '0') {
-        counts.gateway += parseInt(facility.gatewayInfo.id) || 0;
+      if (facility.gatewayInfo?.id && facility.gatewayInfo.id !== '0' && facility.gatewayInfo.id.trim()) {
+        gatewaySet.add(facility.gatewayInfo.id.trim());
       }
     });
+    counts.gateway = gatewaySet.size;
 
-    counts.totalDevices = counts.phSensor + counts.differentialPressureMeter + 
-                         counts.temperatureMeter + counts.dischargeCT + 
+    counts.totalDevices = counts.phSensor + counts.differentialPressureMeter +
+                         counts.temperatureMeter + counts.dischargeCT +
                          counts.fanCT + counts.pumpCT + counts.gateway;
 
     setEquipmentCounts(counts);
@@ -116,8 +118,17 @@ export default function EnhancedFacilityInfoSection({
   }, [facilities]);
 
   useEffect(() => {
-    calculateEquipmentCounts();
-  }, [calculateEquipmentCounts]);
+    const counts = calculateEquipmentCounts();
+
+    // 🔄 자동 저장: 측정기기 수량이 변경되면 데이터베이스에 저장
+    if (businessId && counts.totalDevices > 0) {
+      const timer = setTimeout(() => {
+        saveEquipmentCounts(counts);
+      }, 1000); // 1초 디바운스
+
+      return () => clearTimeout(timer);
+    }
+  }, [calculateEquipmentCounts, businessId]);
 
   // 방지시설 디폴트 값 적용
   const applyPreventionDefaults = (facilityName: string) => {
