@@ -8,8 +8,8 @@ import { AirPermitWithOutlets, DischargeOutlet } from '@/lib/database-service'
 import { createDefaultOutlet } from '@/lib/object-factories'
 import { generateFacilityNumbering, generateOutletFacilitySummary, getFacilityNumber, type FacilityNumberingResult } from '@/utils/facility-numbering'
 import AdminLayout from '@/components/ui/AdminLayout'
-import { 
-  Factory, 
+import {
+  Factory,
   ArrowLeft,
   Settings,
   Edit,
@@ -19,6 +19,7 @@ import {
   FileDown,
   Trash2
 } from 'lucide-react'
+import { UnitInput } from '@/components/ui/UnitInput'
 
 // 게이트웨이 색상 팔레트 - 무한 확장 가능한 기본 색상들
 const baseGatewayColors = [
@@ -1623,10 +1624,11 @@ function AirPermitDetailContent() {
                               <td className="border border-gray-300 px-1 py-1">
                                 {dischargeFacility ? (
                                   isEditing ? (
-                                    <input
-                                      type="text"
+                                    <UnitInput
                                       value={dischargeFacility.capacity || ''}
-                                      onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', dischargeFacility.id, 'capacity', e.target.value)}
+                                      onChange={(value) => handleFacilityEdit(outlet.id, 'discharge', dischargeFacility.id, 'capacity', value)}
+                                      placeholder="용량"
+                                      unit="m³"
                                       className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                                     />
                                   ) : (
@@ -1782,10 +1784,11 @@ function AirPermitDetailContent() {
                               <td className="border border-gray-300 px-1 py-1">
                                 {preventionFacility ? (
                                   isEditing ? (
-                                    <input
-                                      type="text"
+                                    <UnitInput
                                       value={preventionFacility.capacity || ''}
-                                      onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', preventionFacility.id, 'capacity', e.target.value)}
+                                      onChange={(value) => handleFacilityEdit(outlet.id, 'prevention', preventionFacility.id, 'capacity', value)}
+                                      placeholder="용량"
+                                      unit="m³/분"
                                       className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                                     />
                                   ) : (
@@ -1976,11 +1979,11 @@ function AirPermitDetailContent() {
                                   className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
                                 />
                                 <div className="grid grid-cols-2 gap-1.5">
-                                  <input
-                                    type="text"
+                                  <UnitInput
                                     value={facility.capacity || ''}
-                                    onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'capacity', e.target.value)}
+                                    onChange={(value) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'capacity', value)}
                                     placeholder="용량"
+                                    unit="m³"
                                     className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
                                   />
                                   <input
@@ -2091,11 +2094,11 @@ function AirPermitDetailContent() {
                                   className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
                                 />
                                 <div className="grid grid-cols-2 gap-1.5">
-                                  <input
-                                    type="text"
+                                  <UnitInput
                                     value={facility.capacity || ''}
-                                    onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'capacity', e.target.value)}
+                                    onChange={(value) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'capacity', value)}
                                     placeholder="용량"
+                                    unit="m³/분"
                                     className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
                                   />
                                   <input
