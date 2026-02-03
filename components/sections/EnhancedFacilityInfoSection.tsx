@@ -47,6 +47,15 @@ export default function EnhancedFacilityInfoSection({
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // ✅ 로컬 facilityNumbering 상태 관리 (게이트웨이 업데이트 즉시 반영용)
+  const [localFacilityNumbering, setLocalFacilityNumbering] = useState(facilityNumbering);
+
+  // props 변경 시 로컬 상태 동기화
+  useEffect(() => {
+    setLocalFacilityNumbering(facilityNumbering);
+  }, [facilityNumbering]);
+
   const [equipmentCounts, setEquipmentCounts] = useState({
     phSensor: 0,
     differentialPressureMeter: 0,
@@ -209,8 +218,20 @@ export default function EnhancedFacilityInfoSection({
 
       if (result.success) {
         console.log('✅ 배출구 게이트웨이 정보 업데이트 성공');
-        // facilityNumbering 데이터 새로고침 필요 시 onFacilitiesUpdate 호출
-        // 현재는 로컬 상태만 업데이트하고, 페이지 새로고침 시 최신 데이터 로드됨
+
+        // ✅ 로컬 상태 즉시 업데이트
+        setLocalFacilityNumbering((prev: any) => {
+          if (!prev?.outlets) return prev;
+
+          return {
+            ...prev,
+            outlets: prev.outlets.map((outlet: any) =>
+              outlet.id === outletId
+                ? { ...outlet, [field]: value || null }
+                : outlet
+            )
+          };
+        });
       } else {
         console.error('❌ 배출구 게이트웨이 정보 업데이트 실패:', result.message);
         alert(`업데이트 실패: ${result.message}`);
@@ -612,14 +633,14 @@ export default function EnhancedFacilityInfoSection({
             </div>
 
             {/* 🏭 배출구별 시설 및 게이트웨이 정보 */}
-            {facilityNumbering?.outlets && facilityNumbering.outlets.length > 0 && (
+            {localFacilityNumbering?.outlets && localFacilityNumbering.outlets.length > 0 && (
               <div className="space-y-4">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <Factory className="w-5 h-5 text-red-600" />
-                  배출구별 시설 및 게이트웨이 정보 ({facilityNumbering.outlets.length}개 배출구)
+                  배출구별 시설 및 게이트웨이 정보 ({localFacilityNumbering.outlets.length}개 배출구)
                 </h3>
 
-                {facilityNumbering.outlets.map((outlet: any) => {
+                {localFacilityNumbering.outlets.map((outlet: any) => {
                   const totalFacilities = (outlet.dischargeFacilities?.length || 0) + (outlet.preventionFacilities?.length || 0);
 
                   return (

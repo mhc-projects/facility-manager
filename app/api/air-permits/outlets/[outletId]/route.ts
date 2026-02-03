@@ -68,35 +68,39 @@ export async function PUT(
       }, { status: 400 });
     }
 
-    console.log(`📊 [OUTLET-GATEWAY] 배출구 게이트웨이 정보 업데이트: ${outletId}`, {
-      gateway_number,
-      vpn_type
-    });
+    // ✅ undefined 필드는 업데이트에서 제외 (부분 업데이트)
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
 
-    // 게이트웨이 번호 형식 검증 (gateway1 ~ gateway50)
-    if (gateway_number && !/^gateway([1-9]|[1-4][0-9]|50)$/.test(gateway_number)) {
-      return NextResponse.json({
-        success: false,
-        message: '게이트웨이 번호 형식이 올바르지 않습니다. (gateway1 ~ gateway50)'
-      }, { status: 400 });
+    if (gateway_number !== undefined) {
+      // 게이트웨이 번호 형식 검증
+      if (gateway_number && !/^gateway([1-9]|[1-4][0-9]|50)$/.test(gateway_number)) {
+        return NextResponse.json({
+          success: false,
+          message: '게이트웨이 번호 형식이 올바르지 않습니다. (gateway1 ~ gateway50)'
+        }, { status: 400 });
+      }
+      updateData.gateway_number = gateway_number || null;
     }
 
-    // VPN 타입 검증 (유선/무선)
-    if (vpn_type && !['유선', '무선'].includes(vpn_type)) {
-      return NextResponse.json({
-        success: false,
-        message: 'VPN 연결 방식은 유선 또는 무선이어야 합니다.'
-      }, { status: 400 });
+    if (vpn_type !== undefined) {
+      // VPN 타입 검증
+      if (vpn_type && !['유선', '무선'].includes(vpn_type)) {
+        return NextResponse.json({
+          success: false,
+          message: 'VPN 연결 방식은 유선 또는 무선이어야 합니다.'
+        }, { status: 400 });
+      }
+      updateData.vpn_type = vpn_type || null;
     }
+
+    console.log(`📊 [OUTLET-GATEWAY] 배출구 게이트웨이 정보 업데이트: ${outletId}`, updateData);
 
     // 배출구 게이트웨이 정보 업데이트
     const { data, error } = await supabaseAdmin
       .from('discharge_outlets')
-      .update({
-        gateway_number,
-        vpn_type,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', outletId)
       .select()
       .single();
