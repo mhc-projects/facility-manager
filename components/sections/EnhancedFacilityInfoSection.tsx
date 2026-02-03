@@ -100,13 +100,13 @@ export default function EnhancedFacilityInfoSection({
       }
     });
 
-    // 게이트웨이 수량 계산 (배출시설 + 방지시설에서 고유한 게이트웨이 번호 개수)
+    // 게이트웨이 수량 계산 (배출구 + 방지시설에서 고유한 게이트웨이 번호 개수)
     const gatewaySet = new Set<string>();
 
-    // 배출시설에서 게이트웨이 수집
-    facilities.discharge?.forEach(facility => {
-      if (facility.gatewayInfo?.gateway && facility.gatewayInfo.gateway !== '0' && facility.gatewayInfo.gateway.trim()) {
-        gatewaySet.add(facility.gatewayInfo.gateway.trim());
+    // 배출구에서 게이트웨이 수집
+    facilityNumbering?.outlets?.forEach((outlet: any) => {
+      if (outlet.gateway_number && outlet.gateway_number.trim()) {
+        gatewaySet.add(outlet.gateway_number.trim());
       }
     });
 
@@ -125,7 +125,7 @@ export default function EnhancedFacilityInfoSection({
 
     setEquipmentCounts(counts);
     return counts;
-  }, [facilities]);
+  }, [facilities, facilityNumbering]);
 
   useEffect(() => {
     const counts = calculateEquipmentCounts();
@@ -183,6 +183,33 @@ export default function EnhancedFacilityInfoSection({
     };
 
     onFacilitiesUpdate(updatedFacilities);
+  };
+
+  // 배출구 게이트웨이 정보 변경 핸들러
+  const handleOutletGatewayChange = async (outletId: string, field: 'gateway_number' | 'vpn_type', value: string) => {
+    try {
+      const response = await fetch(`/api/air-permits/outlets/${outletId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          [field]: value || null
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('✅ 배출구 게이트웨이 정보 업데이트 성공');
+        // facilityNumbering 데이터 새로고침 필요 시 onFacilitiesUpdate 호출
+        // 현재는 로컬 상태만 업데이트하고, 페이지 새로고침 시 최신 데이터 로드됨
+      } else {
+        console.error('❌ 배출구 게이트웨이 정보 업데이트 실패:', result.message);
+      }
+    } catch (error) {
+      console.error('❌ 배출구 게이트웨이 정보 업데이트 오류:', error);
+    }
   };
 
   const handleSaveFacility = async () => {
@@ -341,86 +368,6 @@ export default function EnhancedFacilityInfoSection({
                       placeholder="특이사항이나 추가 설명을 입력하세요..."
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                  </div>
-                </div>
-              )}
-
-              {/* 🌐 IoT 게이트웨이 정보 - 배출시설용 */}
-              {facilityType === 'discharge' && (
-                <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200">
-                  <h3 className="font-semibold text-teal-800 mb-4 flex items-center gap-2">
-                    <Router className="w-5 h-5" />
-                    게이트웨이 정보
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 게이트웨이 번호 선택 */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        게이트웨이 번호
-                      </label>
-                      <select
-                        value={editingFacility.gatewayInfo?.gateway || ''}
-                        onChange={(e) => setEditingFacility({
-                          ...editingFacility,
-                          gatewayInfo: {
-                            ...editingFacility.gatewayInfo,
-                            gateway: e.target.value
-                          }
-                        })}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                      >
-                        <option value="">선택하세요</option>
-                        {Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
-                          <option key={num} value={`gateway${num}`}>
-                            gateway{num}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* VPN 연결 방식 */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        VPN 연결 방식
-                      </label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditingFacility({
-                            ...editingFacility,
-                            gatewayInfo: {
-                              ...editingFacility.gatewayInfo,
-                              vpn: '유선'
-                            }
-                          })}
-                          className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                            editingFacility.gatewayInfo?.vpn === '유선'
-                              ? 'bg-teal-600 text-white shadow-md'
-                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          유선
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingFacility({
-                            ...editingFacility,
-                            gatewayInfo: {
-                              ...editingFacility.gatewayInfo,
-                              vpn: '무선'
-                            }
-                          })}
-                          className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                            editingFacility.gatewayInfo?.vpn === '무선'
-                              ? 'bg-cyan-600 text-white shadow-md'
-                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          무선
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
@@ -725,19 +672,6 @@ export default function EnhancedFacilityInfoSection({
                                   <span className="font-medium">비고:</span> {String(originalFacility.remarks)}
                                 </div>
                               )}
-                              {originalFacility?.gatewayInfo?.gateway && (
-                                <div className="flex items-center gap-2">
-                                  <Router className="w-4 h-4 text-teal-500" />
-                                  <span>
-                                    게이트웨이: {originalFacility.gatewayInfo.gateway}
-                                    {originalFacility.gatewayInfo.vpn && (
-                                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
-                                        {originalFacility.gatewayInfo.vpn}
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           </div>
                         );
@@ -861,6 +795,98 @@ export default function EnhancedFacilityInfoSection({
                 </div>
               )}
             </div>
+
+            {/* 🌐 배출구별 게이트웨이 설정 */}
+            {facilityNumbering?.outlets && facilityNumbering.outlets.length > 0 && (
+              <div className="bg-white rounded-lg border border-gray-100 p-4 mt-4">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Router className="w-5 h-5 text-teal-600" />
+                  배출구별 게이트웨이 설정 ({facilityNumbering.outlets.length}개 배출구)
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {facilityNumbering.outlets.map((outlet: any) => (
+                    <div
+                      key={outlet.id || outlet.outletNumber}
+                      className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200"
+                    >
+                      {/* 배출구 정보 헤더 */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <Factory className="w-5 h-5 text-teal-600" />
+                        <h4 className="font-semibold text-gray-900">
+                          배출구 {outlet.outletNumber}번
+                        </h4>
+                      </div>
+
+                      {/* 게이트웨이 번호 선택 */}
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          게이트웨이 번호
+                        </label>
+                        <select
+                          value={outlet.gateway_number || ''}
+                          onChange={(e) => handleOutletGatewayChange(outlet.id, 'gateway_number', e.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        >
+                          <option value="">선택하세요</option>
+                          {Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
+                            <option key={num} value={`gateway${num}`}>
+                              gateway{num}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* VPN 타입 선택 */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          VPN 연결 방식
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOutletGatewayChange(outlet.id, 'vpn_type', '유선')}
+                            className={`flex-1 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+                              outlet.vpn_type === '유선'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            유선
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOutletGatewayChange(outlet.id, 'vpn_type', '무선')}
+                            className={`flex-1 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+                              outlet.vpn_type === '무선'
+                                ? 'bg-cyan-600 text-white shadow-md'
+                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            무선
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 현재 설정 표시 */}
+                      {outlet.gateway_number && (
+                        <div className="mt-3 pt-3 border-t border-teal-200">
+                          <div className="flex items-center gap-2 text-sm text-teal-700">
+                            <Router className="w-4 h-4" />
+                            <span className="font-medium">{outlet.gateway_number}</span>
+                            {outlet.vpn_type && (
+                              <span className="px-2 py-0.5 bg-teal-100 rounded-full text-xs font-medium">
+                                {outlet.vpn_type}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

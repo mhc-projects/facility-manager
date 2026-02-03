@@ -120,12 +120,16 @@ export interface DischargeOutlet {
   // Outlet Information
   outlet_number: number
   outlet_name?: string | null
-  
+
+  // Gateway Information (배출구별 게이트웨이 설정)
+  gateway_number?: string | null  // 'gateway1' ~ 'gateway50'
+  vpn_type?: '유선' | '무선' | null  // VPN 연결 방식
+
   // Physical Properties
   stack_height?: number | null
   stack_diameter?: number | null
   flow_rate?: number | null
-  
+
   // Extensible Data
   additional_info: Record<string, any>
 }
