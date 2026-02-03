@@ -602,289 +602,255 @@ export default function EnhancedFacilityInfoSection({
               </div>
             </div>
 
-            {/* 배출시설 목록 */}
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Factory className="w-5 h-5 text-orange-600" />
-                배출시설 ({facilityNumbering?.outlets?.reduce((sum: number, outlet: any) =>
-                  sum + (outlet.dischargeFacilities?.length || 0), 0) || 0}개)
-              </h3>
-
-              {facilityNumbering?.outlets && facilityNumbering.outlets.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {facilityNumbering.outlets
-                    .flatMap((outlet: any) =>
-                      (outlet.dischargeFacilities || []).map((facilityInfo: any) => {
-                        // 원본 시설 데이터 찾기 (측정기기 정보용)
-                        const originalFacility = facilities.discharge.find(f =>
-                          f.id === facilityInfo.facilityId
-                        );
-
-                        // facilityInfo에서 직접 데이터 사용
-                        const facilityData = {
-                          ...originalFacility,
-                          outlet: outlet.outletNumber,
-                          number: facilityInfo.facilityNumber,
-                          name: facilityInfo.facilityName,
-                          capacity: facilityInfo.capacity,
-                          displayNumber: facilityInfo.displayNumber
-                        };
-
-                        return (
-                          <div
-                            key={`discharge-${facilityInfo.facilityId}-${facilityInfo.facilityNumber}`}
-                            onClick={() => originalFacility && handleEditFacility(originalFacility, 'discharge')}
-                            className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-lg hover:border-blue-300 hover:bg-blue-50/30 transition-all duration-200"
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <Factory className="w-5 h-5 text-orange-500" />
-                                <div>
-                                  <h3 className="font-semibold text-gray-900">
-                                    배출시설{facilityInfo.facilityNumber}
-                                  </h3>
-                                  <p className="text-sm text-gray-600">
-                                    {facilityInfo.displayNumber} - 배출구 {outlet.outletNumber}번
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {facilityInfo.facilityName} ({facilityInfo.capacity})
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 배출시설 정보 */}
-                            <div className="space-y-2 text-sm">
-                              {originalFacility?.dischargeCT && String(originalFacility.dischargeCT) !== '0' && (
-                                <div className="flex items-center gap-2">
-                                  <Zap className="w-4 h-4 text-orange-500" />
-                                  <span>배출CT: {String(originalFacility.dischargeCT)}개</span>
-                                </div>
-                              )}
-                              {originalFacility?.exemptionReason && String(originalFacility.exemptionReason) !== 'none' && (
-                                <div className="flex items-center gap-2">
-                                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                                  <span>면제사유: {String(originalFacility.exemptionReason)}</span>
-                                </div>
-                              )}
-                              {originalFacility?.remarks && (
-                                <div className="text-gray-600">
-                                  <span className="font-medium">비고:</span> {String(originalFacility.remarks)}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )
-                  }
-                </div>
-              ) : (
-                <div className="text-center py-6 text-gray-500">
-                  등록된 배출시설이 없습니다.
-                </div>
-              )}
-            </div>
-
-            {/* 방지시설 목록 */}
-            <div className="bg-white rounded-lg border border-gray-100 p-4">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" />
-                방지시설 ({facilityNumbering?.outlets?.reduce((sum: number, outlet: any) =>
-                  sum + (outlet.preventionFacilities?.length || 0), 0) || 0}개)
-              </h3>
-
-              {facilityNumbering?.outlets && facilityNumbering.outlets.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {facilityNumbering.outlets
-                    .flatMap((outlet: any) =>
-                      (outlet.preventionFacilities || []).map((facilityInfo: any) => {
-                        // 원본 시설 데이터 찾기 (측정기기 정보용)
-                        const originalFacility = facilities.prevention.find(f =>
-                          f.id === facilityInfo.facilityId
-                        );
-
-                        return (
-                          <div
-                            key={`prevention-${facilityInfo.facilityId}-${facilityInfo.facilityNumber}`}
-                            onClick={() => originalFacility && handleEditFacility(originalFacility, 'prevention')}
-                            className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-lg hover:border-blue-300 hover:bg-blue-50/30 transition-all duration-200"
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <Shield className="w-5 h-5 text-blue-500" />
-                                <div>
-                                  <h3 className="font-semibold text-gray-900">
-                                    방지시설{facilityInfo.facilityNumber}
-                                  </h3>
-                                  <p className="text-sm text-gray-600">
-                                    {facilityInfo.displayNumber} - 배출구 {outlet.outletNumber}번
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {facilityInfo.facilityName} ({facilityInfo.capacity})
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 방지시설 정보 */}
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              {originalFacility?.ph && String(originalFacility.ph) !== '0' && (
-                                <div className="flex items-center gap-1">
-                                  <Droplets className="w-3 h-3 text-cyan-500" />
-                                  <span>pH계: {String(originalFacility.ph)}</span>
-                                </div>
-                              )}
-                              {originalFacility?.pressure && String(originalFacility.pressure) !== '0' && (
-                                <div className="flex items-center gap-1">
-                                  <Gauge className="w-3 h-3 text-purple-500" />
-                                  <span>차압계: {String(originalFacility.pressure)}</span>
-                                </div>
-                              )}
-                              {originalFacility?.temperature && String(originalFacility.temperature) !== '0' && (
-                                <div className="flex items-center gap-1">
-                                  <Thermometer className="w-3 h-3 text-red-500" />
-                                  <span>온도계: {String(originalFacility.temperature)}</span>
-                                </div>
-                              )}
-                              {originalFacility?.fan && String(originalFacility.fan) !== '0' && (
-                                <div className="flex items-center gap-1">
-                                  <Zap className="w-3 h-3 text-green-500" />
-                                  <span>송풍CT: {String(originalFacility.fan)}</span>
-                                </div>
-                              )}
-                              {originalFacility?.pump && String(originalFacility.pump) !== '0' && (
-                                <div className="flex items-center gap-1">
-                                  <Zap className="w-3 h-3 text-blue-500" />
-                                  <span>펌프CT: {String(originalFacility.pump)}</span>
-                                </div>
-                              )}
-                              {originalFacility?.remarks && (
-                                <div className="col-span-2 text-gray-600">
-                                  <span className="font-medium">비고:</span> {String(originalFacility.remarks)}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* 게이트웨이 정보 */}
-                            {originalFacility?.gatewayInfo && (
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Router className="w-4 h-4 text-blue-500" />
-                                  <span>게이트웨이: {originalFacility.gatewayInfo.ip || 'IP 미설정'}</span>
-                                  <span className={`px-2 py-1 rounded-full text-xs ${
-                                    originalFacility.gatewayInfo.status === 'connected' ? 'bg-green-100 text-green-800' :
-                                    originalFacility.gatewayInfo.status === 'error' ? 'bg-red-100 text-red-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {originalFacility.gatewayInfo.status === 'connected' ? '연결됨' :
-                                     originalFacility.gatewayInfo.status === 'error' ? '오류' : '연결안됨'}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )
-                  }
-                </div>
-              ) : (
-                <div className="text-center py-6 text-gray-500">
-                  등록된 방지시설이 없습니다.
-                </div>
-              )}
-            </div>
-
-            {/* 🌐 배출구별 게이트웨이 설정 */}
+            {/* 🏭 배출구별 시설 및 게이트웨이 정보 */}
             {facilityNumbering?.outlets && facilityNumbering.outlets.length > 0 && (
-              <div className="bg-white rounded-lg border border-gray-100 p-4 mt-4">
+              <div className="space-y-4">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <Router className="w-5 h-5 text-teal-600" />
-                  배출구별 게이트웨이 설정 ({facilityNumbering.outlets.length}개 배출구)
+                  <Factory className="w-5 h-5 text-red-600" />
+                  배출구별 시설 및 게이트웨이 정보 ({facilityNumbering.outlets.length}개 배출구)
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {facilityNumbering.outlets.map((outlet: any) => (
+                {facilityNumbering.outlets.map((outlet: any) => {
+                  const totalFacilities = (outlet.dischargeFacilities?.length || 0) + (outlet.preventionFacilities?.length || 0);
+
+                  return (
                     <div
                       key={outlet.id || outlet.outletNumber}
-                      className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200"
+                      className="bg-white rounded-lg border-4 border-red-500 p-6"
                     >
-                      {/* 배출구 정보 헤더 */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <Factory className="w-5 h-5 text-teal-600" />
-                        <h4 className="font-semibold text-gray-900">
-                          배출구 {outlet.outletNumber}번
-                        </h4>
-                      </div>
+                      {/* 배출구 헤더 with 게이트웨이 정보 */}
+                      <div className="mb-4 pb-4 border-b-2 border-red-200">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          {/* 배출구 제목 */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full">
+                              <Factory className="w-6 h-6 text-red-600" />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-bold text-gray-900">
+                                배출구 {outlet.outletNumber}번
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                총 {totalFacilities}개 시설 (배출: {outlet.dischargeFacilities?.length || 0}, 방지: {outlet.preventionFacilities?.length || 0})
+                              </p>
+                            </div>
+                          </div>
 
-                      {/* 게이트웨이 번호 선택 */}
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          게이트웨이 번호
-                        </label>
-                        <select
-                          value={outlet.gateway_number || ''}
-                          onChange={(e) => handleOutletGatewayChange(outlet.id, 'gateway_number', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                        >
-                          <option value="">선택하세요</option>
-                          {Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
-                            <option key={num} value={`gateway${num}`}>
-                              gateway{num}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                          {/* 게이트웨이 정보 및 설정 */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-gradient-to-br from-teal-50 to-cyan-50 p-4 rounded-lg border border-teal-200">
+                            {/* 게이트웨이 번호 선택 */}
+                            <div className="flex items-center gap-2">
+                              <Router className="w-5 h-5 text-teal-600" />
+                              <select
+                                value={outlet.gateway_number || ''}
+                                onChange={(e) => handleOutletGatewayChange(outlet.id, 'gateway_number', e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm font-medium"
+                              >
+                                <option value="">게이트웨이 선택</option>
+                                {Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
+                                  <option key={num} value={`gateway${num}`}>
+                                    gateway{num}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
 
-                      {/* VPN 타입 선택 */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          VPN 연결 방식
-                        </label>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleOutletGatewayChange(outlet.id, 'vpn_type', '유선')}
-                            className={`flex-1 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
-                              outlet.vpn_type === '유선'
-                                ? 'bg-teal-600 text-white shadow-md'
-                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            유선
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOutletGatewayChange(outlet.id, 'vpn_type', '무선')}
-                            className={`flex-1 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
-                              outlet.vpn_type === '무선'
-                                ? 'bg-cyan-600 text-white shadow-md'
-                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            무선
-                          </button>
+                            {/* VPN 타입 버튼 */}
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOutletGatewayChange(outlet.id, 'vpn_type', '유선')}
+                                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                                  outlet.vpn_type === '유선'
+                                    ? 'bg-teal-600 text-white shadow-md'
+                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                유선
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOutletGatewayChange(outlet.id, 'vpn_type', '무선')}
+                                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                                  outlet.vpn_type === '무선'
+                                    ? 'bg-cyan-600 text-white shadow-md'
+                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                무선
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* 현재 설정 표시 */}
-                      {outlet.gateway_number && (
-                        <div className="mt-3 pt-3 border-t border-teal-200">
-                          <div className="flex items-center gap-2 text-sm text-teal-700">
-                            <Router className="w-4 h-4" />
-                            <span className="font-medium">{outlet.gateway_number}</span>
-                            {outlet.vpn_type && (
-                              <span className="px-2 py-0.5 bg-teal-100 rounded-full text-xs font-medium">
-                                {outlet.vpn_type}
-                              </span>
-                            )}
+                      {/* 배출시설 목록 */}
+                      {outlet.dischargeFacilities && outlet.dischargeFacilities.length > 0 && (
+                        <div className="mb-4">
+                          <h5 className="text-md font-semibold text-orange-600 mb-3 flex items-center gap-2">
+                            <Factory className="w-4 h-4" />
+                            배출시설 ({outlet.dischargeFacilities.length}개)
+                          </h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {outlet.dischargeFacilities.map((facilityInfo: any) => {
+                              const originalFacility = facilities.discharge.find(f =>
+                                f.id === facilityInfo.facilityId
+                              );
+
+                              return (
+                                <div
+                                  key={`discharge-${facilityInfo.facilityId}-${facilityInfo.facilityNumber}`}
+                                  onClick={() => originalFacility && handleEditFacility(originalFacility, 'discharge')}
+                                  className="bg-orange-50/50 rounded-lg border border-orange-200 p-3 cursor-pointer hover:shadow-lg hover:border-orange-400 hover:bg-orange-50 transition-all duration-200"
+                                >
+                                  <div className="flex items-start gap-2 mb-2">
+                                    <Factory className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      <h6 className="font-semibold text-gray-900 text-sm">
+                                        배출시설{facilityInfo.facilityNumber}
+                                      </h6>
+                                      <p className="text-xs text-gray-600 truncate">
+                                        {facilityInfo.displayNumber}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate">
+                                        {facilityInfo.facilityName} ({facilityInfo.capacity})
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* 배출시설 정보 */}
+                                  <div className="space-y-1 text-xs">
+                                    {originalFacility?.dischargeCT && String(originalFacility.dischargeCT) !== '0' && (
+                                      <div className="flex items-center gap-1.5">
+                                        <Zap className="w-3.5 h-3.5 text-orange-500" />
+                                        <span>배출CT: {String(originalFacility.dischargeCT)}개</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.exemptionReason && String(originalFacility.exemptionReason) !== 'none' && (
+                                      <div className="flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
+                                        <span className="truncate">면제: {String(originalFacility.exemptionReason)}</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.remarks && (
+                                      <div className="text-gray-600 truncate">
+                                        <span className="font-medium">비고:</span> {String(originalFacility.remarks)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
+
+                      {/* 방지시설 목록 */}
+                      {outlet.preventionFacilities && outlet.preventionFacilities.length > 0 && (
+                        <div>
+                          <h5 className="text-md font-semibold text-blue-600 mb-3 flex items-center gap-2">
+                            <Shield className="w-4 h-4" />
+                            방지시설 ({outlet.preventionFacilities.length}개)
+                          </h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {outlet.preventionFacilities.map((facilityInfo: any) => {
+                              const originalFacility = facilities.prevention.find(f =>
+                                f.id === facilityInfo.facilityId
+                              );
+
+                              return (
+                                <div
+                                  key={`prevention-${facilityInfo.facilityId}-${facilityInfo.facilityNumber}`}
+                                  onClick={() => originalFacility && handleEditFacility(originalFacility, 'prevention')}
+                                  className="bg-blue-50/50 rounded-lg border border-blue-200 p-3 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
+                                >
+                                  <div className="flex items-start gap-2 mb-2">
+                                    <Shield className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      <h6 className="font-semibold text-gray-900 text-sm">
+                                        방지시설{facilityInfo.facilityNumber}
+                                      </h6>
+                                      <p className="text-xs text-gray-600 truncate">
+                                        {facilityInfo.displayNumber}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate">
+                                        {facilityInfo.facilityName} ({facilityInfo.capacity})
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* 방지시설 정보 */}
+                                  <div className="grid grid-cols-2 gap-1.5 text-xs">
+                                    {originalFacility?.ph && String(originalFacility.ph) !== '0' && (
+                                      <div className="flex items-center gap-1">
+                                        <Droplets className="w-3 h-3 text-cyan-500" />
+                                        <span>pH: {String(originalFacility.ph)}</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.pressure && String(originalFacility.pressure) !== '0' && (
+                                      <div className="flex items-center gap-1">
+                                        <Gauge className="w-3 h-3 text-purple-500" />
+                                        <span>차압: {String(originalFacility.pressure)}</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.temperature && String(originalFacility.temperature) !== '0' && (
+                                      <div className="flex items-center gap-1">
+                                        <Thermometer className="w-3 h-3 text-red-500" />
+                                        <span>온도: {String(originalFacility.temperature)}</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.fan && String(originalFacility.fan) !== '0' && (
+                                      <div className="flex items-center gap-1">
+                                        <Zap className="w-3 h-3 text-green-500" />
+                                        <span>송풍: {String(originalFacility.fan)}</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.pump && String(originalFacility.pump) !== '0' && (
+                                      <div className="flex items-center gap-1">
+                                        <Zap className="w-3 h-3 text-blue-500" />
+                                        <span>펌프: {String(originalFacility.pump)}</span>
+                                      </div>
+                                    )}
+                                    {originalFacility?.remarks && (
+                                      <div className="col-span-2 text-gray-600 truncate">
+                                        <span className="font-medium">비고:</span> {String(originalFacility.remarks)}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* 방지시설 게이트웨이 정보 */}
+                                  {originalFacility?.gatewayInfo && (
+                                    <div className="mt-2 pt-2 border-t border-blue-200">
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <Router className="w-3.5 h-3.5 text-blue-500" />
+                                        <span className="truncate">게이트웨이: {originalFacility.gatewayInfo.ip || 'IP 미설정'}</span>
+                                        <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                          originalFacility.gatewayInfo.status === 'connected' ? 'bg-green-100 text-green-800' :
+                                          originalFacility.gatewayInfo.status === 'error' ? 'bg-red-100 text-red-800' :
+                                          'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          {originalFacility.gatewayInfo.status === 'connected' ? '연결' :
+                                           originalFacility.gatewayInfo.status === 'error' ? '오류' : '미연결'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 시설 없는 경우 */}
+                      {totalFacilities === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          이 배출구에 등록된 시설이 없습니다.
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             )}
           </div>
