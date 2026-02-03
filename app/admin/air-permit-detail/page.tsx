@@ -1456,7 +1456,7 @@ function AirPermitDetailContent() {
               <span className="text-gray-500 text-xs">최초신고일</span>
               <input
                 type="date"
-                value={permitDetail.first_report_date || ''}
+                value={permitDetail.first_report_date?.split('T')[0] || ''}
                 onChange={(e) => handleBasicInfoChange('first_report_date', e.target.value)}
                 min="1000-01-01"
                 max="9999-12-31"
@@ -1479,7 +1479,7 @@ function AirPermitDetailContent() {
               <span className="text-gray-500 text-xs">가동개시일</span>
               <input
                 type="date"
-                value={permitDetail.operation_start_date || ''}
+                value={permitDetail.operation_start_date?.split('T')[0] || ''}
                 onChange={(e) => handleBasicInfoChange('operation_start_date', e.target.value)}
                 min="1000-01-01"
                 max="9999-12-31"
