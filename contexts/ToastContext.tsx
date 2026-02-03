@@ -1,38 +1,28 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { ToastContainer, useToast as useToastHook } from '@/components/ui/Toast';
-import type { Toast } from '@/components/ui/Toast';
+import toast from 'react-hot-toast';
 
 interface ToastContextType {
-  success: (title: string, message?: string, options?: Partial<Toast>) => string;
-  error: (title: string, message?: string, options?: Partial<Toast>) => string;
-  warning: (title: string, message?: string, options?: Partial<Toast>) => string;
-  info: (title: string, message?: string, options?: Partial<Toast>) => string;
-  addToast: (toast: Omit<Toast, 'id'>) => string;
-  removeToast: (id: string) => void;
-  clear: () => void;
+  success: (message: string) => string;
+  error: (message: string) => string;
+  warning: (message: string) => string;
+  info: (message: string) => string;
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const { toasts, addToast, removeToast, success, error, warning, info, clear } = useToastHook();
-
   const contextValue: ToastContextType = {
-    success,
-    error,
-    warning,
-    info,
-    addToast,
-    removeToast,
-    clear
+    success: (message: string) => toast.success(message),
+    error: (message: string) => toast.error(message),
+    warning: (message: string) => toast(message, { icon: '⚠️' }),
+    info: (message: string) => toast(message, { icon: 'ℹ️' })
   };
 
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </ToastContext.Provider>
   );
 }
