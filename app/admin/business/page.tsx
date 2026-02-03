@@ -478,7 +478,10 @@ function BusinessManagementPage() {
           hasData: !!result.data,
           hasFacilities: !!result.data?.facilities,
           dischargeCount: result.data?.facilities?.discharge?.length,
-          preventionCount: result.data?.facilities?.prevention?.length
+          preventionCount: result.data?.facilities?.prevention?.length,
+          note: result.data?.note, // ⚠️ API가 반환한 경고 메시지 (대기필증 미발견 시)
+          apiDischargeCount: result.data?.dischargeCount,
+          apiPreventionCount: result.data?.preventionCount
         })
 
         if (result.success && result.data && result.data.facilities) {
@@ -2566,7 +2569,12 @@ function BusinessManagementPage() {
       if (business.id) {
         loadAirPermitData(business.id)
       }
-      
+
+      // ✅ 시설 정보 로딩 (대기필증 기준)
+      if (business.사업장명) {
+        await loadBusinessFacilitiesWithDetails(business.사업장명)
+      }
+
       // 백그라운드에서 최신 데이터 조회
       if (business.id && business.사업장명) {
         const refreshedBusiness = await refreshBusinessData(business.id, business.사업장명)
@@ -2615,7 +2623,12 @@ function BusinessManagementPage() {
       if (business.id) {
         loadAirPermitData(business.id)
       }
-      
+
+      // ✅ 시설 정보 로딩 (대기필증 기준)
+      if (business.사업장명) {
+        await loadBusinessFacilitiesWithDetails(business.사업장명)
+      }
+
       // 메모 로드 시도
       if (business.id) {
         await loadBusinessMemos(business.id)
