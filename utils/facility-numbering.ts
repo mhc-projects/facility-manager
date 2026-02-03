@@ -23,6 +23,9 @@ export interface FacilityNumberInfo {
 export interface OutletFacilityNumbers {
   outletId: string
   outletNumber: number
+  id?: string // ✅ UI에서 outlet.id로 접근 가능하도록 (outletId와 동일값)
+  gateway_number?: string | null // ✅ 게이트웨이 번호 (gateway1-gateway50)
+  vpn_type?: '유선' | '무선' | null // ✅ VPN 연결 방식
   dischargeFacilities: FacilityNumberInfo[]
   preventionFacilities: FacilityNumberInfo[]
   dischargeFacilityRange: { start: number; end: number } | null

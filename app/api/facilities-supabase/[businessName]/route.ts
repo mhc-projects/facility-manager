@@ -119,9 +119,9 @@ export async function GET(
       return NextResponse.json({ success: true, data: emptyResult }, { headers: CACHE_HEADERS });
     }
 
-    // 3. 배출구 정보 조회 - Direct PostgreSQL
+    // 3. 배출구 정보 조회 (게이트웨이 정보 포함) - Direct PostgreSQL
     const outlets = await queryAll(
-      `SELECT id, outlet_number, outlet_name
+      `SELECT id, outlet_number, outlet_name, gateway_number, vpn_type
        FROM discharge_outlets
        WHERE air_permit_id = $1
        ORDER BY outlet_number`,
@@ -529,6 +529,15 @@ export async function GET(
       업종: business.business_type || '정보 없음'
     };
     
+    // outlet ID to 게이트웨이 정보 매핑 생성
+    const outletIdToGateway: { [key: string]: { gateway_number?: string; vpn_type?: string } } = {};
+    outlets?.forEach((outlet: any) => {
+      outletIdToGateway[outlet.id] = {
+        gateway_number: outlet.gateway_number,
+        vpn_type: outlet.vpn_type
+      };
+    });
+
     // 🎯 결과 데이터 구성 (어드민 시설번호 정보 포함)
     const resultData = {
       facilities,
@@ -536,7 +545,19 @@ export async function GET(
       dischargeCount,
       preventionCount,
       businessInfo,
-      facilityNumbering, // 🎯 어드민과 동일한 시설번호 정보 포함
+      facilityNumbering: {
+        ...facilityNumbering,
+        // ✅ outlets 배열에 id, gateway_number, vpn_type 필드 추가
+        outlets: facilityNumbering.outlets.map(outlet => {
+          const gatewayInfo = outletIdToGateway[outlet.outletId] || {};
+          return {
+            ...outlet,
+            id: outlet.outletId, // UI에서 outlet.id로 접근 가능하도록
+            gateway_number: gatewayInfo.gateway_number || null,
+            vpn_type: gatewayInfo.vpn_type || null
+          };
+        })
+      }, // 🎯 어드민과 동일한 시설번호 정보 포함
       lastUpdated: new Date().toISOString(),
       processingTime: Date.now() - startTime,
       source: 'air-permit-management'

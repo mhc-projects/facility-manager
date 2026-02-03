@@ -187,6 +187,13 @@ export default function EnhancedFacilityInfoSection({
 
   // 배출구 게이트웨이 정보 변경 핸들러
   const handleOutletGatewayChange = async (outletId: string, field: 'gateway_number' | 'vpn_type', value: string) => {
+    // ✅ 유효성 검사
+    if (!outletId || outletId === 'undefined') {
+      console.error('❌ 배출구 ID가 유효하지 않습니다:', outletId);
+      alert('배출구 정보를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침해주세요.');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/air-permits/outlets/${outletId}`, {
         method: 'PUT',
@@ -206,9 +213,11 @@ export default function EnhancedFacilityInfoSection({
         // 현재는 로컬 상태만 업데이트하고, 페이지 새로고침 시 최신 데이터 로드됨
       } else {
         console.error('❌ 배출구 게이트웨이 정보 업데이트 실패:', result.message);
+        alert(`업데이트 실패: ${result.message}`);
       }
     } catch (error) {
       console.error('❌ 배출구 게이트웨이 정보 업데이트 오류:', error);
+      alert('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
     }
   };
 
