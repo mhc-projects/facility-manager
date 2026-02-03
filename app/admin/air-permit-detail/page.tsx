@@ -114,15 +114,19 @@ function AirPermitDetailContent() {
   // 게이트웨이 색상 메모이제이션 - 동적 무한 게이트웨이 지원
   const getGatewayColorClass = useMemo(() => {
     const colorCache = new Map()
-    
+
     return (gateway: string) => {
       // 캐시된 색상이 있으면 반환
       if (colorCache.has(gateway)) {
         return colorCache.get(gateway)
       }
-      
+
       // 새 게이트웨이의 색상 생성하고 캐시
       const gatewayInfo = generateGatewayInfo(gateway)
+
+      // ✅ 디버깅: 게이트웨이 색상 생성 확인
+      console.log(`🎨 Gateway "${gateway}" → Name: "${gatewayInfo.name}", Color: "${gatewayInfo.color}"`)
+
       colorCache.set(gateway, gatewayInfo.color)
       return gatewayInfo.color
     }
@@ -174,7 +178,8 @@ function AirPermitDetailContent() {
 
       try {
         setLoading(true)
-        const response = await fetch(`/api/air-permit?id=${urlParams.permitId}&details=true`)
+        // ✅ forcePrimary=true: Primary DB에서 최신 데이터 조회 (캐시 방지)
+        const response = await fetch(`/api/air-permit?id=${urlParams.permitId}&details=true&forcePrimary=true`)
         const result = await response.json()
         
         if (response.ok && result.data) {
@@ -206,7 +211,7 @@ function AirPermitDetailContent() {
                 console.log('✅ 기본 배출구 생성 완료:', createResult.data)
                 
                 // 생성된 배출구를 포함하여 다시 데이터 로드
-                const refreshResponse = await fetch(`/api/air-permit?id=${urlParams.permitId}&details=true`)
+                const refreshResponse = await fetch(`/api/air-permit?id=${urlParams.permitId}&details=true&forcePrimary=true`)
                 const refreshResult = await refreshResponse.json()
                 if (refreshResponse.ok && refreshResult.data) {
                   permitData = refreshResult.data
@@ -253,11 +258,12 @@ function AirPermitDetailContent() {
       }
   }, [urlParams.permitId, urlParams.mode])
 
+  // ✅ permitId 변경 시 항상 데이터 새로고침 (페이지 재진입 시 최신 데이터 보장)
   useEffect(() => {
-    if (!isInitialized && urlParams.permitId) {
+    if (urlParams.permitId) {
       loadData()
     }
-  }, [loadData, isInitialized, urlParams.permitId])
+  }, [loadData, urlParams.permitId])
 
   // 편집모드 자동 활성화 로직 제거 (isEditing이 항상 true이므로 불필요)
 
@@ -480,6 +486,10 @@ function AirPermitDetailContent() {
 
     // ✅ 저장 실패 시 롤백을 위해 원본 게이트웨이 할당 저장
     const originalGatewayAssignments = { ...gatewayAssignments }
+
+    // ✅ Optimistic UI Update: 사용자가 선택한 게이트웨이를 즉시 UI에 반영
+    const optimisticAssignments = { ...gatewayAssignments }
+    console.log('🚀 [OPTIMISTIC] 즉시 UI 업데이트 - 사용자 선택 값:', optimisticAssignments)
 
     try {
       console.log('💾 handleSave 함수 시작')
@@ -710,16 +720,29 @@ function AirPermitDetailContent() {
             // 게이트웨이 할당 정보 먼저 준비
             const newAssignments: {[outletId: string]: string} = {}
             refreshData.data.outlets.forEach((outlet: any) => {
-              newAssignments[outlet.id] = outlet.additional_info?.gateway || ''
-              console.log(`🔍 [RELOAD] 배출구 ${outlet.outlet_number} (ID: ${outlet.id}): gateway = "${outlet.additional_info?.gateway}"`)
+              const serverGateway = outlet.additional_info?.gateway || ''
+              const currentUIGateway = gatewayAssignments[outlet.id] || ''
+              const optimisticGateway = optimisticAssignments[outlet.id] || ''
+
+              // ✅ 서버 응답이 비어있으면 optimistic 값 사용 (사용자가 방금 선택한 값)
+              newAssignments[outlet.id] = serverGateway || optimisticGateway
+
+              console.log(`🔍 [RELOAD] 배출구 ${outlet.outlet_number} (ID: ${outlet.id}):`)
+              console.log(`  - 서버 응답 게이트웨이: "${serverGateway}"`)
+              console.log(`  - Optimistic 게이트웨이: "${optimisticGateway}"`)
+              console.log(`  - 현재 UI 게이트웨이: "${currentUIGateway}"`)
+              console.log(`  - 최종 선택 값: "${newAssignments[outlet.id]}"`)
+              console.log(`  - 일치 여부: ${serverGateway === currentUIGateway ? '✅' : '❌ 불일치!'}`)
             })
 
             console.log('🔍 [RELOAD] 최종 게이트웨이 할당:', newAssignments)
+            console.log('🔍 [RELOAD] 이전 게이트웨이 할당:', gatewayAssignments)
 
             // 시설 번호 재생성
             const newNumbering = generateFacilityNumbering(refreshData.data)
 
             // 최신 데이터로 UI 업데이트 (flushSync로 즉시 동기 업데이트)
+            console.log('🔄 [SYNC] flushSync 시작 - 업데이트 전 gatewayAssignments:', gatewayAssignments)
             flushSync(() => {
               setPermitDetail(refreshData.data)
               setOriginalPermitDetail(refreshData.data)
@@ -727,9 +750,15 @@ function AirPermitDetailContent() {
               setFacilityNumbering(newNumbering)
             })
             console.log(`⏱️ [TIME] flushSync 완료: ${(performance.now() - startTime).toFixed(0)}ms`)
+            console.log('🔄 [SYNC] flushSync 완료 - 업데이트 후 새 값:', newAssignments)
             console.log('🎯 게이트웨이 할당 정보 재초기화 완료:', newAssignments)
             console.log('✅ UI 업데이트 완료 - permitDetail이 최신 데이터로 업데이트됨')
             console.log(`⏱️ [TIME] UI 업데이트 완료: ${(performance.now() - startTime).toFixed(0)}ms`)
+
+            // flushSync 직후 실제 상태 확인
+            setTimeout(() => {
+              console.log('🔍 [VERIFY] flushSync 직후 실제 gatewayAssignments:', gatewayAssignments)
+            }, 0)
 
             // ✅ 목록 페이지에 업데이트 알림 (localStorage 이벤트 트리거)
             const businessIdForUpdate = refreshData.data.business_id || permitDetail?.business_id
@@ -761,7 +790,10 @@ function AirPermitDetailContent() {
             if (airPermitData.data) {
               const fallbackAssignments: {[outletId: string]: string} = {}
               airPermitData.data.outlets?.forEach((outlet: any) => {
-                fallbackAssignments[outlet.id] = outlet.additional_info?.gateway || ''
+                const serverGateway = outlet.additional_info?.gateway || ''
+                const optimisticGateway = optimisticAssignments[outlet.id] || ''
+                // ✅ Fallback에서도 optimistic 값 사용
+                fallbackAssignments[outlet.id] = serverGateway || optimisticGateway
               })
               const fallbackNumbering = generateFacilityNumbering(airPermitData.data)
 
@@ -788,7 +820,10 @@ function AirPermitDetailContent() {
           if (airPermitData.data) {
             const fallbackAssignments: {[outletId: string]: string} = {}
             airPermitData.data.outlets?.forEach((outlet: any) => {
-              fallbackAssignments[outlet.id] = outlet.additional_info?.gateway || ''
+              const serverGateway = outlet.additional_info?.gateway || ''
+              const optimisticGateway = optimisticAssignments[outlet.id] || ''
+              // ✅ 재조회 실패 시에도 optimistic 값 사용
+              fallbackAssignments[outlet.id] = serverGateway || optimisticGateway
             })
             const fallbackNumbering = generateFacilityNumbering(airPermitData.data)
 

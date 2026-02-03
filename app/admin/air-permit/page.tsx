@@ -23,6 +23,40 @@ import {
 } from 'lucide-react'
 import { UnitInput } from '@/components/ui/UnitInput'
 
+// ✅ 게이트웨이 색상 팔레트 - air-permit 페이지용 (연한 톤)
+const baseGatewayColors = [
+  'bg-blue-100 text-blue-700 border-blue-300',
+  'bg-green-100 text-green-700 border-green-300',
+  'bg-yellow-100 text-yellow-700 border-yellow-300',
+  'bg-red-100 text-red-700 border-red-300',
+  'bg-purple-100 text-purple-700 border-purple-300',
+  'bg-pink-100 text-pink-700 border-pink-300',
+  'bg-indigo-100 text-indigo-700 border-indigo-300',
+  'bg-cyan-100 text-cyan-700 border-cyan-300',
+  'bg-orange-100 text-orange-700 border-orange-300',
+  'bg-teal-100 text-teal-700 border-teal-300',
+  'bg-lime-100 text-lime-700 border-lime-300',
+  'bg-rose-100 text-rose-700 border-rose-300',
+]
+
+// ✅ 동적 게이트웨이 색상 생성 함수 (Gateway 1~50 지원)
+const getGatewayColorClass = (gatewayValue: string): string => {
+  if (!gatewayValue) {
+    return 'bg-gray-100 text-gray-700 border-gray-300'
+  }
+
+  // gateway1, gateway2 등에서 숫자 추출
+  const match = gatewayValue.match(/gateway(\d+)/)
+  if (match) {
+    const num = parseInt(match[1])
+    const colorIndex = (num - 1) % baseGatewayColors.length
+    return baseGatewayColors[colorIndex]
+  }
+
+  // 숫자 추출 실패 시 회색 반환
+  return 'bg-gray-100 text-gray-700 border-gray-300'
+}
+
 // 커스텀 날짜 입력 컴포넌트 (yyyy-mm-dd 형태, 백스페이스 네비게이션)
 const DateInput = ({ value, onChange, placeholder = "YYYY-MM-DD" }: {
   value: string
@@ -1097,16 +1131,6 @@ function AirPermitManagementPage() {
                             const facilityNumbering = facilityNumberingMap.get(permit.id)
                             if (!facilityNumbering || facilityNumbering.outlets.length === 0) return null
 
-                            // 게이트웨이 색상 매핑
-                            const gatewayColors = {
-                              'gateway1': 'bg-blue-100 text-blue-700 border-blue-300',
-                              'gateway2': 'bg-green-100 text-green-700 border-green-300',
-                              'gateway3': 'bg-yellow-100 text-yellow-700 border-yellow-300',
-                              'gateway4': 'bg-red-100 text-red-700 border-red-300',
-                              'gateway5': 'bg-purple-100 text-purple-700 border-purple-300',
-                              'gateway6': 'bg-pink-100 text-pink-700 border-pink-300',
-                            }
-
                             return (
                               <div className="mt-2 p-2 bg-gray-50 rounded border">
                                 <div className="text-[9px] sm:text-[10px] md:text-xs font-medium text-gray-600 mb-1">시설 번호 현황</div>
@@ -1118,7 +1142,7 @@ function AirPermitManagementPage() {
                                     // 게이트웨이 정보 가져오기
                                     const outletData = permit.outlets?.find((o: any) => o.id === outlet.outletId) as any
                                     const gateway = outletData?.additional_info?.gateway || ''
-                                    const gatewayColorClass = gateway ? (gatewayColors[gateway as keyof typeof gatewayColors] || '') : ''
+                                    const gatewayColorClass = getGatewayColorClass(gateway)
 
                                     return (
                                       <div key={outlet.outletId} className="text-[8px] sm:text-[9px] md:text-[10px] text-gray-700 flex items-center gap-1">
@@ -1259,18 +1283,9 @@ function AirPermitManagementPage() {
                   })() ? (
                     <div className="space-y-2 sm:space-y-3 md:space-y-4">
                       {selectedPermit.outlets?.map((outlet: any, index: number) => {
-                        // 게이트웨이 색상 결정
+                        // 게이트웨이 색상 결정 (동적 생성 함수 사용)
                         const gateway = outlet.additional_info?.gateway || ''
-                        const gatewayColors = {
-                          'gateway1': 'bg-blue-100 border-blue-300 text-blue-800',
-                          'gateway2': 'bg-green-100 border-green-300 text-green-800',
-                          'gateway3': 'bg-yellow-100 border-yellow-300 text-yellow-800',
-                          'gateway4': 'bg-red-100 border-red-300 text-red-800',
-                          'gateway5': 'bg-purple-100 border-purple-300 text-purple-800',
-                          'gateway6': 'bg-pink-100 border-pink-300 text-pink-800',
-                          '': 'bg-gray-100 border-gray-300 text-gray-800'
-                        }
-                        const colorClass = gatewayColors[gateway as keyof typeof gatewayColors] || gatewayColors['']
+                        const colorClass = getGatewayColorClass(gateway)
                         
                         return (
                           <div key={index} className={`border-2 rounded-lg p-2 sm:p-3 md:p-4 ${colorClass}`}>
