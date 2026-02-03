@@ -476,6 +476,9 @@ function AirPermitDetailContent() {
     const startTime = performance.now()
     console.log(`⏱️ [TIME] handleSave 시작: 0ms`)
 
+    // ✅ 저장 실패 시 롤백을 위해 원본 게이트웨이 할당 저장
+    const originalGatewayAssignments = { ...gatewayAssignments }
+
     try {
       console.log('💾 handleSave 함수 시작')
       setIsSaving(true)
@@ -844,6 +847,8 @@ function AirPermitDetailContent() {
       if (originalPermitDetail) {
         setPermitDetail(originalPermitDetail);
       }
+      // ✅ 게이트웨이 할당도 원본으로 롤백 (데이터 일관성 보장)
+      setGatewayAssignments(originalGatewayAssignments);
       setIsEditing(true);
       alert('저장에 실패했습니다');
     } finally {
