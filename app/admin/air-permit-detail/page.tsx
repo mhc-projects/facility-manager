@@ -20,6 +20,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { UnitInput } from '@/components/ui/UnitInput'
+import { Toast } from '@/components/ui/Toast'
 
 // 게이트웨이 색상 팔레트 - 무한 확장 가능한 기본 색상들
 const baseGatewayColors = [
@@ -102,6 +103,7 @@ function AirPermitDetailContent() {
   const [permitDetail, setPermitDetail] = useState<AirPermitWithOutlets | null>(null)
   const [originalPermitDetail, setOriginalPermitDetail] = useState<AirPermitWithOutlets | null>(null)
   const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [isEditing, setIsEditing] = useState(true) // 항상 편집모드로 시작
   const [gatewayAssignments, setGatewayAssignments] = useState<{[outletId: string]: string}>({})
@@ -738,24 +740,21 @@ function AirPermitDetailContent() {
             // ✅ 새 대기필증 생성 완료 시 목록 페이지로 리다이렉트
             const wasNewPermit = permitDetail?.id === 'new'
 
-            // ✅ UI 업데이트 완료 후 성공 메시지 표시 (DOM 렌더링 완료 보장)
-            // requestAnimationFrame을 두 번 사용하여 브라우저가 실제로 화면을 다시 그린 후에 alert 표시
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                console.log(`⏱️ [TIME] alert 표시: ${(performance.now() - startTime).toFixed(0)}ms`)
-                if (wasNewPermit) {
-                  alert('대기필증이 성공적으로 추가되었습니다')
-                  // 목록 페이지로 리다이렉트
-                  if (businessIdForUpdate) {
-                    router.push(`/admin/air-permit?businessId=${businessIdForUpdate}`)
-                  } else {
-                    router.push('/admin/air-permit')
-                  }
+            // ✅ UI 업데이트 완료 후 성공 메시지 표시 (Toast 사용으로 렌더링 차단 없음)
+            console.log(`⏱️ [TIME] Toast 표시: ${(performance.now() - startTime).toFixed(0)}ms`)
+            if (wasNewPermit) {
+              setToast({ message: '대기필증이 성공적으로 추가되었습니다', type: 'success' })
+              // 목록 페이지로 리다이렉트
+              setTimeout(() => {
+                if (businessIdForUpdate) {
+                  router.push(`/admin/air-permit?businessId=${businessIdForUpdate}`)
                 } else {
-                  alert('변경사항이 저장되었습니다')
+                  router.push('/admin/air-permit')
                 }
-              })
-            })
+              }, 1000) // Toast 표시 후 1초 뒤 리다이렉트
+            } else {
+              setToast({ message: '변경사항이 저장되었습니다', type: 'success' })
+            }
           } else {
             console.error('❌ 응답 데이터가 비어있거나 outlets 정보가 없습니다:', refreshData)
             // 실패 시 대기필증 API 응답으로 업데이트 (fallback)
@@ -778,12 +777,8 @@ function AirPermitDetailContent() {
                 localStorage.setItem('air-permit-updated', permitDetail.business_id)
               }
 
-              // Fallback에서도 DOM 렌더링 완료 후 alert 표시
-              requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  alert('변경사항이 저장되었습니다')
-                })
-              })
+              // Fallback에서도 Toast 표시 (렌더링 차단 없음)
+              setToast({ message: '변경사항이 저장되었습니다', type: 'success' })
             }
           }
         } else {
@@ -813,22 +808,20 @@ function AirPermitDetailContent() {
             // ✅ 새 대기필증 생성 완료 시 목록 페이지로 리다이렉트
             const wasNewPermit = permitDetail?.id === 'new'
 
-            // Fallback 경로에서도 DOM 렌더링 완료 후 alert 표시
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                if (wasNewPermit) {
-                  alert('대기필증이 성공적으로 추가되었습니다')
-                  // 목록 페이지로 리다이렉트
-                  if (businessIdForUpdate) {
-                    router.push(`/admin/air-permit?businessId=${businessIdForUpdate}`)
-                  } else {
-                    router.push('/admin/air-permit')
-                  }
+            // Fallback 경로에서도 Toast 표시 (렌더링 차단 없음)
+            if (wasNewPermit) {
+              setToast({ message: '대기필증이 성공적으로 추가되었습니다', type: 'success' })
+              // 목록 페이지로 리다이렉트
+              setTimeout(() => {
+                if (businessIdForUpdate) {
+                  router.push(`/admin/air-permit?businessId=${businessIdForUpdate}`)
                 } else {
-                  alert('변경사항이 저장되었습니다')
+                  router.push('/admin/air-permit')
                 }
-              })
-            })
+              }, 1000) // Toast 표시 후 1초 뒤 리다이렉트
+            } else {
+              setToast({ message: '변경사항이 저장되었습니다', type: 'success' })
+            }
               }
             }
           } catch (error) {
@@ -850,7 +843,7 @@ function AirPermitDetailContent() {
       // ✅ 게이트웨이 할당도 원본으로 롤백 (데이터 일관성 보장)
       setGatewayAssignments(originalGatewayAssignments);
       setIsEditing(true);
-      alert('저장에 실패했습니다');
+      setToast({ message: '저장에 실패했습니다', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -1317,10 +1310,20 @@ function AirPermitDetailContent() {
   }
 
   return (
-    <AdminLayout
-      title={urlParams.mode?.includes('create') ? '새 대기필증 추가' : `필증보기 - ${permitDetail.business?.business_name || '대기필증'}`}
-      description={urlParams.mode?.includes('create') ? '새로운 대기필증을 추가합니다' : `업종: ${permitDetail.business_type || '-'} | 배출구 ${permitDetail.outlets?.length || 0}개`}
-      actions={(
+    <>
+      {/* Toast 알림 */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      <AdminLayout
+        title={urlParams.mode?.includes('create') ? '새 대기필증 추가' : `필증보기 - ${permitDetail.business?.business_name || '대기필증'}`}
+        description={urlParams.mode?.includes('create') ? '새로운 대기필증을 추가합니다' : `업종: ${permitDetail.business_type || '-'} | 배출구 ${permitDetail.outlets?.length || 0}개`}
+        actions={(
         <div className="flex gap-3">
           <button
             onClick={() => {
@@ -2210,6 +2213,7 @@ function AirPermitDetailContent() {
         )}
       </div>
     </AdminLayout>
+    </>
   )
 }
 
