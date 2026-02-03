@@ -18,6 +18,20 @@ import {
   CheckCircle,
   ExternalLink
 } from 'lucide-react';
+// 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import
+import {
+  TaskType,
+  TaskStatus,
+  TaskStep,
+  selfSteps,
+  subsidySteps,
+  etcSteps,
+  asSteps,
+  dealerSteps,
+  outsourcingSteps,
+  getStepsForType,
+  getStatusLabel
+} from '@/lib/task-steps';
 
 interface BusinessProgressNote {
   id: string;
@@ -54,124 +68,17 @@ interface TaskNotification {
   expires_at?: string;
 }
 
-// 업무 타입 및 상태 정의 (admin/tasks와 동일)
-type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing'
-type TaskStatus = string
+// 🔄 TaskType과 TaskStatus는 공유 모듈에서 import
+// 🔄 단계 정의는 공유 모듈에서 import (lib/task-steps.ts)
+// 🔄 getStatusLabel은 공유 모듈에서 import하되, type이 undefined일 수 있으므로 wrapper 함수 사용
 
-// 상태별 단계 정의 (자비)
-const selfSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'self_needs_check', label: '확인필요', color: 'red' },
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
-  { status: 'quotation', label: '견적서 작성', color: 'orange' },
-  { status: 'contract', label: '계약 체결', color: 'purple' },
-  { status: 'deposit_confirm', label: '계약금 확인', color: 'indigo' },
-  { status: 'product_order', label: '제품 발주', color: 'cyan' },
-  { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'installation_schedule', label: '설치 협의', color: 'teal' },
-  { status: 'installation', label: '제품 설치', color: 'green' },
-  { status: 'balance_payment', label: '잔금 입금', color: 'lime' },
-  { status: 'document_complete', label: '서류 발송 완료', color: 'green' }
-]
-
-// 상태별 단계 정의 (보조금)
-const subsidySteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'subsidy_needs_check', label: '확인필요', color: 'red' },
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
-  { status: 'quotation', label: '견적서 작성', color: 'orange' },
-  { status: 'document_preparation', label: '신청서 작성 필요', color: 'amber' },
-  { status: 'application_submit', label: '신청서 제출', color: 'purple' },
-  { status: 'approval_pending', label: '보조금 승인대기', color: 'sky' },
-  { status: 'approved', label: '보조금 승인', color: 'lime' },
-  { status: 'rejected', label: '보조금 탈락', color: 'red' },
-  { status: 'document_supplement', label: '신청서 보완', color: 'pink' },
-  { status: 'pre_construction_inspection', label: '착공 전 실사', color: 'indigo' },
-  { status: 'pre_construction_supplement_1st', label: '착공 보완 1차', color: 'rose' },
-  { status: 'pre_construction_supplement_2nd', label: '착공 보완 2차', color: 'fuchsia' },
-  { status: 'construction_report_submit', label: '착공신고서 제출', color: 'blue' },
-  { status: 'product_order', label: '제품 발주', color: 'cyan' },
-  { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'installation_schedule', label: '설치예정', color: 'teal' },
-  { status: 'installation', label: '설치완료', color: 'green' },
-  { status: 'pre_completion_document_submit', label: '준공도서 작성 필요', color: 'amber' },
-  { status: 'completion_inspection', label: '준공 실사', color: 'violet' },
-  { status: 'completion_supplement_1st', label: '준공 보완 1차', color: 'slate' },
-  { status: 'completion_supplement_2nd', label: '준공 보완 2차', color: 'zinc' },
-  { status: 'completion_supplement_3rd', label: '준공 보완 3차', color: 'stone' },
-  { status: 'final_document_submit', label: '보조금지급신청서 제출', color: 'gray' },
-  { status: 'subsidy_payment', label: '보조금 입금', color: 'green' }
-]
-
-// 상태별 단계 정의 (기타)
-const etcSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'etc_needs_check', label: '확인필요', color: 'red' },
-  { status: 'etc_status', label: '기타', color: 'gray' }
-]
-
-// 상태별 단계 정의 (AS)
-const asSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'as_needs_check', label: '확인필요', color: 'red' },
-  { status: 'as_customer_contact', label: 'AS 고객 상담', color: 'blue' },
-  { status: 'as_site_inspection', label: 'AS 현장 확인', color: 'yellow' },
-  { status: 'as_quotation', label: 'AS 견적 작성', color: 'orange' },
-  { status: 'as_contract', label: 'AS 계약 체결', color: 'purple' },
-  { status: 'as_part_order', label: 'AS 부품 발주', color: 'cyan' },
-  { status: 'as_completed', label: 'AS 완료', color: 'green' }
-]
-
-// 상태별 단계 정의 (대리점)
-const dealerSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'dealer_needs_check', label: '확인필요', color: 'red' },
-  { status: 'dealer_order_received', label: '발주 수신', color: 'blue' },
-  { status: 'dealer_invoice_issued', label: '계산서 발행', color: 'yellow' },
-  { status: 'dealer_payment_confirmed', label: '입금 확인', color: 'green' },
-  { status: 'dealer_product_ordered', label: '제품 발주', color: 'emerald' }
-]
-
-// 상태별 단계 정의 (외주설치)
-const outsourcingSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'outsourcing_needs_check', label: '확인필요', color: 'red' },
-  { status: 'outsourcing_order', label: '외주 발주', color: 'blue' },
-  { status: 'outsourcing_schedule', label: '일정 조율', color: 'yellow' },
-  { status: 'outsourcing_in_progress', label: '설치 진행 중', color: 'orange' },
-  { status: 'outsourcing_completed', label: '설치 완료', color: 'green' }
-]
-
-// 상태를 한글 라벨로 변환하는 헬퍼 함수
-const getStatusLabel = (type: TaskType | undefined, status: string): string => {
+// 상태를 한글 라벨로 변환하는 헬퍼 함수 (type이 undefined일 수 있는 경우 처리)
+const getStatusLabelWithOptionalType = (type: TaskType | undefined, status: string): string => {
   if (!type) {
-    // 타입이 없는 경우 모든 steps에서 검색
-    const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
-    const foundStep = allSteps.find(s => s.status === status)
-    if (foundStep) {
-      return foundStep.label
-    }
-    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+    // 타입이 없는 경우 etc로 기본값 설정하여 공유 모듈 함수 사용
+    return getStatusLabel('etc', status)
   }
-
-  const steps = type === 'self' ? selfSteps :
-                type === 'subsidy' ? subsidySteps :
-                type === 'dealer' ? dealerSteps :
-                type === 'outsourcing' ? outsourcingSteps :
-                type === 'etc' ? etcSteps : asSteps
-
-  const step = steps.find(s => s.status === status)
-
-  if (step) {
-    return step.label
-  }
-
-  // 타입이 맞지 않는 경우, 모든 steps 배열에서 검색
-  const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
-  const foundStep = allSteps.find(s => s.status === status)
-
-  if (foundStep) {
-    return foundStep.label
-  }
-
-  // 그래도 찾지 못한 경우, status 값을 사람이 읽을 수 있는 형태로 변환
-  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return getStatusLabel(type, status)
 }
 
 interface BusinessProgressSectionProps {
@@ -505,7 +412,7 @@ export default function BusinessProgressSection({
                   {note.related_task && (
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(note.related_task.status)}`}>
-                        {getStatusLabel(note.related_task.task_type, note.related_task.status)}
+                        {getStatusLabelWithOptionalType(note.related_task.task_type, note.related_task.status)}
                       </span>
                       <span className={`px-2 py-1 text-xs rounded-full ${getPriorityColor(note.related_task.priority)}`}>
                         {note.related_task.priority}

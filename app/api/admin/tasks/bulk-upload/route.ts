@@ -62,6 +62,7 @@ async function checkAdminPermission(request: NextRequest) {
 
 // 한글 상태명 → 영문 코드 변환 (역방향 매핑)
 // 🔧 Phase 7: "확인필요"는 업무타입에 따라 다른 코드로 변환
+// 🔧 Fix: task_type을 고려하여 올바른 status 코드 반환
 function getStatusCodeFromKorean(koreanStatus: string, taskType?: string | null): string | null {
   // 특별 처리: "확인필요"는 업무타입에 따라 다른 코드로 변환
   if (koreanStatus === '확인필요' && taskType) {
@@ -76,12 +77,33 @@ function getStatusCodeFromKorean(koreanStatus: string, taskType?: string | null)
     return needsCheckMap[taskType] || null;
   }
 
-  // 일반 매핑
+  // task_type이 있는 경우: prefix가 있는 status 우선 검색
+  if (taskType) {
+    // 1순위: {task_type}_{status} 형태 검색 (예: dealer_product_ordered)
+    for (const [code, korean] of Object.entries(TASK_STATUS_KR)) {
+      if (korean === koreanStatus && code.startsWith(`${taskType}_`)) {
+        return code;
+      }
+    }
+
+    // 2순위: 공통 단계 검색 (prefix 없는 status)
+    // dealer, outsourcing, etc는 공통 단계를 사용하지 않으므로 이 단계를 건너뜀
+    if (taskType !== 'dealer' && taskType !== 'outsourcing' && taskType !== 'etc') {
+      for (const [code, korean] of Object.entries(TASK_STATUS_KR)) {
+        if (korean === koreanStatus && !code.includes('_')) {
+          return code;
+        }
+      }
+    }
+  }
+
+  // task_type이 없거나 위에서 찾지 못한 경우: 일반 매핑 (첫 번째 매칭)
   for (const [code, korean] of Object.entries(TASK_STATUS_KR)) {
     if (korean === koreanStatus) {
       return code;
     }
   }
+
   return null;
 }
 

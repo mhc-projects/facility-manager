@@ -633,7 +633,7 @@ export default function BusinessDetailModal({
                       <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm">
                         <div className="flex items-center text-xs sm:text-sm md:text-base text-gray-600 mb-2 sm:mb-3">
                           <MessageSquare className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-indigo-500" />
-                          메모 및 업무 ({businessMemos.length + businessTasks.length}개)
+                          메모 및 업무 ({getIntegratedItems().length}개)
                         </div>
                         {/* 스크롤 가능한 컨테이너 추가 - 최대 높이 제한으로 내용이 많아져도 스크롤 가능 */}
                         <div className="space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto pr-1 sm:pr-2" style={{scrollbarWidth: 'thin'}}>
@@ -710,13 +710,28 @@ export default function BusinessDetailModal({
                                 <div key={`task-${item.id}-${index}`} className={`${statusColors.bg} rounded-lg p-2 sm:p-3 md:p-4 border-l-4 ${statusColors.border} hover:shadow-md transition-shadow`}>
                                   <div className="flex items-start justify-between mb-2 sm:mb-3">
                                     <div className="flex-1">
-                                      <div className="flex items-center space-x-1 sm:space-x-2 mb-1 sm:mb-2">
-                                        <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                                      <div className="flex items-center space-x-1 sm:space-x-2 mb-1 sm:mb-2 flex-wrap">
+                                        <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
                                         <h4 className="font-semibold text-gray-900 text-xs sm:text-sm md:text-base">
                                           {getStatusDisplayName(item.status || '')}
                                         </h4>
+                                        <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-medium rounded-full ${
+                                          item.task_type === 'subsidy' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                          item.task_type === 'dealer' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                                          item.task_type === 'outsourcing' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                                          item.task_type === 'as' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                          item.task_type === 'self' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                          'bg-gray-100 text-gray-700 border border-gray-200'
+                                        }`}>
+                                          {item.task_type === 'subsidy' ? '보조금' :
+                                           item.task_type === 'dealer' ? '대리점' :
+                                           item.task_type === 'outsourcing' ? '외주설치' :
+                                           item.task_type === 'as' ? 'AS' :
+                                           item.task_type === 'self' ? '자비' :
+                                           '기타'}
+                                        </span>
                                         <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-medium rounded-full ${statusColors.badge} ${statusColors.text}`}>
-                                          {item.task_type === 'subsidy' ? '지원사업' : item.task_type === 'as' ? 'A/S' : '자체사업'}
+                                          {getStatusDisplayName(item.status || '')}
                                         </span>
                                       </div>
                                       <p className="text-xs sm:text-sm text-gray-700 mb-2 sm:mb-3 leading-relaxed break-words">{item.description}</p>

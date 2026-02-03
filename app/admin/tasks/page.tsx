@@ -13,6 +13,23 @@ import TaskHistoryTimeline from '@/components/TaskHistoryTimeline'
 import BusinessInfoPanel from '@/components/tasks/BusinessInfoPanel'
 import SubsidyActiveBadge from '@/components/tasks/SubsidyActiveBadge'
 import BulkUploadModal from '@/components/tasks/BulkUploadModal'
+import DuplicateTasksModal from '@/components/admin/DuplicateTasksModal'
+// 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import
+import {
+  TaskType,
+  TaskStatus,
+  TaskStep,
+  selfSteps,
+  subsidySteps,
+  etcSteps,
+  asSteps,
+  dealerSteps,
+  outsourcingSteps,
+  getStepsForType,
+  calculateProgressPercentage,
+  getStatusLabel,
+  getStatusColorClass
+} from '@/lib/task-steps'
 import {
   Plus,
   Search,
@@ -50,37 +67,7 @@ import {
   Upload
 } from 'lucide-react'
 
-// 업무 타입 정의
-type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing'
-type TaskStatus =
-  // 공통 단계
-  | 'pending' | 'site_survey' | 'customer_contact' | 'site_inspection' | 'quotation' | 'contract'
-  // 확인필요 단계 (각 업무 타입별)
-  | 'self_needs_check' | 'subsidy_needs_check' | 'as_needs_check' | 'dealer_needs_check' | 'outsourcing_needs_check' | 'etc_needs_check'
-  // 자비 단계
-  | 'deposit_confirm' | 'product_order' | 'product_shipment' | 'installation_schedule'
-  | 'installation' | 'balance_payment' | 'document_complete'
-  // 보조금 단계
-  | 'approval_pending' | 'approved' | 'rejected'
-  | 'application_submit' | 'document_supplement' | 'document_preparation' | 'pre_construction_inspection'
-  // 착공 보완 세분화
-  | 'pre_construction_supplement_1st' | 'pre_construction_supplement_2nd'
-  | 'construction_report_submit' // 🆕 착공신고서 제출
-  | 'pre_completion_document_submit' | 'completion_inspection'
-  // 준공 보완 세분화
-  | 'completion_supplement_1st' | 'completion_supplement_2nd' | 'completion_supplement_3rd'
-  | 'final_document_submit' | 'subsidy_payment'
-  // AS 전용 단계
-  | 'as_customer_contact' | 'as_site_inspection' | 'as_quotation' | 'as_contract'
-  | 'as_part_order' | 'as_completed'
-  // 대리점 단계 (단순화)
-  | 'dealer_order_received' | 'dealer_invoice_issued'
-  | 'dealer_payment_confirmed' | 'dealer_product_ordered'
-  // 외주설치 단계
-  | 'outsourcing_order' | 'outsourcing_schedule' | 'outsourcing_in_progress' | 'outsourcing_completed'
-  // 기타 단계
-  | 'etc_status'
-
+// 🔄 TaskType과 TaskStatus는 공유 모듈에서 import
 type Priority = 'high' | 'medium' | 'low'
 
 export interface Task {
@@ -136,139 +123,7 @@ interface BusinessOption {
   address: string
 }
 
-// 상태별 단계 정의 (자비)
-const selfSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'self_needs_check', label: '확인필요', color: 'red' },
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
-  { status: 'quotation', label: '견적서 작성', color: 'orange' },
-  { status: 'contract', label: '계약 체결', color: 'purple' },
-  { status: 'deposit_confirm', label: '계약금 확인', color: 'indigo' },
-  { status: 'product_order', label: '제품 발주', color: 'cyan' },
-  { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'installation_schedule', label: '설치 협의', color: 'teal' },
-  { status: 'installation', label: '제품 설치', color: 'green' },
-  { status: 'balance_payment', label: '잔금 입금', color: 'lime' },
-  { status: 'document_complete', label: '서류 발송 완료', color: 'green' }
-]
-
-// 상태별 단계 정의 (보조금)
-const subsidySteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'subsidy_needs_check', label: '확인필요', color: 'red' },
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
-  { status: 'quotation', label: '견적서 작성', color: 'orange' },
-  // ✨ 새로운 단계 추가
-  { status: 'document_preparation', label: '신청서 작성 필요', color: 'amber' },
-  { status: 'application_submit', label: '신청서 제출', color: 'purple' },
-  // 보조금 승인 단계
-  { status: 'approval_pending', label: '보조금 승인대기', color: 'sky' },
-  { status: 'approved', label: '보조금 승인', color: 'lime' },
-  { status: 'rejected', label: '보조금 탈락', color: 'red' },
-  // 🔄 워딩 변경: 서류 보완 → 신청서 보완
-  { status: 'document_supplement', label: '신청서 보완', color: 'pink' },
-  { status: 'pre_construction_inspection', label: '착공 전 실사', color: 'indigo' },
-  // 착공 보완 세분화
-  { status: 'pre_construction_supplement_1st', label: '착공 보완 1차', color: 'rose' },
-  { status: 'pre_construction_supplement_2nd', label: '착공 보완 2차', color: 'fuchsia' },
-  // 🆕 착공신고서 제출 단계
-  { status: 'construction_report_submit', label: '착공신고서 제출', color: 'blue' },
-  { status: 'product_order', label: '제품 발주', color: 'cyan' },
-  { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  // 🔄 워딩 변경: 설치 협의 → 설치예정
-  { status: 'installation_schedule', label: '설치예정', color: 'teal' },
-  // 🔄 워딩 변경: 제품 설치 → 설치완료
-  { status: 'installation', label: '설치완료', color: 'green' },
-  // 🔄 워딩 변경: 준공실사 전 서류 제출 → 준공도서 작성 필요
-  { status: 'pre_completion_document_submit', label: '준공도서 작성 필요', color: 'amber' },
-  { status: 'completion_inspection', label: '준공 실사', color: 'violet' },
-  // 준공 보완 세분화
-  { status: 'completion_supplement_1st', label: '준공 보완 1차', color: 'slate' },
-  { status: 'completion_supplement_2nd', label: '준공 보완 2차', color: 'zinc' },
-  { status: 'completion_supplement_3rd', label: '준공 보완 3차', color: 'stone' },
-  { status: 'final_document_submit', label: '보조금지급신청서 제출', color: 'gray' },
-  { status: 'subsidy_payment', label: '보조금 입금', color: 'green' }
-]
-
-// 상태별 단계 정의 (기타)
-const etcSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'etc_needs_check', label: '확인필요', color: 'red' },
-  { status: 'etc_status', label: '기타', color: 'gray' }
-]
-
-// 상태별 단계 정의 (AS)
-const asSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'as_needs_check', label: '확인필요', color: 'red' },
-  { status: 'as_customer_contact', label: 'AS 고객 상담', color: 'blue' },
-  { status: 'as_site_inspection', label: 'AS 현장 확인', color: 'yellow' },
-  { status: 'as_quotation', label: 'AS 견적 작성', color: 'orange' },
-  { status: 'as_contract', label: 'AS 계약 체결', color: 'purple' },
-  { status: 'as_part_order', label: 'AS 부품 발주', color: 'cyan' },
-  { status: 'as_completed', label: 'AS 완료', color: 'green' }
-]
-
-// 상태별 단계 정의 (대리점) - 단순화
-const dealerSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'dealer_needs_check', label: '확인필요', color: 'red' },
-  { status: 'dealer_order_received', label: '발주 수신', color: 'blue' },
-  { status: 'dealer_invoice_issued', label: '계산서 발행', color: 'yellow' },
-  { status: 'dealer_payment_confirmed', label: '입금 확인', color: 'green' },
-  { status: 'dealer_product_ordered', label: '제품 발주', color: 'emerald' }
-]
-
-// 상태별 단계 정의 (외주설치)
-const outsourcingSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'outsourcing_needs_check', label: '확인필요', color: 'red' },
-  { status: 'outsourcing_order', label: '외주 발주', color: 'blue' },
-  { status: 'outsourcing_schedule', label: '일정 조율', color: 'yellow' },
-  { status: 'outsourcing_in_progress', label: '설치 진행 중', color: 'orange' },
-  { status: 'outsourcing_completed', label: '설치 완료', color: 'green' }
-]
-
-// 진행률 자동 계산 함수
-const calculateProgressPercentage = (type: TaskType, status: TaskStatus): number => {
-  const steps = type === 'self' ? selfSteps :
-                type === 'subsidy' ? subsidySteps :
-                type === 'dealer' ? dealerSteps :
-                type === 'outsourcing' ? outsourcingSteps :
-                type === 'etc' ? etcSteps : asSteps
-
-  const currentStepIndex = steps.findIndex(step => step.status === status)
-
-  if (currentStepIndex === -1) {
-    return 0 // 단계를 찾을 수 없으면 0%
-  }
-
-  // 현재 단계 / 전체 단계 * 100 (소수점 첫째자리 반올림)
-  const progress = ((currentStepIndex + 1) / steps.length) * 100
-  return Math.round(progress)
-}
-
-// 상태를 한글 라벨로 변환하는 헬퍼 함수
-const getStatusLabel = (type: TaskType, status: TaskStatus): string => {
-  const steps = type === 'self' ? selfSteps :
-                type === 'subsidy' ? subsidySteps :
-                type === 'dealer' ? dealerSteps :
-                type === 'outsourcing' ? outsourcingSteps :
-                type === 'etc' ? etcSteps : asSteps
-
-  const step = steps.find(s => s.status === status)
-
-  if (step) {
-    return step.label
-  }
-
-  // 타입이 맞지 않는 경우, 모든 steps 배열에서 검색
-  const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
-  const foundStep = allSteps.find(s => s.status === status)
-
-  if (foundStep) {
-    return foundStep.label
-  }
-
-  // 그래도 찾지 못한 경우, status 값을 사람이 읽을 수 있는 형태로 변환
-  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-}
+// 🔄 단계 정의 및 헬퍼 함수는 공유 모듈에서 import (lib/task-steps.ts)
 
 function TaskManagementPage() {
   const { user } = useAuth()
@@ -292,6 +147,10 @@ function TaskManagementPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showEditHistory, setShowEditHistory] = useState(false)
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicateGroups, setDuplicateGroups] = useState<any[]>([])
+  const [duplicateSummary, setDuplicateSummary] = useState({ totalGroups: 0, totalDuplicates: 0, toDelete: 0 })
+  const [isDuplicateLoading, setIsDuplicateLoading] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [draggedTask, setDraggedTask] = useState<Task | null>(null)
@@ -420,6 +279,60 @@ function TaskManagementPage() {
     } finally {
       setIsLoading(false)
     }
+  }, [])
+
+  // 중복 업무 조회
+  const fetchDuplicates = async () => {
+    setIsDuplicateLoading(true)
+    try {
+      const token = TokenManager.getToken()
+      const response = await fetch('/api/admin/tasks/duplicates', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await response.json()
+      setDuplicateGroups(data.duplicates)
+      setDuplicateSummary(data.summary)
+      return data
+    } catch (error) {
+      console.error('중복 업무 조회 실패:', error)
+      alert('중복 업무를 불러오는 중 오류가 발생했습니다.')
+      return { duplicates: [], summary: { totalGroups: 0, totalDuplicates: 0, toDelete: 0 } }
+    } finally {
+      setIsDuplicateLoading(false)
+    }
+  }
+
+  // 중복 업무 삭제
+  const deleteDuplicates = async (taskIds: string[]) => {
+    try {
+      const token = TokenManager.getToken()
+      const response = await fetch('/api/admin/tasks/duplicates', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ taskIds })
+      })
+      const result = await response.json()
+      if (result.success > 0) {
+        await fetchTasks() // 업무 목록 새로고침
+      }
+      return result
+    } catch (error) {
+      console.error('중복 업무 삭제 실패:', error)
+      return { success: 0, failed: taskIds.length }
+    }
+  }
+
+  // 중복 관리 모달 열기
+  const handleOpenDuplicateModal = useCallback(async () => {
+    const { summary } = await fetchDuplicates()
+    if (summary.totalGroups === 0) {
+      alert('중복된 업무가 없습니다.')
+      return
+    }
+    setShowDuplicateModal(true)
   }, [])
 
   // 🆕 활성 보조금 공고 로딩
@@ -593,8 +506,25 @@ function TaskManagementPage() {
       const result = await response.json()
       console.log('✅ 업무 삭제 성공:', result)
 
+      // 삭제된 업무의 사업장명 저장 (이벤트 발송용)
+      const deletedTask = tasks.find(t => t.id === taskId)
+      const deletedBusinessName = deletedTask?.businessName
+
       // 로컬 상태에서 제거
       setTasks(prev => prev.filter(t => t.id !== taskId))
+
+      // 📡 이벤트 발송: 업무 삭제 알림 (사업장 모달 실시간 동기화)
+      if (deletedBusinessName) {
+        const taskUpdateEvent = new CustomEvent('task-updated', {
+          detail: {
+            businessName: deletedBusinessName,
+            taskId: taskId,
+            action: 'deleted'
+          }
+        })
+        window.dispatchEvent(taskUpdateEvent)
+        console.log('📡 [EVENT] 업무 삭제 이벤트 발송:', deletedBusinessName)
+      }
 
       // 수정 모달이 열려있다면 닫기
       if (editingTask?.id === taskId) {
@@ -1368,6 +1298,17 @@ function TaskManagementPage() {
 
       setTasks(prev => [newTask, ...prev])
 
+      // 📡 이벤트 발송: 업무 생성 알림 (사업장 모달 실시간 동기화)
+      const taskUpdateEvent = new CustomEvent('task-updated', {
+        detail: {
+          businessName: result.data.task.business_name,
+          taskId: result.data.task.id,
+          status: result.data.task.status
+        }
+      })
+      window.dispatchEvent(taskUpdateEvent)
+      console.log('📡 [EVENT] 업무 생성 이벤트 발송:', result.data.task.business_name)
+
       // 폼 초기화
       setCreateTaskForm({
         title: '',
@@ -1554,6 +1495,17 @@ function TaskManagementPage() {
           : task
       ))
 
+      // 📡 이벤트 발송: 업무 업데이트 알림 (사업장 모달 실시간 동기화)
+      const taskUpdateEvent = new CustomEvent('task-updated', {
+        detail: {
+          businessName: editingTask.businessName,
+          taskId: editingTask.id,
+          status: editingTask.status
+        }
+      })
+      window.dispatchEvent(taskUpdateEvent)
+      console.log('📡 [EVENT] 업무 업데이트 이벤트 발송:', editingTask.businessName)
+
       // 모달 닫기
       setShowEditModal(false)
       setEditingTask(null)
@@ -1593,13 +1545,23 @@ function TaskManagementPage() {
           {/* 핵심 액션 - 모든 화면에서 표시 */}
           <div className="flex items-center gap-2">
             {user?.permission_level === 4 && (
-              <button
-                onClick={() => setShowBulkUploadModal(true)}
-                className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 md:px-3 rounded-lg hover:bg-green-700 transition-colors text-sm"
-              >
-                <Upload className="w-4 h-4" />
-                <span className="hidden md:inline">엑셀 일괄 등록</span>
-              </button>
+              <>
+                <button
+                  onClick={handleOpenDuplicateModal}
+                  className="flex items-center gap-2 bg-orange-600 text-white px-3 py-1.5 md:px-3 rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                  title="중복 업무 조회 및 삭제"
+                >
+                  <FileX className="w-4 h-4" />
+                  <span className="hidden md:inline">중복 관리</span>
+                </button>
+                <button
+                  onClick={() => setShowBulkUploadModal(true)}
+                  className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 md:px-3 rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="hidden md:inline">엑셀 일괄 등록</span>
+                </button>
+              </>
             )}
             <button
               onClick={handleOpenCreateModal}
@@ -3027,6 +2989,15 @@ function TaskManagementPage() {
           }}
         />
       )}
+
+      {/* 중복 업무 관리 모달 */}
+      <DuplicateTasksModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        duplicates={duplicateGroups}
+        summary={duplicateSummary}
+        onDelete={deleteDuplicates}
+      />
     </AdminLayout>
   );
 }

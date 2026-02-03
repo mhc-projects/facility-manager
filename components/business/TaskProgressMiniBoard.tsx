@@ -5,6 +5,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { TokenManager } from '@/lib/api-client';
 import { Clock, User, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+// 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import
+import {
+  TaskType,
+  TaskStatus,
+  TaskStep,
+  selfSteps,
+  subsidySteps,
+  etcSteps,
+  asSteps,
+  dealerSteps,
+  outsourcingSteps,
+  getStepsForType
+} from '@/lib/task-steps';
 
 interface TaskAssignee {
   id: string;
@@ -12,18 +25,7 @@ interface TaskAssignee {
   email: string;
 }
 
-// 실제 업무관리 시스템과 동일한 타입 정의
-type TaskType = 'self' | 'subsidy' | 'etc' | 'as'
-type TaskStatus =
-  | 'customer_contact' | 'site_inspection' | 'quotation' | 'contract'
-  | 'deposit_confirm' | 'product_order' | 'product_shipment' | 'installation_schedule'
-  | 'installation' | 'balance_payment' | 'document_complete'
-  // 보조금 전용 단계
-  | 'application_submit' | 'document_supplement' | 'pre_construction_inspection'
-  | 'pre_construction_supplement' | 'completion_inspection' | 'completion_supplement'
-  | 'final_document_submit' | 'subsidy_payment'
-  // 기타 단계
-  | 'etc_status'
+// 🔄 TaskType과 TaskStatus는 공유 모듈에서 import
 
 interface FacilityTask {
   id: string;
@@ -46,69 +48,7 @@ interface TaskProgressMiniBoardProps {
   onStatusChange?: (taskId: string, newStatus: string) => void;
 }
 
-// 업무 타입별 단계 정의 (업무관리와 동일)
-const selfSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
-  { status: 'quotation', label: '견적서 작성', color: 'orange' },
-  { status: 'contract', label: '계약 체결', color: 'purple' },
-  { status: 'deposit_confirm', label: '계약금 확인', color: 'indigo' },
-  { status: 'product_order', label: '제품 발주', color: 'cyan' },
-  { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'installation_schedule', label: '설치 협의', color: 'teal' },
-  { status: 'installation', label: '제품 설치', color: 'green' },
-  { status: 'balance_payment', label: '잔금 입금', color: 'lime' },
-  { status: 'document_complete', label: '서류 발송 완료', color: 'green' }
-]
-
-const subsidySteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 실사', color: 'yellow' },
-  { status: 'quotation', label: '견적서 작성', color: 'orange' },
-  // ✨ 새로운 단계 추가
-  { status: 'document_preparation', label: '신청서 작성 필요', color: 'amber' },
-  { status: 'application_submit', label: '신청서 제출', color: 'purple' },
-  // 보조금 승인 단계
-  { status: 'approval_pending', label: '보조금 승인대기', color: 'sky' },
-  { status: 'approved', label: '보조금 승인', color: 'lime' },
-  { status: 'rejected', label: '보조금 탈락', color: 'red' },
-  // 🔄 워딩 변경: 서류 보완 → 신청서 보완
-  { status: 'document_supplement', label: '신청서 보완', color: 'pink' },
-  { status: 'pre_construction_inspection', label: '착공 전 실사', color: 'indigo' },
-  // 착공 보완 세분화
-  { status: 'pre_construction_supplement_1st', label: '착공 보완 1차', color: 'rose' },
-  { status: 'pre_construction_supplement_2nd', label: '착공 보완 2차', color: 'fuchsia' },
-  // 🆕 착공신고서 제출 단계
-  { status: 'construction_report_submit', label: '착공신고서 제출', color: 'blue' },
-  { status: 'product_order', label: '제품 발주', color: 'cyan' },
-  { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  // 🔄 워딩 변경: 설치 협의 → 설치예정
-  { status: 'installation_schedule', label: '설치예정', color: 'teal' },
-  // 🔄 워딩 변경: 제품 설치 → 설치완료
-  { status: 'installation', label: '설치완료', color: 'green' },
-  // 🔄 워딩 변경: 준공실사 전 서류 제출 → 준공도서 작성 필요
-  { status: 'pre_completion_document_submit', label: '준공도서 작성 필요', color: 'amber' },
-  { status: 'completion_inspection', label: '준공 실사', color: 'violet' },
-  // 준공 보완 세분화
-  { status: 'completion_supplement_1st', label: '준공 보완 1차', color: 'slate' },
-  { status: 'completion_supplement_2nd', label: '준공 보완 2차', color: 'zinc' },
-  { status: 'completion_supplement_3rd', label: '준공 보완 3차', color: 'stone' },
-  { status: 'final_document_submit', label: '보조금지급신청서 제출', color: 'gray' },
-  { status: 'subsidy_payment', label: '보조금 입금', color: 'green' }
-]
-
-const asSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'customer_contact', label: '고객 상담', color: 'blue' },
-  { status: 'site_inspection', label: '현장 확인', color: 'yellow' },
-  { status: 'quotation', label: 'AS 견적', color: 'orange' },
-  { status: 'contract', label: 'AS 계약', color: 'purple' },
-  { status: 'product_order', label: '부품 발주', color: 'cyan' },
-  { status: 'installation', label: 'AS 완료', color: 'green' }
-]
-
-const etcSteps: Array<{status: TaskStatus, label: string, color: string}> = [
-  { status: 'etc_status', label: '기타', color: 'gray' }
-]
+// 🔄 단계 정의는 공유 모듈에서 import (lib/task-steps.ts)
 
 // 색상 매핑을 Tailwind CSS 클래스로 변환
 const getColorClasses = (color: string) => {
@@ -138,16 +78,7 @@ const getColorClasses = (color: string) => {
   return colorMap[color] || colorMap.gray
 }
 
-// 업무 타입에 따른 단계 목록 가져오기
-const getStepsForType = (taskType: TaskType) => {
-  switch (taskType) {
-    case 'self': return selfSteps
-    case 'subsidy': return subsidySteps
-    case 'as': return asSteps
-    case 'etc': return etcSteps
-    default: return etcSteps
-  }
-}
+// 🔄 getStepsForType 함수는 공유 모듈에서 import (lib/task-steps.ts)
 
 export default function TaskProgressMiniBoard({
   businessName,
@@ -275,6 +206,8 @@ export default function TaskProgressMiniBoard({
     const tasksByType: {[key: string]: {tasks: FacilityTask[], steps: any[]}} = {
       self: { tasks: [], steps: selfSteps },
       subsidy: { tasks: [], steps: subsidySteps },
+      dealer: { tasks: [], steps: dealerSteps }, // 🔄 추가
+      outsourcing: { tasks: [], steps: outsourcingSteps }, // 🔄 추가
       as: { tasks: [], steps: asSteps },
       etc: { tasks: [], steps: etcSteps }
     };
@@ -429,6 +362,8 @@ export default function TaskProgressMiniBoard({
         const typeLabels: {[key: string]: string} = {
           self: '자비',
           subsidy: '보조금',
+          dealer: '대리점', // 🔄 추가
+          outsourcing: '외주설치', // 🔄 추가
           as: 'AS',
           etc: '기타'
         };
@@ -481,9 +416,6 @@ export default function TaskProgressMiniBoard({
                 <div className="space-y-2">
                   {typeData.tasks.filter(task => expandedStatus === `${taskType}-${task.status}`).map((task) => (
                     <div key={task.id} className="bg-white p-2 rounded border text-xs">
-                      <div className="font-medium text-gray-800 mb-1 truncate">
-                        {task.title}
-                      </div>
                       <div className="flex items-center justify-between text-gray-600">
                         <div className="flex items-center gap-2">
                           <User className="w-3 h-3" />

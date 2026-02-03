@@ -837,7 +837,73 @@ function BusinessManagementPage() {
   // 업무 상태 매핑 유틸리티 함수들
   const getStatusDisplayName = (status: string): string => {
     const statusMap: { [key: string]: string } = {
-      // 자비 업무 단계
+      // 확인필요 단계
+      'self_needs_check': '확인필요',
+      'subsidy_needs_check': '확인필요',
+      'as_needs_check': '확인필요',
+      'dealer_needs_check': '확인필요',
+      'outsourcing_needs_check': '확인필요',
+      'etc_needs_check': '확인필요',
+      // 자비 공통 단계
+      'self_customer_contact': '고객 상담',
+      'self_site_inspection': '현장 실사',
+      'self_quotation': '견적서 작성',
+      'self_contract': '계약 체결',
+      // 자비 전용 단계
+      'self_deposit_confirm': '계약금 확인',
+      'self_product_order': '제품 발주',
+      'self_product_shipment': '제품 출고',
+      'self_installation_schedule': '설치예정',
+      'self_installation': '설치완료',
+      'self_balance_payment': '잔금 입금',
+      'self_document_complete': '서류 발송 완료',
+      // 보조금 공통 단계
+      'subsidy_customer_contact': '고객 상담',
+      'subsidy_site_inspection': '현장 실사',
+      'subsidy_quotation': '견적서 작성',
+      'subsidy_contract': '계약 체결',
+      // 보조금 전용 단계
+      'subsidy_document_preparation': '신청서 작성 필요',
+      'subsidy_application_submit': '신청서 제출',
+      'subsidy_approval_pending': '보조금 승인대기',
+      'subsidy_approved': '보조금 승인',
+      'subsidy_rejected': '보조금 탈락',
+      'subsidy_document_supplement': '신청서 보완',
+      'subsidy_pre_construction_inspection': '착공 전 실사',
+      'subsidy_pre_construction_supplement_1st': '착공 보완 1차',
+      'subsidy_pre_construction_supplement_2nd': '착공 보완 2차',
+      'subsidy_construction_report_submit': '착공신고서 제출',
+      'subsidy_product_order': '제품 발주',
+      'subsidy_product_shipment': '제품 출고',
+      'subsidy_installation_schedule': '설치예정',
+      'subsidy_installation': '설치완료',
+      'subsidy_pre_completion_document_submit': '준공도서 작성 필요',
+      'subsidy_completion_inspection': '준공 실사',
+      'subsidy_completion_supplement_1st': '준공 보완 1차',
+      'subsidy_completion_supplement_2nd': '준공 보완 2차',
+      'subsidy_completion_supplement_3rd': '준공 보완 3차',
+      'subsidy_final_document_submit': '보조금지급신청서 제출',
+      'subsidy_payment': '보조금 입금',
+      // AS 단계
+      'as_customer_contact': 'AS 고객 상담',
+      'as_site_inspection': 'AS 현장 확인',
+      'as_quotation': 'AS 견적 작성',
+      'as_contract': 'AS 계약 체결',
+      'as_part_order': 'AS 부품 발주',
+      'as_completed': 'AS 완료',
+      // 대리점 단계
+      'dealer_order_received': '발주 수신',
+      'dealer_invoice_issued': '계산서 발행',
+      'dealer_payment_confirmed': '입금 확인',
+      'dealer_product_ordered': '제품 발주',
+      // 외주설치 단계
+      'outsourcing_order': '외주 발주',
+      'outsourcing_schedule': '일정 조율',
+      'outsourcing_in_progress': '설치 진행 중',
+      'outsourcing_completed': '설치 완료',
+      // 기타 단계
+      'etc_status': '기타',
+      // 레거시 호환성 (구버전 status - 유지)
       'customer_contact': '고객 상담',
       'site_inspection': '현장 실사',
       'quotation': '견적서 작성',
@@ -849,7 +915,6 @@ function BusinessManagementPage() {
       'installation': '설치완료',
       'balance_payment': '잔금 입금',
       'document_complete': '서류 발송 완료',
-      // 보조금 업무 단계
       'document_preparation': '신청서 작성 필요',
       'application_submit': '신청서 제출',
       'approval_pending': '보조금 승인대기',
@@ -866,17 +931,6 @@ function BusinessManagementPage() {
       'completion_supplement_2nd': '준공 보완 2차',
       'completion_supplement_3rd': '준공 보완 3차',
       'final_document_submit': '보조금지급신청서 제출',
-      'subsidy_payment': '보조금 입금',
-      // AS 업무 단계
-      'as_customer_contact': 'AS 고객 상담',
-      'as_site_inspection': 'AS 현장 확인',
-      'as_quotation': 'AS 견적 작성',
-      'as_contract': 'AS 계약 체결',
-      'as_part_order': 'AS 부품 발주',
-      'as_completed': 'AS 완료',
-      // 기타 단계
-      'etc_status': '기타',
-      // 기존 단계 (호환성)
       'pending': '대기',
       'in_progress': '진행중',
       'completed': '완료',
@@ -887,13 +941,33 @@ function BusinessManagementPage() {
   }
 
   const getStatusColor = (status: string) => {
+    // 확인필요 단계
+    if (status.includes('needs_check')) {
+      return { bg: 'bg-red-50', border: 'border-red-400', text: 'text-red-700', badge: 'bg-red-100' }
+    }
+
+    // 공통 단계 (prefix 포함)
+    if (status.includes('customer_contact')) {
+      return { bg: 'bg-blue-50', border: 'border-blue-400', text: 'text-blue-700', badge: 'bg-blue-100' }
+    }
+    if (status.includes('site_inspection')) {
+      return { bg: 'bg-cyan-50', border: 'border-cyan-400', text: 'text-cyan-700', badge: 'bg-cyan-100' }
+    }
+    if (status.includes('quotation')) {
+      return { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-700', badge: 'bg-amber-100' }
+    }
+    if (status.includes('contract')) {
+      return { bg: 'bg-purple-50', border: 'border-purple-400', text: 'text-purple-700', badge: 'bg-purple-100' }
+    }
+    if (status.includes('installation') && !status.includes('schedule')) {
+      return { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', badge: 'bg-orange-100' }
+    }
+    if (status.includes('completed') || status.includes('payment')) {
+      return { bg: 'bg-green-50', border: 'border-green-400', text: 'text-green-700', badge: 'bg-green-100' }
+    }
+
+    // 기타 공통 상태
     switch (status) {
-      case 'quotation': return { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-700', badge: 'bg-amber-100' }
-      case 'site_inspection': return { bg: 'bg-cyan-50', border: 'border-cyan-400', text: 'text-cyan-700', badge: 'bg-cyan-100' }
-      case 'customer_contact': return { bg: 'bg-blue-50', border: 'border-blue-400', text: 'text-blue-700', badge: 'bg-blue-100' }
-      case 'contract': return { bg: 'bg-purple-50', border: 'border-purple-400', text: 'text-purple-700', badge: 'bg-purple-100' }
-      case 'installation': return { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', badge: 'bg-orange-100' }
-      case 'completion': return { bg: 'bg-green-50', border: 'border-green-400', text: 'text-green-700', badge: 'bg-green-100' }
       case 'pending': return { bg: 'bg-gray-50', border: 'border-gray-400', text: 'text-gray-700', badge: 'bg-gray-100' }
       case 'in_progress': return { bg: 'bg-indigo-50', border: 'border-indigo-400', text: 'text-indigo-700', badge: 'bg-indigo-100' }
       case 'on_hold': return { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-700', badge: 'bg-yellow-100' }
@@ -918,8 +992,14 @@ function BusinessManagementPage() {
       data: any
     }> = []
 
-    // 메모 추가 (type: 'memo')
+    // 메모 추가 (type: 'memo') - task_sync 메모는 제외 (실제 업무가 이미 표시되므로)
     businessMemos.forEach(memo => {
+      // task_sync 메모는 건너뛰기 (중복 방지)
+      if (memo.source_type === 'task_sync') {
+        console.log('🔧 [FRONTEND] task_sync 메모 제외:', memo.title)
+        return
+      }
+
       items.push({
         type: 'memo',
         id: memo.id,
@@ -930,8 +1010,22 @@ function BusinessManagementPage() {
       })
     })
 
-    // 업무 추가 (type: 'task')
+    // 업무 추가 (type: 'task') - DB에 실제 등록된 업무만 표시
+    console.log('🔍 [DEBUG] businessTasks 배열:', businessTasks)
+    console.log('🔍 [DEBUG] businessTasks IDs:', businessTasks.map(t => ({ id: t.id, title: t.title })))
+    console.log('🔍 [DEBUG] businessTasks unique IDs:', [...new Set(businessTasks.map(t => t.id))])
+
+    // ✅ 중복 방지: 이미 추가된 task ID를 추적
+    const addedTaskIds = new Set<string>()
+
     businessTasks.forEach(task => {
+      // 이미 추가된 task ID는 건너뛰기 (중복 방지)
+      if (addedTaskIds.has(task.id)) {
+        console.warn('⚠️ [FRONTEND] 중복 업무 제외됨:', task.id, task.title)
+        return
+      }
+
+      addedTaskIds.add(task.id)
       items.push({
         type: 'task',
         id: task.id,
@@ -944,6 +1038,9 @@ function BusinessManagementPage() {
         data: task
       })
     })
+
+    console.log('🔧 [FRONTEND] 통합 아이템 수 - 메모:', items.filter(i => i.type === 'memo').length, '개, 업무:', items.filter(i => i.type === 'task').length, '개')
+    console.log('🔍 [DEBUG] 최종 items 배열:', items.map(i => ({ type: i.type, id: i.id, title: i.title })))
 
     // 업무를 먼저, 그 다음 메모를 최신순으로 정렬
     return items.sort((a, b) => {
@@ -1131,8 +1228,15 @@ function BusinessManagementPage() {
       });
       const result = await response.json()
 
+      console.log('🔍 [DEBUG] API 응답:', result)
+      console.log('🔍 [DEBUG] API tasks 배열:', result.data?.tasks)
+      console.log('🔍 [DEBUG] API tasks IDs:', result.data?.tasks?.map(t => ({ id: t.id, title: t.title })))
+
       if (result.success) {
-        setBusinessTasks(result.data?.tasks || [])
+        const tasks = result.data?.tasks || []
+        console.log('🔍 [DEBUG] setBusinessTasks 호출 전 tasks:', tasks)
+        console.log('🔍 [DEBUG] tasks unique IDs:', [...new Set(tasks.map(t => t.id))])
+        setBusinessTasks(tasks)
       } else {
         console.error('❌ 업무 로드 실패:', result.error)
         setBusinessTasks([])
@@ -2018,6 +2122,48 @@ function BusinessManagementPage() {
       loadBusinessTasks(selectedBusiness.사업장명)
     }
   }, [selectedBusiness?.id])
+
+  // 이벤트 기반 실시간 업데이트 - 리소스 효율적 방식
+  useEffect(() => {
+    if (!selectedBusiness) return
+
+    // 업무 업데이트 이벤트 리스너
+    const handleTaskUpdate = (event: CustomEvent) => {
+      const { businessName } = event.detail
+      console.log('📡 [EVENT] 업무 업데이트 이벤트 수신:', businessName)
+
+      // 현재 선택된 사업장과 일치하는 경우만 업데이트
+      if (businessName === selectedBusiness.사업장명) {
+        console.log('🔄 [EVENT] 업무 데이터 새로고침 시작')
+        loadBusinessTasks(businessName)
+      }
+    }
+
+    // 메모 업데이트 이벤트 리스너
+    const handleMemoUpdate = (event: CustomEvent) => {
+      const { businessId } = event.detail
+      console.log('📡 [EVENT] 메모 업데이트 이벤트 수신:', businessId)
+
+      // 현재 선택된 사업장과 일치하는 경우만 업데이트
+      if (businessId === selectedBusiness.id) {
+        console.log('🔄 [EVENT] 메모 데이터 새로고침 시작')
+        loadBusinessMemos(businessId)
+      }
+    }
+
+    // 이벤트 리스너 등록
+    window.addEventListener('task-updated', handleTaskUpdate as EventListener)
+    window.addEventListener('memo-updated', handleMemoUpdate as EventListener)
+
+    console.log('📡 [EVENT] 이벤트 리스너 등록 완료 - 사업장:', selectedBusiness.사업장명)
+
+    // 클린업
+    return () => {
+      window.removeEventListener('task-updated', handleTaskUpdate as EventListener)
+      window.removeEventListener('memo-updated', handleMemoUpdate as EventListener)
+      console.log('📡 [EVENT] 이벤트 리스너 해제')
+    }
+  }, [selectedBusiness?.id, selectedBusiness?.사업장명, loadBusinessMemos, loadBusinessTasks])
 
   // ESC 키로 모달 닫기
   useEffect(() => {
