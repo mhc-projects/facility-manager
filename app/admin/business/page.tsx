@@ -466,18 +466,32 @@ function BusinessManagementPage() {
     // 추가 상세 정보 변환 로직
     try {
       const encodedBusinessName = encodeURIComponent(businessName)
+      console.log(`🔍 [FACILITY-LOAD] 사업장 시설 정보 조회: ${businessName}`)
+
       const response = await fetch(`/api/facilities-supabase/${encodedBusinessName}`)
+      console.log(`📡 [FACILITY-LOAD] API 응답 상태:`, response.status, response.ok)
+
       if (response.ok) {
         const result = await response.json()
-        if (result.success && result.data) {
+        console.log(`📊 [FACILITY-LOAD] API 응답 데이터:`, {
+          success: result.success,
+          hasData: !!result.data,
+          hasFacilities: !!result.data?.facilities,
+          dischargeCount: result.data?.facilities?.discharge?.length,
+          preventionCount: result.data?.facilities?.prevention?.length
+        })
+
+        if (result.success && result.data && result.data.facilities) {
           // facilities-supabase API 데이터를 BusinessFacilityData 형식으로 변환
           const facilityApiData = result.data
+
+          // ✅ 시설 데이터가 비어있는 경우에도 빈 배열로 변환
           const transformedData: BusinessFacilityData = {
             business: {
               id: facilityApiData.businessInfo?.businessName || businessName,
               business_name: businessName
             },
-            discharge_facilities: facilityApiData.facilities?.discharge?.map((facility: any) => ({
+            discharge_facilities: (facilityApiData.facilities?.discharge || []).map((facility: any) => ({
               id: `discharge-${facility.outlet}-${facility.number}`,
               outlet_number: facility.outlet || 1,
               outlet_name: `배출구 ${facility.outlet || 1}`,
@@ -486,8 +500,8 @@ function BusinessManagementPage() {
               capacity: facility.capacity || '',
               quantity: facility.quantity || 1,
               display_name: facility.displayName || `배출구${facility.outlet}-배출시설${facility.number}`
-            })) || [],
-            prevention_facilities: facilityApiData.facilities?.prevention?.map((facility: any) => ({
+            })),
+            prevention_facilities: (facilityApiData.facilities?.prevention || []).map((facility: any) => ({
               id: `prevention-${facility.outlet}-${facility.number}`,
               outlet_number: facility.outlet || 1,
               outlet_name: `배출구 ${facility.outlet || 1}`,
@@ -496,22 +510,36 @@ function BusinessManagementPage() {
               capacity: facility.capacity || '',
               quantity: facility.quantity || 1,
               display_name: facility.displayName || `배출구${facility.outlet}-방지시설${facility.number}`
-            })) || [],
+            })),
             summary: {
               discharge_count: facilityApiData.dischargeCount || 0,
               prevention_count: facilityApiData.preventionCount || 0,
               total_facilities: (facilityApiData.dischargeCount || 0) + (facilityApiData.preventionCount || 0)
             }
           }
+
+          console.log(`✅ [FACILITY-LOAD] 변환 완료:`, {
+            dischargeCount: transformedData.discharge_facilities.length,
+            preventionCount: transformedData.prevention_facilities.length,
+            totalFacilities: transformedData.summary.total_facilities
+          })
+
+          // ✅ 시설이 없어도 빈 데이터 객체로 설정 (null이 아님)
           setFacilityData(transformedData)
         } else {
+          console.warn(`⚠️ [FACILITY-LOAD] API 응답 데이터 형식 오류:`, {
+            success: result.success,
+            hasData: !!result.data,
+            hasFacilities: !!result.data?.facilities
+          })
           setFacilityData(null)
         }
       } else {
+        console.error(`❌ [FACILITY-LOAD] API 호출 실패:`, response.status)
         setFacilityData(null)
       }
     } catch (error) {
-      console.error('사업장 시설 정보 로드 실패:', error)
+      console.error('❌ [FACILITY-LOAD] 사업장 시설 정보 로드 실패:', error)
       setFacilityData(null)
     }
     // Note: facilityLoading is managed by the useFacilityStats hook

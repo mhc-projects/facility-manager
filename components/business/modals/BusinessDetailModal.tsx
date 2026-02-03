@@ -262,6 +262,7 @@ interface BusinessDetailModalProps {
     summary: {
       discharge_count: number
       prevention_count: number
+      total_facilities: number
     }
     discharge_facilities: Array<{ outlet_number: number }>
     prevention_facilities: Array<{ outlet_number: number }>
@@ -1004,7 +1005,7 @@ export default function BusinessDetailModal({
                       <Settings className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-gray-300 mx-auto mb-2" />
                       <div className="text-xs sm:text-sm">시설 정보를 불러오는 중...</div>
                     </div>
-                  ) : facilityData ? (
+                  ) : facilityData && (facilityData.summary.total_facilities > 0 || facilityData.discharge_facilities.length > 0 || facilityData.prevention_facilities.length > 0) ? (
                     <>
                       {/* Facility Summary Card */}
                       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 sm:p-4 border border-blue-200 mb-3 sm:mb-4">
