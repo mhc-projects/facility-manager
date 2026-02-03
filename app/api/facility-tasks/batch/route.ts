@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSuccessResponse, createErrorResponse } from '@/lib/api-utils'
 import { queryAll } from '@/lib/supabase-direct'
 import { verifyTokenHybrid } from '@/lib/secure-jwt'
+import { TASK_STATUS_KR } from '@/lib/task-status-utils'
 
 // 사용자 권한 확인 헬퍼 함수
 async function checkUserPermission(request: NextRequest) {
@@ -148,80 +149,107 @@ export async function POST(request: NextRequest) {
         })
 
         const topTask = sortedTasks[0]
-        const statusLabels: Record<string, string> = {
-          // 자비/공통 단계
-          customer_contact: '고객 상담',
-          site_inspection: '현장 실사',
-          quotation: '견적서 작성',
-          contract: '계약 체결',
-          deposit_confirm: '계약금 확인',
-          product_order: '제품 발주',
-          product_shipment: '제품 출고',
-          installation_schedule: '설치 협의',
-          installation: '제품 설치',
-          balance_payment: '잔금 입금',
-          document_complete: '서류 발송 완료',
-
-          // 보조금 전용 단계
-          application_submit: '신청서 제출',
-          document_supplement: '서류 보완',
-          pre_construction_inspection: '착공 전 실사',
-          pre_construction_supplement: '착공 보완',
-          pre_construction_supplement_1st: '착공 보완 1차',
-          pre_construction_supplement_2nd: '착공 보완 2차',
-          pre_construction_supplement_3rd: '착공 보완 3차',
-          completion_inspection: '준공 실사',
-          completion_supplement: '준공 보완',
-          completion_supplement_1st: '준공 보완 1차',
-          completion_supplement_2nd: '준공 보완 2차',
-          completion_supplement_3rd: '준공 보완 3차',
-          final_document_submit: '서류 제출',
-          subsidy_payment: '보조금 입금',
-
-          // 기타
-          etc_status: '기타'
-        }
-
-        const statusLabel = statusLabels[topTask.status] || topTask.status
+        // TASK_STATUS_KR을 사용하여 모든 prefix 상태 지원
+        const statusLabel = TASK_STATUS_KR[topTask.status] || topTask.status
         let statusText = activeTasks.length === 1 ? statusLabel : `${statusLabel} 외 ${activeTasks.length - 1}건`
 
-        // 단계별 고유 색상 매핑 (우선순위 대신 단계로 통일감 부여)
+        // 단계별 고유 색상 매핑 (모든 prefix 상태 지원)
         const statusColors: Record<string, string> = {
-          // 영업/계약 단계 (초기)
-          customer_contact: 'bg-purple-100 text-purple-800',      // 고객 상담
-          site_inspection: 'bg-blue-100 text-blue-800',           // 현장 실사
-          quotation: 'bg-yellow-100 text-yellow-800',             // 견적서 작성
-          contract: 'bg-green-100 text-green-800',                // 계약 체결
+          // 확인필요 단계 (모든 타입)
+          'self_needs_check': 'bg-red-100 text-red-800',
+          'subsidy_needs_check': 'bg-red-100 text-red-800',
+          'dealer_needs_check': 'bg-red-100 text-red-800',
+          'as_needs_check': 'bg-red-100 text-red-800',
+          'outsourcing_needs_check': 'bg-red-100 text-red-800',
+          'etc_needs_check': 'bg-red-100 text-red-800',
 
-          // 진행 단계 (중기)
-          deposit_confirm: 'bg-emerald-100 text-emerald-800',     // 계약금 확인
-          product_order: 'bg-indigo-100 text-indigo-800',         // 제품 발주
-          product_shipment: 'bg-cyan-100 text-cyan-800',          // 제품 출고
-          installation_schedule: 'bg-amber-100 text-amber-800',   // 설치 협의
-          installation: 'bg-orange-100 text-orange-800',          // 제품 설치
+          // 자비 단계 (self_ prefix)
+          'self_customer_contact': 'bg-purple-100 text-purple-800',
+          'self_site_inspection': 'bg-blue-100 text-blue-800',
+          'self_quotation': 'bg-yellow-100 text-yellow-800',
+          'self_contract': 'bg-green-100 text-green-800',
+          'self_deposit_confirm': 'bg-emerald-100 text-emerald-800',
+          'self_product_order': 'bg-indigo-100 text-indigo-800',
+          'self_product_shipment': 'bg-cyan-100 text-cyan-800',
+          'self_installation_schedule': 'bg-amber-100 text-amber-800',
+          'self_installation': 'bg-orange-100 text-orange-800',
+          'self_balance_payment': 'bg-teal-100 text-teal-800',
+          'self_document_complete': 'bg-sky-100 text-sky-800',
 
-          // 완료 단계 (후기)
-          balance_payment: 'bg-teal-100 text-teal-800',           // 잔금 입금
-          document_complete: 'bg-sky-100 text-sky-800',           // 서류 발송 완료
+          // 보조금 단계 (subsidy_ prefix)
+          'subsidy_customer_contact': 'bg-purple-100 text-purple-800',
+          'subsidy_site_inspection': 'bg-blue-100 text-blue-800',
+          'subsidy_quotation': 'bg-yellow-100 text-yellow-800',
+          'subsidy_contract': 'bg-green-100 text-green-800',
+          'subsidy_document_preparation': 'bg-amber-100 text-amber-800',
+          'subsidy_application_submit': 'bg-violet-100 text-violet-800',
+          'subsidy_approval_pending': 'bg-sky-100 text-sky-800',
+          'subsidy_approved': 'bg-lime-100 text-lime-800',
+          'subsidy_rejected': 'bg-red-100 text-red-800',
+          'subsidy_document_supplement': 'bg-yellow-100 text-yellow-800',
+          'subsidy_pre_construction_inspection': 'bg-blue-100 text-blue-800',
+          'subsidy_pre_construction_supplement_1st': 'bg-orange-100 text-orange-800',
+          'subsidy_pre_construction_supplement_2nd': 'bg-orange-100 text-orange-800',
+          'subsidy_construction_report_submit': 'bg-purple-100 text-purple-800',
+          'subsidy_product_order': 'bg-indigo-100 text-indigo-800',
+          'subsidy_product_shipment': 'bg-cyan-100 text-cyan-800',
+          'subsidy_installation_schedule': 'bg-amber-100 text-amber-800',
+          'subsidy_installation': 'bg-orange-100 text-orange-800',
+          'subsidy_pre_completion_document_submit': 'bg-amber-100 text-amber-800',
+          'subsidy_completion_inspection': 'bg-cyan-100 text-cyan-800',
+          'subsidy_completion_supplement_1st': 'bg-amber-100 text-amber-800',
+          'subsidy_completion_supplement_2nd': 'bg-amber-100 text-amber-800',
+          'subsidy_completion_supplement_3rd': 'bg-amber-100 text-amber-800',
+          'subsidy_final_document_submit': 'bg-green-100 text-green-800',
+          'subsidy_payment': 'bg-emerald-100 text-emerald-800',
 
-          // 보조금 전용 단계
-          application_submit: 'bg-violet-100 text-violet-800',    // 신청서 제출
-          document_supplement: 'bg-yellow-100 text-yellow-800',   // 서류 보완
-          pre_construction_inspection: 'bg-blue-100 text-blue-800', // 착공 전 실사
-          pre_construction_supplement: 'bg-orange-100 text-orange-800', // 착공 보완
-          pre_construction_supplement_1st: 'bg-orange-100 text-orange-800', // 착공 보완 1차
-          pre_construction_supplement_2nd: 'bg-orange-100 text-orange-800', // 착공 보완 2차
-          pre_construction_supplement_3rd: 'bg-orange-100 text-orange-800', // 착공 보완 3차
-          completion_inspection: 'bg-cyan-100 text-cyan-800',     // 준공 실사
-          completion_supplement: 'bg-amber-100 text-amber-800',   // 준공 보완
-          completion_supplement_1st: 'bg-amber-100 text-amber-800', // 준공 보완 1차
-          completion_supplement_2nd: 'bg-amber-100 text-amber-800', // 준공 보완 2차
-          completion_supplement_3rd: 'bg-amber-100 text-amber-800', // 준공 보완 3차
-          final_document_submit: 'bg-green-100 text-green-800',   // 서류 제출
-          subsidy_payment: 'bg-emerald-100 text-emerald-800',     // 보조금 입금
+          // 대리점 단계 (dealer_ prefix)
+          'dealer_order_received': 'bg-blue-100 text-blue-800',
+          'dealer_invoice_issued': 'bg-green-100 text-green-800',
+          'dealer_payment_confirmed': 'bg-emerald-100 text-emerald-800',
+          'dealer_product_ordered': 'bg-indigo-100 text-indigo-800',
 
-          // 기타
-          etc_status: 'bg-gray-100 text-gray-600'                 // 기타
+          // AS 단계 (as_ prefix)
+          'as_customer_contact': 'bg-purple-100 text-purple-800',
+          'as_site_inspection': 'bg-blue-100 text-blue-800',
+          'as_quotation': 'bg-yellow-100 text-yellow-800',
+          'as_contract': 'bg-green-100 text-green-800',
+          'as_part_order': 'bg-indigo-100 text-indigo-800',
+          'as_completed': 'bg-emerald-100 text-emerald-800',
+
+          // 외주설치 단계 (outsourcing_ prefix)
+          'outsourcing_order': 'bg-blue-100 text-blue-800',
+          'outsourcing_schedule': 'bg-amber-100 text-amber-800',
+          'outsourcing_in_progress': 'bg-orange-100 text-orange-800',
+          'outsourcing_completed': 'bg-emerald-100 text-emerald-800',
+
+          // 레거시 호환성 (구버전 status - prefix 없는 상태)
+          customer_contact: 'bg-purple-100 text-purple-800',
+          site_inspection: 'bg-blue-100 text-blue-800',
+          quotation: 'bg-yellow-100 text-yellow-800',
+          contract: 'bg-green-100 text-green-800',
+          deposit_confirm: 'bg-emerald-100 text-emerald-800',
+          product_order: 'bg-indigo-100 text-indigo-800',
+          product_shipment: 'bg-cyan-100 text-cyan-800',
+          installation_schedule: 'bg-amber-100 text-amber-800',
+          installation: 'bg-orange-100 text-orange-800',
+          balance_payment: 'bg-teal-100 text-teal-800',
+          document_complete: 'bg-sky-100 text-sky-800',
+          application_submit: 'bg-violet-100 text-violet-800',
+          document_supplement: 'bg-yellow-100 text-yellow-800',
+          pre_construction_inspection: 'bg-blue-100 text-blue-800',
+          pre_construction_supplement: 'bg-orange-100 text-orange-800',
+          pre_construction_supplement_1st: 'bg-orange-100 text-orange-800',
+          pre_construction_supplement_2nd: 'bg-orange-100 text-orange-800',
+          pre_construction_supplement_3rd: 'bg-orange-100 text-orange-800',
+          completion_inspection: 'bg-cyan-100 text-cyan-800',
+          completion_supplement: 'bg-amber-100 text-amber-800',
+          completion_supplement_1st: 'bg-amber-100 text-amber-800',
+          completion_supplement_2nd: 'bg-amber-100 text-amber-800',
+          completion_supplement_3rd: 'bg-amber-100 text-amber-800',
+          final_document_submit: 'bg-green-100 text-green-800',
+          subsidy_payment: 'bg-emerald-100 text-emerald-800',
+          etc_status: 'bg-gray-100 text-gray-600'
         }
 
         businessStatuses[businessName] = {
