@@ -102,6 +102,7 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/business-info',  // 사업장 정보 API (JWT 인증 사용)
     '/api/business-info-direct',  // 사업장 정보 직접 API (JWT 인증 사용)
     '/api/business-management',  // 사업장 관리 API (JWT 인증 사용)
+    '/api/business-equipment-counts',  // 측정기기 수량 관리 API (공개 사용)
     '/api/facility-management',  // 시설 관리 정보 API (공개 사용)
     '/api/router-inventory',  // 라우터 재고 관리 메인 API (JWT 인증 사용)
     '/api/order-management',  // 발주 관리 메인 API (JWT 인증 사용)
