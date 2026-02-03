@@ -53,11 +53,25 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       console.log(`✅ [BUSINESS-MEMOS] businessName → businessId 변환: ${businessName} → ${finalBusinessId}`)
     }
 
-    // 메모 조회 - Direct PostgreSQL
+    // 메모 조회 - Direct PostgreSQL (related_task 정보 포함)
     const memos = await queryAll(
-      `SELECT * FROM business_memos
-       WHERE business_id = $1 AND is_active = true AND is_deleted = false
-       ORDER BY created_at DESC`,
+      `SELECT
+        bm.*,
+        CASE
+          WHEN bm.task_id IS NOT NULL THEN
+            json_build_object(
+              'id', ft.id,
+              'title', ft.description,
+              'status', ft.status,
+              'task_type', ft.task_type,
+              'priority', ft.priority
+            )
+          ELSE NULL
+        END as related_task
+       FROM business_memos bm
+       LEFT JOIN facility_tasks ft ON bm.task_id = ft.id
+       WHERE bm.business_id = $1 AND bm.is_active = true AND bm.is_deleted = false
+       ORDER BY bm.created_at DESC`,
       [finalBusinessId]
     );
 
