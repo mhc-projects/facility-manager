@@ -244,6 +244,32 @@ const calculateProgressPercentage = (type: TaskType, status: TaskStatus): number
   return Math.round(progress)
 }
 
+// 상태를 한글 라벨로 변환하는 헬퍼 함수
+const getStatusLabel = (type: TaskType, status: TaskStatus): string => {
+  const steps = type === 'self' ? selfSteps :
+                type === 'subsidy' ? subsidySteps :
+                type === 'dealer' ? dealerSteps :
+                type === 'outsourcing' ? outsourcingSteps :
+                type === 'etc' ? etcSteps : asSteps
+
+  const step = steps.find(s => s.status === status)
+
+  if (step) {
+    return step.label
+  }
+
+  // 타입이 맞지 않는 경우, 모든 steps 배열에서 검색
+  const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
+  const foundStep = allSteps.find(s => s.status === status)
+
+  if (foundStep) {
+    return foundStep.label
+  }
+
+  // 그래도 찾지 못한 경우, status 값을 사람이 읽을 수 있는 형태로 변환
+  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
 function TaskManagementPage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -835,15 +861,14 @@ function TaskManagementPage() {
       showOnlyNoConstructionReport
     })
 
-    // 🔥 완료 업무 보기가 활성화되면 다른 필터 무시하고 완료된 업무만 표시
-    if (showCompletedTasks) {
-      return tasksWithDelayStatus.filter(task => task.progressPercentage === 100)
-    }
-
-    // 일반 필터링 (완료되지 않은 업무만)
+    // 일반 필터링 (완료업무 필터에 따라 완료/미완료 업무 표시)
     const result = tasksWithDelayStatus.filter(task => {
-      // 완료된 업무 제외
-      if (task.progressPercentage === 100) return false
+      // 완료 업무 필터: true면 완료된 업무만, false면 미완료 업무만
+      if (showCompletedTasks) {
+        if (task.progressPercentage !== 100) return false
+      } else {
+        if (task.progressPercentage === 100) return false
+      }
 
       const matchesSearch = searchTerm === '' ||
         task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1974,6 +1999,7 @@ function TaskManagementPage() {
                                    task.type === 'dealer' ? dealerSteps :
                                    task.type === 'outsourcing' ? outsourcingSteps :
                                    task.type === 'etc' ? etcSteps : asSteps).find(s => s.status === task.status)
+                    const statusLabel = getStatusLabel(task.type, task.status)
                     return (
                       <tr
                         key={task.id}
@@ -2012,7 +2038,7 @@ function TaskManagementPage() {
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
                           <span className={`inline-flex px-2 py-1 text-xs rounded-full ${getColorClasses(step?.color || 'gray')}`}>
-                            {step?.label || task.status}
+                            {statusLabel}
                           </span>
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs text-gray-600">
