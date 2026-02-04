@@ -63,7 +63,8 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
   }
 
   const handleEdit = () => {
-    router.push(`/admin/meeting-minutes/${params.id}/edit`)
+    const timestamp = Date.now()
+    router.push(`/admin/meeting-minutes/${params.id}/edit?refresh=${timestamp}`)
   }
 
   const handleDelete = async () => {

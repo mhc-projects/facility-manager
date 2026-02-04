@@ -4,7 +4,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import AutocompleteSelectInput from '@/components/ui/AutocompleteSelectInput'
 import {
@@ -30,6 +30,8 @@ import {
 
 export default function EditMeetingMinutePage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const refresh = searchParams.get('refresh')  // 타임스탬프 파라미터 감지
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -58,7 +60,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       await loadMeetingMinute()
     }
     initializeData()
-  }, [])
+  }, [refresh])  // refresh 파라미터 변경 시 재실행
 
   const loadBusinessesAndEmployees = async () => {
     try {
@@ -98,7 +100,10 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     try {
       setLoading(true)
 
-      const response = await fetch(`/api/meeting-minutes/${params.id}`)
+      const timestamp = Date.now()
+      const response = await fetch(`/api/meeting-minutes/${params.id}?_t=${timestamp}`, {
+        cache: 'no-store'
+      })
       const result = await response.json()
 
       if (result.success) {
