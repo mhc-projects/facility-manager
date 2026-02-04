@@ -596,6 +596,21 @@ export default function BusinessDetailModal({
                         <div className="text-xs sm:text-sm text-gray-700 p-2 sm:p-3 bg-blue-50 rounded-lg">
                           • 주문 담당자: {business.order_manager || '미배정'}
                         </div>
+                        {business.estimate_survey_manager && (
+                          <div className="text-xs sm:text-sm text-gray-700 p-2 sm:p-3 bg-purple-50 rounded-lg">
+                            • 견적실사 담당자: {business.estimate_survey_manager}
+                          </div>
+                        )}
+                        {business.pre_construction_survey_manager && (
+                          <div className="text-xs sm:text-sm text-gray-700 p-2 sm:p-3 bg-orange-50 rounded-lg">
+                            • 착공실사 담당자: {business.pre_construction_survey_manager}
+                          </div>
+                        )}
+                        {business.completion_survey_manager && (
+                          <div className="text-xs sm:text-sm text-gray-700 p-2 sm:p-3 bg-teal-50 rounded-lg">
+                            • 준공실사 담당자: {business.completion_survey_manager}
+                          </div>
+                        )}
                         {business.installation_date && (
                           <div className="text-xs sm:text-sm text-gray-700 p-2 sm:p-3 bg-green-50 rounded-lg">
                             • 설치 예정일: {formatDate(business.installation_date)}
