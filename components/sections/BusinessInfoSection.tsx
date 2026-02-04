@@ -130,10 +130,16 @@ export default function BusinessInfoSection({ businessInfo }: BusinessInfoSectio
               <p className="text-sm font-medium text-gray-600">사업장 연락처</p>
               <div className="flex items-center justify-between">
                 {contactInfo.사업장연락처 && contactInfo.사업장연락처 !== '정보 없음' ? (
-                  <a 
+                  <a
                     href={createPhoneLink(contactInfo.사업장연락처)}
                     className="text-blue-600 hover:text-blue-800 hover:underline transition-colors flex-1"
                     title="전화걸기"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Let the browser handle tel: protocol natively
+                      window.location.href = createPhoneLink(contactInfo.사업장연락처!);
+                      e.preventDefault();
+                    }}
                   >
                     {contactInfo.사업장연락처}
                   </a>
@@ -183,11 +189,17 @@ export default function BusinessInfoSection({ businessInfo }: BusinessInfoSectio
                 {contactInfo.담당자연락처 && contactInfo.담당자연락처 !== '정보 없음' ? (
                   <div className="flex flex-wrap gap-2 flex-1">
                     {contactInfo.담당자연락처.split(' ').filter(contact => contact.trim()).map((contact, index) => (
-                      <a 
+                      <a
                         key={index}
                         href={createPhoneLink(contact.trim())}
                         className="text-blue-600 hover:text-blue-800 hover:underline transition-colors flex items-center gap-1"
                         title="전화걸기"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Let the browser handle tel: protocol natively
+                          window.location.href = createPhoneLink(contact.trim());
+                          e.preventDefault();
+                        }}
                       >
                         <Phone className="w-3 h-3" />
                         {contact.trim()}
