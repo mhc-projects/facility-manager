@@ -1570,49 +1570,52 @@ export default function ImprovedFacilityPhotoSection({
       
       {/* Progressive Upload Queue - REMOVED: 중복 UI 제거, SmartFloatingProgress로 대체 */}
       
-      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-xl border-2 border-gray-200/80">
+      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 md:p-6 shadow-xl border-2 border-gray-200/80">
         {/* File upload status tracker */}
         <FileUploadStatus fileStates={fileUploadStates} />
-      
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg">
-            <Camera className="w-6 h-6 text-purple-600" />
+
+      {/* 헤더 - 모바일 최적화 */}
+      <div className="flex items-center justify-between mb-3 md:mb-6">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+          <div className="p-1.5 md:p-2 bg-purple-100 rounded-lg flex-shrink-0">
+            <Camera className="w-4 h-4 md:w-6 md:h-6 text-purple-600" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">시설별 사진 관리</h2>
-            <p className="text-sm text-gray-600">
-              총 {statistics.totalFacilities}개 시설, 전체 {statistics.totalPhotosAllPhases}장 (현재 단계: {statistics.totalPhotos}장)
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base md:text-xl font-bold text-gray-800 truncate">시설별 사진 관리</h2>
+            <p className="text-xs md:text-sm text-gray-600 truncate">
+              총 {statistics.totalFacilities}개 시설, 전체 {statistics.totalPhotosAllPhases}장
             </p>
           </div>
         </div>
 
-        {/* 컨트롤 버튼 */}
-        <div className="flex items-center gap-2">
+        {/* 컨트롤 버튼 - 모바일 최적화 */}
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
           {/* 뷰 모드 토글 */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-gray-100 rounded-lg p-0.5 md:p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-white shadow' : ''}`}
+              className={`p-1.5 md:p-2 rounded ${viewMode === 'grid' ? 'bg-white shadow' : ''}`}
+              aria-label="그리드 뷰"
             >
-              <Grid className="w-4 h-4" />
+              <Grid className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow' : ''}`}
+              className={`p-1.5 md:p-2 rounded ${viewMode === 'list' ? 'bg-white shadow' : ''}`}
+              aria-label="리스트 뷰"
             >
-              <List className="w-4 h-4" />
+              <List className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </button>
           </div>
 
           <button
             onClick={() => loadUploadedFiles(true)}
             disabled={loadingFiles}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+            className="flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+            aria-label="새로고침"
           >
-            <RefreshCw className={`w-4 h-4 ${loadingFiles ? 'animate-spin' : ''}`} />
-            새로고침
+            <RefreshCw className={`w-3.5 h-3.5 md:w-4 md:h-4 ${loadingFiles ? 'animate-spin' : ''}`} />
+            <span className="hidden md:inline text-sm">새로고침</span>
           </button>
         </div>
       </div>
