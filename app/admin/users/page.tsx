@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, withAuth } from '@/contexts/AuthContext';
+import { useSupabaseRealtime } from '@/hooks/useSupabaseRealtime';
 import AdminLayout from '@/components/ui/AdminLayout';
 import {
   Users,
@@ -505,7 +506,7 @@ function UsersManagementPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          await loadEmployees();
+          // ✅ Realtime이 자동으로 사용자 정보 업데이트 - loadEmployees() 불필요
           setShowEditModal(false);
           setEditingUser(null);
           alert('사용자 정보가 성공적으로 업데이트되었습니다.');
@@ -574,7 +575,7 @@ function UsersManagementPage() {
       });
 
       if (response.ok) {
-        await loadEmployees();
+        // ✅ Realtime이 자동으로 상태 업데이트 - loadEmployees() 불필요
         alert(`사용자가 ${isActive ? '활성화' : '비활성화'}되었습니다.`);
       }
     } catch (error) {
@@ -596,7 +597,7 @@ function UsersManagementPage() {
       });
 
       if (response.ok) {
-        await loadSocialApprovals();
+        // ✅ Realtime이 자동으로 승인 상태 업데이트 - loadSocialApprovals() 불필요
         alert(`승인 요청이 ${action === 'approved' ? '승인' : '거부'}되었습니다.`);
       }
     } catch (error) {
@@ -713,6 +714,168 @@ function UsersManagementPage() {
       alert('세션 종료 중 오류가 발생했습니다.');
     }
   };
+
+  // ==================== 실시간 이벤트 핸들러 ====================
+
+  // employees 테이블 실시간 업데이트 핸들러
+  const handleEmployeeUpdate = useCallback((payload: any) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+
+    console.log('📡 [REALTIME] employees 이벤트:', {
+      eventType,
+      userId: newRecord?.id || oldRecord?.id,
+      changes: {
+        is_active: oldRecord?.is_active !== newRecord?.is_active,
+        last_login_at: oldRecord?.last_login_at !== newRecord?.last_login_at,
+        permission_level: oldRecord?.permission_level !== newRecord?.permission_level
+      }
+    });
+
+    if (eventType === 'INSERT') {
+      // 새 사용자 추가 (승인 대기 목록에 추가)
+      setEmployees(prev => [newRecord, ...prev]);
+      console.log('✅ [REALTIME] 새 사용자 추가:', newRecord.name);
+    }
+
+    if (eventType === 'UPDATE') {
+      // 변경사항이 실제로 있는지 확인 (중복 업데이트 방지)
+      const hasChanges = Object.keys(newRecord).some(
+        key => JSON.stringify(newRecord[key]) !== JSON.stringify(oldRecord?.[key])
+      );
+
+      if (!hasChanges) {
+        console.log('⚠️ [REALTIME] 변경사항 없음 - 업데이트 스킵');
+        return;
+      }
+
+      // 사용자 정보 업데이트
+      setEmployees(prev =>
+        prev.map(emp =>
+          emp.id === newRecord.id ? { ...emp, ...newRecord } : emp
+        )
+      );
+
+      // 현재 선택된 사용자 상세 정보도 업데이트
+      if (selectedUser?.id === newRecord.id) {
+        setSelectedUser(prev => prev ? { ...prev, ...newRecord } : null);
+        console.log('✅ [REALTIME] 선택된 사용자 정보 업데이트:', newRecord.name);
+      }
+
+      console.log('✅ [REALTIME] 사용자 정보 업데이트:', newRecord.name);
+    }
+
+    if (eventType === 'DELETE') {
+      // 사용자 삭제
+      setEmployees(prev => prev.filter(emp => emp.id !== oldRecord.id));
+
+      // 삭제된 사용자가 현재 선택되어 있으면 모달 닫기
+      if (selectedUser?.id === oldRecord.id) {
+        setSelectedUser(null);
+      }
+
+      console.log('✅ [REALTIME] 사용자 삭제:', oldRecord.name);
+    }
+  }, [selectedUser]);
+
+  // social_login_approvals 테이블 실시간 업데이트 핸들러
+  const handleApprovalUpdate = useCallback((payload: any) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+
+    console.log('📡 [REALTIME] social_login_approvals 이벤트:', {
+      eventType,
+      approvalId: newRecord?.id || oldRecord?.id,
+      status: newRecord?.approval_status
+    });
+
+    if (eventType === 'INSERT') {
+      // 새 승인 요청 추가
+      setSocialApprovals(prev => [newRecord, ...prev]);
+      console.log('✅ [REALTIME] 새 승인 요청 추가:', newRecord.requester_name);
+    }
+
+    if (eventType === 'UPDATE') {
+      // 승인 상태 업데이트
+      setSocialApprovals(prev =>
+        prev.map(approval =>
+          approval.id === newRecord.id ? { ...approval, ...newRecord } : approval
+        )
+      );
+
+      // 승인 완료 시 승인 대기 목록에서 제거
+      if (newRecord.approval_status !== 'pending') {
+        setSocialApprovals(prev => prev.filter(approval => approval.id !== newRecord.id));
+        console.log('✅ [REALTIME] 승인 처리 완료 - 목록에서 제거:', newRecord.requester_name);
+      }
+    }
+
+    if (eventType === 'DELETE') {
+      // 승인 요청 삭제
+      setSocialApprovals(prev => prev.filter(approval => approval.id !== oldRecord.id));
+      console.log('✅ [REALTIME] 승인 요청 삭제:', oldRecord.requester_name);
+    }
+  }, []);
+
+  // user_login_history 테이블 실시간 업데이트 핸들러
+  const handleLoginHistoryUpdate = useCallback((payload: any) => {
+    const { eventType, new: newRecord } = payload;
+
+    if (eventType === 'INSERT') {
+      console.log('📡 [REALTIME] user_login_history 이벤트:', {
+        userId: newRecord.user_id,
+        loginAt: newRecord.login_at,
+        loginMethod: newRecord.login_method
+      });
+
+      // 로그인 이력 추가 (선택된 사용자만)
+      if (selectedUser?.id === newRecord.user_id) {
+        setUserLoginHistory(prev => [newRecord, ...prev]);
+        console.log('✅ [REALTIME] 로그인 이력 추가:', newRecord.login_method);
+      }
+
+      // 해당 사용자의 last_login_at 업데이트
+      setEmployees(prev =>
+        prev.map(emp =>
+          emp.id === newRecord.user_id
+            ? { ...emp, last_login_at: newRecord.login_at }
+            : emp
+        )
+      );
+
+      // 선택된 사용자 정보도 업데이트
+      if (selectedUser?.id === newRecord.user_id) {
+        setSelectedUser(prev =>
+          prev ? { ...prev, last_login_at: newRecord.login_at } : null
+        );
+        console.log('✅ [REALTIME] 최근 로그인 시간 업데이트:', newRecord.login_at);
+      }
+    }
+  }, [selectedUser]);
+
+  // ==================== 실시간 구독 설정 ====================
+
+  // employees 테이블 실시간 구독
+  useSupabaseRealtime({
+    tableName: 'employees',
+    eventTypes: ['INSERT', 'UPDATE', 'DELETE'],
+    onNotification: handleEmployeeUpdate,
+    autoConnect: true
+  });
+
+  // social_login_approvals 테이블 실시간 구독
+  useSupabaseRealtime({
+    tableName: 'social_login_approvals',
+    eventTypes: ['INSERT', 'UPDATE', 'DELETE'],
+    onNotification: handleApprovalUpdate,
+    autoConnect: true
+  });
+
+  // user_login_history 테이블 실시간 구독
+  useSupabaseRealtime({
+    tableName: 'user_login_history',
+    eventTypes: ['INSERT'],
+    onNotification: handleLoginHistoryUpdate,
+    autoConnect: true
+  });
 
   // 승인 설정 로드
   const loadApprovalSettings = async () => {
