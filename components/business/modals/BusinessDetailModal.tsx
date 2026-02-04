@@ -640,7 +640,7 @@ export default function BusinessDetailModal({
                           메모 및 업무 ({getIntegratedItems().length}개)
                         </div>
                         {/* 스크롤 가능한 컨테이너 추가 - 최대 높이 제한으로 내용이 많아져도 스크롤 가능 */}
-                        <div className="space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto pr-1 sm:pr-2" style={{scrollbarWidth: 'thin'}}>
+                        <div className="space-y-2 sm:space-y-3 max-h-[640px] sm:max-h-[768px] md:max-h-[800px] overflow-y-auto pr-1 sm:pr-2" style={{scrollbarWidth: 'thin'}}>
                           {getIntegratedItems().map((item, index) => {
                             if (item.type === 'memo') {
                               const memo = item.data as Memo
