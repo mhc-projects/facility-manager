@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { UnitInput } from '@/components/ui/UnitInput'
 import { Toast } from '@/components/ui/Toast'
+import { getManufacturerName } from '@/constants/manufacturers'
 
 // 게이트웨이 색상 팔레트 - 무한 확장 가능한 기본 색상들
 const baseGatewayColors = [
@@ -1525,7 +1526,7 @@ function AirPermitDetailContent() {
             {(permitDetail.business as any)?.manufacturer && (
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded text-xs">
                 <span className="font-semibold text-green-900">제조사</span>
-                <span className="font-medium text-green-900">{(permitDetail.business as any).manufacturer}</span>
+                <span className="font-medium text-green-900">{getManufacturerName((permitDetail.business as any).manufacturer)}</span>
               </div>
             )}
           </div>
