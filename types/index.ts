@@ -245,6 +245,10 @@ export interface BusinessInfo {
     totalDevices: number;
   };
 
+  // 현장 확인 데이터 (사무실 관리 데이터)
+  discharge_flowmeter?: number;  // 배출전류계 수량
+  supply_flowmeter?: number;     // 송풍전류계 수량
+
   // 계산서 및 입금 관리 (보조금 사업장)
   invoice_1st_date?: string;
   invoice_1st_amount?: number;
@@ -646,4 +650,37 @@ declare global {
       };
     };
   }
+}
+
+// ============================================================
+// Equipment Field Check Types
+// ============================================================
+
+export interface EquipmentFieldCheck {
+  id: string;
+  business_id: string;
+  discharge_flowmeter: number;
+  supply_flowmeter: number;
+  checked_by: string | null;
+  checked_at: string;
+  check_location: string | null;
+  notes: string | null;
+  is_synced: boolean;
+  synced_at: string | null;
+  synced_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateEquipmentFieldCheckRequest {
+  businessId: string;
+  discharge_flowmeter: number;
+  supply_flowmeter: number;
+  checked_by?: string;
+  check_location?: string;
+  notes?: string;
+}
+
+export interface SyncEquipmentFieldCheckRequest {
+  synced_by: string;
 }

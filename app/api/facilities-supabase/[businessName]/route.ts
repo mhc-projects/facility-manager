@@ -209,9 +209,11 @@ export async function GET(
           capacity: facility.capacity,
           quantity: facility.quantity,
           notes: facility.notes,
-          // 측정기기 필드 추가
-          dischargeCT: facility.discharge_ct,
-          exemptionReason: facility.exemption_reason,
+          // 측정기기 필드 추가 (이중 제공: Business 페이지용 + Admin 모달용)
+          dischargeCT: facility.discharge_ct,                 // Business 페이지용
+          exemptionReason: facility.exemption_reason,         // Business 페이지용
+          discharge_ct: facility.discharge_ct,                // Admin 모달용
+          exemption_reason: facility.exemption_reason,        // Admin 모달용
           remarks: facility.remarks,
           last_updated_at: facility.last_updated_at,
           last_updated_by: facility.last_updated_by
@@ -246,12 +248,17 @@ export async function GET(
           capacity: facility.capacity,
           quantity: facility.quantity,
           notes: facility.notes,
-          // 측정기기 필드 추가
-          ph: facility.ph,
-          pressure: facility.pressure,
-          temperature: facility.temperature,
-          pump: facility.pump,
-          fan: facility.fan,
+          // 측정기기 필드 추가 (이중 제공: Business 페이지용 + Admin 모달용)
+          ph: facility.ph,                                    // Business 페이지용
+          pressure: facility.pressure,                        // Business 페이지용
+          temperature: facility.temperature,                  // Business 페이지용
+          pump: facility.pump,                                // Business 페이지용
+          fan: facility.fan,                                  // Business 페이지용
+          ph_meter: facility.ph,                              // Admin 모달용
+          differential_pressure_meter: facility.pressure,     // Admin 모달용
+          temperature_meter: facility.temperature,            // Admin 모달용
+          pump_ct: facility.pump,                             // Admin 모달용
+          fan_ct: facility.fan,                               // Admin 모달용
           remarks: facility.remarks,
           last_updated_at: facility.last_updated_at,
           last_updated_by: facility.last_updated_by
@@ -276,9 +283,11 @@ export async function GET(
         quantity: facility.quantity,
         displayName: `배출구${facility.outlet_number}-배출시설${facility.facility_number}`,
         notes: facility.notes,
-        // 측정기기 필드 추가
-        dischargeCT: facility.dischargeCT,
-        exemptionReason: facility.exemptionReason,
+        // 측정기기 필드 추가 (이중 제공: Business 페이지용 + Admin 모달용)
+        dischargeCT: facility.dischargeCT,                    // Business 페이지용
+        exemptionReason: facility.exemptionReason,            // Business 페이지용
+        discharge_ct: facility.discharge_ct,                  // Admin 모달용
+        exemption_reason: facility.exemption_reason,          // Admin 모달용
         remarks: facility.remarks,
         last_updated_at: facility.last_updated_at,
         last_updated_by: facility.last_updated_by
@@ -302,12 +311,17 @@ export async function GET(
           quantity: facility.quantity,
           displayName: `배출구${facility.outlet_number}-방지시설${facility.facility_number}`,
           notes: facility.notes,
-          // 측정기기 필드 추가
-          ph: facility.ph,
-          pressure: facility.pressure,
-          temperature: facility.temperature,
-          pump: facility.pump,
-          fan: facility.fan,
+          // 측정기기 필드 추가 (이중 제공: Business 페이지용 + Admin 모달용)
+          ph: facility.ph,                                    // Business 페이지용
+          pressure: facility.pressure,                        // Business 페이지용
+          temperature: facility.temperature,                  // Business 페이지용
+          pump: facility.pump,                                // Business 페이지용
+          fan: facility.fan,                                  // Business 페이지용
+          ph_meter: facility.ph_meter,                        // Admin 모달용
+          differential_pressure_meter: facility.differential_pressure_meter, // Admin 모달용
+          temperature_meter: facility.temperature_meter,      // Admin 모달용
+          pump_ct: facility.pump_ct,                          // Admin 모달용
+          fan_ct: facility.fan_ct,                            // Admin 모달용
           remarks: facility.remarks,
           last_updated_at: facility.last_updated_at,
           last_updated_by: facility.last_updated_by
@@ -641,12 +655,45 @@ export async function POST(
   try {
     const businessName = decodeURIComponent(params.businessName);
     const body = await request.json();
-    
+
     console.log('🏭 [FACILITIES-SUPABASE] 시설 정보 저장 시작:', businessName);
-    
+
     const { discharge = [], prevention = [] } = body;
 
-    // 기존 데이터 삭제 (전체 교체) - Direct PostgreSQL
+    // 1. 사업장 정보 조회하여 business_id 획득
+    const business = await queryOne(
+      'SELECT id FROM business_info WHERE business_name = $1',
+      [businessName]
+    );
+
+    if (!business) {
+      throw new Error(`사업장 "${businessName}"을 찾을 수 없습니다.`);
+    }
+
+    // 2. 대기필증 정보 조회
+    const airPermit = await queryOne(
+      'SELECT id FROM air_permit_info WHERE business_id = $1 AND is_deleted = false ORDER BY created_at DESC LIMIT 1',
+      [business.id]
+    );
+
+    if (!airPermit) {
+      throw new Error(`사업장 "${businessName}"의 대기필증을 찾을 수 없습니다.`);
+    }
+
+    // 3. 배출구 정보 조회하여 outlet_number → outlet_id 매핑 생성
+    const outlets = await queryAll(
+      'SELECT id, outlet_number FROM discharge_outlets WHERE air_permit_id = $1',
+      [airPermit.id]
+    );
+
+    const outletNumberToId: { [key: number]: string } = {};
+    outlets?.forEach((outlet: any) => {
+      outletNumberToId[outlet.outlet_number] = outlet.id;
+    });
+
+    console.log('🏭 [FACILITIES-SUPABASE] 배출구 매핑:', outletNumberToId);
+
+    // 4. 기존 데이터 삭제 (전체 교체) - Direct PostgreSQL
     const [deleteDischarge, deletePrevention] = await Promise.allSettled([
       pgQuery(
         'DELETE FROM discharge_facilities WHERE business_name = $1',
@@ -665,7 +712,7 @@ export async function POST(
       console.error('🏭 [FACILITIES-SUPABASE] 기존 방지시설 삭제 실패:', deletePrevention.reason);
     }
 
-    // 새 데이터 삽입 - Direct PostgreSQL
+    // 5. 새 데이터 삽입 - Direct PostgreSQL
     const promises = [];
 
     if (discharge.length > 0) {
@@ -675,29 +722,41 @@ export async function POST(
       let paramIndex = 1;
 
       discharge.forEach((facility: any) => {
+        const outletId = outletNumberToId[facility.outlet];
+        if (!outletId) {
+          console.warn(`⚠️ [FACILITIES-SUPABASE] 배출구 ${facility.outlet}에 대한 outlet_id를 찾을 수 없습니다.`);
+          return;
+        }
+
         valueStrings.push(
-          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6})`
+          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10})`
         );
         values.push(
+          outletId,  // ✅ outlet_id 추가
           businessName,
           facility.outlet,
           facility.number,
           facility.name,
           facility.capacity,
           facility.quantity || 1,
-          facility.notes || null
+          facility.notes || null,
+          facility.dischargeCT || facility.discharge_ct || null,
+          facility.exemptionReason || facility.exemption_reason || null,
+          facility.remarks || null
         );
-        paramIndex += 7;
+        paramIndex += 11;  // 10 → 11로 변경
       });
 
-      const dischargeInsertQuery = `
-        INSERT INTO discharge_facilities (
-          business_name, outlet_number, facility_number, facility_name,
-          capacity, quantity, notes
-        ) VALUES ${valueStrings.join(', ')}
-      `;
+      if (valueStrings.length > 0) {
+        const dischargeInsertQuery = `
+          INSERT INTO discharge_facilities (
+            outlet_id, business_name, outlet_number, facility_number, facility_name,
+            capacity, quantity, notes, discharge_ct, exemption_reason, remarks
+          ) VALUES ${valueStrings.join(', ')}
+        `;
 
-      promises.push(pgQuery(dischargeInsertQuery, values));
+        promises.push(pgQuery(dischargeInsertQuery, values));
+      }
     }
 
     if (prevention.length > 0) {
@@ -707,29 +766,44 @@ export async function POST(
       let paramIndex = 1;
 
       prevention.forEach((facility: any) => {
+        const outletId = outletNumberToId[facility.outlet];
+        if (!outletId) {
+          console.warn(`⚠️ [FACILITIES-SUPABASE] 배출구 ${facility.outlet}에 대한 outlet_id를 찾을 수 없습니다.`);
+          return;
+        }
+
         valueStrings.push(
-          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6})`
+          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10}, $${paramIndex + 11}, $${paramIndex + 12}, $${paramIndex + 13})`
         );
         values.push(
+          outletId,  // ✅ outlet_id 추가
           businessName,
           facility.outlet,
           facility.number,
           facility.name,
           facility.capacity,
           facility.quantity || 1,
-          facility.notes || null
+          facility.notes || null,
+          facility.ph || facility.ph_meter || null,
+          facility.pressure || facility.differential_pressure_meter || null,
+          facility.temperature || facility.temperature_meter || null,
+          facility.pump || facility.pump_ct || null,
+          facility.fan || facility.fan_ct || null,
+          facility.remarks || null
         );
-        paramIndex += 7;
+        paramIndex += 14;  // 13 → 14로 변경
       });
 
-      const preventionInsertQuery = `
-        INSERT INTO prevention_facilities (
-          business_name, outlet_number, facility_number, facility_name,
-          capacity, quantity, notes
-        ) VALUES ${valueStrings.join(', ')}
-      `;
+      if (valueStrings.length > 0) {
+        const preventionInsertQuery = `
+          INSERT INTO prevention_facilities (
+            outlet_id, business_name, outlet_number, facility_number, facility_name,
+            capacity, quantity, notes, ph, pressure, temperature, pump, fan, remarks
+          ) VALUES ${valueStrings.join(', ')}
+        `;
 
-      promises.push(pgQuery(preventionInsertQuery, values));
+        promises.push(pgQuery(preventionInsertQuery, values));
+      }
     }
 
     const results = await Promise.allSettled(promises);

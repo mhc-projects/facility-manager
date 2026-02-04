@@ -370,6 +370,7 @@ function BusinessManagementPage() {
   const [selectedBusiness, setSelectedBusiness] = useState<UnifiedBusinessInfo | null>(null)
   const [facilityData, setFacilityData] = useState<BusinessFacilityData | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+
   const [duplicateCheck, setDuplicateCheck] = useState<{
     isDuplicate: boolean
     exactMatch: UnifiedBusinessInfo | null
@@ -456,6 +457,71 @@ function BusinessManagementPage() {
   const [returnTaskId, setReturnTaskId] = useState<string | null>(null)
 
   // ⚡ 주의: 초기 데이터 병렬 로딩은 커스텀 훅으로 이동됨 (useRevenueData, useBusinessData)
+
+  // 🔄 시설 데이터 실시간 업데이트 핸들러
+  const handleFacilityUpdate = useCallback(async (businessName: string) => {
+    try {
+      console.log('🔄 [handleFacilityUpdate] 시설 데이터 업데이트 시작:', businessName);
+
+      // API에서 최신 시설 데이터 가져오기
+      const response = await fetch(`/api/facilities-supabase/${encodeURIComponent(businessName)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch facility data');
+      }
+
+      const facilityApiData = await response.json();
+
+      // facilityData 상태 업데이트
+      const transformedData: BusinessFacilityData = {
+        business: {
+          id: facilityApiData.businessInfo?.businessName || businessName,
+          business_name: businessName
+        },
+        discharge_facilities: (facilityApiData.facilities?.discharge || []).map((facility: any) => ({
+          id: `discharge-${facility.outlet}-${facility.number}`,
+          outlet_number: facility.outlet || 1,
+          outlet_name: `배출구 ${facility.outlet || 1}`,
+          facility_number: facility.number || 1,
+          facility_name: facility.name || '배출시설',
+          capacity: facility.capacity || '',
+          quantity: facility.quantity || 1,
+          display_name: facility.displayName || `배출구${facility.outlet}-배출시설${facility.number}`,
+          // 측정기기 필드
+          discharge_ct: facility.discharge_ct,
+          exemption_reason: facility.exemption_reason,
+          remarks: facility.remarks
+        })),
+        prevention_facilities: (facilityApiData.facilities?.prevention || []).map((facility: any) => ({
+          id: `prevention-${facility.outlet}-${facility.number}`,
+          outlet_number: facility.outlet || 1,
+          outlet_name: `배출구 ${facility.outlet || 1}`,
+          facility_number: facility.number || 1,
+          facility_name: facility.name || '방지시설',
+          capacity: facility.capacity || '',
+          quantity: facility.quantity || 1,
+          display_name: facility.displayName || `배출구${facility.outlet}-방지시설${facility.number}`,
+          // 측정기기 필드
+          ph_meter: facility.ph_meter,
+          differential_pressure_meter: facility.differential_pressure_meter,
+          temperature_meter: facility.temperature_meter,
+          pump_ct: facility.pump_ct,
+          fan_ct: facility.fan_ct,
+          remarks: facility.remarks
+        })),
+        summary: {
+          discharge_count: facilityApiData.dischargeCount || 0,
+          prevention_count: facilityApiData.preventionCount || 0,
+          total_facilities: (facilityApiData.dischargeCount || 0) + (facilityApiData.preventionCount || 0)
+        }
+      };
+
+      setFacilityData(transformedData);
+      console.log('✅ [handleFacilityUpdate] facilityData 업데이트 완료');
+
+    } catch (error) {
+      console.error('❌ [handleFacilityUpdate] 시설 데이터 업데이트 실패:', error);
+    }
+  }, []);
   // ⚡ 시설 통계 관련 함수들(calculateFacilityStats, loadBusinessFacilityStats, loadBusinessFacilities)은 useFacilityStats 훅으로 이동됨
 
   // 사업장 상세 시설 정보 조회 (추가 로직 포함)
@@ -466,23 +532,10 @@ function BusinessManagementPage() {
     // 추가 상세 정보 변환 로직
     try {
       const encodedBusinessName = encodeURIComponent(businessName)
-      console.log(`🔍 [FACILITY-LOAD] 사업장 시설 정보 조회: ${businessName}`)
-
       const response = await fetch(`/api/facilities-supabase/${encodedBusinessName}`)
-      console.log(`📡 [FACILITY-LOAD] API 응답 상태:`, response.status, response.ok)
 
       if (response.ok) {
         const result = await response.json()
-        console.log(`📊 [FACILITY-LOAD] API 응답 데이터:`, {
-          success: result.success,
-          hasData: !!result.data,
-          hasFacilities: !!result.data?.facilities,
-          dischargeCount: result.data?.facilities?.discharge?.length,
-          preventionCount: result.data?.facilities?.prevention?.length,
-          note: result.data?.note, // ⚠️ API가 반환한 경고 메시지 (대기필증 미발견 시)
-          apiDischargeCount: result.data?.dischargeCount,
-          apiPreventionCount: result.data?.preventionCount
-        })
 
         if (result.success && result.data && result.data.facilities) {
           // facilities-supabase API 데이터를 BusinessFacilityData 형식으로 변환
@@ -502,7 +555,11 @@ function BusinessManagementPage() {
               facility_name: facility.name || '배출시설',
               capacity: facility.capacity || '',
               quantity: facility.quantity || 1,
-              display_name: facility.displayName || `배출구${facility.outlet}-배출시설${facility.number}`
+              display_name: facility.displayName || `배출구${facility.outlet}-배출시설${facility.number}`,
+              // 측정기기 필드 추가
+              discharge_ct: facility.discharge_ct,
+              exemption_reason: facility.exemption_reason,
+              remarks: facility.remarks
             })),
             prevention_facilities: (facilityApiData.facilities?.prevention || []).map((facility: any) => ({
               id: `prevention-${facility.outlet}-${facility.number}`,
@@ -512,7 +569,14 @@ function BusinessManagementPage() {
               facility_name: facility.name || '방지시설',
               capacity: facility.capacity || '',
               quantity: facility.quantity || 1,
-              display_name: facility.displayName || `배출구${facility.outlet}-방지시설${facility.number}`
+              display_name: facility.displayName || `배출구${facility.outlet}-방지시설${facility.number}`,
+              // 측정기기 필드 추가
+              ph_meter: facility.ph_meter,
+              differential_pressure_meter: facility.differential_pressure_meter,
+              temperature_meter: facility.temperature_meter,
+              pump_ct: facility.pump_ct,
+              fan_ct: facility.fan_ct,
+              remarks: facility.remarks
             })),
             summary: {
               discharge_count: facilityApiData.dischargeCount || 0,
@@ -521,28 +585,15 @@ function BusinessManagementPage() {
             }
           }
 
-          console.log(`✅ [FACILITY-LOAD] 변환 완료:`, {
-            dischargeCount: transformedData.discharge_facilities.length,
-            preventionCount: transformedData.prevention_facilities.length,
-            totalFacilities: transformedData.summary.total_facilities
-          })
-
-          // ✅ 시설이 없어도 빈 데이터 객체로 설정 (null이 아님)
           setFacilityData(transformedData)
         } else {
-          console.warn(`⚠️ [FACILITY-LOAD] API 응답 데이터 형식 오류:`, {
-            success: result.success,
-            hasData: !!result.data,
-            hasFacilities: !!result.data?.facilities
-          })
           setFacilityData(null)
         }
       } else {
-        console.error(`❌ [FACILITY-LOAD] API 호출 실패:`, response.status)
         setFacilityData(null)
       }
     } catch (error) {
-      console.error('❌ [FACILITY-LOAD] 사업장 시설 정보 로드 실패:', error)
+      console.error('❌ 사업장 시설 정보 로드 실패:', error)
       setFacilityData(null)
     }
     // Note: facilityLoading is managed by the useFacilityStats hook
@@ -1007,8 +1058,8 @@ function BusinessManagementPage() {
     }
   }
 
-  // 메모와 업무를 통합해서 최신순으로 정렬하는 함수
-  const getIntegratedItems = () => {
+  // 메모와 업무를 통합해서 최신순으로 정렬하는 함수 (useCallback으로 최적화)
+  const getIntegratedItems = useCallback(() => {
     console.log('🔧 [FRONTEND] getIntegratedItems 호출됨 - businessMemos:', businessMemos.length, '개, businessTasks:', businessTasks.length, '개')
     const items: Array<{
       type: 'memo' | 'task',
@@ -1083,7 +1134,7 @@ function BusinessManagementPage() {
       // 같은 타입 내에서는 최신순으로 정렬
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     })
-  }
+  }, [businessMemos, businessTasks])
 
   // 엑셀 템플릿 다운로드 함수 (API 엔드포인트 사용)
   const downloadExcelTemplate = async () => {
@@ -1124,15 +1175,31 @@ function BusinessManagementPage() {
       const response = await fetch(url)
       const result = await response.json()
 
-      console.log('🔧 [FRONTEND] 메모 로드 API 응답:', result)
-      console.log('🔧 [FRONTEND] 받은 메모 데이터:', result.data)
-      console.log('🔧 [FRONTEND] 메모 개수:', result.data?.length || 0)
+      console.log('🔧 [FRONTEND] ===== API 응답 상세 디버깅 =====')
+      console.log('🔧 [FRONTEND] 전체 응답:', JSON.stringify(result, null, 2))
+      console.log('🔧 [FRONTEND] result.success:', result.success)
+      console.log('🔧 [FRONTEND] result.data 타입:', typeof result.data)
+      console.log('🔧 [FRONTEND] result.data는 배열?:', Array.isArray(result.data))
+      console.log('🔧 [FRONTEND] result.data:', result.data)
+      console.log('🔧 [FRONTEND] result.data.data:', result.data?.data)
 
       if (result.success) {
-        // API 응답이 {data: {data: [...], metadata: {...}}} 구조이므로 실제 배열은 result.data.data에 있음
-        const memos = result.data?.data || []
-        console.log('🔧 [FRONTEND] 추출된 메모 배열:', memos)
-        console.log('🔧 [FRONTEND] setBusinessMemos 호출 전 - 설정할 메모:', memos.length, '개')
+        // API 응답 구조 확인 후 올바른 데이터 추출
+        let memos = []
+
+        if (Array.isArray(result.data)) {
+          console.log('🔧 [FRONTEND] Case 1: result.data가 배열')
+          memos = result.data
+        } else if (result.data?.data && Array.isArray(result.data.data)) {
+          console.log('🔧 [FRONTEND] Case 2: result.data.data가 배열 (중첩 구조)')
+          memos = result.data.data
+        } else {
+          console.warn('⚠️ [FRONTEND] 예상치 못한 응답 구조:', result)
+          memos = []
+        }
+
+        console.log('🔧 [FRONTEND] 최종 추출된 메모:', memos.length, '개')
+        console.log('🔧 [FRONTEND] 메모 상세:', memos.map((m: any) => ({ id: m.id, title: m.title, source_type: m.source_type })))
         setBusinessMemos(memos)
         console.log('🔧 [FRONTEND] setBusinessMemos 호출 완료')
       } else {
@@ -2575,6 +2642,7 @@ function BusinessManagementPage() {
         await loadBusinessFacilitiesWithDetails(business.사업장명)
       }
 
+
       // 백그라운드에서 최신 데이터 조회
       if (business.id && business.사업장명) {
         const refreshedBusiness = await refreshBusinessData(business.id, business.사업장명)
@@ -2628,6 +2696,7 @@ function BusinessManagementPage() {
       if (business.사업장명) {
         await loadBusinessFacilitiesWithDetails(business.사업장명)
       }
+
 
       // 메모 로드 시도
       if (business.id) {
@@ -4488,6 +4557,7 @@ function BusinessManagementPage() {
             setSelectedRevenueBusiness={setSelectedRevenueBusiness}
             setShowRevenueModal={setShowRevenueModal}
             mapCategoryToInvoiceType={mapCategoryToInvoiceType}
+            onFacilityUpdate={handleFacilityUpdate}
           />
         </Suspense>
       )}

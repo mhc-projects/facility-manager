@@ -56,98 +56,10 @@ export default function EnhancedFacilityInfoSection({
     setLocalFacilityNumbering(facilityNumbering);
   }, [facilityNumbering]);
 
-  const [equipmentCounts, setEquipmentCounts] = useState({
-    phSensor: 0,
-    differentialPressureMeter: 0,
-    temperatureMeter: 0,
-    dischargeCT: 0,
-    fanCT: 0,
-    pumpCT: 0,
-    gateway: 0,
-    totalDevices: 0
-  });
-
-  // 🎯 facilityNumbering을 직접 사용하므로 별도 매핑 불필요
-  // 대기필증 관리 데이터에 이미 quantity별 개별 번호가 할당되어 있음
-
-  // 측정기기 수량 계산
-  const calculateEquipmentCounts = useCallback(() => {
-    let counts = {
-      phSensor: 0,
-      differentialPressureMeter: 0,
-      temperatureMeter: 0,
-      dischargeCT: 0,
-      fanCT: 0,
-      pumpCT: 0,
-      gateway: 0,
-      totalDevices: 0
-    };
-
-    // 배출시설에서 배출CT 카운트
-    facilities.discharge?.forEach(facility => {
-      if (facility.dischargeCT && facility.dischargeCT !== '0') {
-        counts.dischargeCT += parseInt(facility.dischargeCT) || 0;
-      }
-    });
-
-    // 방지시설에서 측정기기 카운트
-    facilities.prevention?.forEach(facility => {
-      if (facility.ph && facility.ph !== '0') {
-        counts.phSensor += parseInt(facility.ph) || 0;
-      }
-      if (facility.pressure && facility.pressure !== '0') {
-        counts.differentialPressureMeter += parseInt(facility.pressure) || 0;
-      }
-      if (facility.temperature && facility.temperature !== '0') {
-        counts.temperatureMeter += parseInt(facility.temperature) || 0;
-      }
-      if (facility.fan && facility.fan !== '0') {
-        counts.fanCT += parseInt(facility.fan) || 0;
-      }
-      if (facility.pump && facility.pump !== '0') {
-        counts.pumpCT += parseInt(facility.pump) || 0;
-      }
-    });
-
-    // 게이트웨이 수량 계산 (배출구 + 방지시설에서 고유한 게이트웨이 번호 개수)
-    const gatewaySet = new Set<string>();
-
-    // 배출구에서 게이트웨이 수집
-    facilityNumbering?.outlets?.forEach((outlet: any) => {
-      if (outlet.gateway_number && outlet.gateway_number.trim()) {
-        gatewaySet.add(outlet.gateway_number.trim());
-      }
-    });
-
-    // 방지시설에서 게이트웨이 수집
-    facilities.prevention?.forEach(facility => {
-      if (facility.gatewayInfo?.id && facility.gatewayInfo.id !== '0' && facility.gatewayInfo.id.trim()) {
-        gatewaySet.add(facility.gatewayInfo.id.trim());
-      }
-    });
-
-    counts.gateway = gatewaySet.size;
-
-    counts.totalDevices = counts.phSensor + counts.differentialPressureMeter +
-                         counts.temperatureMeter + counts.dischargeCT +
-                         counts.fanCT + counts.pumpCT + counts.gateway;
-
-    setEquipmentCounts(counts);
-    return counts;
-  }, [facilities, facilityNumbering]);
-
-  useEffect(() => {
-    const counts = calculateEquipmentCounts();
-
-    // 🔄 자동 저장: 측정기기 수량이 변경되면 데이터베이스에 저장
-    if (businessId && counts.totalDevices > 0) {
-      const timer = setTimeout(() => {
-        saveEquipmentCounts(counts);
-      }, 1000); // 1초 디바운스
-
-      return () => clearTimeout(timer);
-    }
-  }, [calculateEquipmentCounts, businessId]);
+  // ❌ 제거: equipmentCounts 상태 및 calculateEquipmentCounts 함수
+  // 측정기기 수량 계산 로직은 EquipmentFieldCheckSection 컴포넌트에서 독립적으로 처리
+  // 기존: 대기필증 데이터 기반 자동 계산 + 자동 저장
+  // 신규: 현장 확인 데이터 입력 + 수동 저장 (별도 테이블 관리)
 
   // 방지시설 디폴트 값 적용
   const applyPreventionDefaults = (facilityName: string) => {
@@ -248,55 +160,49 @@ export default function EnhancedFacilityInfoSection({
     try {
       const updatedFacilities = { ...facilities };
       const facilityArray = facilityType === 'discharge' ? updatedFacilities.discharge : updatedFacilities.prevention;
-      
-      const index = facilityArray?.findIndex(f => 
+
+      const index = facilityArray?.findIndex(f =>
         f.outlet === editingFacility.outlet && f.number === editingFacility.number
       );
-      
+
       if (index !== -1 && facilityArray) {
         facilityArray[index] = editingFacility;
-        onFacilitiesUpdate(updatedFacilities);
-        
-        // 수량 재계산 및 Supabase 저장
-        const newCounts = calculateEquipmentCounts();
-        await saveEquipmentCounts(newCounts);
+
+        // 🔄 DB에 저장
+        console.log('💾 [EnhancedFacilityInfoSection] DB 저장 시작:', businessName);
+        const response = await fetch(`/api/facilities-supabase/${encodeURIComponent(businessName)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            discharge: updatedFacilities.discharge,
+            prevention: updatedFacilities.prevention
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          console.log('✅ [EnhancedFacilityInfoSection] DB 저장 성공');
+          onFacilitiesUpdate(updatedFacilities);
+        } else {
+          console.error('❌ [EnhancedFacilityInfoSection] DB 저장 실패:', result.error);
+          alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
+          return;
+        }
       }
 
       setShowAddForm(false);
       setEditingFacility(null);
     } catch (error) {
-      console.error('시설 정보 저장 실패:', error);
+      console.error('❌ [EnhancedFacilityInfoSection] 시설 정보 저장 실패:', error);
+      alert('저장 중 오류가 발생했습니다.');
     }
   };
 
-  // 측정기기 수량을 Supabase에 저장
-  const saveEquipmentCounts = async (counts: typeof equipmentCounts) => {
-    if (!businessId) {
-      console.log('⏭️ businessId가 없어 측정기기 수량 저장을 건너뜁니다.');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/business-equipment-counts', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessId,
-          equipmentCounts: counts
-        })
-      });
-
-      if (!response.ok) {
-        console.warn('⚠️ 측정기기 수량 저장 실패 (계속 진행):', await response.text());
-        return; // 오류를 throw하지 않고 조용히 실패
-      }
-
-      console.log('✅ 측정기기 수량 저장 완료:', counts);
-    } catch (error) {
-      console.warn('⚠️ 측정기기 수량 저장 오류 (계속 진행):', error);
-      // 오류를 throw하지 않고 조용히 실패
-    }
-  };
+  // ❌ 제거: saveEquipmentCounts 함수
+  // 현장 확인 데이터는 별도 컴포넌트 (EquipmentFieldCheckSection)에서 관리
 
 
   const renderEditForm = () => {
@@ -589,49 +495,6 @@ export default function EnhancedFacilityInfoSection({
         
         {!isCollapsed && (
           <div className="px-6 pb-6 space-y-6">
-            {/* 측정기기 수량 요약 */}
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-xl border-2 border-gray-200/80 hover:shadow-2xl hover:border-gray-300/80 transition-all duration-300">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-blue-600" />
-                측정기기 수량 현황
-              </h3>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-cyan-600">{equipmentCounts.phSensor}</div>
-                  <div className="text-xs text-gray-600">pH계</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{equipmentCounts.differentialPressureMeter}</div>
-                  <div className="text-xs text-gray-600">차압계</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{equipmentCounts.temperatureMeter}</div>
-                  <div className="text-xs text-gray-600">온도계</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{equipmentCounts.dischargeCT}</div>
-                  <div className="text-xs text-gray-600">배출CT</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{equipmentCounts.fanCT}</div>
-                  <div className="text-xs text-gray-600">송풍CT</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{equipmentCounts.pumpCT}</div>
-                  <div className="text-xs text-gray-600">펌프CT</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-indigo-600">{equipmentCounts.gateway}</div>
-                  <div className="text-xs text-gray-600">게이트웨이</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-800">{equipmentCounts.totalDevices}</div>
-                  <div className="text-xs text-gray-600">총 기기</div>
-                </div>
-              </div>
-            </div>
-
             {/* 🏭 배출구별 시설 및 게이트웨이 정보 */}
             {localFacilityNumbering?.outlets && localFacilityNumbering.outlets.length > 0 && (
               <div className="space-y-4">

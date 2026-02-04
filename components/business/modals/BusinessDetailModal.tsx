@@ -275,6 +275,8 @@ interface BusinessDetailModalProps {
   setSelectedRevenueBusiness: (business: UnifiedBusinessInfo) => void
   setShowRevenueModal: (show: boolean) => void
   mapCategoryToInvoiceType: (category: string) => string
+  // 실시간 업데이트 핸들러
+  onFacilityUpdate?: (businessName: string) => void
 }
 
 export default function BusinessDetailModal({
@@ -304,6 +306,7 @@ export default function BusinessDetailModal({
   setSelectedRevenueBusiness,
   setShowRevenueModal,
   mapCategoryToInvoiceType,
+  onFacilityUpdate,
 }: BusinessDetailModalProps) {
   if (!isOpen || !business) return null
 
@@ -1009,8 +1012,8 @@ export default function BusinessDetailModal({
                     <>
                       {/* Facility Summary Card */}
                       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 sm:p-4 border border-blue-200 mb-3 sm:mb-4">
-                        <div className="text-xs sm:text-sm md:text-base font-semibold text-blue-700 mb-2 sm:mb-3">시설 정보 (대기필증 기준)</div>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 text-center">
+                        <div className="text-xs sm:text-sm md:text-base font-semibold text-blue-700 mb-2 sm:mb-3">시설 정보 (실사 기준)</div>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 text-center mb-4">
                           <div>
                             <div className="text-[10px] sm:text-xs md:text-sm text-blue-600 mb-1">배출시설</div>
                             <div className="text-sm sm:text-lg md:text-xl font-bold text-blue-800">{facilityData.summary.discharge_count}</div>
@@ -1029,6 +1032,107 @@ export default function BusinessDetailModal({
                                 }, [] as number[]).length}
                             </div>
                           </div>
+                        </div>
+
+                        {/* Detailed Facility List by Outlet */}
+                        <div className="space-y-3">
+                          {(() => {
+                            // Group facilities by outlet
+                            const outletGroups: { [key: number]: { discharge: any[], prevention: any[] } } = {};
+
+                            facilityData.discharge_facilities.forEach(f => {
+                              if (!outletGroups[f.outlet_number]) {
+                                outletGroups[f.outlet_number] = { discharge: [], prevention: [] };
+                              }
+                              outletGroups[f.outlet_number].discharge.push(f);
+                            });
+
+                            facilityData.prevention_facilities.forEach(f => {
+                              if (!outletGroups[f.outlet_number]) {
+                                outletGroups[f.outlet_number] = { discharge: [], prevention: [] };
+                              }
+                              outletGroups[f.outlet_number].prevention.push(f);
+                            });
+
+                            return Object.entries(outletGroups).map(([outletNum, facilities]) => (
+                              <div key={outletNum} className="bg-white rounded-lg p-3 border border-blue-200">
+                                <div className="text-xs sm:text-sm font-semibold text-blue-600 mb-2">배출구 {outletNum}번</div>
+
+                                {/* 배출시설 */}
+                                {facilities.discharge.length > 0 && (
+                                  <div className="mb-3">
+                                    <div className="text-xs text-orange-600 font-medium mb-1.5">배출시설 ({facilities.discharge.length}개)</div>
+                                    <div className="space-y-1.5">
+                                      {facilities.discharge.map((f, idx) => (
+                                        <div key={idx} className="bg-orange-50 rounded p-2 text-xs">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="font-medium text-orange-800">{f.facility_name}</div>
+                                            {f.facility_number && (
+                                              <div className="text-[10px] bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded font-semibold">
+                                                #{f.facility_number}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="text-gray-600">용량: {f.capacity || '-'}</div>
+                                          {f.discharge_ct && Number(f.discharge_ct) > 0 && (
+                                            <div className="text-gray-600 mt-1">
+                                              <span className="font-medium text-orange-700">측정기기:</span>
+                                              <div className="ml-2 mt-0.5">
+                                                • 배출CT: {f.discharge_ct}개
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 방지시설 */}
+                                {facilities.prevention.length > 0 && (
+                                  <div>
+                                    <div className="text-xs text-cyan-600 font-medium mb-1.5">방지시설 ({facilities.prevention.length}개)</div>
+                                    <div className="space-y-1.5">
+                                      {facilities.prevention.map((f, idx) => (
+                                        <div key={idx} className="bg-cyan-50 rounded p-2 text-xs">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="font-medium text-cyan-800">{f.facility_name}</div>
+                                            {f.facility_number && (
+                                              <div className="text-[10px] bg-cyan-200 text-cyan-800 px-1.5 py-0.5 rounded font-semibold">
+                                                #{f.facility_number}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="text-gray-600">용량: {f.capacity || '-'}</div>
+                                          {(() => {
+                                            const hasMeasurementDevices =
+                                              (f.ph_meter && Number(f.ph_meter) > 0) ||
+                                              (f.differential_pressure_meter && Number(f.differential_pressure_meter) > 0) ||
+                                              (f.temperature_meter && Number(f.temperature_meter) > 0) ||
+                                              (f.pump_ct && Number(f.pump_ct) > 0) ||
+                                              (f.fan_ct && Number(f.fan_ct) > 0);
+
+                                            return hasMeasurementDevices && (
+                                              <div className="text-gray-600 mt-1">
+                                                <span className="font-medium text-cyan-700">측정기기:</span>
+                                                <div className="ml-2 mt-0.5 space-y-0.5">
+                                                  {f.ph_meter && Number(f.ph_meter) > 0 && <div>• PH센서: {f.ph_meter}개</div>}
+                                                  {f.differential_pressure_meter && Number(f.differential_pressure_meter) > 0 && <div>• 차압계: {f.differential_pressure_meter}개</div>}
+                                                  {f.temperature_meter && Number(f.temperature_meter) > 0 && <div>• 온도계: {f.temperature_meter}개</div>}
+                                                  {f.pump_ct && Number(f.pump_ct) > 0 && <div>• 펌프CT: {f.pump_ct}개</div>}
+                                                  {f.fan_ct && Number(f.fan_ct) > 0 && <div>• 송풍CT: {f.fan_ct}개</div>}
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ));
+                          })()}
                         </div>
                       </div>
                     </>
