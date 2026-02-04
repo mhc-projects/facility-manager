@@ -66,15 +66,48 @@ const DateInput = ({ value, onChange, placeholder = "YYYY-MM-DD" }: {
   const yearRef = useRef<HTMLInputElement>(null)
   const monthRef = useRef<HTMLInputElement>(null)
   const dayRef = useRef<HTMLInputElement>(null)
-  
-  const parts = value ? value.split('-') : ['', '', '']
-  const [year, month, day] = parts
+
+  // 내부 상태로 각 필드 관리 (불완전한 입력 허용)
+  const [localYear, setLocalYear] = useState('')
+  const [localMonth, setLocalMonth] = useState('')
+  const [localDay, setLocalDay] = useState('')
+
+  // 외부 value prop이 변경되면 내부 상태 동기화
+  useEffect(() => {
+    if (value && value.includes('-')) {
+      const parts = value.split('-')
+      setLocalYear(parts[0] || '')
+      setLocalMonth(parts[1] || '')
+      setLocalDay(parts[2] || '')
+    } else if (!value) {
+      // 빈 값이면 초기화
+      setLocalYear('')
+      setLocalMonth('')
+      setLocalDay('')
+    }
+  }, [value])
+
+  // 완전한 날짜인지 검증하는 함수
+  const isCompleteDate = (y: string, m: string, d: string) => {
+    return y.length === 4 && m.length === 2 && d.length === 2
+  }
+
+  // 상위 컴포넌트로 완전한 날짜만 전달
+  const updateParentIfComplete = (y: string, m: string, d: string) => {
+    if (isCompleteDate(y, m, d)) {
+      onChange(`${y}-${m}-${d}`)
+    } else if (!y && !m && !d) {
+      // 모든 필드가 비어있으면 빈 문자열 전달
+      onChange('')
+    }
+    // 부분 입력 상태에서는 onChange 호출 안 함 (불완전한 날짜 방지)
+  }
 
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     if (val.length <= 4 && /^\d*$/.test(val)) {
-      const newValue = `${val}-${month}-${day}`
-      onChange(newValue)
+      setLocalYear(val)
+      updateParentIfComplete(val, localMonth, localDay)
       if (val.length === 4) {
         monthRef.current?.focus()
       }
@@ -93,8 +126,8 @@ const DateInput = ({ value, onChange, placeholder = "YYYY-MM-DD" }: {
           monthVal = numVal.toString().padStart(2, '0')
         }
       }
-      const newValue = `${year}-${monthVal}-${day}`
-      onChange(newValue)
+      setLocalMonth(monthVal)
+      updateParentIfComplete(localYear, monthVal, localDay)
       if (monthVal.length === 2) {
         dayRef.current?.focus()
       }
@@ -119,8 +152,8 @@ const DateInput = ({ value, onChange, placeholder = "YYYY-MM-DD" }: {
           dayVal = val
         }
       }
-      const newValue = `${year}-${month}-${dayVal}`
-      onChange(newValue)
+      setLocalDay(dayVal)
+      updateParentIfComplete(localYear, localMonth, dayVal)
     }
   }
 
@@ -140,37 +173,51 @@ const DateInput = ({ value, onChange, placeholder = "YYYY-MM-DD" }: {
     }
   }
 
+  // 불완전한 날짜 상태 표시
+  const isIncomplete = (localYear || localMonth || localDay) && !isCompleteDate(localYear, localMonth, localDay)
+
   return (
-    <div className="flex items-center gap-1 sm:gap-2">
-      <input
-        ref={yearRef}
-        type="text"
-        value={year}
-        onChange={handleYearChange}
-        onKeyDown={(e) => handleKeyDown(e, 'year')}
-        placeholder="YYYY"
-        className="w-12 sm:w-14 md:w-16 px-1 sm:px-2 py-1.5 sm:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-base"
-      />
-      <span className="text-base text-gray-400">-</span>
-      <input
-        ref={monthRef}
-        type="text"
-        value={month}
-        onChange={handleMonthChange}
-        onKeyDown={(e) => handleKeyDown(e, 'month')}
-        placeholder="MM"
-        className="w-8 sm:w-10 md:w-12 px-1 sm:px-2 py-1.5 sm:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-base"
-      />
-      <span className="text-base text-gray-400">-</span>
-      <input
-        ref={dayRef}
-        type="text"
-        value={day}
-        onChange={handleDayChange}
-        onKeyDown={(e) => handleKeyDown(e, 'day')}
-        placeholder="DD"
-        className="w-8 sm:w-10 md:w-12 px-1 sm:px-2 py-1.5 sm:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-base"
-      />
+    <div className="flex flex-col gap-1">
+      <div className={`flex items-center gap-1 sm:gap-2 ${isIncomplete ? 'opacity-70' : ''}`}>
+        <input
+          ref={yearRef}
+          type="text"
+          value={localYear}
+          onChange={handleYearChange}
+          onKeyDown={(e) => handleKeyDown(e, 'year')}
+          placeholder="YYYY"
+          className={`w-12 sm:w-14 md:w-16 px-1 sm:px-2 py-1.5 sm:py-2 border rounded-md focus:ring-2 focus:ring-blue-500 text-center text-base ${
+            localYear && localYear.length !== 4 ? 'border-amber-400' : 'border-gray-300'
+          }`}
+        />
+        <span className="text-base text-gray-400">-</span>
+        <input
+          ref={monthRef}
+          type="text"
+          value={localMonth}
+          onChange={handleMonthChange}
+          onKeyDown={(e) => handleKeyDown(e, 'month')}
+          placeholder="MM"
+          className={`w-8 sm:w-10 md:w-12 px-1 sm:px-2 py-1.5 sm:py-2 border rounded-md focus:ring-2 focus:ring-blue-500 text-center text-base ${
+            localMonth && localMonth.length !== 2 ? 'border-amber-400' : 'border-gray-300'
+          }`}
+        />
+        <span className="text-base text-gray-400">-</span>
+        <input
+          ref={dayRef}
+          type="text"
+          value={localDay}
+          onChange={handleDayChange}
+          onKeyDown={(e) => handleKeyDown(e, 'day')}
+          placeholder="DD"
+          className={`w-8 sm:w-10 md:w-12 px-1 sm:px-2 py-1.5 sm:py-2 border rounded-md focus:ring-2 focus:ring-blue-500 text-center text-base ${
+            localDay && localDay.length !== 2 ? 'border-amber-400' : 'border-gray-300'
+          }`}
+        />
+      </div>
+      {isIncomplete && (
+        <span className="text-[10px] text-amber-600">날짜를 완성해주세요 (YYYY-MM-DD)</span>
+      )}
     </div>
   )
 }
