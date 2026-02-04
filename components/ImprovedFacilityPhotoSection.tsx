@@ -1620,56 +1620,56 @@ export default function ImprovedFacilityPhotoSection({
         </div>
       </div>
 
-      {/* 통계 대시보드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
-        <div className="bg-orange-50 p-3 md:p-4 rounded-lg border border-orange-200 hover:bg-orange-100 hover:border-orange-300 active:bg-orange-200 active:border-orange-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
-          <div className="flex items-center gap-2">
-            <Factory className="w-5 h-5 text-orange-600" />
-            <span className="font-medium text-orange-800">배출시설</span>
+      {/* 통계 대시보드 - 모바일 간격 최적화 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 md:gap-4 mb-2 md:mb-6">
+        <div className="bg-orange-50 p-2 md:p-4 rounded-lg border border-orange-200 hover:bg-orange-100 hover:border-orange-300 active:bg-orange-200 active:border-orange-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <Factory className="w-4 h-4 md:w-5 md:h-5 text-orange-600" />
+            <span className="font-medium text-xs md:text-sm text-orange-800">배출시설</span>
           </div>
-          <div className="text-2xl font-bold text-orange-900">
-            <AnimatedCounter 
-              value={statistics.dischargeFacilities} 
-              duration={800} 
-              className="inline-block" 
+          <div className="text-xl md:text-2xl font-bold text-orange-900 mt-0.5 md:mt-1">
+            <AnimatedCounter
+              value={statistics.dischargeFacilities}
+              duration={800}
+              className="inline-block"
             />
           </div>
         </div>
 
-        <div className="bg-green-50 p-3 md:p-4 rounded-lg border border-green-200 hover:bg-green-100 hover:border-green-300 active:bg-green-200 active:border-green-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
-          <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-green-600" />
-            <span className="font-medium text-green-800">방지시설</span>
+        <div className="bg-green-50 p-2 md:p-4 rounded-lg border border-green-200 hover:bg-green-100 hover:border-green-300 active:bg-green-200 active:border-green-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <Shield className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
+            <span className="font-medium text-xs md:text-sm text-green-800">방지시설</span>
           </div>
-          <div className="text-2xl font-bold text-green-900">
-            <AnimatedCounter 
-              value={statistics.preventionFacilities} 
-              duration={800} 
-              className="inline-block" 
+          <div className="text-xl md:text-2xl font-bold text-green-900 mt-0.5 md:mt-1">
+            <AnimatedCounter
+              value={statistics.preventionFacilities}
+              duration={800}
+              className="inline-block"
             />
           </div>
         </div>
 
-        <div className="bg-blue-50 p-3 md:p-4 rounded-lg border border-blue-200 hover:bg-blue-100 hover:border-blue-300 active:bg-blue-200 active:border-blue-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-blue-600" />
-            <span className="font-medium text-blue-800">기본사진</span>
+        <div className="bg-blue-50 p-2 md:p-4 rounded-lg border border-blue-200 hover:bg-blue-100 hover:border-blue-300 active:bg-blue-200 active:border-blue-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <Building2 className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+            <span className="font-medium text-xs md:text-sm text-blue-800">기본사진</span>
           </div>
-          <div className="text-2xl font-bold text-blue-900">
-            <AnimatedCounter 
-              value={statistics.basicCategories} 
-              duration={800} 
-              className="inline-block" 
+          <div className="text-xl md:text-2xl font-bold text-blue-900 mt-0.5 md:mt-1">
+            <AnimatedCounter
+              value={statistics.basicCategories}
+              duration={800}
+              className="inline-block"
             />
           </div>
         </div>
 
-        <div className="bg-purple-50 p-3 md:p-4 rounded-lg border border-purple-200 hover:bg-purple-100 hover:border-purple-300 active:bg-purple-200 active:border-purple-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
-          <div className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-purple-600" />
-            <span className="font-medium text-purple-800">총 사진 (전체)</span>
+        <div className="bg-purple-50 p-2 md:p-4 rounded-lg border border-purple-200 hover:bg-purple-100 hover:border-purple-300 active:bg-purple-200 active:border-purple-400 transition-all duration-200 transform hover:scale-105 active:scale-102 touch-manipulation shadow-sm hover:shadow-md">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <Camera className="w-4 h-4 md:w-5 md:h-5 text-purple-600" />
+            <span className="font-medium text-xs md:text-sm text-purple-800 truncate">총 사진</span>
           </div>
-          <div className="text-2xl font-bold text-purple-900">
+          <div className="text-xl md:text-2xl font-bold text-purple-900 mt-0.5 md:mt-1">
             <AnimatedCounter
               value={statistics.totalPhotosAllPhases || 0}
               duration={1000}
@@ -1679,26 +1679,26 @@ export default function ImprovedFacilityPhotoSection({
         </div>
       </div>
 
-      <div className="space-y-3 md:space-y-6">
+      <div className="space-y-2 md:space-y-6">
         {/* 배출구별 시설 */}
         {outlets.map(outlet => {
           const outletData = outletFacilities[outlet];
           const outletPrevention = outletData.prevention || [];
           const outletDischarge = outletData.discharge || [];
-          
+
           return (
-            <div key={outlet} className="bg-white rounded-lg p-3 md:p-4 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2 md:mb-4 flex items-center gap-2">
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+            <div key={outlet} className="bg-white rounded-lg p-2 md:p-4 border border-gray-200">
+              <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                <span className="bg-blue-100 text-blue-800 px-2 md:px-3 py-0.5 md:py-1 rounded-full text-xs md:text-sm font-medium">
                   배출구 {outlet}
                 </span>
               </h3>
-              
+
               {/* 방지시설 */}
               {outletPrevention.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="text-md font-medium text-green-600 mb-3 flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
+                <div className="mb-3 md:mb-6">
+                  <h4 className="text-sm md:text-md font-medium text-green-600 mb-2 md:mb-3 flex items-center gap-1.5 md:gap-2">
+                    <Shield className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     방지시설 ({outletPrevention.reduce((total, f) => total + f.quantity, 0)}개)
                   </h4>
                   
@@ -1754,8 +1754,8 @@ export default function ImprovedFacilityPhotoSection({
               {/* 배출시설 */}
               {outletDischarge.length > 0 && (
                 <div>
-                  <h4 className="text-md font-medium text-orange-600 mb-3 flex items-center gap-2">
-                    <Factory className="w-4 h-4" />
+                  <h4 className="text-sm md:text-md font-medium text-orange-600 mb-2 md:mb-3 flex items-center gap-1.5 md:gap-2">
+                    <Factory className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     배출시설 ({outletDischarge.reduce((total, f) => total + f.quantity, 0)}개)
                   </h4>
                   
@@ -1811,16 +1811,16 @@ export default function ImprovedFacilityPhotoSection({
           );
         })}
 
-        {/* 기본사진 섹션 */}
-        <div className="bg-white rounded-lg p-3 md:p-4 border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800 mb-3 md:mb-6 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-blue-600" />
+        {/* 기본사진 섹션 - 모바일 간격 최적화 */}
+        <div className="bg-white rounded-lg p-2 md:p-4 border border-gray-200">
+          <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2 md:mb-6 flex items-center gap-1.5 md:gap-2">
+            <Building2 className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
             기본사진
           </h3>
-          
+
           {/* 기본사진 인라인 진행률 표시기 - REMOVED: SmartFloatingProgress로 대체 */}
-          
-          <div className="space-y-3 md:space-y-6">
+
+          <div className="space-y-2 md:space-y-6">
             {/* 게이트웨이 */}
             <BasicPhotoCategory
               category="gateway"
