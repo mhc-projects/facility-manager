@@ -959,7 +959,7 @@ function RevenueDashboard() {
           const month = String(date.getMonth() + 1);
           monthMatch = selectedMonths.includes(month);
         } else {
-          monthMatch = true;
+          monthMatch = false;  // 설치일 없으면 제외
         }
       }
 
