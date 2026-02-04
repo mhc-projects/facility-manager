@@ -3,8 +3,8 @@
 // ============================================
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import {
   Plus,
@@ -26,8 +26,11 @@ import {
   Pagination
 } from '@/types/meeting-minutes'
 
-export default function MeetingMinutesPage() {
+// useSearchParams를 사용하는 내부 컴포넌트
+function MeetingMinutesContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const refreshTrigger = searchParams.get('refresh')  // 업데이트 트리거 감지
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [viewType, setViewType] = useState<'card' | 'table'>('card')
@@ -57,7 +60,7 @@ export default function MeetingMinutesPage() {
   useEffect(() => {
     setMounted(true)
     loadMeetingMinutes()
-  }, [])
+  }, [refreshTrigger])  // refreshTrigger 변경 시 재실행
 
   useEffect(() => {
     if (mounted) {
@@ -544,5 +547,23 @@ function MeetingMinutesTable({ minutes, onRefresh }: MeetingMinutesTableProps) {
         </table>
       </div>
     </div>
+  )
+}
+
+// Suspense로 래핑된 메인 컴포넌트
+export default function MeetingMinutesPage() {
+  return (
+    <Suspense fallback={
+      <AdminLayout title="회의록 관리">
+        <div className="h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">로딩 중...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    }>
+      <MeetingMinutesContent />
+    </Suspense>
   )
 }

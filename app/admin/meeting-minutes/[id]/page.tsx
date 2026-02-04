@@ -92,7 +92,8 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
   }
 
   const handleBack = () => {
-    router.push('/admin/meeting-minutes')
+    const timestamp = Date.now()
+    router.push(`/admin/meeting-minutes?refresh=${timestamp}`)
   }
 
   if (!mounted || loading) {
