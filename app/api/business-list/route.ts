@@ -8,6 +8,14 @@ import { queryAll } from '@/lib/supabase-direct';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// 🔥 배포 환경 캐싱 방지 헤더
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
 
 export const GET = withApiHandler(async (request: NextRequest) => {
   try {
@@ -99,7 +107,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
             businessesWithPhotos: Array.from(photoCountMapAll.values()).filter(count => count > 0).length
           }
         }
-      });
+      }, undefined, 200, { noCache: true });
     }
 
     // 기존 로직: 대기필증이 등록된 사업장만 조회
@@ -133,7 +141,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
           hasPhotoData: true,
           criteriaUsed: 'air_permit_required'
         }
-      });
+      }, undefined, 200, { noCache: true });
     }
 
     // 대기필증이 있는 사업장만 business_info에서 조회 (Facility 페이지 필수 필드만)
@@ -207,7 +215,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
           totalCount: uniqueBusinessNames.length,
           hasPhotoData: false
         }
-      });
+      }, undefined, 200, { noCache: true });
     }
     
     if (!businessWithPermits || businessWithPermits.length === 0) {
@@ -221,7 +229,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
           hasPhotoData: true,
           criteriaUsed: 'air_permit_required'
         }
-      });
+      }, undefined, 200, { noCache: true });
     }
 
     // 📷 각 사업장의 사진 개수 조회
@@ -285,7 +293,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
           businessesWithPhotos: Array.from(photoCountMap.values()).filter(count => count > 0).length
         }
       }
-    });
+    }, undefined, 200, { noCache: true });
     
   } catch (error: any) {
     console.error('🔴 [BUSINESS-LIST] 오류:', error?.message || error);
@@ -301,7 +309,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         hasPhotoData: false,
         fallback: true
       }
-    });
+    }, undefined, 200, { noCache: true });
   }
 }, { logLevel: 'debug' });
 

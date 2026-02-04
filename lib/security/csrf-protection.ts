@@ -103,6 +103,7 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/business-info-direct',  // 사업장 정보 직접 API (JWT 인증 사용)
     '/api/business-management',  // 사업장 관리 API (JWT 인증 사용)
     '/api/business-equipment-counts',  // 측정기기 수량 관리 API (공개 사용)
+    '/api/equipment-field-checks',  // 현장 확인 데이터 관리 API (공개 사용)
     '/api/facility-management',  // 시설 관리 정보 API (공개 사용)
     '/api/router-inventory',  // 라우터 재고 관리 메인 API (JWT 인증 사용)
     '/api/order-management',  // 발주 관리 메인 API (JWT 인증 사용)
@@ -157,7 +158,8 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/meeting-minutes',  // 회의록 관리 API (JWT 인증 사용)
     '/api/meeting-minutes/*',  // 회의록 관리 API 전체 제외 (JWT 인증 사용)
     '/api/meeting-templates',  // 회의록 템플릿 API (JWT 인증 사용)
-    '/api/meeting-templates/*'  // 회의록 템플릿 API 전체 제외 (JWT 인증 사용)
+    '/api/meeting-templates/*',  // 회의록 템플릿 API 전체 제외 (JWT 인증 사용)
+    '/api/equipment-field-checks/*'  // 현장 확인 데이터 개별 API 전체 제외 (공개 사용)
   ];
 
   if (excludePaths.includes(request.nextUrl.pathname)) {

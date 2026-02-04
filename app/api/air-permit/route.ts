@@ -6,6 +6,14 @@ import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// 🔥 배포 환경 캐싱 방지 헤더
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
 // Type definitions
 interface AirPermitInfo {
   id?: string;
@@ -81,9 +89,7 @@ export async function GET(request: NextRequest) {
 
       console.log(`✅ [AIR-PERMIT] GET - 상세 조회 완료: ${permit.outlets?.length || 0}개 배출구`);
       return NextResponse.json({ data: permit }, {
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8'
-        }
+        headers: NO_CACHE_HEADERS
       });
     }
 
@@ -169,9 +175,7 @@ export async function GET(request: NextRequest) {
         data: permits,
         count: permits.length
       }, {
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8'
-        }
+        headers: NO_CACHE_HEADERS
       });
     }
 

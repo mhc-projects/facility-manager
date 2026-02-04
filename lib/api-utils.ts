@@ -34,13 +34,27 @@ export function createErrorResponse(
 
 // 성공 응답 생성 함수
 export function createSuccessResponse(
-  data?: any, 
+  data?: any,
   message?: string,
-  status: number = 200
+  status: number = 200,
+  options?: { noCache?: boolean }
 ) {
+  // 🔥 배포 환경 캐싱 방지 옵션
+  const headers = options?.noCache
+    ? {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    : {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        'Content-Type': 'application/json; charset=utf-8'
+      };
+
   return NextResponse.json(
-    { 
-      success: true, 
+    {
+      success: true,
       ...(data && { data }),
       ...(message && { message }),
       timestamp: new Date().toLocaleString('ko-KR', {
@@ -56,10 +70,7 @@ export function createSuccessResponse(
     },
     {
       status,
-      headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-        'Content-Type': 'application/json; charset=utf-8'
-      }
+      headers
     }
   );
 }

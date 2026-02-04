@@ -314,8 +314,9 @@ function AirPermitManagementPage() {
       }, 10000)
       
       // 1. 모든 대기필증 조회 (사업장 정보 포함)
-      // 🔥 배포 환경에서 캐싱 방지
-      const airPermitResponse = await fetch('/api/air-permit', {
+      // 🔥 배포 환경에서 캐싱 방지 - timestamp 추가로 Router Cache 우회
+      const timestamp = Date.now()
+      const airPermitResponse = await fetch(`/api/air-permit?_t=${timestamp}`, {
         cache: 'no-store',
         signal: abortController.signal
       })
@@ -431,8 +432,9 @@ function AirPermitManagementPage() {
   const loadAirPermits = async (businessId: string) => {
     try {
       setIsLoading(true)
-      // 🔥 배포 환경에서 캐싱 방지 - 수정 후 즉시 반영
-      const response = await fetch(`/api/air-permit?businessId=${businessId}&details=true`, {
+      // 🔥 배포 환경에서 캐싱 방지 - 수정 후 즉시 반영 + timestamp로 Router Cache 우회
+      const timestamp = Date.now()
+      const response = await fetch(`/api/air-permit?businessId=${businessId}&details=true&_t=${timestamp}`, {
         cache: 'no-store'
       })
       const result = await response.json()
@@ -520,8 +522,9 @@ function AirPermitManagementPage() {
     setIsLoadingBusinesses(true)
     try {
       // includeAll=true 파라미터로 전체 사업장 조회
-      // 🔥 배포 환경에서 캐싱 방지
-      const response = await fetch('/api/business-list?includeAll=true', {
+      // 🔥 배포 환경에서 캐싱 방지 (Router Cache 무효화)
+      const timestamp = Date.now()
+      const response = await fetch(`/api/business-list?includeAll=true&_t=${timestamp}`, {
         cache: 'no-store'
       })
       const result = await response.json()
@@ -854,7 +857,9 @@ function AirPermitManagementPage() {
         fullData: permitData
       })
 
-      const response = await fetch('/api/air-permit', {
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/air-permit?_t=${timestamp}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -910,7 +915,9 @@ function AirPermitManagementPage() {
       // 사업장 목록의 필증 카운트 업데이트 (삭제 성공 후 처리)
       // loadBusinessesWithPermits()를 호출하지 않고 UI만 즉시 업데이트
 
-      const response = await fetch(`/api/air-permit?id=${deletedPermit.id}`, {
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/air-permit?id=${deletedPermit.id}&_t=${timestamp}`, {
         method: 'DELETE'
       })
 

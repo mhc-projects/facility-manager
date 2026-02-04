@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
@@ -12,6 +13,13 @@ export default function ClientProviders({
 }: {
   children: React.ReactNode;
 }) {
+  // Hydration 에러 방지: 클라이언트에서만 Toaster 렌더링
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <ErrorBoundary>
       <ReactQueryProvider>
@@ -19,32 +27,34 @@ export default function ClientProviders({
           <NotificationProvider>
             <ToastProvider>
               {children}
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  duration: 3000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                    padding: '16px',
-                    borderRadius: '8px',
-                  },
-                  success: {
+              {mounted && (
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
                     duration: 3000,
-                    iconTheme: {
-                      primary: '#10b981',
-                      secondary: '#fff',
+                    style: {
+                      background: '#363636',
+                      color: '#fff',
+                      padding: '16px',
+                      borderRadius: '8px',
                     },
-                  },
-                  error: {
-                    duration: 4000,
-                    iconTheme: {
-                      primary: '#ef4444',
-                      secondary: '#fff',
+                    success: {
+                      duration: 3000,
+                      iconTheme: {
+                        primary: '#10b981',
+                        secondary: '#fff',
+                      },
                     },
-                  },
-                }}
-              />
+                    error: {
+                      duration: 4000,
+                      iconTheme: {
+                        primary: '#ef4444',
+                        secondary: '#fff',
+                      },
+                    },
+                  }}
+                />
+              )}
             </ToastProvider>
           </NotificationProvider>
         </AuthProvider>
