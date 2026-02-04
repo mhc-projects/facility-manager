@@ -52,6 +52,10 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
   const [isProcessing, setIsProcessing] = useState(false);
   const queueRef = useRef<OptimisticPhoto[]>([]);
   const processingRef = useRef<Set<string>>(new Set());
+
+  // 🎯 FIX: 마지막 성공 업로드 카운트 추적 (큐 클리어 후에도 유지)
+  const lastSuccessCountRef = useRef<number>(0);
+  const lastTotalCountRef = useRef<number>(0);
   
   // 🚀 ENHANCED: 전역 낙관적 업데이트 시스템 통합
   const { 
@@ -96,7 +100,11 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
     additionalDataFactory: (file: File, index: number) => Record<string, string>
   ) => {
     console.log(`📤 [UPLOAD-START] ${files.length}개 파일 업로드 시작`);
-    
+
+    // 🎯 FIX: 새 업로드 시작 시 이전 성공 카운트 초기화
+    lastSuccessCountRef.current = 0;
+    lastTotalCountRef.current = 0;
+
     const newPhotos: OptimisticPhoto[] = [];
     
     // 🚀 1단계: 파일 선택 즉시 플레이스홀더로 UI 업데이트 (0ms 지연)
@@ -533,8 +541,19 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
     const uploadingPhoto = photos.find(p => p.status === 'uploading');
     const failedPhotos = photos.filter(p => p.status === 'error');
     const duplicatePhotos = photos.filter(p => p.status === 'duplicate');
-    const overallProgress = stats.total > 0 
-      ? Math.round((stats.completed / stats.total) * 100)
+
+    // 🎯 FIX: 성공 카운트 추적 업데이트 (큐 클리어 전)
+    if (stats.completed > 0) {
+      lastSuccessCountRef.current = stats.completed;
+      lastTotalCountRef.current = stats.total;
+    }
+
+    // 🎯 FIX: 큐가 비어있지만 최근에 성공한 업로드가 있으면 마지막 성공 카운트 사용
+    const displayTotal = stats.total > 0 ? stats.total : lastTotalCountRef.current;
+    const displayCompleted = stats.total > 0 ? stats.completed : lastSuccessCountRef.current;
+
+    const overallProgress = displayTotal > 0
+      ? Math.round((displayCompleted / displayTotal) * 100)
       : 0;
 
     // 에러 상세 정보 수집
@@ -545,24 +564,24 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
     }));
 
     // 진행 멈춤 감지 (5초 이상 진행이 없는 경우)
-    const stuckPhoto = photos.find(p => 
-      p.status === 'uploading' && 
-      Date.now() - p.startTime > 5000 && 
+    const stuckPhoto = photos.find(p =>
+      p.status === 'uploading' &&
+      Date.now() - p.startTime > 5000 &&
       p.progress < 100
     );
 
     // 일반적인 에러 메시지
     let errorMessage = '';
     if (failedPhotos.length > 0) {
-      errorMessage = failedPhotos.length === 1 
+      errorMessage = failedPhotos.length === 1
         ? failedPhotos[0].error || '업로드 실패'
         : `${failedPhotos.length}개 파일 업로드 실패`;
     }
 
     return {
-      isVisible: isProcessing || stats.total > 0,
-      totalFiles: stats.total,
-      completedFiles: stats.completed,
+      isVisible: isProcessing || stats.total > 0 || lastSuccessCountRef.current > 0,
+      totalFiles: displayTotal,
+      completedFiles: displayCompleted,
       currentFileName: uploadingPhoto?.file.name,
       overallProgress: overallProgress,
       failedFiles: stats.failed,
