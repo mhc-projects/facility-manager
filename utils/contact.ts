@@ -9,8 +9,12 @@ export function createPhoneLink(phoneNumber: string): string {
   // 공백, 하이픈, 괄호 등 제거하고 숫자만 남김
   const cleanNumber = phoneNumber.replace(/[^\d]/g, '');
 
-  // 010으로 시작하는 휴대폰 번호나 일반 전화번호
-  if (cleanNumber.length >= 10) {
+  // 한국 전화번호 형식 지원:
+  // - 휴대폰: 010-XXXX-XXXX (11자리)
+  // - 서울: 02-XXX-XXXX (9자리)
+  // - 지역: 031-XXX-XXXX (10-11자리)
+  // - 최소 8자리 이상이면 유효한 전화번호로 간주
+  if (cleanNumber.length >= 8) {
     return `tel:${cleanNumber}`;
   }
 

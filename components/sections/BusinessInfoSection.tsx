@@ -136,8 +136,13 @@ export default function BusinessInfoSection({ businessInfo }: BusinessInfoSectio
                     title="전화걸기"
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Let the browser handle tel: protocol natively
-                      window.location.href = createPhoneLink(contactInfo.사업장연락처!);
+                      const phoneLink = createPhoneLink(contactInfo.사업장연락처!);
+                      if (phoneLink) {
+                        // Let the browser handle tel: protocol natively
+                        window.location.href = phoneLink;
+                      } else {
+                        alert('유효하지 않은 전화번호 형식입니다.');
+                      }
                       e.preventDefault();
                     }}
                   >
@@ -196,8 +201,13 @@ export default function BusinessInfoSection({ businessInfo }: BusinessInfoSectio
                         title="전화걸기"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Let the browser handle tel: protocol natively
-                          window.location.href = createPhoneLink(contact.trim());
+                          const phoneLink = createPhoneLink(contact.trim());
+                          if (phoneLink) {
+                            // Let the browser handle tel: protocol natively
+                            window.location.href = phoneLink;
+                          } else {
+                            alert('유효하지 않은 전화번호 형식입니다.');
+                          }
                           e.preventDefault();
                         }}
                       >
