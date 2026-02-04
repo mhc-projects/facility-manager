@@ -13,6 +13,9 @@ const getPhotosFromStore = () => usePhotoStore.getState().photos;
 // 📡 Realtime 이벤트 타입 (모듈 레벨 상수 - 매 렌더링마다 재생성 방지)
 const FILE_REALTIME_EVENT_TYPES: ('INSERT' | 'DELETE')[] = ['INSERT', 'DELETE'];
 
+// ⚡ 중복 방지 시간 (밀리초) - 5초 → 2초 단축 (빠른 재업로드 케이스 개선)
+const DEDUP_WINDOW_MS = 2000;
+
 interface FileContextType {
   uploadedFiles: UploadedFile[];
   setUploadedFiles: (files: UploadedFile[]) => void;
@@ -215,8 +218,8 @@ export function FileProvider({ children }: FileProviderProps) {
     files.forEach(file => {
       if (file.id) {
         recentLocalUpdatesRef.current.add(file.id);
-        // 5초 후 자동 제거
-        setTimeout(() => recentLocalUpdatesRef.current.delete(file.id), 5000);
+        // ⚡ 2초 후 자동 제거 (5초 → 2초 단축)
+        setTimeout(() => recentLocalUpdatesRef.current.delete(file.id), DEDUP_WINDOW_MS);
       }
     });
     rawAddFiles(files);
@@ -226,7 +229,8 @@ export function FileProvider({ children }: FileProviderProps) {
   const removeFile = (fileId: string) => {
     // 로컬 업데이트 추적 (Realtime 중복 방지)
     recentLocalUpdatesRef.current.add(fileId);
-    setTimeout(() => recentLocalUpdatesRef.current.delete(fileId), 5000);
+    // ⚡ 2초 후 자동 제거 (5초 → 2초 단축)
+    setTimeout(() => recentLocalUpdatesRef.current.delete(fileId), DEDUP_WINDOW_MS);
 
     rawRemoveFile(fileId);
     console.log(`🗑️ [FILE-CONTEXT] removeFile: ${fileId} 제거 (로컬)`);
