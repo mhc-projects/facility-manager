@@ -58,7 +58,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       `SELECT
         bm.*,
         CASE
-          WHEN bm.task_id IS NOT NULL THEN
+          WHEN bm.source_id IS NOT NULL AND bm.source_type = 'task_sync' THEN
             json_build_object(
               'id', ft.id,
               'title', ft.description,
@@ -69,7 +69,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
           ELSE NULL
         END as related_task
        FROM business_memos bm
-       LEFT JOIN facility_tasks ft ON bm.task_id = ft.id
+       LEFT JOIN facility_tasks ft ON bm.source_id = ft.id AND bm.source_type = 'task_sync'
        WHERE bm.business_id = $1 AND bm.is_active = true AND bm.is_deleted = false
        ORDER BY bm.created_at DESC`,
       [finalBusinessId]
@@ -95,7 +95,15 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
   } catch (error: any) {
     console.error('❌ [BUSINESS-MEMOS] GET 요청 처리 오류:', error)
-    return createErrorResponse('서버 오류가 발생했습니다.', 500);
+    console.error('❌ [BUSINESS-MEMOS] 에러 상세:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    })
+    return createErrorResponse(
+      `메모 조회 실패: ${error.message || '알 수 없는 오류'}`,
+      500
+    );
   }
 }, { logLevel: 'debug' });
 
