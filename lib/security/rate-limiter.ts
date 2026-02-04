@@ -57,6 +57,10 @@ export class RateLimiter {
     '/api/facility-tasks': {
       windowMs: 15 * 60 * 1000, // 15분
       maxRequests: 10000 // 개발 환경: 대량 조회를 위한 높은 제한
+    },
+    '/api/uploaded-files-supabase': {
+      windowMs: 15 * 60 * 1000, // 15분
+      maxRequests: process.env.NODE_ENV === 'development' ? 1000 : 200 // 개발: Hot Reload 대응, 프로덕션: 정상 사용 + 여유
     }
   };
 
