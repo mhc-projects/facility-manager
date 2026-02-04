@@ -3980,11 +3980,15 @@ function BusinessManagementPage() {
       title: '설치완료',
       width: '80px',
       render: (item: any) => {
+        // 설치일이 있으면 완료
         const hasInstallation = !!item.installation_date
+
+        // 진행구분이 '대리점'이고 발주일이 있으면 완료 (대리점은 발주로 모든 과정 종료)
+        const isDealerComplete = item.progress_status === '대리점' && !!item.order_date
 
         return (
           <div className="flex justify-center items-center">
-            {hasInstallation ? (
+            {(hasInstallation || isDealerComplete) ? (
               <div className="flex items-center gap-1">
                 <Check className="w-4 h-4 text-green-600" />
                 <span className="text-xs text-green-600 font-medium">완료</span>
