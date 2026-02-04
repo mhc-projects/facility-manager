@@ -281,9 +281,9 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
 
       if (result.success) {
         alert('회의록이 수정되었습니다.')
-        // 페이지 새로고침 후 상세 페이지로 이동 (수정 내용 즉시 반영)
-        router.push(`/admin/meeting-minutes/${params.id}`)
-        router.refresh()  // Next.js 캐시 강제 새로고침
+        // 타임스탬프 파라미터로 상세 페이지 강제 리로드 트리거
+        const timestamp = Date.now()
+        router.push(`/admin/meeting-minutes/${params.id}?updated=${timestamp}`)
       } else {
         alert(`수정 실패: ${result.error}`)
       }

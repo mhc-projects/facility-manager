@@ -4,7 +4,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import {
   ArrowLeft,
@@ -23,6 +23,9 @@ import { MeetingMinute, ActionItem } from '@/types/meeting-minutes'
 
 export default function MeetingMinuteDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const updated = searchParams.get('updated')  // 타임스탬프 파라미터 감지
+
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [minute, setMinute] = useState<MeetingMinute | null>(null)
@@ -30,13 +33,15 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
   useEffect(() => {
     setMounted(true)
     loadMeetingMinute()
-  }, [])
+  }, [updated])  // updated 파라미터 변경 시 재실행
 
   const loadMeetingMinute = async () => {
     try {
       setLoading(true)
 
-      const response = await fetch(`/api/meeting-minutes/${params.id}`, {
+      // 캐시 우회를 위한 타임스탬프 추가
+      const timestamp = Date.now()
+      const response = await fetch(`/api/meeting-minutes/${params.id}?_t=${timestamp}`, {
         cache: 'no-store'  // 캐시 비활성화로 항상 최신 데이터 표시
       })
       const result = await response.json()
