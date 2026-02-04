@@ -88,9 +88,10 @@ function MeetingMinutesContent() {
         params.append('search', filters.search)
       }
 
-      // API 호출 (쿠키 기반 인증 사용, 캐시 비활성화)
-      const response = await fetch(`/api/meeting-minutes?${params}`, {
-        cache: 'no-store'
+      // 캐시 우회를 위한 타임스탬프 추가
+      const timestamp = Date.now()
+      const response = await fetch(`/api/meeting-minutes?${params}&_t=${timestamp}`, {
+        cache: 'no-store'  // 캐시 비활성화로 항상 최신 데이터 표시
       })
       const result = await response.json()
 
