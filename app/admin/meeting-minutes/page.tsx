@@ -148,7 +148,7 @@ export default function MeetingMinutesPage() {
     >
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 통계 카드 */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
           <StatCard
             label="전체"
             value={statistics.total}
@@ -318,16 +318,16 @@ function StatCard({ label, value, icon: Icon, color, active, onClick }: StatCard
     <div
       onClick={onClick}
       className={`
-        bg-gradient-to-br ${colors[color]} p-4 rounded-lg shadow-sm border
+        bg-gradient-to-br ${colors[color]} p-2 sm:p-3 md:p-4 rounded-md sm:rounded-lg shadow-sm border
         ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}
         ${active ? 'border-2' : 'border-gray-200'}
       `}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <Icon className={`w-5 h-5 ${iconColors[color]}`} />
+      <div className="flex items-center justify-between mb-1 sm:mb-1.5 md:mb-2">
+        <span className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-700">{label}</span>
+        <Icon className={`w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 ${iconColors[color]}`} />
       </div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
+      <div className="text-base sm:text-xl md:text-2xl font-bold text-gray-900">{value}</div>
     </div>
   )
 }
