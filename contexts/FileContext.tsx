@@ -23,6 +23,7 @@ interface FileContextType {
   businessName: string;
   systemType: string;
   setBusinessInfo: (businessName: string, systemType: string) => void;
+  realtimeConnected: boolean; // 🔧 REALTIME-SYNC-FIX: 실시간 연결 상태 노출
 }
 
 const FileContext = createContext<FileContextType | undefined>(undefined);
@@ -191,14 +192,17 @@ export function FileProvider({ children }: FileProviderProps) {
   }, [currentBusinessId, rawAddFiles, rawRemoveFile]);
 
   // 📡 Supabase Realtime 구독
-  // ✅ FIX: currentBusinessId도 설정된 후에만 연결 (INSERT 필터링 문제 방지)
+  // ✅ FIX: businessName만으로 즉시 연결 (currentBusinessId 대기 불필요)
+  // 🔧 REALTIME-SYNC-FIX: Phase 1-1 - 즉시 연결로 초기 이벤트 손실 방지
   const { isConnected: realtimeConnected } = useSupabaseRealtime({
     tableName: 'uploaded_files',
     eventTypes: FILE_REALTIME_EVENT_TYPES, // 모듈 레벨 상수 사용 (재생성 방지)
-    autoConnect: !!businessName && !!currentBusinessId, // 사업장 ID가 설정된 후에만 연결
+    autoConnect: !!businessName, // businessName만 확인 (즉시 연결)
     onNotification: handleRealtimeNotification,
     onConnect: () => {
-      console.log(`📡 [FILE-REALTIME] Realtime 연결됨 - 사업장: ${businessName}, ID: ${currentBusinessId}`);
+      console.log(`📡 [FILE-REALTIME] Realtime 연결됨 - 초기 동기화 시작: ${businessName}`);
+      // 🔧 REALTIME-SYNC-FIX: Phase 1-3 - 연결 시 초기 동기화
+      rawRefreshFiles();
     },
     onDisconnect: () => {
       console.log(`📡 [FILE-REALTIME] Realtime 연결 해제`);
@@ -248,6 +252,7 @@ export function FileProvider({ children }: FileProviderProps) {
     businessName,
     systemType,
     setBusinessInfo,
+    realtimeConnected, // 🔧 REALTIME-SYNC-FIX: 실시간 연결 상태 노출
   };
 
   return (

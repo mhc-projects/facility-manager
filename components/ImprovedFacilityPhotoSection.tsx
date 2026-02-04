@@ -220,7 +220,7 @@ export default function ImprovedFacilityPhotoSection({
   }, [facilityNumberMap]);
 
   const toast = useToast();
-  const { addFiles, removeFile, setBusinessInfo, businessName: contextBusinessName, uploadedFiles } = useFileContext();
+  const { addFiles, removeFile, setBusinessInfo, businessName: contextBusinessName, uploadedFiles, realtimeConnected } = useFileContext();
 
   // 📡 FileContext에 사업장 정보 설정 (Realtime 구독용) - 무한 루프 방지
   useEffect(() => {
@@ -430,14 +430,21 @@ export default function ImprovedFacilityPhotoSection({
     }
   }, [businessName, loadUploadedFiles]);
 
-  // 🚫 자동 새로고침 제거: Optimistic update로 모든 변경사항이 즉시 반영되므로 불필요
-  // 필요시 수동 새로고침 버튼 또는 verify-uploads 이벤트 사용
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     loadUploadedFiles(true, true);
-  //   }, 30000);
-  //   return () => clearInterval(interval);
-  // }, [loadUploadedFiles]);
+  // 🔧 REALTIME-SYNC-FIX: Phase 1-2 - 하이브리드 폴링 재활성화 (60초 간격)
+  // Realtime이 연결되어 있으면 가벼운 검증만, 연결 안되면 전체 새로고침
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (realtimeConnected) {
+        // Realtime 연결됨: 가벼운 검증만 (서버 쿼리는 스킵)
+        loadUploadedFiles(true, false);
+      } else {
+        // Realtime 연결 안됨: 전체 새로고침 (폴링 fallback)
+        console.log('⚠️ [HYBRID-POLLING] Realtime 연결 끊김, 전체 새로고침 실행');
+        loadUploadedFiles(true, true);
+      }
+    }, 60000); // 60초 간격
+    return () => clearInterval(interval);
+  }, [loadUploadedFiles, realtimeConnected]);
 
   // ✅ FIX: 업로드 검증 이벤트 리스너
   useEffect(() => {
