@@ -464,7 +464,9 @@ function BusinessManagementPage() {
       console.log('🔄 [handleFacilityUpdate] 시설 데이터 업데이트 시작:', businessName);
 
       // API에서 최신 시설 데이터 가져오기
-      const response = await fetch(`/api/facilities-supabase/${encodeURIComponent(businessName)}`);
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/facilities-supabase/${encodeURIComponent(businessName)}?_t=${timestamp}`);
       if (!response.ok) {
         throw new Error('Failed to fetch facility data');
       }
@@ -532,7 +534,9 @@ function BusinessManagementPage() {
     // 추가 상세 정보 변환 로직
     try {
       const encodedBusinessName = encodeURIComponent(businessName)
-      const response = await fetch(`/api/facilities-supabase/${encodedBusinessName}`)
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/facilities-supabase/${encodedBusinessName}?_t=${timestamp}`)
 
       if (response.ok) {
         const result = await response.json()
@@ -1321,7 +1325,9 @@ function BusinessManagementPage() {
         console.warn('⚠️ [FACILITY-TASKS-CLIENT] 토큰이 없어서 Authorization 헤더 없이 요청');
       }
 
-      const response = await fetch(`/api/facility-tasks?businessName=${encodeURIComponent(businessName)}`, {
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/facility-tasks?businessName=${encodeURIComponent(businessName)}&_t=${timestamp}`, {
         headers
       });
       const result = await response.json()
@@ -1893,7 +1899,9 @@ function BusinessManagementPage() {
   const loadAirPermitData = useCallback(async (businessId: string) => {
     try {
       setAirPermitLoading(true)
-      const response = await fetch(`/api/air-permit?businessId=${businessId}`)
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/air-permit?businessId=${businessId}&_t=${timestamp}`)
       
       if (!response.ok) {
         // 404는 정상적인 경우 (대기필증이 없는 사업장)
@@ -1940,7 +1948,9 @@ function BusinessManagementPage() {
           }
         }
 
-        const response = await fetch('/api/air-permit', {
+        // 🔥 배포 환경에서 Router Cache 무효화
+        const timestamp = Date.now()
+        const response = await fetch(`/api/air-permit?_t=${timestamp}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updateData)
@@ -2767,7 +2777,9 @@ function BusinessManagementPage() {
     // API에서 최신 데이터 가져오기
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      const response = await fetch(`/api/business-info-direct?id=${business.id}`, {
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/business-info-direct?id=${business.id}&_t=${timestamp}`, {
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -3240,7 +3252,9 @@ function BusinessManagementPage() {
       
       try {
         // 배치 업로드 API 호출
-        const response = await fetch('/api/business-info-direct', {
+        // 🔥 배포 환경에서 Router Cache 무효화
+        const timestamp = Date.now()
+        const response = await fetch(`/api/business-info-direct?_t=${timestamp}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3442,9 +3456,11 @@ function BusinessManagementPage() {
         });
       }
 
-      const response = await fetch('/api/business-info-direct', {
+      // 🔥 배포 환경에서 Router Cache 무효화
+      const timestamp = Date.now()
+      const response = await fetch(`/api/business-info-direct?_t=${timestamp}`, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json; charset=utf-8',
           'Accept': 'application/json',
           'Accept-Charset': 'utf-8'

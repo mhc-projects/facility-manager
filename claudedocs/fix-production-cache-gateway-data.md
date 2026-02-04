@@ -205,6 +205,16 @@ UI에 최신 데이터 표시 (192.168.1.100) ✅
    - Line 859-865: handleCreate POST timestamp 추가
    - Line 915-917: handleDelete timestamp 추가
 
+5. **[app/admin/business/page.tsx](app/admin/business/page.tsx)**
+   - Line 467: handleFacilityUpdate timestamp 추가
+   - Line 535-536: loadBusinessFacilitiesWithDetails timestamp 추가
+   - Line 1324-1326: loadBusinessTasks timestamp 추가
+   - Line 1896: loadAirPermitData timestamp 추가
+   - Line 1943-1946: syncAirPermitData PUT timestamp 추가
+   - Line 2780: openEditModal timestamp 추가 (이미 2416에 구현됨)
+   - Line 3255: 배치 업로드 POST timestamp 추가
+   - Line 3459: handleSubmit POST/PUT timestamp 추가
+
 ## 테스트 결과
 
 ### Build Test
