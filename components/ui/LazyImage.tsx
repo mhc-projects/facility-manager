@@ -128,7 +128,7 @@ const LazyImage = memo(function LazyImage({
 
   const handleError = async () => {
     console.log(`[LAZY-IMAGE] 이미지 로드 실패: ${currentSrc} (${currentSrcIndex + 1}/${srcArray.length})`);
-    
+
     // Supabase URL 새로고침 시도 (filePath가 있고 재시도 횟수가 1회 미만인 경우)
     if (filePath && retryCount < 1 && !refreshedUrl) {
       console.log('[LAZY-IMAGE] Supabase URL 새로고침 시도...');
@@ -140,7 +140,7 @@ const LazyImage = memo(function LazyImage({
         return;
       }
     }
-    
+
     // Try next URL in array
     if (currentSrcIndex < srcArray.length - 1) {
       console.log(`[LAZY-IMAGE] 다음 URL 시도: ${srcArray[currentSrcIndex + 1]}`);
@@ -148,6 +148,19 @@ const LazyImage = memo(function LazyImage({
       setIsLoaded(false); // Reset loaded state for new image
     } else {
       console.log('[LAZY-IMAGE] 모든 URL 실패, 에러 상태 설정');
+
+      // 🔧 Orphaned record 자동 정리 요청
+      // filePath가 있으면 서버에 파일이 없다는 것을 보고하여 DB 정리 유도
+      if (filePath) {
+        console.log('[LAZY-IMAGE] Orphaned record 정리 요청:', filePath);
+        // 백그라운드에서 실행 (비동기, 에러 무시)
+        fetch('/api/uploaded-files-supabase/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath })
+        }).catch(err => console.warn('[LAZY-IMAGE] 정리 요청 실패:', err));
+      }
+
       setHasError(true);
       onError?.();
     }
