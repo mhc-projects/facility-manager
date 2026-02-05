@@ -22,6 +22,7 @@ import {
 import { UnitInput } from '@/components/ui/UnitInput'
 import { Toast } from '@/components/ui/Toast'
 import { getManufacturerName } from '@/constants/manufacturers'
+import { parseDateInput, toKSTDateString, formatKSTDate } from '@/utils/date-utils'
 
 // 게이트웨이 색상 팔레트 - 무한 확장 가능한 기본 색상들
 const baseGatewayColors = [
@@ -994,9 +995,28 @@ function AirPermitDetailContent() {
 
   // 기본정보 필드 변경 핸들러
   const handleBasicInfoChange = (field: string, value: string) => {
+    // 날짜 필드 처리 (타임존 변환 없이 문자열 그대로 사용)
+    if (field === 'first_report_date' || field === 'operation_start_date') {
+      const dateValue = parseDateInput(value)  // "YYYY-MM-DD" 또는 null
+
+      console.log(`📅 [DATE-INPUT] ${field} 변경:`, {
+        입력값: value,
+        처리된값: dateValue
+      })
+
+      setPermitDetail(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          [field]: dateValue
+        }
+      })
+      return
+    }
+
     setPermitDetail(prev => {
       if (!prev) return null;
-      
+
       // additional_info 필드들 처리 (category 등)
       if (field === 'category') {
         return {
@@ -1007,7 +1027,7 @@ function AirPermitDetailContent() {
           }
         }
       }
-      
+
       // 직접 필드들 처리
       return {
         ...prev,
@@ -1457,7 +1477,7 @@ function AirPermitDetailContent() {
               <span className="text-gray-500 text-xs">최초신고일</span>
               <input
                 type="date"
-                value={permitDetail.first_report_date?.split('T')[0] || ''}
+                value={toKSTDateString(permitDetail.first_report_date) || ''}
                 onChange={(e) => handleBasicInfoChange('first_report_date', e.target.value)}
                 min="1000-01-01"
                 max="9999-12-31"
@@ -1480,7 +1500,7 @@ function AirPermitDetailContent() {
               <span className="text-gray-500 text-xs">가동개시일</span>
               <input
                 type="date"
-                value={permitDetail.operation_start_date?.split('T')[0] || ''}
+                value={toKSTDateString(permitDetail.operation_start_date) || ''}
                 onChange={(e) => handleBasicInfoChange('operation_start_date', e.target.value)}
                 min="1000-01-01"
                 max="9999-12-31"

@@ -111,20 +111,27 @@ export async function PUT(
   try {
     const { id } = params;
     const updateData = await request.json();
+
     console.log(`📝 [AIR-PERMIT-UPDATE] 대기필증 업데이트: ${id}`);
+    console.log('📅 [AIR-PERMIT-UPDATE] 날짜 필드 입력값:', {
+      first_report_date: updateData.first_report_date,
+      operation_start_date: updateData.operation_start_date
+    });
 
     const adminClient = getSupabaseAdminClient();
 
+    // ✅ 날짜 필드는 문자열 그대로 전달 (타임존 변환 없음)
+    // YYYY-MM-DD 형식의 문자열을 PostgreSQL date 타입에 저장
     const { data: updatedPermit, error } = await adminClient
       .from('air_permit_info')
       .update({
         business_type: updateData.business_type,
         annual_emission_amount: updateData.annual_emission_amount,
         annual_pollutant_emission: updateData.annual_pollutant_emission,
-        first_report_date: updateData.first_report_date,
-        operation_start_date: updateData.operation_start_date,
+        first_report_date: updateData.first_report_date,  // "YYYY-MM-DD" 문자열
+        operation_start_date: updateData.operation_start_date,  // "YYYY-MM-DD" 문자열
         additional_info: updateData.additional_info,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString()  // 시간은 ISO 형식
       })
       .eq('id', id)
       .select()
@@ -135,7 +142,11 @@ export async function PUT(
       return createErrorResponse(`대기필증 업데이트 실패: ${error.message}`, 500);
     }
 
-    console.log(`✅ [AIR-PERMIT-UPDATE] 업데이트 완료: ${(updatedPermit as any).business_type}`);
+    console.log('✅ [AIR-PERMIT-UPDATE] 업데이트 완료:', {
+      business_type: (updatedPermit as any).business_type,
+      first_report_date: (updatedPermit as any).first_report_date,
+      operation_start_date: (updatedPermit as any).operation_start_date
+    });
 
     return createSuccessResponse({
       air_permit: updatedPermit,
