@@ -189,7 +189,7 @@ export default function Navigation() {
   return (
     <>
       {/* 데스크톱 사이드바 */}
-      <div className="hidden lg:flex lg:flex-shrink-0">
+      <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64 border-r border-gray-200 bg-white pt-5 pb-4 overflow-y-auto">
           {/* 로고 */}
           <div className="flex items-center flex-shrink-0 px-4">
@@ -218,7 +218,7 @@ export default function Navigation() {
       </div>
 
       {/* 모바일 메뉴 버튼 */}
-      <div className="lg:hidden">
+      <div className="md:hidden">
         <div className="flex items-center justify-between bg-white border-b border-gray-200 px-4 py-2">
           <div className="flex items-center">
             <Building2 className="h-8 w-8 text-blue-600" />
@@ -239,7 +239,7 @@ export default function Navigation() {
 
       {/* 모바일 메뉴 */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden">
+        <div className="md:hidden">
           <div className="pt-2 pb-3 space-y-1 bg-white border-b border-gray-200">
             <nav className="px-4 space-y-1">
               {filterNavigationItems(navigationItems).map((item) => (
