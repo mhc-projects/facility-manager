@@ -248,6 +248,7 @@ interface BusinessDetailModalProps {
   startEditMemo: (memo: Memo) => void
   handleDeleteMemo: (memo: Memo) => void
   editingMemo: Memo | null
+  setEditingMemo: (memo: Memo | null) => void
   memoForm: { title: string; content: string }
   setMemoForm: React.Dispatch<React.SetStateAction<{ title: string; content: string }>>
   handleAddMemo: () => void
@@ -293,6 +294,7 @@ export default function BusinessDetailModal({
   startEditMemo,
   handleDeleteMemo,
   editingMemo,
+  setEditingMemo,
   memoForm,
   setMemoForm,
   handleAddMemo,
@@ -566,7 +568,11 @@ export default function BusinessDetailModal({
                       <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">업무 진행 현황</h3>
                     </div>
                     <button
-                      onClick={() => setIsAddingMemo(true)}
+                      onClick={() => {
+                        setEditingMemo(null)
+                        setMemoForm({ title: '', content: '' })
+                        setIsAddingMemo(true)
+                      }}
                       className="flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] md:text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 rounded-lg transition-colors"
                     >
                       <MessageSquarePlus className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
@@ -832,6 +838,7 @@ export default function BusinessDetailModal({
                             <button
                               onClick={() => {
                                 setIsAddingMemo(false)
+                                setEditingMemo(null)
                                 setMemoForm({ title: '', content: '' })
                               }}
                               className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"

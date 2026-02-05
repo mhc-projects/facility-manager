@@ -4568,6 +4568,7 @@ function BusinessManagementPage() {
             startEditMemo={startEditMemo}
             handleDeleteMemo={handleDeleteMemo}
             editingMemo={editingMemo}
+            setEditingMemo={setEditingMemo}
             memoForm={memoForm}
             setMemoForm={setMemoForm}
             handleAddMemo={handleAddMemo}
