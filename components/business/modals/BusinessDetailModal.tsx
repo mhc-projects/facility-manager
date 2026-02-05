@@ -32,7 +32,7 @@ import TaskProgressMiniBoard from '@/components/business/TaskProgressMiniBoard'
 import { InvoiceDisplay } from '@/components/business/InvoiceDisplay'
 import { formatDate } from '@/utils/formatters'
 import MemoEditForm from '@/components/business/modals/MemoEditForm'
-import React from 'react'
+import React, { useRef, useEffect } from 'react'
 
 // UnifiedBusinessInfo interface
 interface UnifiedBusinessInfo {
@@ -312,6 +312,22 @@ export default function BusinessDetailModal({
   mapCategoryToInvoiceType,
   onFacilityUpdate,
 }: BusinessDetailModalProps) {
+  // Ref for auto-scrolling to memo add form
+  const memoFormRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to memo form when isAddingMemo becomes true
+  useEffect(() => {
+    if (isAddingMemo && !editingMemo && memoFormRef.current) {
+      // Small delay to ensure the form is rendered
+      setTimeout(() => {
+        memoFormRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        })
+      }, 100)
+    }
+  }, [isAddingMemo, editingMemo])
+
   if (!isOpen || !business) return null
 
   return (
@@ -662,6 +678,27 @@ export default function BusinessDetailModal({
                           <MessageSquare className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-indigo-500" />
                           메모 및 업무 ({getIntegratedItems().length}개)
                         </div>
+
+                        {/* 메모 추가 폼 - 최상단 배치 */}
+                        {isAddingMemo && !editingMemo && (
+                          <div ref={memoFormRef} className="mb-3 sm:mb-4">
+                            <div className="flex items-center text-xs sm:text-sm text-indigo-600 mb-2">
+                              <MessageSquarePlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                              새 메모 추가
+                            </div>
+                            <MemoEditForm
+                              mode="create"
+                              memoForm={memoForm}
+                              setMemoForm={setMemoForm}
+                              onSave={handleAddMemo}
+                              onCancel={() => {
+                                setIsAddingMemo(false)
+                                setMemoForm({ title: '', content: '' })
+                              }}
+                            />
+                          </div>
+                        )}
+
                         {/* 스크롤 가능한 컨테이너 추가 - 최대 높이 제한으로 내용이 많아져도 스크롤 가능 */}
                         <div className="space-y-2 sm:space-y-3 max-h-[640px] sm:max-h-[768px] md:max-h-[800px] overflow-y-auto pr-1 sm:pr-2" style={{scrollbarWidth: 'thin'}}>
                           {getIntegratedItems().map((item, index) => {
@@ -827,25 +864,6 @@ export default function BusinessDetailModal({
                       </div>
                     )}
 
-                    {/* 메모 추가 폼 - 편집 중이 아닐 때만 하단에 표시 */}
-                    {isAddingMemo && !editingMemo && (
-                      <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-indigo-200">
-                        <div className="flex items-center text-xs sm:text-sm text-indigo-600 mb-2 sm:mb-3">
-                          <MessageSquarePlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                          새 메모 추가
-                        </div>
-                        <MemoEditForm
-                          mode="create"
-                          memoForm={memoForm}
-                          setMemoForm={setMemoForm}
-                          onSave={handleAddMemo}
-                          onCancel={() => {
-                            setIsAddingMemo(false)
-                            setMemoForm({ title: '', content: '' })
-                          }}
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
