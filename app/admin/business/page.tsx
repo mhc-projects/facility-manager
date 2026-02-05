@@ -3696,6 +3696,10 @@ function BusinessManagementPage() {
             // 🗑️ 캐시 무효화 (서버에서 최신 데이터를 받았으므로)
             invalidateBusinessCache(editingBusiness.id);
 
+            // ✅ [REALTIME-UPDATE] 테이블 즉시 반영 (영업점 및 모든 필드 실시간 동기화)
+            await refetchBusinesses();
+            console.log('✅ [REALTIME-UPDATE] allBusinesses 새로고침 완료 - 테이블 즉시 업데이트');
+
             // ✅ [SYNC-CHECK] 최종 동기화 완료 로깅
             console.log('✅ [SYNC-CHECK-FINAL] 서버 데이터로 최종 동기화 완료:', {
               businessId: updatedBusiness.id,
