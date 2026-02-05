@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { getSupabaseAdminClient } from '@/lib/supabase';
+import { toKSTDateString } from '@/utils/date-utils';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -58,6 +59,18 @@ export async function GET(
       if (error) {
         console.error('❌ [AIR-PERMIT-DETAIL] 조회 실패:', error);
         return createErrorResponse(`대기필증 조회 실패: ${error.message}`, 404);
+      }
+
+      // ✅ 날짜 필드 정규화 (timestamptz → date string)
+      if (airPermit.first_report_date) {
+        const originalDate = airPermit.first_report_date
+        airPermit.first_report_date = toKSTDateString(airPermit.first_report_date)
+        console.log(`📅 first_report_date 정규화: ${originalDate} → ${airPermit.first_report_date}`)
+      }
+      if (airPermit.operation_start_date) {
+        const originalDate = airPermit.operation_start_date
+        airPermit.operation_start_date = toKSTDateString(airPermit.operation_start_date)
+        console.log(`📅 operation_start_date 정규화: ${originalDate} → ${airPermit.operation_start_date}`)
       }
 
       const response: any = { air_permit: airPermit };
@@ -118,20 +131,35 @@ export async function PUT(
       operation_start_date: updateData.operation_start_date
     });
 
+    // ✅ 날짜 필드 타임존 보정 (date string → timestamptz with KST)
+    // PostgreSQL이 timestamptz 타입으로 저장하므로 KST 타임존 명시
+    let first_report_date = updateData.first_report_date
+    let operation_start_date = updateData.operation_start_date
+
+    if (first_report_date && !first_report_date.includes('T')) {
+      // "2022-02-04" → "2022-02-04T00:00:00+09:00"
+      first_report_date = `${first_report_date}T00:00:00+09:00`
+      console.log(`📅 first_report_date KST 변환: ${updateData.first_report_date} → ${first_report_date}`)
+    }
+
+    if (operation_start_date && !operation_start_date.includes('T')) {
+      // "2022-02-04" → "2022-02-04T00:00:00+09:00"
+      operation_start_date = `${operation_start_date}T00:00:00+09:00`
+      console.log(`📅 operation_start_date KST 변환: ${updateData.operation_start_date} → ${operation_start_date}`)
+    }
+
     const adminClient = getSupabaseAdminClient();
 
-    // ✅ 날짜 필드는 문자열 그대로 전달 (타임존 변환 없음)
-    // YYYY-MM-DD 형식의 문자열을 PostgreSQL date 타입에 저장
     const { data: updatedPermit, error } = await adminClient
       .from('air_permit_info')
       .update({
         business_type: updateData.business_type,
         annual_emission_amount: updateData.annual_emission_amount,
         annual_pollutant_emission: updateData.annual_pollutant_emission,
-        first_report_date: updateData.first_report_date,  // "YYYY-MM-DD" 문자열
-        operation_start_date: updateData.operation_start_date,  // "YYYY-MM-DD" 문자열
+        first_report_date: first_report_date,  // KST 타임존 포함
+        operation_start_date: operation_start_date,  // KST 타임존 포함
         additional_info: updateData.additional_info,
-        updated_at: new Date().toISOString()  // 시간은 ISO 형식
+        updated_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
@@ -140,6 +168,16 @@ export async function PUT(
     if (error) {
       console.error('❌ [AIR-PERMIT-UPDATE] 업데이트 실패:', error);
       return createErrorResponse(`대기필증 업데이트 실패: ${error.message}`, 500);
+    }
+
+    // ✅ 응답 데이터도 정규화 (timestamptz → date string)
+    if (updatedPermit) {
+      if (updatedPermit.first_report_date) {
+        updatedPermit.first_report_date = toKSTDateString(updatedPermit.first_report_date)
+      }
+      if (updatedPermit.operation_start_date) {
+        updatedPermit.operation_start_date = toKSTDateString(updatedPermit.operation_start_date)
+      }
     }
 
     console.log('✅ [AIR-PERMIT-UPDATE] 업데이트 완료:', {
