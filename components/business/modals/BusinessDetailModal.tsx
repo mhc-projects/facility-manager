@@ -740,6 +740,7 @@ export default function BusinessDetailModal({
                                       onSave={handleEditMemo}
                                       onCancel={() => {
                                         setEditingMemo(null)
+                                        setIsAddingMemo(false)  // ✅ 추가 폼도 닫기
                                         setMemoForm({ title: '', content: '' })
                                       }}
                                     />
