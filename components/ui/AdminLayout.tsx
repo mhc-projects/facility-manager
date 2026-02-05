@@ -276,20 +276,20 @@ export default function AdminLayout({ children, title, description, actions }: A
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+        <div
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Container with improved layout */}
-      <div className="lg:flex lg:gap-4 lg:p-4 lg:h-screen">
+      <div className="md:flex md:gap-4 md:p-4 md:h-screen">
         {/* Sidebar - Improved responsive design (20% reduced width) */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-80 lg:w-52 xl:w-64 bg-white/95 lg:bg-white backdrop-blur-md
-          shadow-xl lg:shadow-lg lg:border lg:border-gray-200 lg:rounded-xl transform transition-all duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-80 md:w-52 xl:w-64 bg-white/95 md:bg-white backdrop-blur-md
+          shadow-xl md:shadow-lg md:border md:border-gray-200 md:rounded-xl transform transition-all duration-300 ease-in-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:z-0 lg:flex lg:flex-col lg:h-full lg:min-w-0 lg:flex-shrink-0
+          md:translate-x-0 md:static md:z-0 md:flex md:flex-col md:h-full md:min-w-0 md:flex-shrink-0
         `}>
           <div className="flex flex-col h-full lg:p-2">
             {/* Logo/Header - Integrated with main design */}
@@ -309,7 +309,7 @@ export default function AdminLayout({ children, title, description, actions }: A
               </Link>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="lg:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1"
+                className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -340,8 +340,8 @@ export default function AdminLayout({ children, title, description, actions }: A
         </div>
 
         {/* Main content - Improved layout */}
-        <div className="flex-1 lg:flex lg:flex-col lg:min-h-0 lg:min-w-0">
-          <div className="lg:bg-white lg:shadow-lg lg:border lg:border-gray-200 lg:rounded-xl lg:flex lg:flex-col lg:h-full lg:overflow-hidden">
+        <div className="flex-1 md:flex md:flex-col md:min-h-0 md:min-w-0">
+          <div className="md:bg-white md:shadow-lg md:border md:border-gray-200 md:rounded-xl md:flex md:flex-col md:h-full md:overflow-hidden">
             {/* Top bar - Mobile optimized with fixed positioning */}
             <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md lg:bg-transparent border-b border-gray-200 lg:border-gray-300 shadow-sm lg:shadow-none">
               <div className="px-4 py-3 lg:px-8 lg:py-6">
