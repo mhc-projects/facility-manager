@@ -578,3 +578,25 @@ input[type="date"]::-webkit-date-and-time-value {
 input[type="date"]:focus {
   outline: none;
 }
+
+/* =================================
+   Memo Edit Form Animation
+   ================================= */
+
+/* Slide down animation for inline memo edit form */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
