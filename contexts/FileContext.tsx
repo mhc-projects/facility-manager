@@ -198,12 +198,14 @@ export function FileProvider({ children }: FileProviderProps) {
   }, [currentBusinessId, rawAddFiles, rawRemoveFile]);
 
   // 📡 Supabase Realtime 구독
-  // ✅ OPTIMIZATION: business_id 확보 후 연결 (정확한 필터링 보장)
-  // 🎯 Priority-1: autoConnect 조건 강화 - 다른 사업장 이벤트 완전 차단
+  // ✅ FIX: 즉시 연결로 복원 (DELETE 이벤트 손실 방지)
+  // 🔧 CRITICAL-FIX: autoConnect 조건 완화 - 이벤트 손실 방지 우선
+  // - handleRealtimeNotification 내부에서 business_id 필터링 수행 (Line 128)
+  // - DELETE의 경우 로컬 배열 존재 여부로 추가 필터링 (Line 117-125)
   const { isConnected: realtimeConnected } = useSupabaseRealtime({
     tableName: 'uploaded_files',
     eventTypes: FILE_REALTIME_EVENT_TYPES, // 모듈 레벨 상수 사용 (재생성 방지)
-    autoConnect: !!businessName && !!currentBusinessId, // business_id 확보 후 연결
+    autoConnect: !!businessName, // 즉시 연결 (이벤트 손실 방지)
     onNotification: handleRealtimeNotification,
     onConnect: () => {
       console.log(`📡 [FILE-REALTIME] Realtime 연결됨 - 초기 동기화 시작: ${businessName}`);
