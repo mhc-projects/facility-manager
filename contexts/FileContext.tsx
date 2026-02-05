@@ -13,8 +13,9 @@ const getPhotosFromStore = () => usePhotoStore.getState().photos;
 // 📡 Realtime 이벤트 타입 (모듈 레벨 상수 - 매 렌더링마다 재생성 방지)
 const FILE_REALTIME_EVENT_TYPES: ('INSERT' | 'DELETE')[] = ['INSERT', 'DELETE'];
 
-// ⚡ 중복 방지 시간 (밀리초) - 5초 → 2초 단축 (빠른 재업로드 케이스 개선)
-const DEDUP_WINDOW_MS = 2000;
+// ⚡ 중복 방지 시간 (밀리초) - 네트워크 지연 대응 최적화
+// 🎯 Priority-1: 2초 → 3초 확대 (느린 네트워크 환경에서 중복 이벤트 방지)
+const DEDUP_WINDOW_MS = 3000;
 
 interface FileContextType {
   uploadedFiles: UploadedFile[];
@@ -167,8 +168,10 @@ export function FileProvider({ children }: FileProviderProps) {
           };
 
           // ✅ FIX: Zustand 상태를 직접 조회 (클로저 stale 문제 방지)
+          // 🎯 Priority-1: 중복 체크 최적화 - O(n) → O(1) 성능 개선
           const currentPhotos = getPhotosFromStore();
-          const exists = currentPhotos.some(f => f.id === newFile.id);
+          const photoMap = new Map(currentPhotos.map(p => [p.id, p]));
+          const exists = photoMap.has(newFile.id);
           if (!exists) {
             rawAddFiles([newFile]);
             console.log(`📡 [FILE-REALTIME] 새 파일 추가됨: ${newFile.originalName}`, { url: publicUrl });
@@ -195,12 +198,12 @@ export function FileProvider({ children }: FileProviderProps) {
   }, [currentBusinessId, rawAddFiles, rawRemoveFile]);
 
   // 📡 Supabase Realtime 구독
-  // ✅ FIX: businessName만으로 즉시 연결 (currentBusinessId 대기 불필요)
-  // 🔧 REALTIME-SYNC-FIX: Phase 1-1 - 즉시 연결로 초기 이벤트 손실 방지
+  // ✅ OPTIMIZATION: business_id 확보 후 연결 (정확한 필터링 보장)
+  // 🎯 Priority-1: autoConnect 조건 강화 - 다른 사업장 이벤트 완전 차단
   const { isConnected: realtimeConnected } = useSupabaseRealtime({
     tableName: 'uploaded_files',
     eventTypes: FILE_REALTIME_EVENT_TYPES, // 모듈 레벨 상수 사용 (재생성 방지)
-    autoConnect: !!businessName, // businessName만 확인 (즉시 연결)
+    autoConnect: !!businessName && !!currentBusinessId, // business_id 확보 후 연결
     onNotification: handleRealtimeNotification,
     onConnect: () => {
       console.log(`📡 [FILE-REALTIME] Realtime 연결됨 - 초기 동기화 시작: ${businessName}`);
