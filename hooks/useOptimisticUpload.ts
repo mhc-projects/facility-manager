@@ -66,32 +66,40 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
     getPendingCount
   } = useOptimisticUpdates<OptimisticPhoto>(photos);
 
-  // 🎯 AUTO-DISMISS: 업로드 완료 후 1초 뒤 자동 제거
+  // 🎯 AUTO-DISMISS: 모든 업로드 완료 후 1초 뒤 자동 제거
   useEffect(() => {
     const completedPhotos = photos.filter(p => p.status === 'uploaded');
+    const activePhotos = photos.filter(p =>
+      p.status === 'preparing' ||
+      p.status === 'uploading'
+    );
 
-    if (completedPhotos.length === 0) return;
+    // 완료된 파일이 없거나, 아직 업로드 중인 파일이 있으면 대기
+    if (completedPhotos.length === 0 || activePhotos.length > 0) {
+      return;
+    }
 
-    console.log(`⏱️ [AUTO-DISMISS] ${completedPhotos.length}개 완료된 업로드 1초 후 자동 제거 예약`);
+    // 모든 업로드가 완료된 경우에만 1초 후 자동 제거
+    console.log(`⏱️ [AUTO-DISMISS] 모든 업로드 완료 (${completedPhotos.length}개), 1초 후 자동 제거 예약`);
 
-    const timers = completedPhotos.map(photo => {
-      return setTimeout(() => {
-        console.log(`🗑️ [AUTO-DISMISS] ${photo.file.name} 자동 제거`);
+    const timer = setTimeout(() => {
+      console.log(`🗑️ [AUTO-DISMISS] ${completedPhotos.length}개 파일 일괄 자동 제거`);
 
-        // 미리보기 URL 정리
+      // 모든 미리보기 URL 정리
+      completedPhotos.forEach(photo => {
         if (photo.localPreview?.startsWith('blob:')) {
           URL.revokeObjectURL(photo.localPreview);
         }
+      });
 
-        setPhotos(prev => prev.filter(p => p.id !== photo.id));
-        queueRef.current = queueRef.current.filter(p => p.id !== photo.id);
-        processingRef.current.delete(photo.id);
-      }, 1000);
-    });
+      // 모든 완료된 파일 제거
+      const completedIds = new Set(completedPhotos.map(p => p.id));
+      setPhotos(prev => prev.filter(p => !completedIds.has(p.id)));
+      queueRef.current = queueRef.current.filter(p => !completedIds.has(p.id));
+      completedIds.forEach(id => processingRef.current.delete(id));
+    }, 1000);
 
-    return () => {
-      timers.forEach(timer => clearTimeout(timer));
-    };
+    return () => clearTimeout(timer);
   }, [photos]);
 
   // 고유 ID 생성
