@@ -1,7 +1,7 @@
 // hooks/useOptimisticUpload.ts
 // Optimistic UI를 위한 업로드 상태 관리 훅
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { uploadWithProgress, uploadMultipleWithProgress, createImagePreview, UploadProgress } from '@/utils/upload-with-progress';
 import { uploadToSupabaseStorage } from '@/utils/supabase-direct-upload';
 import { useOptimisticUpdates } from '@/utils/optimistic-updates';
@@ -58,13 +58,41 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
   const lastTotalCountRef = useRef<number>(0);
   
   // 🚀 ENHANCED: 전역 낙관적 업데이트 시스템 통합
-  const { 
-    data: globalPhotos, 
-    createOptimistic, 
-    updateOptimistic, 
+  const {
+    data: globalPhotos,
+    createOptimistic,
+    updateOptimistic,
     isPending: isGlobalPending,
-    getPendingCount 
+    getPendingCount
   } = useOptimisticUpdates<OptimisticPhoto>(photos);
+
+  // 🎯 AUTO-DISMISS: 업로드 완료 후 1초 뒤 자동 제거
+  useEffect(() => {
+    const completedPhotos = photos.filter(p => p.status === 'uploaded');
+
+    if (completedPhotos.length === 0) return;
+
+    console.log(`⏱️ [AUTO-DISMISS] ${completedPhotos.length}개 완료된 업로드 1초 후 자동 제거 예약`);
+
+    const timers = completedPhotos.map(photo => {
+      return setTimeout(() => {
+        console.log(`🗑️ [AUTO-DISMISS] ${photo.file.name} 자동 제거`);
+
+        // 미리보기 URL 정리
+        if (photo.localPreview?.startsWith('blob:')) {
+          URL.revokeObjectURL(photo.localPreview);
+        }
+
+        setPhotos(prev => prev.filter(p => p.id !== photo.id));
+        queueRef.current = queueRef.current.filter(p => p.id !== photo.id);
+        processingRef.current.delete(photo.id);
+      }, 1000);
+    });
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
+  }, [photos]);
 
   // 고유 ID 생성
   const generateId = useCallback(() => {
