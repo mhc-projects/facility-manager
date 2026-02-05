@@ -22,6 +22,7 @@ import {
   X
 } from 'lucide-react'
 import { UnitInput } from '@/components/ui/UnitInput'
+import { formatKSTDate } from '@/utils/date-utils'
 
 // ✅ 게이트웨이 색상 팔레트 - air-permit 페이지용 (연한 톤)
 const baseGatewayColors = [
@@ -1311,13 +1312,13 @@ function AirPermitManagementPage() {
                     <div>
                       <label className="block text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm font-medium text-gray-700">최초신고일</label>
                       <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] md:text-xs lg:text-sm text-gray-900">
-                        {(selectedPermit as any).first_report_date || '미지정'}
+                        {formatKSTDate((selectedPermit as any).first_report_date) || '미지정'}
                       </p>
                     </div>
                     <div>
                       <label className="block text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm font-medium text-gray-700">가동개시일</label>
                       <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] md:text-xs lg:text-sm text-gray-900">
-                        {(selectedPermit as any).operation_start_date || '미지정'}
+                        {formatKSTDate((selectedPermit as any).operation_start_date) || '미지정'}
                       </p>
                     </div>
                   </div>
