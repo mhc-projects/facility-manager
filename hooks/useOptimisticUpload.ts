@@ -614,8 +614,13 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
         : `${failedPhotos.length}개 파일 업로드 실패`;
     }
 
+    // 🎯 isVisible 로직 수정: 업로드 중이거나 대기 중인 파일이 있을 때만 표시
+    // 모든 파일이 완료(uploaded)되면 isVisible을 false로 설정하여 자동 숨김 트리거
+    const hasActiveUploads = stats.uploading > 0 || stats.pending > 0;
+    const shouldBeVisible = isProcessing || hasActiveUploads || (stats.total > 0 && stats.completed < stats.total);
+
     return {
-      isVisible: isProcessing || stats.total > 0 || lastSuccessCountRef.current > 0,
+      isVisible: shouldBeVisible,
       totalFiles: displayTotal,
       completedFiles: displayCompleted,
       currentFileName: uploadingPhoto?.file.name,
