@@ -1559,7 +1559,7 @@ export default function ImprovedFacilityPhotoSection({
       {/* Smart Floating Progress - 스마트 호버 진행상황 표시 */}
       <SmartFloatingProgress
         {...getSmartProgressData()}
-        autoHideDelay={1000}
+        autoHideDelay={2000}
         onClose={() => {
           // 🚀 프로그래스 바 수동 닫기 핸들러
           console.log('🔥 [PROGRESS-CLOSE] 사용자가 수동으로 프로그래스 바 닫기');
