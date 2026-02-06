@@ -190,8 +190,27 @@ export function FileProvider({ children }: FileProviderProps) {
         break;
 
       case 'UPDATE':
-        // 파일 메타데이터 업데이트 (필요 시)
-        console.log(`📡 [FILE-REALTIME] 파일 업데이트: ${newRecord?.original_filename}`);
+        // 파일 메타데이터 업데이트 (caption 등)
+        if (newRecord) {
+          const currentPhotos = getPhotosFromStore();
+          const updatedPhotos = currentPhotos.map(photo => {
+            if (photo.id === newRecord.id) {
+              console.log(`📡 [FILE-REALTIME] 파일 업데이트: ${newRecord.original_filename}`, {
+                caption: newRecord.caption,
+                oldCaption: photo.caption
+              });
+              return {
+                ...photo,
+                caption: newRecord.caption,
+                // 다른 업데이트 가능한 필드들도 여기에 추가 가능
+              };
+            }
+            return photo;
+          });
+
+          // Zustand 스토어 업데이트 (전체 배열 교체)
+          usePhotoStore.setState({ photos: updatedPhotos });
+        }
         break;
     }
   // ✅ uploadedFiles 제거: getPhotosFromStore()로 직접 조회하므로 의존성 불필요
