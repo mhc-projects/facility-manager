@@ -226,11 +226,12 @@ export async function POST(request: NextRequest) {
         downloadUrl: '',
         webViewLink: '',
         thumbnailUrl: '',
-        folderName: file.file_path.includes('discharge') ? '배출시설' : 
+        folderName: file.file_path.includes('discharge') ? '배출시설' :
                    file.file_path.includes('prevention') ? '방지시설' : '기본사진',
         facilityInfo: file.facility_info || '',
         filePath: file.file_path,
-        uploadStatus: file.upload_status || 'uploaded'
+        uploadStatus: file.upload_status || 'uploaded',
+        caption: file.caption || null
       }));
       
       photoTracker.buildFromUploadedFiles(formattedFiles);
@@ -571,11 +572,12 @@ export async function GET(request: NextRequest) {
           downloadUrl: publicUrl.publicUrl,
           webViewLink: publicUrl.publicUrl,
           thumbnailUrl: publicUrl.publicUrl,
-          folderName: file.file_path.includes('discharge') ? '배출시설' : 
+          folderName: file.file_path.includes('discharge') ? '배출시설' :
                      file.file_path.includes('prevention') ? '방지시설' : '기본사진',
           facilityInfo: file.facility_info || '',
           filePath: file.file_path,
-          uploadStatus: file.upload_status || 'uploaded'
+          uploadStatus: file.upload_status || 'uploaded',
+          caption: file.caption || null
         };
       })
     );

@@ -31,6 +31,7 @@ export interface FacilityPhoto {
   filePath: string
   downloadUrl: string
   thumbnailUrl: string
+  caption?: string | null // 사진 설명 (최대 500자)
   isRecent?: boolean      // 최근 업로드된 사진 (깜빡임 효과용)
 }
 
@@ -86,6 +87,7 @@ export class FacilityPhotoTracker {
         filePath: file.filePath || '',
         downloadUrl: file.downloadUrl,
         thumbnailUrl: file.thumbnailUrl || file.downloadUrl,
+        caption: (file as any).caption || null,
         isRecent: (file as any).justUploaded || false
       }
 

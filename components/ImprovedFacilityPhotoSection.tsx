@@ -18,6 +18,7 @@ import { useOptimisticUpload } from '@/hooks/useOptimisticUpload';
 import UploadQueue from '@/components/ui/UploadQueue';
 import SmartFloatingProgress from '@/components/ui/SmartFloatingProgress';
 import { smartUploadQueue } from '@/utils/smart-upload-queue';
+import PhotoCaptionInput from '@/components/PhotoCaptionInput';
 
 interface ImprovedFacilityPhotoSectionProps {
   businessName: string;
@@ -2789,6 +2790,30 @@ function ExpandedPhotoSection({
           <div className="mt-2 text-sm text-gray-600">
             <div>{(photo.fileSize / 1024 / 1024).toFixed(1)}MB • {new Date(photo.uploadedAt).toLocaleString()}</div>
           </div>
+
+          {/* 사진 설명(Caption) 입력 섹션 🆕 */}
+          <div className="mt-4">
+            <PhotoCaptionInput
+              photo={{
+                id: photo.id,
+                name: photo.fileName,
+                originalName: photo.originalFileName,
+                mimeType: 'image/jpeg',
+                size: photo.fileSize,
+                createdTime: new Date(photo.uploadedAt).toISOString(),
+                webViewLink: photo.downloadUrl,
+                downloadUrl: photo.downloadUrl,
+                thumbnailUrl: photo.downloadUrl,
+                folderName: photo.categoryPath,
+                uploadStatus: 'uploaded',
+                filePath: photo.filePath,
+                caption: photo.caption
+              }}
+              onCaptionSaved={(caption) => {
+                console.log('✅ Caption saved in ExpandedPhotoSection:', caption);
+              }}
+            />
+          </div>
         </div>
 
         {/* 우측: 썸네일 리스트 */}
@@ -3005,7 +3030,31 @@ const PhotoDetailModal = forwardRef<HTMLDivElement, PhotoDetailModalProps>(
                 filePath={photo.filePath}
               />
             </div>
-            
+
+            {/* 사진 설명 섹션 🆕 */}
+            <div className="mt-4 border-t pt-4">
+              <PhotoCaptionInput
+                photo={{
+                  id: photo.id,
+                  name: photo.fileName,
+                  originalName: photo.originalFileName,
+                  mimeType: 'image/jpeg',
+                  size: photo.fileSize,
+                  createdTime: new Date(photo.uploadedAt).toISOString(),
+                  webViewLink: photo.downloadUrl,
+                  downloadUrl: photo.downloadUrl,
+                  thumbnailUrl: photo.downloadUrl,
+                  folderName: photo.categoryPath,
+                  uploadStatus: 'uploaded',
+                  filePath: photo.filePath,
+                  caption: photo.caption
+                }}
+                onCaptionSaved={(caption) => {
+                  console.log('✅ Caption saved callback:', caption);
+                }}
+              />
+            </div>
+
             {/* 액션 버튼 */}
             <div className="flex flex-col md:flex-row gap-2 md:gap-3 justify-center mt-4">
               <a

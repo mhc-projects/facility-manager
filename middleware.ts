@@ -89,6 +89,7 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/webhooks/',          // 외부 웹훅
     '/api/order-management',   // 발주 관리 API (Bearer 토큰 or 쿠키 인증)
     '/api/migrate-business-id', // 마이그레이션 API (관리자 전용)
+    '/api/test-caption',       // Caption 테스트 API (개발용)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }

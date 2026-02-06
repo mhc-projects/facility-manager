@@ -348,6 +348,7 @@ export interface UploadedFile {
   filePath?: string; // 시설별 스토리지 경로
   justUploaded?: boolean; // 업로드 직후 마커 (깜빡임 방지)
   uploadedAt?: number; // 업로드 시점 타임스탬프
+  caption?: string; // 사진 설명 (최대 500자)
 }
 
 export interface UploadedFiles {
