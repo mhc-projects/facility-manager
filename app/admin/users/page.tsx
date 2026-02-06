@@ -777,79 +777,81 @@ function UsersManagementPage() {
     }
   }, [selectedUser]);
 
-  // social_login_approvals 테이블 실시간 업데이트 핸들러
-  const handleApprovalUpdate = useCallback((payload: any) => {
-    const { eventType, new: newRecord, old: oldRecord } = payload;
+  // ⚠️ DEPRECATED: social_login_approvals 테이블이 DB에 존재하지 않아 비활성화
+  // 기능이 필요한 경우 테이블을 먼저 생성해야 함
+  // const handleApprovalUpdate = useCallback((payload: any) => {
+  //   const { eventType, new: newRecord, old: oldRecord } = payload;
 
-    console.log('📡 [REALTIME] social_login_approvals 이벤트:', {
-      eventType,
-      approvalId: newRecord?.id || oldRecord?.id,
-      status: newRecord?.approval_status
-    });
+  //   console.log('📡 [REALTIME] social_login_approvals 이벤트:', {
+  //     eventType,
+  //     approvalId: newRecord?.id || oldRecord?.id,
+  //     status: newRecord?.approval_status
+  //   });
 
-    if (eventType === 'INSERT') {
-      // 새 승인 요청 추가
-      setSocialApprovals(prev => [newRecord, ...prev]);
-      console.log('✅ [REALTIME] 새 승인 요청 추가:', newRecord.requester_name);
-    }
+  //   if (eventType === 'INSERT') {
+  //     // 새 승인 요청 추가
+  //     setSocialApprovals(prev => [newRecord, ...prev]);
+  //     console.log('✅ [REALTIME] 새 승인 요청 추가:', newRecord.requester_name);
+  //   }
 
-    if (eventType === 'UPDATE') {
-      // 승인 상태 업데이트
-      setSocialApprovals(prev =>
-        prev.map(approval =>
-          approval.id === newRecord.id ? { ...approval, ...newRecord } : approval
-        )
-      );
+  //   if (eventType === 'UPDATE') {
+  //     // 승인 상태 업데이트
+  //     setSocialApprovals(prev =>
+  //       prev.map(approval =>
+  //         approval.id === newRecord.id ? { ...approval, ...newRecord } : approval
+  //       )
+  //     );
 
-      // 승인 완료 시 승인 대기 목록에서 제거
-      if (newRecord.approval_status !== 'pending') {
-        setSocialApprovals(prev => prev.filter(approval => approval.id !== newRecord.id));
-        console.log('✅ [REALTIME] 승인 처리 완료 - 목록에서 제거:', newRecord.requester_name);
-      }
-    }
+  //     // 승인 완료 시 승인 대기 목록에서 제거
+  //     if (newRecord.approval_status !== 'pending') {
+  //       setSocialApprovals(prev => prev.filter(approval => approval.id !== newRecord.id));
+  //       console.log('✅ [REALTIME] 승인 처리 완료 - 목록에서 제거:', newRecord.requester_name);
+  //     }
+  //   }
 
-    if (eventType === 'DELETE') {
-      // 승인 요청 삭제
-      setSocialApprovals(prev => prev.filter(approval => approval.id !== oldRecord.id));
-      console.log('✅ [REALTIME] 승인 요청 삭제:', oldRecord.requester_name);
-    }
-  }, []);
+  //   if (eventType === 'DELETE') {
+  //     // 승인 요청 삭제
+  //     setSocialApprovals(prev => prev.filter(approval => approval.id !== oldRecord.id));
+  //     console.log('✅ [REALTIME] 승인 요청 삭제:', oldRecord.requester_name);
+  //   }
+  // }, []);
 
-  // user_login_history 테이블 실시간 업데이트 핸들러
-  const handleLoginHistoryUpdate = useCallback((payload: any) => {
-    const { eventType, new: newRecord } = payload;
+  // ⚠️ DEPRECATED: user_login_history 테이블이 DB에 존재하지 않아 비활성화
+  // 기능이 필요한 경우 테이블을 먼저 생성해야 함
+  // const handleLoginHistoryUpdate = useCallback((payload: any) => {
+  //   const { eventType, new: newRecord } = payload;
 
-    if (eventType === 'INSERT') {
-      console.log('📡 [REALTIME] user_login_history 이벤트:', {
-        userId: newRecord.user_id,
-        loginAt: newRecord.login_at,
-        loginMethod: newRecord.login_method
-      });
+  //   if (eventType === 'INSERT') {
+  //     console.log('📡 [REALTIME] user_login_history 이벤트:', {
+  //       userId: newRecord.user_id,
+  //       loginAt: newRecord.login_at,
+  //       loginMethod: newRecord.login_method
+  //     });
 
-      // 로그인 이력 추가 (선택된 사용자만)
-      if (selectedUser?.id === newRecord.user_id) {
-        setUserLoginHistory(prev => [newRecord, ...prev]);
-        console.log('✅ [REALTIME] 로그인 이력 추가:', newRecord.login_method);
-      }
+  //     // 로그인 이력 추가 (선택된 사용자만)
+  //     if (selectedUser?.id === newRecord.user_id) {
+  //       setUserLoginHistory(prev => [newRecord, ...prev]);
+  //       console.log('✅ [REALTIME] 로그인 이력 추가:', newRecord.login_method);
+  //     }
 
-      // 해당 사용자의 last_login_at 업데이트
-      setEmployees(prev =>
-        prev.map(emp =>
-          emp.id === newRecord.user_id
-            ? { ...emp, last_login_at: newRecord.login_at }
-            : emp
-        )
-      );
+  //     // 해당 사용자의 last_login_at 업데이트
+  //     setEmployees(prev =>
+  //       prev.map(emp =>
+  //         emp.id === newRecord.user_id
+  //           ? { ...emp, last_login_at: newRecord.login_at }
+  //           : emp
+  //       )
+  //     );
 
-      // 선택된 사용자 정보도 업데이트
-      if (selectedUser?.id === newRecord.user_id) {
-        setSelectedUser(prev =>
-          prev ? { ...prev, last_login_at: newRecord.login_at } : null
-        );
-        console.log('✅ [REALTIME] 최근 로그인 시간 업데이트:', newRecord.login_at);
-      }
-    }
-  }, [selectedUser]);
+  //     // 선택된 사용자 정보도 업데이트
+  //     if (selectedUser?.id === newRecord.user_id) {
+  //       setSelectedUser(prev =>
+  //         prev ? { ...prev, last_login_at: newRecord.login_at } : null
+  //       );
+  //       console.log('✅ [REALTIME] 최근 로그인 시간 업데이트:', newRecord.login_at);
+  //     }
+  //   }
+  // }, [selectedUser]);
 
   // ==================== 실시간 구독 설정 ====================
 
@@ -861,21 +863,22 @@ function UsersManagementPage() {
     autoConnect: true
   });
 
-  // social_login_approvals 테이블 실시간 구독
-  useSupabaseRealtime({
-    tableName: 'social_login_approvals',
-    eventTypes: ['INSERT', 'UPDATE', 'DELETE'],
-    onNotification: handleApprovalUpdate,
-    autoConnect: true
-  });
+  // ⚠️ DEPRECATED: 존재하지 않는 테이블 구독 비활성화
+  // social_login_approvals 테이블이 DB에 존재하지 않음 (기능 불필요)
+  // useSupabaseRealtime({
+  //   tableName: 'social_login_approvals',
+  //   eventTypes: ['INSERT', 'UPDATE', 'DELETE'],
+  //   onNotification: handleApprovalUpdate,
+  //   autoConnect: true
+  // });
 
-  // user_login_history 테이블 실시간 구독
-  useSupabaseRealtime({
-    tableName: 'user_login_history',
-    eventTypes: ['INSERT'],
-    onNotification: handleLoginHistoryUpdate,
-    autoConnect: true
-  });
+  // user_login_history 테이블이 DB에 존재하지 않음
+  // useSupabaseRealtime({
+  //   tableName: 'user_login_history',
+  //   eventTypes: ['INSERT'],
+  //   onNotification: handleLoginHistoryUpdate,
+  //   autoConnect: true
+  // });
 
   // 승인 설정 로드
   const loadApprovalSettings = async () => {
