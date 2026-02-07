@@ -108,6 +108,7 @@ export class FacilityPhotoTracker {
   /**
    * 특정 시설의 사진 목록 조회
    * 정확한 키 매칭만 사용 (역호환성 로직 제거)
+   * 🆕 송풍팬 배출구 1번: 레거시 사진(outletNumber 없음)도 포함
    */
   public getFacilityPhotos(facilityType: 'discharge' | 'prevention' | 'basic',
                           facilityNumber?: number,
@@ -115,6 +116,40 @@ export class FacilityPhotoTracker {
                           category?: string): FacilityPhoto[] {
     const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category)
     const facilityInfo = this.facilityPhotos.get(facilityKey)
+
+    // 🆕 송풍팬 배출구 1번 요청 시 레거시 사진도 포함
+    if (category === 'fan' && outletNumber === 1) {
+      const outlet1Photos = facilityInfo?.photos || []
+      const legacyKey = 'basic-fan' // 배출구 번호가 없는 기존 송풍팬 키
+      const legacyInfo = this.facilityPhotos.get(legacyKey)
+      const allLegacyPhotos = legacyInfo?.photos || []
+
+      // 🔧 레거시 사진 필터링: 파일명이나 폴더에 배출구 번호가 명시되지 않은 것만
+      const trueLegacyPhotos = allLegacyPhotos.filter(photo => {
+        // 파일명에 "송풍팬-배N" 패턴이 있으면 제외 (새로운 형식)
+        if (photo.fileName.match(/송풍팬-배\d+/)) {
+          return false
+        }
+        // 폴더명에 "outlet-N" 패턴이 있으면 제외 (새로운 형식)
+        if (photo.filePath.match(/fan[\/\\]outlet-\d+/)) {
+          return false
+        }
+        // 위 조건에 해당하지 않으면 진짜 레거시 사진
+        return true
+      })
+
+      if (trueLegacyPhotos.length > 0) {
+        console.log(`🔄 [LEGACY-FAN-PHOTOS] 배출구 1번에 레거시 송풍팬 사진 ${trueLegacyPhotos.length}장 포함 (전체 ${allLegacyPhotos.length}장 중 필터링)`);
+        // 배출구 1번 사진 + 진짜 레거시 사진 합치기 (중복 제거)
+        const combined = [...outlet1Photos, ...trueLegacyPhotos]
+        // filePath 기준으로 중복 제거
+        const unique = Array.from(
+          new Map(combined.map(photo => [photo.filePath, photo])).values()
+        )
+        // photoIndex 기준으로 정렬
+        return unique.sort((a, b) => a.photoIndex - b.photoIndex)
+      }
+    }
 
     if (facilityInfo) {
       return facilityInfo.photos
@@ -332,6 +367,48 @@ export class FacilityPhotoTracker {
     // 기본사진인 경우 카테고리 추출
     if (facilityType === 'basic') {
       const category = this.extractBasicCategory(file)
+
+      // 🆕 송풍팬 + 배출구별 패턴 감지: fan/outlet-N 또는 파일명에 송풍팬-배N
+      if (category === 'fan') {
+        console.log(`🔍 [EXTRACT-FAN] 송풍팬 사진 분석:`, {
+          파일명: file.name,
+          폴더명: file.folderName,
+          전체경로: file.filePath
+        });
+
+        // 🔧 filePath에서 outlet-N 패턴 확인 (folderName은 "기본사진"으로만 설정되므로 전체 경로 사용)
+        const outletMatch = file.filePath?.match(/fan[\/\\]outlet-(\d+)/)
+        if (outletMatch) {
+          const outletNumber = parseInt(outletMatch[1], 10)
+          console.log(`✅ [EXTRACT-FAN-PATH] 전체 경로에서 배출구 ${outletNumber} 감지 (${file.filePath})`);
+          return {
+            facilityId: `fan-outlet-${outletNumber}`,
+            facilityType: 'basic',
+            facilityNumber: 0,
+            outletNumber: outletNumber,
+            displayName: `배출구 ${outletNumber}번 송풍팬`,
+            category: 'fan'
+          };
+        }
+
+        // 파일명에서 송풍팬-배N 패턴 확인
+        const fileOutletMatch = file.name.match(/송풍팬-배(\d+)/)
+        if (fileOutletMatch) {
+          const outletNumber = parseInt(fileOutletMatch[1], 10)
+          console.log(`✅ [EXTRACT-FAN-FILENAME] 파일명에서 배출구 ${outletNumber} 감지`);
+          return {
+            facilityId: `fan-outlet-${outletNumber}`,
+            facilityType: 'basic',
+            facilityNumber: 0,
+            outletNumber: outletNumber,
+            displayName: `배출구 ${outletNumber}번 송풍팬`,
+            category: 'fan'
+          };
+        }
+
+        console.log(`⚠️ [EXTRACT-FAN-LEGACY] 배출구 번호 없음 (레거시 사진)`);
+      }
+
       return {
         facilityId: `basic-${category}`,
         facilityType: 'basic',
@@ -396,20 +473,28 @@ export class FacilityPhotoTracker {
   }
 
   private generateFacilityKey(facilityType: 'discharge' | 'prevention' | 'basic',
-                             facilityNumber?: number, 
+                             facilityNumber?: number,
                              outletNumber?: number,
                              category?: string): string {
     if (facilityType === 'basic') {
+      // 🆕 송풍팬 + 배출구별 키 생성
+      if (category === 'fan' && outletNumber !== undefined) {
+        return `fan-outlet-${outletNumber}`
+      }
       return `basic-${category || 'others'}`
     }
     return `${facilityType}-${outletNumber || 0}-${facilityNumber || 0}`
   }
 
   private generateFacilityId(facilityType: 'discharge' | 'prevention' | 'basic',
-                            facilityNumber?: number, 
+                            facilityNumber?: number,
                             outletNumber?: number,
                             category?: string): string {
     if (facilityType === 'basic') {
+      // 🆕 송풍팬 + 배출구별 ID 생성
+      if (category === 'fan' && outletNumber !== undefined) {
+        return `fan-outlet-${outletNumber}`
+      }
       return `basic-${category || 'others'}`
     }
     return `${facilityType}-${outletNumber}-${facilityNumber}`

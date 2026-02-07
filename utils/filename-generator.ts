@@ -118,17 +118,34 @@ export function generateFacilityFileName(params: FileNameParams): string {
 /**
  * 기본사진용 파일명 생성 (개선된 형식)
  * 구조: {카테고리명}_{순번}_{yymmdd}.webp
+ * 송풍팬 + 배출구별: 송풍팬-배{N}-{순번}.jpg 🆕
  */
 export function generateBasicFileName(
-  category: string, 
-  photoIndex: number, 
-  originalFileName: string = 'photo.jpg'
+  category: string,
+  photoIndex: number,
+  originalFileName: string = 'photo.jpg',
+  outletNumber?: number  // 🆕 배출구 번호 (송풍팬 전용)
 ): string {
   const timestamp = generateTimestamp();
   const extension = getFileExtension(originalFileName);
-  
+
   // 사진 순번 (3자리 0 패딩)
   const photoSequence = photoIndex.toString().padStart(3, '0');
+
+  // 🆕 송풍팬 + 배출구별 파일명 생성
+  if (category === 'fan' && outletNumber !== undefined) {
+    // 한글 파일명: 송풍팬-배{N}-{순번}.jpg
+    const fileName = `송풍팬-배${outletNumber}-${photoSequence}.jpg`;
+
+    console.log('📝 [FAN-OUTLET-FILENAME-GENERATOR] 배출구별 송풍팬 파일명 생성:', {
+      카테고리: category,
+      배출구번호: outletNumber,
+      사진순번: photoSequence,
+      생성된파일명: fileName
+    });
+
+    return fileName;
+  }
 
   // 카테고리명 매핑 (ASCII 호환)
   const categoryMap: { [key: string]: string } = {
@@ -308,31 +325,64 @@ export function calculatePhotoIndex(
 
 /**
  * 기본사진의 사진 순서 계산 (새로운 형식 지원)
+ * 🆕 송풍팬 + 배출구별 순서 계산 지원
  */
 export function calculateBasicPhotoIndex(
-  existingFiles: any[], 
-  category: string
+  existingFiles: any[],
+  category: string,
+  outletNumber?: number  // 🆕 배출구 번호 (송풍팬 전용)
 ): number {
   const categoryMap: { [key: string]: string } = {
     'gateway': 'gateway',
-    'fan': 'fan', 
+    'fan': 'fan',
     'electrical': 'electrical',
     'others': 'others'
   };
 
   const categoryName = categoryMap[category] || category;
 
+  // 🆕 송풍팬 + 배출구별 순서 계산
+  if (category === 'fan' && outletNumber !== undefined) {
+    const existingCount = existingFiles.filter(file => {
+      if (!file.name) return false;
+
+      // 송풍팬-배{N}-{순번}.jpg 패턴 매칭
+      const fanOutletMatch = file.name.match(/^송풍팬-배(\d+)-\d+\.jpg$/);
+      if (fanOutletMatch) {
+        const fileOutlet = parseInt(fanOutletMatch[1], 10);
+        return fileOutlet === outletNumber;
+      }
+
+      // folder 경로로 매칭 (fan/outlet-N)
+      if (file.folderName?.includes(`fan/outlet-${outletNumber}`) ||
+          file.folderName?.includes(`fan\\outlet-${outletNumber}`)) {
+        return true;
+      }
+
+      return false;
+    }).length;
+
+    console.log('📝 [FAN-OUTLET-PHOTO-INDEX] 배출구별 송풍팬 순서 계산:', {
+      카테고리: category,
+      배출구번호: outletNumber,
+      기존파일수: existingCount,
+      다음순서: existingCount + 1
+    });
+
+    return existingCount + 1;
+  }
+
   // 새로운 형식과 기존 형식 모두 지원
   const existingCount = existingFiles.filter(file => {
     if (!file.name) return false;
-    
+
     // 새로운 형식: {카테고리명}_{순번}_{yymmdd}.webp
     const newFormatMatch = file.name.startsWith(`${categoryName}_`);
-    
+
     // 기존 형식: basic_{category}_
-    const oldFormatMatch = file.name.includes(`기본_${categoryName}`) || 
+    const oldFormatMatch = file.name.includes(`기본_${categoryName}`) ||
                           file.name.includes(`basic_${category}`);
-    
+
     return newFormatMatch || oldFormatMatch;
   }).length;
 

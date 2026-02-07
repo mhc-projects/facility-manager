@@ -220,6 +220,32 @@ export default function ImprovedFacilityPhotoSection({
     return facility.number;
   }, [facilityNumberMap]);
 
+  // 🆕 배출구 번호 목록 추출 (송풍팬 사진 섹션용)
+  const outletNumbers = useMemo(() => {
+    if (!facilities) return [];
+
+    const outlets = new Set<number>();
+
+    // 배출시설에서 outlet 번호 수집
+    facilities.discharge?.forEach(facility => {
+      if (facility.outlet) {
+        outlets.add(facility.outlet);
+      }
+    });
+
+    // 방지시설에서 outlet 번호 수집
+    facilities.prevention?.forEach(facility => {
+      if (facility.outlet) {
+        outlets.add(facility.outlet);
+      }
+    });
+
+    // 정렬된 배열로 반환
+    const sorted = Array.from(outlets).sort((a, b) => a - b);
+    console.log('🆕 [OUTLET-NUMBERS] 추출된 배출구 번호:', sorted);
+    return sorted;
+  }, [facilities]);
+
   const toast = useToast();
   const { addFiles, removeFile, setBusinessInfo, businessName: contextBusinessName, uploadedFiles, realtimeConnected } = useFileContext();
 
@@ -742,7 +768,8 @@ export default function ImprovedFacilityPhotoSection({
     facilityType: 'discharge' | 'prevention' | 'basic',
     facility?: Facility,
     instanceIndex?: number,
-    category?: string
+    category?: string,
+    outletNumber?: number // 🆕 배출구 번호 (송풍팬 전용)
   ) => {
     return (file: File, index: number) => {
       const data: Record<string, string> = {
@@ -772,6 +799,11 @@ export default function ImprovedFacilityPhotoSection({
           type: 'basic',
           category: category
         });
+
+        // 🆕 송풍팬 + 배출구 번호가 있으면 outletNumber 추가
+        if (category === 'fan' && outletNumber !== undefined) {
+          data.outletNumber = `${outletNumber}`;
+        }
       }
 
       return data;
@@ -829,11 +861,15 @@ export default function ImprovedFacilityPhotoSection({
   }, [addOptimisticFiles, createAdditionalDataFactory, loadUploadedFiles, toast]);
 
   // 기본사진용 Progressive Upload
-  const handleProgressiveBasicUpload = useCallback(async (files: FileList, category: string) => {
+  const handleProgressiveBasicUpload = useCallback(async (
+    files: FileList,
+    category: string,
+    outletNumber?: number // 🆕 배출구 번호 (송풍팬 전용)
+  ) => {
     if (!files.length) return;
 
     const fileArray = Array.from(files);
-    const additionalDataFactory = createAdditionalDataFactory('basic', undefined, undefined, category);
+    const additionalDataFactory = createAdditionalDataFactory('basic', undefined, undefined, category, outletNumber);
 
     try {
       await addOptimisticFiles(fileArray, additionalDataFactory);
@@ -844,7 +880,11 @@ export default function ImprovedFacilityPhotoSection({
         totalPhotos: prev.totalPhotos + fileArray.length,
         basicCategories: prev.basicCategories + fileArray.length
       }));
-      console.log(`📊 [STATS-OPTIMISTIC-BASIC] 통계 즉시 업데이트: +${fileArray.length}장 (기본사진)`);
+
+      const logMessage = outletNumber !== undefined
+        ? `📊 [STATS-OPTIMISTIC-BASIC] 통계 즉시 업데이트: +${fileArray.length}장 (송풍팬 배출구 ${outletNumber})`
+        : `📊 [STATS-OPTIMISTIC-BASIC] 통계 즉시 업데이트: +${fileArray.length}장 (기본사진)`;
+      console.log(logMessage);
 
       // 기존 시스템과 호환성을 위한 새로고침
       setTimeout(async () => {
@@ -855,9 +895,13 @@ export default function ImprovedFacilityPhotoSection({
         }
       }, 1000);
 
+      const successMessage = outletNumber !== undefined
+        ? `${fileArray.length}장의 송풍팬 사진(배출구 ${outletNumber}) 업로드를 시작했습니다.`
+        : `${fileArray.length}장의 기본사진 업로드를 시작했습니다.`;
+
       toast.success(
         '업로드 시작',
-        `${fileArray.length}장의 기본사진 업로드를 시작했습니다.`,
+        successMessage,
         { duration: 3000 }
       );
 
@@ -879,9 +923,13 @@ export default function ImprovedFacilityPhotoSection({
   }, [handleProgressiveFacilityUpload]);
 
   // 기존 기본사진 업로드 핸들러도 교체
-  const handleBasicUpload = useCallback(async (files: FileList, category: string) => {
+  const handleBasicUpload = useCallback(async (
+    files: FileList,
+    category: string,
+    outletNumber?: number // 🆕 배출구 번호 (송풍팬 전용)
+  ) => {
     // Progressive Upload로 리다이렉트
-    return handleProgressiveBasicUpload(files, category);
+    return handleProgressiveBasicUpload(files, category, outletNumber);
   }, [handleProgressiveBasicUpload]);
 
   // 원본 업로드 핸들러 (백업용 - 필요시 사용)
@@ -1846,29 +1894,70 @@ export default function ImprovedFacilityPhotoSection({
               setStatistics={setStatistics}
             />
 
-            {/* 송풍팬 */}
-            <BasicPhotoCategory
-              category="fan"
-              title="송풍팬"
-              icon={<Zap className="w-4 h-4" />}
-              color="cyan"
-              isUploading={uploading['basic-fan']}
-              progress={uploadProgress['basic-fan'] || 0}
-              photos={getFilteredPhotos(photoTracker.getFacilityPhotos('basic', undefined, undefined, 'fan'))}
-              onUpload={(files) => handleBasicUpload(files, 'fan')}
-              onPhotoSelect={handlePhotoSelect}
-              viewMode={viewMode}
-              dragHandlers={createDragHandlers(
-                'basic-fan',
-                (files) => handleBasicUpload(files, 'fan')
-              )}
-              dragZoneStyles={getDragZoneStyles}
-              recentPhotoIds={recentPhotoIds}
-              businessName={businessName}
-              loadUploadedFiles={loadUploadedFiles}
-              photoTracker={photoTracker}
-              setStatistics={setStatistics}
-            />
+            {/* 송풍팬 - 배출구별 섹션 🆕 */}
+            {outletNumbers.length > 0 ? (
+              outletNumbers.map((outletNumber) => {
+                const outletKey = `fan-outlet-${outletNumber}`;
+                // 배출구별 송풍팬 사진 필터링
+                const outletFanPhotos = photoTracker.getFacilityPhotos('basic', undefined, outletNumber, 'fan');
+
+                return (
+                  <BasicPhotoCategory
+                    key={outletKey}
+                    category="fan"
+                    title={`송풍팬 (배출구 ${outletNumber})`}
+                    icon={<Zap className="w-4 h-4" />}
+                    color="cyan"
+                    isUploading={uploading[outletKey]}
+                    progress={uploadProgress[outletKey] || 0}
+                    photos={getFilteredPhotos(outletFanPhotos)}
+                    onUpload={(files) => handleBasicUpload(files, 'fan', outletNumber)}
+                    onPhotoSelect={handlePhotoSelect}
+                    viewMode={viewMode}
+                    dragHandlers={createDragHandlers(
+                      outletKey,
+                      (files) => {
+                        console.log(`🎯 [UI-DRAG] dragHandlers 호출:`, {
+                          배출구번호: outletNumber,
+                          파일수: files.length
+                        });
+                        return handleBasicUpload(files, 'fan', outletNumber);
+                      }
+                    )}
+                    dragZoneStyles={getDragZoneStyles}
+                    recentPhotoIds={recentPhotoIds}
+                    businessName={businessName}
+                    loadUploadedFiles={loadUploadedFiles}
+                    photoTracker={photoTracker}
+                    setStatistics={setStatistics}
+                  />
+                );
+              })
+            ) : (
+              /* 배출구 정보가 없을 때 기존 단일 섹션 표시 (하위 호환성) */
+              <BasicPhotoCategory
+                category="fan"
+                title="송풍팬"
+                icon={<Zap className="w-4 h-4" />}
+                color="cyan"
+                isUploading={uploading['basic-fan']}
+                progress={uploadProgress['basic-fan'] || 0}
+                photos={getFilteredPhotos(photoTracker.getFacilityPhotos('basic', undefined, undefined, 'fan'))}
+                onUpload={(files) => handleBasicUpload(files, 'fan')}
+                onPhotoSelect={handlePhotoSelect}
+                viewMode={viewMode}
+                dragHandlers={createDragHandlers(
+                  'basic-fan',
+                  (files) => handleBasicUpload(files, 'fan')
+                )}
+                dragZoneStyles={getDragZoneStyles}
+                recentPhotoIds={recentPhotoIds}
+                businessName={businessName}
+                loadUploadedFiles={loadUploadedFiles}
+                photoTracker={photoTracker}
+                setStatistics={setStatistics}
+              />
+            )}
 
             {/* 기타 */}
             <BasicPhotoCategory
@@ -2295,13 +2384,6 @@ function InlinePhotoViewer({ photos, onPhotoSelect, viewMode, colorScheme, recen
   
   // 📷 메인 컴포넌트에서 이미 getFilteredPhotos()로 필터링된 배열을 받음
   // 따라서 추가 필터링 불필요, photos를 직접 사용
-  console.log('🔍 [INLINE-VIEWER-DEBUG]', {
-    receivedPhotos: photos.length,
-    facilityType,
-    facilityNumber,
-    outletNumber,
-    category
-  });
 
   // 사진 클릭 핸들러 - 인라인 확장
   const handlePhotoClick = useCallback((photo: FacilityPhoto, index: number, event: React.MouseEvent) => {

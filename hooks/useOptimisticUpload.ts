@@ -239,16 +239,30 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
         // additionalDataFactory에서 업로드 옵션 추출
         const additionalData = additionalDataFactory(photo.file, index);
 
+        console.log(`📋 [OPTIMISTIC-UPLOAD] additionalData 확인:`, {
+          파일: photo.file.name,
+          카테고리: additionalData.category,
+          배출구번호: additionalData.outletNumber
+        });
+
         // Supabase Storage 직접 업로드 (Progressive Compression 자동 적용)
+
+        // 🔧 fileType 결정 로직 (기본사진은 항상 'basic', 시설사진만 'discharge'/'prevention')
+        let fileType: 'basic' | 'discharge' | 'prevention' = 'basic';
+        if (additionalData.category === 'discharge' || additionalData.category === 'prevention') {
+          fileType = additionalData.category;
+        }
+
         const response = await uploadToSupabaseStorage(
           photo.file,
           {
             businessName: additionalData.businessName,
             systemType: (additionalData.systemType as 'presurvey' | 'completion') || 'completion',
-            fileType: (additionalData.category as 'basic' | 'discharge' | 'prevention') || 'basic',
+            fileType: fileType, // 🔧 수정: 카테고리가 아닌 올바른 fileType 사용
             facilityInfo: additionalData.facilityInfo,
             facilityId: additionalData.facilityId,
             facilityNumber: additionalData.facilityNumber,
+            outletNumber: additionalData.outletNumber, // 🆕 배출구 번호 전달
             onProgress: (percent) => {
               updatePhoto(photo.id, {
                 progress: percent

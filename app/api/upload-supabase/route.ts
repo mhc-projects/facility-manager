@@ -153,7 +153,7 @@ async function getOrCreateBusiness(businessName: string): Promise<string> {
 }
 
 // 시설별 세분화된 폴더 경로 생성 (Supabase Storage 호환 - ASCII만 사용)
-function getFilePath(businessName: string, fileType: string, facilityInfo: string, filename: string, systemType: string = 'completion', displayName?: string): string {
+function getFilePath(businessName: string, fileType: string, facilityInfo: string, filename: string, systemType: string = 'completion', displayName?: string, outletNumber?: string): string { // 🆕 outletNumber 파라미터 추가
   // Supabase Storage는 ASCII 문자만 허용하므로 한글 제거
   const sanitizedBusiness = businessName
     .replace(/[가-힣]/g, '')          // 한글 완전 제거
@@ -211,9 +211,16 @@ function getFilePath(businessName: string, fileType: string, facilityInfo: strin
     const facilityNumber = displayName ? displayName.match(/(\d+)$/)?.[1] || outletNumber : outletNumber;
     facilityFolder = `outlet_${facilityNumber}_prev_facility`;
   } else {
-    // 기본시설: facility_숫자 (시설 인덱스 기반)
-    const facilityIndex = getFacilityIndex(facilityInfo);
-    facilityFolder = `facility_${facilityIndex}`;
+    // 🆕 송풍팬 + 배출구별 폴더 구조: fan/outlet-N
+    const category = parseCategoryFromFacilityInfo(facilityInfo || '');
+    if (category === 'fan' && outletNumber) {
+      facilityFolder = `fan/outlet-${outletNumber}`;
+      console.log(`🆕 [FAN-OUTLET-PATH] 배출구별 송풍팬 경로 생성: ${facilityFolder}`);
+    } else {
+      // 기본시설: facility_숫자 (시설 인덱스 기반)
+      const facilityIndex = getFacilityIndex(facilityInfo);
+      facilityFolder = `facility_${facilityIndex}`;
+    }
   }
   
   const path = `${sanitizedBusiness}/${systemPrefix}/${baseFolder}/${facilityFolder}/${timestamp}_${sanitizedFilename}`;
@@ -497,6 +504,7 @@ export async function POST(request: NextRequest) {
     const facilityId = formData.get('facilityId') as string | null;
     const facilityType = formData.get('facilityType') as string | null;
     const facilityNumber = formData.get('facilityNumber') as string | null;
+    const outletNumber = formData.get('outletNumber') as string | null; // 🆕 배출구 번호 (송풍팬 전용)
     const alreadyCompressed = formData.get('compressed') === 'true'; // 클라이언트 압축 여부
 
     console.log('🔍 [UPLOAD-DEBUG] 받은 데이터:', {
@@ -506,6 +514,7 @@ export async function POST(request: NextRequest) {
       facilityId,
       facilityType,
       facilityNumber,
+      outletNumber, // 🆕
       파일명: file?.name,
       클라이언트압축완료: alreadyCompressed
     });
@@ -639,7 +648,9 @@ export async function POST(request: NextRequest) {
         } else if (fileType === 'basic') {
           // 기본사진용 구조화된 파일명 생성
           const category = parseCategoryFromFacilityInfo(facilityInfo || '');
-          structuredFilename = generateBasicFileName(category, actualPhotoIndex, file.name);
+          // 🆕 송풍팬 + 배출구 번호가 있으면 함께 전달
+          const parsedOutletNumber = outletNumber ? parseInt(outletNumber) : undefined;
+          structuredFilename = generateBasicFileName(category, actualPhotoIndex, file.name, parsedOutletNumber);
         }
 
         console.log(`📝 [FILENAME] 서버 생성 파일명 (fallback): ${file.name} → ${structuredFilename}`);
@@ -656,7 +667,7 @@ export async function POST(request: NextRequest) {
           finalFilename = structuredFilename.replace(/\.[^.]+$/, '.webp');
         }
         
-        const filePath = getFilePath(businessName, fileType, facilityInfo || '기본사진', finalFilename, systemType);
+        const filePath = getFilePath(businessName, fileType, facilityInfo || '기본사진', finalFilename, systemType, undefined, outletNumber || undefined); // 🆕 outletNumber 전달
         
         console.log(`📊 [COMPRESSION] ${file.name} → ${finalFilename} (${optimizedImage.compressionRatio}% 감소)`);
         

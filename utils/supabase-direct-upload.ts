@@ -19,6 +19,7 @@ export interface DirectUploadOptions {
   facilityInfo?: string;
   facilityId?: string;
   facilityNumber?: string;
+  outletNumber?: string; // 🆕 배출구 번호 (송풍팬 전용)
   onProgress?: (percent: number) => void;
 }
 
@@ -97,8 +98,39 @@ export async function uploadToSupabaseStorage(
 
     if (options.fileType === 'basic') {
       // 기본사진: businessId/systemType/basic/category
-      const category = options.facilityInfo || 'others';
-      folderPath = `${businessId}/${options.systemType}/basic/${category}`;
+      let category = 'others';
+
+      // facilityInfo JSON 파싱하여 category 추출
+      if (options.facilityInfo) {
+        try {
+          const facilityInfoObj = JSON.parse(options.facilityInfo);
+          category = facilityInfoObj.category || 'others';
+          console.log(`📋 [DIRECT-UPLOAD] facilityInfo 파싱:`, {
+            원본: options.facilityInfo,
+            파싱결과: facilityInfoObj,
+            추출된카테고리: category
+          });
+        } catch (e) {
+          // JSON 파싱 실패 시 문자열 그대로 사용
+          category = options.facilityInfo;
+          console.log(`⚠️ [DIRECT-UPLOAD] facilityInfo JSON 파싱 실패, 문자열 사용: ${category}`);
+        }
+      }
+
+      console.log(`🔍 [DIRECT-UPLOAD] 카테고리 및 배출구 확인:`, {
+        category,
+        outletNumber: options.outletNumber,
+        송풍팬조건: category === 'fan' && options.outletNumber
+      });
+
+      // 🆕 송풍팬 + 배출구별 폴더 구조: fan/outlet-N
+      if (category === 'fan' && options.outletNumber) {
+        folderPath = `${businessId}/${options.systemType}/basic/fan/outlet-${options.outletNumber}`;
+        console.log(`🆕 [FAN-OUTLET-DIRECT-PATH] 배출구별 송풍팬 경로 생성: ${folderPath}`);
+      } else {
+        folderPath = `${businessId}/${options.systemType}/basic/${category}`;
+        console.log(`📁 [DIRECT-UPLOAD] 일반 기본사진 경로: ${folderPath}`);
+      }
     } else {
       // 배출시설/방지시설: businessId/systemType/fileType/outlet_N/facilityType_N
       const outletNumber = options.facilityNumber || '1';
