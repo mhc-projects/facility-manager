@@ -165,7 +165,7 @@ function getFilePath(businessName: string, fileType: string, facilityInfo: strin
     
   // 시설 정보에서 배출구 번호와 시설명 추출
   const facilityName = extractFacilityName(facilityInfo);
-  const outletNumber = extractOutletNumber(facilityInfo);
+  const extractedOutletNumber = extractOutletNumber(facilityInfo);
   
   // 시설명에서 숫자와 영문만 추출 (배출시설1 → discharge1, 방지시설2 → prevention2)
   const facilityNumber = facilityName.match(/(\d+)/)?.[1] || '0';
@@ -227,7 +227,7 @@ function getFilePath(businessName: string, fileType: string, facilityInfo: strin
   
   console.log('🔧 [PATH] 시설명 기반 안정적 경로 생성:', {
     원본: { businessName, fileType, facilityInfo, filename, displayName, systemType },
-    추출됨: { facilityName, outletNumber, displayFacilityNumber: displayName ? displayName.match(/(\d+)/)?.[1] : null },
+    추출됨: { facilityName, extractedOutletNumber, displayFacilityNumber: displayName ? displayName.match(/(\d+)/)?.[1] : null },
     정리후: { sanitizedBusiness, systemPrefix, baseFolder, facilityFolder, sanitizedFilename },
     최종경로: path,
     구조: 'systemType 분리된 ASCII 호환 구조'

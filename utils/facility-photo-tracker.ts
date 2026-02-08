@@ -109,12 +109,14 @@ export class FacilityPhotoTracker {
    * 특정 시설의 사진 목록 조회
    * 정확한 키 매칭만 사용 (역호환성 로직 제거)
    * 🆕 송풍팬 배출구 1번: 레거시 사진(outletNumber 없음)도 포함
+   * 🆕 인스턴스 번호로 다중 시설 구분
    */
   public getFacilityPhotos(facilityType: 'discharge' | 'prevention' | 'basic',
                           facilityNumber?: number,
                           outletNumber?: number,
-                          category?: string): FacilityPhoto[] {
-    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category)
+                          category?: string,
+                          instanceNumber?: number): FacilityPhoto[] {  // 🆕 인스턴스 번호 추가
+    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category, instanceNumber)
     const facilityInfo = this.facilityPhotos.get(facilityKey)
 
     // 🆕 송풍팬 배출구 1번 요청 시 레거시 사진도 포함
@@ -161,24 +163,28 @@ export class FacilityPhotoTracker {
 
   /**
    * 특정 시설의 다음 사진 인덱스 계산
+   * 🆕 인스턴스 번호로 다중 시설 구분
    */
   public getNextPhotoIndex(facilityType: 'discharge' | 'prevention' | 'basic',
-                          facilityNumber?: number, 
+                          facilityNumber?: number,
                           outletNumber?: number,
-                          category?: string): number {
-    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category)
+                          category?: string,
+                          instanceNumber?: number): number {  // 🆕 인스턴스 번호 추가
+    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category, instanceNumber)
     const facilityInfo = this.facilityPhotos.get(facilityKey)
     return (facilityInfo?.maxPhotoIndex || 0) + 1
   }
 
   /**
    * 시설별 사진 개수 조회
+   * 🆕 인스턴스 번호로 다중 시설 구분
    */
   public getFacilityPhotoCount(facilityType: 'discharge' | 'prevention' | 'basic',
-                              facilityNumber?: number, 
+                              facilityNumber?: number,
                               outletNumber?: number,
-                              category?: string): number {
-    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category)
+                              category?: string,
+                              instanceNumber?: number): number {  // 🆕 인스턴스 번호 추가
+    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category, instanceNumber)
     const facilityInfo = this.facilityPhotos.get(facilityKey)
     return facilityInfo?.totalPhotoCount || 0
   }
@@ -231,13 +237,15 @@ export class FacilityPhotoTracker {
 
   /**
    * 사진 추가 (업로드 후)
+   * 🆕 인스턴스 번호로 다중 시설 구분
    */
   public addPhoto(facilityType: 'discharge' | 'prevention' | 'basic',
                  photo: Omit<FacilityPhoto, 'photoIndex'>,
-                 facilityNumber?: number, 
+                 facilityNumber?: number,
                  outletNumber?: number,
-                 category?: string): number {
-    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category)
+                 category?: string,
+                 instanceNumber?: number): number {  // 🆕 인스턴스 번호 추가
+    const facilityKey = this.generateFacilityKey(facilityType, facilityNumber, outletNumber, category, instanceNumber)
     
     // 시설 정보 가져오기 또는 생성
     let facilityInfo = this.facilityPhotos.get(facilityKey)
@@ -301,13 +309,9 @@ export class FacilityPhotoTracker {
   private extractFacilityKey(file: UploadedFile): string | null {
     const facilityInfo = this.extractFacilityInfo(file)
     if (!facilityInfo) return null
-    
-    return this.generateFacilityKey(
-      facilityInfo.facilityType, 
-      facilityInfo.facilityNumber, 
-      facilityInfo.outletNumber,
-      facilityInfo.category
-    )
+
+    // 🆕 facilityId에 이미 인스턴스가 포함되어 있으므로 그대로 반환
+    return facilityInfo.facilityId
   }
 
   private extractFacilityInfo(file: UploadedFile): {
@@ -332,8 +336,9 @@ export class FacilityPhotoTracker {
     try {
       const parsed = JSON.parse(file.facilityInfo || '{}')
       if (parsed.outlet && parsed.number && parsed.type) {
+        const instance = parsed.instance || 1  // 🆕 인스턴스 번호 (기본값 1로 하위 호환성 유지)
         return {
-          facilityId: `${parsed.type}-${parsed.outlet}-${parsed.number}`,
+          facilityId: `${parsed.type}-${parsed.outlet}-${parsed.number}-${instance}`,  // 🆕 인스턴스 포함
           facilityType: parsed.type,
           facilityNumber: this.calculateSequentialNumber(parsed.type, parsed.outlet, parsed.number),
           outletNumber: parsed.outlet,
@@ -475,7 +480,8 @@ export class FacilityPhotoTracker {
   private generateFacilityKey(facilityType: 'discharge' | 'prevention' | 'basic',
                              facilityNumber?: number,
                              outletNumber?: number,
-                             category?: string): string {
+                             category?: string,
+                             instanceNumber?: number): string {  // 🆕 인스턴스 번호 추가
     if (facilityType === 'basic') {
       // 🆕 송풍팬 + 배출구별 키 생성
       if (category === 'fan' && outletNumber !== undefined) {
@@ -483,7 +489,8 @@ export class FacilityPhotoTracker {
       }
       return `basic-${category || 'others'}`
     }
-    return `${facilityType}-${outletNumber || 0}-${facilityNumber || 0}`
+    const instance = instanceNumber || 1  // 🆕 기본값 1로 하위 호환성 유지
+    return `${facilityType}-${outletNumber || 0}-${facilityNumber || 0}-${instance}`  // 🆕 인스턴스 포함
   }
 
   private generateFacilityId(facilityType: 'discharge' | 'prevention' | 'basic',

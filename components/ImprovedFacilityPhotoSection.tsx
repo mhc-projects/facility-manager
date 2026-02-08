@@ -788,7 +788,8 @@ export default function ImprovedFacilityPhotoSection({
         data.facilityInfo = JSON.stringify({
           type: facilityType,
           outlet: facility.outlet || 1,  // ✅ outletNumber → outlet 수정
-          number: facility.number
+          number: facility.number,
+          instance: instanceIndex || 1  // 🆕 인스턴스 번호 추가 (다중 시설 구분용)
         });
       }
 
@@ -1767,8 +1768,8 @@ export default function ImprovedFacilityPhotoSection({
                       const isUploading = uploading[uploadKey];
                       const progress = uploadProgress[uploadKey] || 0;
 
-                      // ✅ correctNumber를 사용하여 사진 조회
-                      const rawPhotos = photoTracker.getFacilityPhotos('prevention', correctNumber, facility.outlet);
+                      // ✅ correctNumber와 instanceIndex를 사용하여 사진 조회 (다중 시설 구분)
+                      const rawPhotos = photoTracker.getFacilityPhotos('prevention', correctNumber, facility.outlet, undefined, instanceIndex);
                       const facilityPhotos = getFilteredPhotos(rawPhotos);
 
                       return (
@@ -1824,8 +1825,8 @@ export default function ImprovedFacilityPhotoSection({
                       const isUploading = uploading[uploadKey];
                       const progress = uploadProgress[uploadKey] || 0;
 
-                      // ✅ correctNumber를 사용하여 사진 조회
-                      const rawPhotos = photoTracker.getFacilityPhotos('discharge', correctNumber, facility.outlet);
+                      // ✅ correctNumber와 instanceIndex를 사용하여 사진 조회 (다중 시설 구분)
+                      const rawPhotos = photoTracker.getFacilityPhotos('discharge', correctNumber, facility.outlet, undefined, instanceIndex);
                       const facilityPhotos = getFilteredPhotos(rawPhotos);
 
                       return (
