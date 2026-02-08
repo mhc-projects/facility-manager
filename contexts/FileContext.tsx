@@ -221,15 +221,16 @@ export function FileProvider({ children }: FileProviderProps) {
   // 🔧 CRITICAL-FIX: autoConnect 조건 완화 - 이벤트 손실 방지 우선
   // - handleRealtimeNotification 내부에서 business_id 필터링 수행 (Line 128)
   // - DELETE의 경우 로컬 배열 존재 여부로 추가 필터링 (Line 117-125)
+  // 🔧 RECONNECT-LOOP-FIX: onConnect에서 rawRefreshFiles() 제거 - 무한 재연결 방지
   const { isConnected: realtimeConnected } = useSupabaseRealtime({
     tableName: 'uploaded_files',
     eventTypes: FILE_REALTIME_EVENT_TYPES, // 모듈 레벨 상수 사용 (재생성 방지)
     autoConnect: !!businessName, // 즉시 연결 (이벤트 손실 방지)
     onNotification: handleRealtimeNotification,
     onConnect: () => {
-      console.log(`📡 [FILE-REALTIME] Realtime 연결됨 - 초기 동기화 시작: ${businessName}`);
-      // 🔧 REALTIME-SYNC-FIX: Phase 1-3 - 연결 시 초기 동기화
-      rawRefreshFiles();
+      console.log(`📡 [FILE-REALTIME] Realtime 연결됨: ${businessName}`);
+      // 🚫 rawRefreshFiles() 제거: onConnect에서 API 호출 시 connection 끊김 발생
+      // 초기 동기화는 컴포넌트 마운트 시 usePhotoStore에서 자동 수행됨
     },
     onDisconnect: () => {
       console.log(`📡 [FILE-REALTIME] Realtime 연결 해제`);
