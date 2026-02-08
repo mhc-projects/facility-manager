@@ -113,6 +113,13 @@ function uploadWithProgressInternal(
       formData.append(key, value);
     });
 
+    // 🔍 FormData 내용 출력 (디버깅용)
+    console.log(`📋 [FORMDATA-DEBUG] ${file.name} FormData 내용:`, {
+      파일명: file.name,
+      파일크기: file.size,
+      추가데이터: additionalData
+    });
+
     // 업로드 진행률 추적
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && options.onProgress) {
