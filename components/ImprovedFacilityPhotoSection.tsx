@@ -2839,11 +2839,11 @@ function ExpandedPhotoSection({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* 좌측: 메인 사진 */}
         <div className="lg:col-span-2">
-          <div className="relative bg-gray-100 rounded-lg overflow-hidden aspect-[4/3]">
+          <div className="relative bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '400px', maxHeight: '600px' }}>
             <LazyImage
               src={photo.downloadUrl}
               alt={photo.originalFileName}
-              className="w-full h-full object-contain"
+              className="max-w-full max-h-full object-contain"
               filePath={photo.filePath}
             />
             
@@ -3105,11 +3105,11 @@ const PhotoDetailModal = forwardRef<HTMLDivElement, PhotoDetailModalProps>(
 
           {/* 모달 이미지 */}
           <div className="p-4">
-            <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+            <div className="relative bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '300px', maxHeight: '70vh' }}>
               <LazyImage
                 src={photo.downloadUrl}
                 alt={photo.originalFileName}
-                className="w-full max-h-[70vh] object-contain"
+                className="max-w-full max-h-[70vh] object-contain"
                 filePath={photo.filePath}
               />
             </div>
