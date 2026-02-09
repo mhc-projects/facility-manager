@@ -191,6 +191,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       if (eventType === 'INSERT' && newRecord) {
+        // ✅ FIX: 현재 로그인한 사용자의 알림만 처리
+        if (newRecord.user_id !== user?.id) {
+          logger.debug('REALTIME', 'INSERT: 다른 사용자의 알림 - 무시', {
+            notificationUserId: newRecord.user_id,
+            currentUserId: user?.id
+          });
+          return;
+        }
+
         logger.debug('REALTIME', 'INSERT: 새 알림 추가');
 
         // task_notifications 구조에 맞게 새 알림 추가
@@ -294,6 +303,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         }
 
       } else if (eventType === 'UPDATE' && newRecord) {
+        // ✅ FIX: 현재 로그인한 사용자의 알림만 처리
+        if (newRecord.user_id !== user?.id) {
+          logger.debug('REALTIME', 'UPDATE: 다른 사용자의 알림 - 무시', {
+            notificationUserId: newRecord.user_id,
+            currentUserId: user?.id
+          });
+          return;
+        }
+
         // is_deleted가 true로 변경된 경우 삭제 처리 (소프트 삭제)
         if (newRecord.is_deleted === true) {
           logger.debug('REALTIME', 'UPDATE: 소프트 삭제 감지 - UI에서 제거');
