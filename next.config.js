@@ -50,6 +50,17 @@ const nextConfig = {
   // Vercel 배포 최적화
   output: 'standalone',
 
+  // 🔄 빌드 ID 생성 - 캐시 무효화를 위한 고유 ID
+  // Git commit hash를 사용하여 배포마다 새로운 빌드 ID 생성
+  generateBuildId: async () => {
+    // Vercel 환경에서는 VERCEL_GIT_COMMIT_SHA 사용
+    if (process.env.VERCEL_GIT_COMMIT_SHA) {
+      return process.env.VERCEL_GIT_COMMIT_SHA;
+    }
+    // 로컬에서는 타임스탬프 사용
+    return `build-${Date.now()}`;
+  },
+
   // 이미지 최적화 - 성능 개선
   images: {
     remotePatterns: [
