@@ -36,6 +36,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // ✅ FIX: JWT 토큰의 permission_level 필드명 통일 (스네이크 케이스)
+    const userPermissionLevel = decodedToken.permission_level || decodedToken.permissionLevel || 1;
+
     // 병렬로 모든 메타데이터 조회
     const [
       categoriesResult,
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
         .from('task_categories')
         .select('id, name, description, color, icon, min_permission_level')
         .eq('is_active', true)
-        .lte('min_permission_level', decodedToken.permissionLevel)
+        .lte('min_permission_level', userPermissionLevel)
         .order('sort_order'),
 
       // 업무 상태 조회
@@ -94,7 +97,7 @@ export async function GET(request: NextRequest) {
     // 권한에 따른 직원 목록 필터링
     let availableEmployees = employeesResult.data || [];
 
-    if (decodedToken.permissionLevel === 1 || decodedToken.permissionLevel === 2) {
+    if (userPermissionLevel === 1 || userPermissionLevel === 2) {
       // 일반 사용자 및 매니저: 현재는 모든 직원 (추후 팀/부서별 필터링 가능)
       // 필요시 부서별 필터링 로직 추가
     }
@@ -121,7 +124,7 @@ export async function GET(request: NextRequest) {
       categories: categoriesResult.data?.length || 0,
       statuses: statusesResult.data?.length || 0,
       employees: availableEmployees.length,
-      userPermissionLevel: decodedToken.permissionLevel
+      userPermissionLevel
     });
 
     return NextResponse.json({
@@ -133,10 +136,10 @@ export async function GET(request: NextRequest) {
         employees: availableEmployees,
         priorities,
         userInfo: {
-          id: decodedToken.userId,
+          id: decodedToken.userId || decodedToken.id,
           email: decodedToken.email,
           name: decodedToken.name,
-          permissionLevel: decodedToken.permissionLevel
+          permissionLevel: userPermissionLevel
         }
       }
     });
