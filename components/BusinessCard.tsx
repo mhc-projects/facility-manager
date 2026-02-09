@@ -2,6 +2,7 @@
 
 import { memo } from 'react';
 import { Building2, User, Calendar, Camera } from 'lucide-react';
+import ExportButtons from './facility/ExportButtons';
 
 export interface BusinessInfo {
   id: string;
@@ -54,9 +55,18 @@ export default memo(function BusinessCard({ business, onClick }: BusinessCardPro
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // ExportButtons 영역 클릭 시 이벤트 전파 방지
+    if ((e.target as HTMLElement).closest('[data-export-buttons]')) {
+      e.stopPropagation();
+      return;
+    }
+    onClick(business.business_name);
+  };
+
   return (
-    <button
-      onClick={() => onClick(business.business_name)}
+    <div
+      onClick={handleCardClick}
       className="w-full px-3 sm:px-6 py-2.5 sm:py-3 text-left transition-all group hover:bg-blue-50 cursor-pointer hover:shadow-sm"
     >
       {/* 모바일: 세로 레이아웃, 데스크톱: 가로 그리드 레이아웃 */}
@@ -171,6 +181,19 @@ export default memo(function BusinessCard({ business, onClick }: BusinessCardPro
               </div>
             </div>
           </div>
+
+          {/* 다운로드 버튼 (사진이 있는 경우만 표시) */}
+          {business.has_photos && business.photo_count && (
+            <div data-export-buttons onClick={(e) => e.stopPropagation()}>
+              <ExportButtons
+                businessName={business.business_name}
+                businessInfo={{
+                  address: business.address
+                }}
+                photoCount={business.photo_count}
+              />
+            </div>
+          )}
         </div>
 
         {/* 데스크톱: 화살표 */}
@@ -178,6 +201,6 @@ export default memo(function BusinessCard({ business, onClick }: BusinessCardPro
           →
         </div>
       </div>
-    </button>
+    </div>
   );
 });
