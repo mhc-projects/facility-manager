@@ -29,10 +29,20 @@ export default function ExportButtons({
     try {
       onExportStart?.();
 
+      // 1. CSRF 토큰 가져오기
+      const csrfResponse = await fetch('/api/csrf-token');
+      const csrfToken = csrfResponse.headers.get('X-CSRF-Token');
+
+      if (!csrfToken) {
+        throw new Error('CSRF 토큰을 가져올 수 없습니다.');
+      }
+
+      // 2. Export API 호출 (CSRF 토큰 포함)
       const response = await fetch('/api/export-photos', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify({
           businessName,
