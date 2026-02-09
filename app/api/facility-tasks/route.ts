@@ -820,13 +820,30 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     await createAutoProgressNoteAndNotification(existingTask, updatedTask, user);
 
     // 담당자 변경 시 다중 담당자 알림 업데이트 (PostgreSQL 함수 사용)
-    const assigneesChanged = JSON.stringify(existingTask.assignees || []) !== JSON.stringify(updatedTask.assignees || []);
+    // ✅ FIX: assignees가 문자열일 수 있으므로 파싱 필요
+    const parseAssignees = (assignees: any): TaskAssignee[] => {
+      if (!assignees) return [];
+      if (typeof assignees === 'string') {
+        try {
+          return JSON.parse(assignees);
+        } catch {
+          return [];
+        }
+      }
+      if (Array.isArray(assignees)) return assignees;
+      return [];
+    };
+
+    const oldAssigneesParsed = parseAssignees(existingTask.assignees);
+    const newAssigneesParsed = parseAssignees(updatedTask.assignees);
+    const assigneesChanged = JSON.stringify(oldAssigneesParsed) !== JSON.stringify(newAssigneesParsed);
+
     if (assigneesChanged) {
       try {
         const updateResult = await updateTaskAssignmentNotifications(
           updatedTask.id,
-          existingTask.assignees || [],
-          updatedTask.assignees || [],
+          oldAssigneesParsed,
+          newAssigneesParsed,
           updatedTask.business_name,
           updatedTask.title,
           updatedTask.task_type,
