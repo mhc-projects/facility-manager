@@ -36,11 +36,23 @@ interface ExportRequestBody {
  */
 async function collectPhotos(businessName: string, section: 'prevention' | 'discharge'): Promise<PhotoData[]> {
   try {
-    // Supabase 쿼리
+    // 1. business_name으로 business_id 조회
+    const { data: business, error: businessError } = await supabaseAdmin
+      .from('businesses')
+      .select('id')
+      .eq('business_name', businessName)
+      .single();
+
+    if (businessError || !business) {
+      console.error(`[EXPORT] 사업장 조회 실패:`, businessError);
+      throw new Error(`사업장을 찾을 수 없습니다: ${businessName}`);
+    }
+
+    // 2. Supabase 쿼리 (business_id 사용)
     let query = supabaseAdmin
       .from('uploaded_files')
       .select('*')
-      .eq('business_name', businessName);
+      .eq('business_id', business.id);
 
     if (section === 'prevention') {
       // 방지시설: gateway + 방지시설
