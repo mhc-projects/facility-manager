@@ -247,7 +247,7 @@ export default function ImprovedFacilityPhotoSection({
   }, [facilities]);
 
   const toast = useToast();
-  const { addFiles, removeFile, setBusinessInfo, businessName: contextBusinessName, uploadedFiles, realtimeConnected } = useFileContext();
+  const { addFiles, removeFile, setBusinessInfo, businessName: contextBusinessName, uploadedFiles, realtimeConnected, setUploadedFiles } = useFileContext();
 
   // 📡 FileContext에 사업장 정보 설정 (Realtime 구독용) - 무한 루프 방지
   useEffect(() => {
@@ -440,6 +440,14 @@ export default function ImprovedFacilityPhotoSection({
             totalPhotosAllPhases: result.data.statistics?.totalPhotosAllPhases ?? trackerStats.totalPhotos
           });
           setLastRefreshTime(new Date());
+
+          // 🔥 CRITICAL FIX: FileContext도 업데이트하여 Realtime 이벤트 대기 제거
+          // uploadedFiles를 직접 업데이트하면 useEffect (line 501)가 즉시 반응하여
+          // Realtime 이벤트 도착 전에도 UI가 업데이트됨
+          if (forceRefresh && newFiles.length > 0) {
+            console.log(`🔄 [FILECONTEXT-SYNC] FileContext 즉시 동기화: ${newFiles.length}개 파일`);
+            setUploadedFiles(newFiles);
+          }
 
           // 성능 로그 (제거)
         }
