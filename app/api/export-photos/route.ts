@@ -7,7 +7,7 @@ import {
   generateGatewayCaption,
   FacilityInfo
 } from '@/lib/facilityInfoExtractor';
-import { generatePDF } from '@/lib/pdfGenerator';
+import { generateFacilityPhotoPDF } from '@/lib/facilityPhotoPdfGenerator';
 import { generateExcel } from '@/lib/excelGenerator';
 
 // Force dynamic rendering
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
     let mimeType: string;
 
     if (format === 'pdf') {
-      fileBuffer = await generatePDF(
+      fileBuffer = await generateFacilityPhotoPDF(
         businessName,
         businessInfo,
         preventionPhotos,

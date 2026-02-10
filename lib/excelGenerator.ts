@@ -3,12 +3,11 @@ import ExcelJS from 'exceljs';
 interface PhotoData {
   id: string;
   file_path: string;
-  original_file_name: string;
+  original_filename: string;
   download_url: string;
-  folder_name: string;
   user_caption?: string;
   facility_caption: string;
-  uploaded_at: string;
+  created_at: string;
 }
 
 const EXCEL_CONFIG = {
@@ -130,20 +129,20 @@ export async function generateExcel(
 
     // 헤더 정보
     worksheet.getCell('A1').value = `사업장명: ${businessName}`;
-    worksheet.getCell('A1').font = { size: 14, bold: true };
+    worksheet.getCell('A1').font = { size: 14, bold: true, name: 'Malgun Gothic' };
 
     if (businessInfo.address) {
       worksheet.getCell('A2').value = `주소: ${businessInfo.address}`;
-      worksheet.getCell('A2').font = { size: 10 };
+      worksheet.getCell('A2').font = { size: 10, name: 'Malgun Gothic' };
     }
 
     const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
     worksheet.getCell('A3').value = `작성일: ${today}`;
-    worksheet.getCell('A3').font = { size: 10 };
+    worksheet.getCell('A3').font = { size: 10, name: 'Malgun Gothic' };
 
     // 섹션 제목
     worksheet.getCell('A5').value = '1) 방지시설-방지시설명(용량) Gate Way, pH계(온도계, 차압계), 전류계(설치예정) 위치';
-    worksheet.getCell('A5').font = { size: 12, bold: true };
+    worksheet.getCell('A5').font = { size: 12, bold: true, name: 'Malgun Gothic' };
     worksheet.mergeCells('A5:C5');
 
     // 이미지 다운로드
