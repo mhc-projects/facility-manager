@@ -140,24 +140,14 @@ export default function ExportButtons({
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
-          title="PDF로 다운로드"
-        >
-          <span>📥</span>
-          <span>PDF</span>
-        </button>
-        <button
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors"
-          title="Excel로 다운로드"
-        >
-          <span>📊</span>
-          <span>Excel</span>
-        </button>
-      </div>
+      <button
+        onClick={() => setIsDialogOpen(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+        title="시설사진 다운로드"
+      >
+        <span>📥</span>
+        <span>다운로드</span>
+      </button>
 
       <ExportDialog
         isOpen={isDialogOpen}
