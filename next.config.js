@@ -116,13 +116,13 @@ const nextConfig = {
           }
         ],
       },
-      // 🔥 사진 조회 API - 장시간 캐싱
+      // 🔥 사진 조회 API - 실시간 업데이트를 위한 캐싱 비활성화
       {
         source: '/api/facility-photos',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, s-maxage=600, stale-while-revalidate=1800, max-age=300'
+            value: 'no-store, no-cache, must-revalidate, max-age=0'
           }
         ],
       },
@@ -131,7 +131,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, s-maxage=600, stale-while-revalidate=1800, max-age=300'
+            value: 'no-store, no-cache, must-revalidate, max-age=0'
           }
         ],
       },
