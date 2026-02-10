@@ -91,7 +91,15 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
           // 시설 테이블에서 시설명/용량 조회 (discharge/prevention)
           if (info.type === 'discharge' || info.type === 'prevention') {
             const tableName = info.type === 'discharge' ? 'discharge_facilities' : 'prevention_facilities';
-            const { data: facilityData } = await supabaseAdmin
+
+            console.log('[EXPORT-DATA] 시설 정보 조회 시도:', {
+              tableName,
+              businessName,
+              outlet_number: info.outlet || 1,
+              facility_number: info.number || 1
+            });
+
+            const { data: facilityData, error: facilityError } = await supabaseAdmin
               .from(tableName)
               .select('facility_name, capacity')
               .eq('business_name', businessName)
@@ -99,9 +107,16 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
               .eq('facility_number', info.number || 1)
               .single();
 
+            if (facilityError) {
+              console.error('[EXPORT-DATA] 시설 정보 조회 실패:', facilityError);
+            }
+
             if (facilityData) {
+              console.log('[EXPORT-DATA] 시설 정보 조회 성공:', facilityData);
               info.name = facilityData.facility_name;
               info.capacity = facilityData.capacity;
+            } else {
+              console.warn('[EXPORT-DATA] 시설 정보 없음 - 기본 캡션 사용');
             }
           }
 

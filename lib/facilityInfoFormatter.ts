@@ -37,32 +37,42 @@ export function formatFacilityInfoToCaption(facilityInfoStr: string): string {
 
     if (info.type === 'prevention') {
       // 방지시설
+      // 시설번호 형식: instance가 있으면 "4-1", "4-2" 형식으로, 없으면 "4"
+      const facilityNumberText = info.instance && info.instance > 1
+        ? `${info.number || ''}-${info.instance}`
+        : `${info.number || ''}`;
+
       if (info.name && info.capacity) {
-        // 시설명과 용량이 있는 경우: "방지시설1 여과집진시설 (450㎥/분, 배출구: 1번)"
-        caption = `방지시설${info.number || ''} ${info.name} (${info.capacity}`;
+        // 시설명과 용량이 있는 경우: "방지시설4-1 여과집진시설 (450㎥/분, 배출구: 1번)"
+        caption = `방지시설${facilityNumberText} ${info.name} (${info.capacity}`;
         if (info.outlet) {
           caption += `, 배출구: ${info.outlet}번`;
         }
         caption += ')';
       } else {
-        // 기본 형식
-        caption = `방지시설${info.number || ''}`;
+        // 기본 형식: "방지시설4-1 (배출구: 1번)"
+        caption = `방지시설${facilityNumberText}`;
         if (info.outlet) {
           caption += ` (배출구: ${info.outlet}번)`;
         }
       }
     } else if (info.type === 'discharge') {
       // 배출시설
+      // 시설번호 형식: instance가 있으면 "4-1", "4-2" 형식으로, 없으면 "4"
+      const facilityNumberText = info.instance && info.instance > 1
+        ? `${info.number || ''}-${info.instance}`
+        : `${info.number || ''}`;
+
       if (info.name && info.capacity) {
-        // 시설명과 용량이 있는 경우: "배출시설1 압출기 (2.5㎥, 배출구: 1번)"
-        caption = `배출시설${info.number || ''} ${info.name} (${info.capacity}`;
+        // 시설명과 용량이 있는 경우: "배출시설4-1 압출기 (2.5㎥, 배출구: 1번)"
+        caption = `배출시설${facilityNumberText} ${info.name} (${info.capacity}`;
         if (info.outlet) {
           caption += `, 배출구: ${info.outlet}번`;
         }
         caption += ')';
       } else {
-        // 기본 형식
-        caption = `배출시설${info.number || ''}`;
+        // 기본 형식: "배출시설4-1 (배출구: 1번)"
+        caption = `배출시설${facilityNumberText}`;
         if (info.outlet) {
           caption += ` (배출구: ${info.outlet}번)`;
         }
