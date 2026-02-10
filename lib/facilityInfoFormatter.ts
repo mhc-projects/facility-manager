@@ -8,6 +8,8 @@ interface FacilityInfoJSON {
   number?: number;
   instance?: number;
   category?: string;
+  name?: string;      // 시설명 (옵션)
+  capacity?: string;  // 용량 (옵션)
 }
 
 /**
@@ -35,15 +37,35 @@ export function formatFacilityInfoToCaption(facilityInfoStr: string): string {
 
     if (info.type === 'prevention') {
       // 방지시설
-      caption = `방지시설${info.number || ''}`;
-      if (info.outlet) {
-        caption += ` (배출구: ${info.outlet}번)`;
+      if (info.name && info.capacity) {
+        // 시설명과 용량이 있는 경우: "방지시설1 여과집진시설 (450㎥/분, 배출구: 1번)"
+        caption = `방지시설${info.number || ''} ${info.name} (${info.capacity}`;
+        if (info.outlet) {
+          caption += `, 배출구: ${info.outlet}번`;
+        }
+        caption += ')';
+      } else {
+        // 기본 형식
+        caption = `방지시설${info.number || ''}`;
+        if (info.outlet) {
+          caption += ` (배출구: ${info.outlet}번)`;
+        }
       }
     } else if (info.type === 'discharge') {
       // 배출시설
-      caption = `배출시설${info.number || ''}`;
-      if (info.outlet) {
-        caption += ` (배출구: ${info.outlet}번)`;
+      if (info.name && info.capacity) {
+        // 시설명과 용량이 있는 경우: "배출시설1 압출기 (2.5㎥, 배출구: 1번)"
+        caption = `배출시설${info.number || ''} ${info.name} (${info.capacity}`;
+        if (info.outlet) {
+          caption += `, 배출구: ${info.outlet}번`;
+        }
+        caption += ')';
+      } else {
+        // 기본 형식
+        caption = `배출시설${info.number || ''}`;
+        if (info.outlet) {
+          caption += ` (배출구: ${info.outlet}번)`;
+        }
       }
     } else if (info.type === 'basic') {
       // 기본시설

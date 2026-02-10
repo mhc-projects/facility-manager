@@ -8,7 +8,7 @@ import {
   generateGatewayCaption,
   FacilityInfo
 } from '@/lib/facilityInfoExtractor';
-import { normalizeFacilityInfo } from '@/lib/facilityInfoFormatter';
+import { normalizeFacilityInfo, formatFacilityInfoToCaption } from '@/lib/facilityInfoFormatter';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { generateExcel } from '@/lib/excelGenerator';
 
@@ -84,7 +84,31 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
 
       // DB에 저장된 facility_info 컬럼 직접 사용 (JSON → 한글 변환)
       if (photo.facility_info) {
-        facilityCaption = normalizeFacilityInfo(photo.facility_info);
+        // 🔧 시설명/용량 정보를 JSON에 추가
+        try {
+          const info = JSON.parse(photo.facility_info);
+
+          // 시설 테이블에서 시설명/용량 조회 (discharge/prevention)
+          if (info.type === 'discharge' || info.type === 'prevention') {
+            const tableName = info.type === 'discharge' ? 'discharge_facilities' : 'prevention_facilities';
+            const { data: facilityData } = await supabaseAdmin
+              .from(tableName)
+              .select('facility_name, capacity')
+              .eq('business_name', businessName)
+              .eq('outlet_number', info.outlet || 1)
+              .eq('facility_number', info.number || 1)
+              .single();
+
+            if (facilityData) {
+              info.name = facilityData.facility_name;
+              info.capacity = facilityData.capacity;
+            }
+          }
+
+          facilityCaption = formatFacilityInfoToCaption(JSON.stringify(info));
+        } catch (e) {
+          facilityCaption = normalizeFacilityInfo(photo.facility_info);
+        }
       } else if (isGatewayOrBasicPhoto(photo.file_path)) {
         facilityCaption = generateGatewayCaption();
       } else {

@@ -38,31 +38,40 @@ export class FacilityPhotoPdfGenerator {
     try {
       let isFirstSection = true;
 
-      // 방지시설 섹션
+      // 🔧 방지시설 섹션 - 페이지당 4행(12개) 분할
       if (data.preventionPhotos.length > 0) {
-        const htmlContent = this.generateSectionHtml(
-          data.businessName,
-          data.businessInfo,
-          '1) 방지시설-방지시설명(용량) Gate Way, pH계(온도계, 차압계), 전류계(설치예정) 위치',
-          data.preventionPhotos,
-          includeUserCaption
-        );
+        const chunks = this.chunkPhotos(data.preventionPhotos, 12); // 12개씩 분할
 
-        await this.renderHtmlToPdf(htmlContent, !isFirstSection);
-        isFirstSection = false;
+        for (let i = 0; i < chunks.length; i++) {
+          const htmlContent = this.generateSectionHtml(
+            data.businessName,
+            data.businessInfo,
+            `1) 방지시설-방지시설명(용량) Gate Way, pH계(온도계, 차압계), 전류계(설치예정) 위치${chunks.length > 1 ? ` (${i + 1}/${chunks.length})` : ''}`,
+            chunks[i],
+            includeUserCaption
+          );
+
+          await this.renderHtmlToPdf(htmlContent, !isFirstSection);
+          isFirstSection = false;
+        }
       }
 
-      // 배출시설 섹션
+      // 🔧 배출시설 섹션 - 페이지당 4행(12개) 분할
       if (data.dischargePhotos.length > 0) {
-        const htmlContent = this.generateSectionHtml(
-          data.businessName,
-          data.businessInfo,
-          '2) 배출시설 전류계(설치예정) 위치',
-          data.dischargePhotos,
-          includeUserCaption
-        );
+        const chunks = this.chunkPhotos(data.dischargePhotos, 12); // 12개씩 분할
 
-        await this.renderHtmlToPdf(htmlContent, !isFirstSection);
+        for (let i = 0; i < chunks.length; i++) {
+          const htmlContent = this.generateSectionHtml(
+            data.businessName,
+            data.businessInfo,
+            `2) 배출시설 전류계(설치예정) 위치${chunks.length > 1 ? ` (${i + 1}/${chunks.length})` : ''}`,
+            chunks[i],
+            includeUserCaption
+          );
+
+          await this.renderHtmlToPdf(htmlContent, !isFirstSection);
+          isFirstSection = false;
+        }
       }
 
       return new Blob([this.doc.output('blob')], { type: 'application/pdf' });
@@ -70,6 +79,17 @@ export class FacilityPhotoPdfGenerator {
       console.error('한글 PDF 생성 오류:', error);
       throw error;
     }
+  }
+
+  /**
+   * 사진 배열을 지정된 크기로 분할
+   */
+  private chunkPhotos<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
   }
 
   private generateSectionHtml(
@@ -85,6 +105,7 @@ export class FacilityPhotoPdfGenerator {
       day: '2-digit'
     });
 
+    // 🔧 페이지당 4행(12개) 제한으로 사진 잘림 방지
     // 3열 그리드로 사진 배치
     const photoRows: Array<PhotoData[]> = [];
     for (let i = 0; i < photos.length; i += 3) {
