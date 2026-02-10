@@ -465,6 +465,17 @@ export default function ImprovedFacilityPhotoSection({
     }
   }, [businessName, loadUploadedFiles]);
 
+  // 🔥 CRITICAL FIX: 컴포넌트 마운트 시 항상 최신 데이터 로드
+  // Next.js 클라이언트 라우팅으로 인해 컴포넌트가 재사용될 수 있으므로
+  // 마운트 시마다 명시적으로 최신 데이터 조회
+  useEffect(() => {
+    console.log('🔄 [COMPONENT-MOUNT] ImprovedFacilityPhotoSection 마운트됨 - 최신 데이터 조회');
+    if (businessName && businessName.length > 0) {
+      loadUploadedFiles(true, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 배열: 마운트 시에만 실행
+
   // 🔧 REALTIME-SYNC-FIX: Phase 1-2 - 하이브리드 폴링 재활성화 (15초 간격으로 단축)
   // Realtime이 연결되어 있으면 가벼운 검증만, 연결 안되면 전체 새로고침
   useEffect(() => {
