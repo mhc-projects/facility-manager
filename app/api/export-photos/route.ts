@@ -86,11 +86,21 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
         facilityCaption = generateCaption(facilityInfo);
       }
 
+      // download_url이 없으면 file_path로부터 생성
+      let downloadUrl = photo.download_url;
+      if (!downloadUrl || downloadUrl === '') {
+        const { data: publicUrl } = supabaseAdmin.storage
+          .from('facility-files')
+          .getPublicUrl(photo.file_path);
+        downloadUrl = publicUrl.publicUrl;
+        console.log(`[EXPORT] URL 생성: ${photo.file_path} → ${downloadUrl}`);
+      }
+
       return {
         id: photo.id,
         file_path: photo.file_path,
         original_filename: photo.original_filename,
-        download_url: photo.download_url,
+        download_url: downloadUrl,
         user_caption: photo.caption || undefined,
         facility_caption: facilityCaption,
         created_at: photo.created_at
@@ -98,6 +108,13 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
     });
 
     console.log(`[EXPORT] ${section} 사진 ${photosWithCaptions.length}장 수집 완료`);
+
+    // URL 샘플 로깅 (첫 번째 사진만)
+    if (photosWithCaptions.length > 0) {
+      console.log(`[EXPORT] 샘플 URL: ${photosWithCaptions[0].download_url}`);
+      console.log(`[EXPORT] 샘플 file_path: ${photosWithCaptions[0].file_path}`);
+    }
+
     return photosWithCaptions;
   } catch (error) {
     console.error(`[EXPORT] ${section} 사진 수집 오류:`, error);

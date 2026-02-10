@@ -6,12 +6,11 @@ import jsPDF from 'jspdf';
 interface PhotoData {
   id: string;
   file_path: string;
-  original_file_name: string;
+  original_filename: string;
   download_url: string;
-  folder_name: string;
   user_caption?: string;
   facility_caption: string;
-  uploaded_at: string;
+  created_at: string;
 }
 
 const PDF_CONFIG = {
@@ -55,7 +54,9 @@ function addFacilityCaption(
   width: number
 ) {
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
+  // courier는 monospace 폰트로 한글이 일부 지원됨
+  // 또는 나중에 NanumGothic 등을 추가할 수 있음
+  doc.setFont('courier', 'normal');
 
   // 캡션을 여러 줄로 분할
   const lines = doc.splitTextToSize(caption, width);
@@ -78,7 +79,7 @@ function addUserCaption(
   width: number
 ) {
   doc.setFontSize(7);
-  doc.setFont('helvetica', 'italic');
+  doc.setFont('courier', 'normal');
   doc.setTextColor(100, 100, 100);
 
   const lines = doc.splitTextToSize(`"${caption}"`, width);
@@ -97,16 +98,33 @@ function addUserCaption(
  */
 async function downloadImageAsBase64(downloadUrl: string): Promise<string> {
   try {
+    console.log(`[PDF] 이미지 다운로드 시도: ${downloadUrl}`);
+
     const response = await fetch(downloadUrl);
+
+    console.log(`[PDF] 응답 상태: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
+
     if (!response.ok) {
-      throw new Error(`이미지 다운로드 실패: ${response.status}`);
+      throw new Error(`이미지 다운로드 실패: ${response.status} ${response.statusText}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();
+    console.log(`[PDF] ArrayBuffer 크기: ${arrayBuffer.byteLength} bytes`);
+
+    if (arrayBuffer.byteLength === 0) {
+      throw new Error('이미지 데이터가 비어있습니다');
+    }
+
     const base64 = Buffer.from(arrayBuffer).toString('base64');
-    return `data:image/jpeg;base64,${base64}`;
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const mimeType = contentType.split(';')[0];
+
+    console.log(`[PDF] Base64 변환 완료: ${base64.length} chars`);
+
+    return `data:${mimeType};base64,${base64}`;
   } catch (error) {
     console.error('[PDF] 이미지 다운로드 오류:', error);
+    console.error('[PDF] 실패한 URL:', downloadUrl);
     // Placeholder 이미지 반환 (옵션)
     return '';
   }
@@ -127,13 +145,13 @@ export async function generatePDF(
 
   // ========== 페이지 헤더 ==========
   doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('courier', 'bold');
   doc.text(`사업장명: ${businessName}`, PDF_CONFIG.margin, currentY);
   currentY += 8;
 
   if (businessInfo.address) {
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('courier', 'normal');
     doc.text(`주소: ${businessInfo.address}`, PDF_CONFIG.margin, currentY);
     currentY += 6;
   }
@@ -146,7 +164,7 @@ export async function generatePDF(
   // ========== 방지시설 섹션 ==========
   if (preventionPhotos.length > 0) {
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('courier', 'bold');
     doc.text('1) 방지시설-방지시설명(용량) Gate Way, pH계(온도계, 차압계), 전류계(설치예정) 위치', PDF_CONFIG.margin, currentY);
     currentY += 8;
 
@@ -196,7 +214,7 @@ export async function generatePDF(
     currentY = PDF_CONFIG.margin;
 
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('courier', 'bold');
     doc.text('2) 배출시설 전류계(설치예정) 위치', PDF_CONFIG.margin, currentY);
     currentY += 8;
 
@@ -244,7 +262,7 @@ export async function generatePDF(
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('courier', 'normal');
     doc.text(
       `페이지 ${i} / ${pageCount}`,
       PDF_CONFIG.pageWidth / 2,
