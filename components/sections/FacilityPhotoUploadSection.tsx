@@ -447,14 +447,20 @@ export default function FacilityPhotoUploadSection({
 
       const results = await Promise.all(uploadPromises);
       const successCount = results.filter(r => r.success).length;
-      
-      // 완전한 optimistic UI: 서버 동기화 완전 제거 (즉시 반영)
-      console.log(`✅ [UPLOAD-SUCCESS] 시설 업로드 완료: ${successCount}/${compressedFiles.length} (완전 optimistic UI)`);
-      
+
+      console.log(`✅ [UPLOAD-SUCCESS] 시설 업로드 완료: ${successCount}/${compressedFiles.length}`);
+
+      // 🔄 방법 1: 업로드 완료 후 서버에서 최신 데이터 재조회 (캐시 무효화 포함)
+      if (successCount > 0) {
+        console.log(`🔄 [SERVER-REFRESH] 업로드 완료, 서버 최신 데이터 재조회 시작`);
+        await loadUploadedFiles(true); // forceRefresh=true로 캐시 무효화된 최신 데이터 가져오기
+        console.log(`✅ [SERVER-REFRESH] 서버 재조회 완료`);
+      }
+
       // 실패한 업로드가 있는 경우 미리보기 파일만 제거
       if (successCount < files.length) {
         console.log(`❌ [UPLOAD-PARTIAL] 부분 실패, 미리보기 파일 정리`);
-        // 실패한 미리보기 파일만 제거 (서버 호출 없음)
+        // 실패한 미리보기 파일만 제거
         setUploadedFiles(prev => prev.filter(f => !(f as any).isPreview));
       }
 
@@ -578,14 +584,20 @@ export default function FacilityPhotoUploadSection({
 
       const results = await Promise.all(uploadPromises);
       const successCount = results.filter(r => r.success).length;
-      
-      // 완전한 optimistic UI: 서버 동기화 완전 제거 (즉시 반영)
-      console.log(`✅ [UPLOAD-SUCCESS] 기본사진 업로드 완료: ${successCount}/${files.length} (완전 optimistic UI)`);
-      
+
+      console.log(`✅ [UPLOAD-SUCCESS] 기본사진 업로드 완료: ${successCount}/${files.length}`);
+
+      // 🔄 방법 1: 업로드 완료 후 서버에서 최신 데이터 재조회 (캐시 무효화 포함)
+      if (successCount > 0) {
+        console.log(`🔄 [SERVER-REFRESH] 업로드 완료, 서버 최신 데이터 재조회 시작`);
+        await loadUploadedFiles(true); // forceRefresh=true로 캐시 무효화된 최신 데이터 가져오기
+        console.log(`✅ [SERVER-REFRESH] 서버 재조회 완료`);
+      }
+
       // 실패한 업로드가 있는 경우 미리보기 파일만 제거
       if (successCount < files.length) {
         console.log(`❌ [UPLOAD-PARTIAL] 기본사진 부분 실패, 미리보기 파일 정리`);
-        // 실패한 미리보기 파일만 제거 (서버 호출 없음)
+        // 실패한 미리보기 파일만 제거
         setUploadedFiles(prev => prev.filter(f => !(f as any).isPreview));
       }
 

@@ -1448,13 +1448,17 @@ export default function ImprovedFacilityPhotoSection({
       return grouped;
     }
 
-    // ✅ FIX: 중복 제거 - 배출구+시설번호+용량 기준으로 고유한 시설만 그룹화 (용량이 다르면 다른 시설)
+    // ✅ FIX: id 기반 중복 제거 - 각 시설은 고유한 id로 식별
+    // outlet-number-capacity가 같아도 id가 다르면 별도 시설로 처리
     const seenDischarge = new Set<string>();
     facilities.discharge.forEach(facility => {
-      const uniqueKey = `${facility.outlet}-${facility.number}-${facility.capacity || 'unknown'}`;
+      // id가 있으면 id 기반, 없으면 기존 방식 (하위 호환성)
+      const uniqueKey = (facility as any).id
+        ? `id-${(facility as any).id}`
+        : `${facility.outlet}-${facility.number}-${facility.capacity || 'unknown'}-${facility.name}`;
+
       if (seenDischarge.has(uniqueKey)) {
-        // 디버그 로그 제거 (중복 제거 기능 정상 작동)
-        // console.warn(`⚠️ [DUPLICATE] 중복 배출시설 제거: 배출구${facility.outlet}, 시설${facility.number}, 용량${facility.capacity}`);
+        console.warn(`⚠️ [DUPLICATE] 중복 배출시설 제거: ${uniqueKey}`);
         return; // 중복 건너뛰기
       }
       seenDischarge.add(uniqueKey);
@@ -1467,9 +1471,13 @@ export default function ImprovedFacilityPhotoSection({
 
     const seenPrevention = new Set<string>();
     facilities.prevention.forEach(facility => {
-      const uniqueKey = `${facility.outlet}-${facility.number}-${facility.capacity || 'unknown'}`;
+      // id가 있으면 id 기반, 없으면 기존 방식 (하위 호환성)
+      const uniqueKey = (facility as any).id
+        ? `id-${(facility as any).id}`
+        : `${facility.outlet}-${facility.number}-${facility.capacity || 'unknown'}-${facility.name}`;
+
       if (seenPrevention.has(uniqueKey)) {
-        console.warn(`⚠️ [DUPLICATE] 중복 방지시설 제거: 배출구${facility.outlet}, 시설${facility.number}, 용량${facility.capacity}`);
+        console.warn(`⚠️ [DUPLICATE] 중복 방지시설 제거: ${uniqueKey}`);
         return; // 중복 건너뛰기
       }
       seenPrevention.add(uniqueKey);

@@ -762,11 +762,21 @@ export async function POST(request: NextRequest) {
 
       console.log('✅ [SUCCESS] 파일 업로드 완료:', uploadedFile.name);
 
-      // 캐시 무효화 (즉시 새 데이터 반영)
-      memoryCache.delete(`files_${businessName}_completion`);
-      memoryCache.delete(`files_${businessName}_presurvey`);
-      console.log(`💾 [CACHE-INVALIDATE] 업로드 후 캐시 무효화: ${businessName}`);
+      // 🔥 방법 2: 캐시 무효화 강화 - 모든 관련 캐시 키 삭제
+      const cacheKeys = [
+        `files_${businessName}_completion`,
+        `files_${businessName}_presurvey`,
+        `files_${businessName}_${systemType}`, // 시스템 타입별 캐시
+        `files_${businessName}_${fileType}`,   // 파일 타입별 캐시
+        `files_${businessName}_all`            // 전체 파일 캐시
+      ];
 
+      cacheKeys.forEach(key => {
+        memoryCache.delete(key);
+        console.log(`🔥 [CACHE-DELETE] 캐시 삭제: ${key}`);
+      });
+
+      console.log(`✅ [CACHE-INVALIDATE] 업로드 후 모든 관련 캐시 무효화 완료: ${businessName}`);
       console.log(`✅ [SUPABASE-UPLOAD] 완료: ${requestId}, 파일명=${uploadedFile.name}`);
 
       return NextResponse.json({
