@@ -5,6 +5,12 @@ type Props = {
   params: { businessName: string };
 };
 
+// 🔄 실시간 업데이트를 위한 동적 렌더링 강제
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+// 🚫 페이지 레벨 캐싱 완전 비활성화
+export const fetchCache = 'force-no-store';
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const businessName = decodeURIComponent(params.businessName);
 
