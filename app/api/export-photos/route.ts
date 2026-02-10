@@ -92,7 +92,8 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
 
           // 시설 테이블에서 시설명/용량 조회 (discharge/prevention)
           if (info.type === 'discharge' || info.type === 'prevention') {
-            const outletTable = info.type === 'discharge' ? 'discharge_outlets' : 'prevention_outlets';
+            // 방지시설과 배출시설 모두 discharge_outlets를 사용
+            const outletTable = 'discharge_outlets';
             const facilityTable = info.type === 'discharge' ? 'discharge_facilities' : 'prevention_facilities';
 
             console.log('[EXPORT] 시설 정보 조회 시도:', {
