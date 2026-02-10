@@ -145,16 +145,28 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
                 }
 
                 if (facilities && facilities.length > 0) {
-                  // Use facility_number as 1-indexed array position
-                  const facilityIndex = (info.number || 1) - 1;
+                  // Use instance as 1-indexed array position (instance represents order within outlet)
+                  // instance=1 → index 0, instance=2 → index 1, etc.
+                  const facilityIndex = (info.instance || 1) - 1;
                   const facilityData = facilities[facilityIndex];
+
+                  console.log('[EXPORT-DATA] 시설 배열 매칭:', {
+                    총_시설_수: facilities.length,
+                    instance: info.instance,
+                    계산된_인덱스: facilityIndex,
+                    매칭_성공: !!facilityData
+                  });
 
                   if (facilityData) {
                     console.log('[EXPORT-DATA] 시설 정보 조회 성공:', facilityData);
                     info.name = facilityData.facility_name;
                     info.capacity = facilityData.capacity;
                   } else {
-                    console.warn('[EXPORT-DATA] 시설 번호에 해당하는 데이터 없음:', facilityIndex);
+                    console.warn('[EXPORT-DATA] 인스턴스 번호에 해당하는 데이터 없음:', {
+                      instance: info.instance,
+                      facilityIndex,
+                      available_count: facilities.length
+                    });
                   }
                 } else {
                   console.warn('[EXPORT-DATA] 시설 정보 없음 - 기본 캡션 사용');
