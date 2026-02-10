@@ -36,11 +36,12 @@ interface ExportRequestBody {
  */
 async function collectPhotos(businessName: string, section: 'prevention' | 'discharge'): Promise<PhotoData[]> {
   try {
-    // 1. business_name으로 business_id 조회
+    // 1. business_name으로 business_id 조회 (business_info 테이블 사용)
     const { data: business, error: businessError } = await supabaseAdmin
-      .from('businesses')
+      .from('business_info')
       .select('id')
       .eq('business_name', businessName)
+      .eq('is_deleted', false)
       .single();
 
     if (businessError || !business) {
