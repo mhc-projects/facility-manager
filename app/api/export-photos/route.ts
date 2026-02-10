@@ -92,33 +92,79 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
 
           // 시설 테이블에서 시설명/용량 조회 (discharge/prevention)
           if (info.type === 'discharge' || info.type === 'prevention') {
-            const tableName = info.type === 'discharge' ? 'discharge_facilities' : 'prevention_facilities';
+            const outletTable = info.type === 'discharge' ? 'discharge_outlets' : 'prevention_outlets';
+            const facilityTable = info.type === 'discharge' ? 'discharge_facilities' : 'prevention_facilities';
 
             console.log('[EXPORT] 시설 정보 조회 시도:', {
-              tableName,
+              outletTable,
+              facilityTable,
               businessName,
+              business_id: business.id,
               outlet_number: info.outlet || 1,
               facility_number: info.number || 1
             });
 
-            const { data: facilityData, error: facilityError } = await supabaseAdmin
-              .from(tableName)
-              .select('facility_name, capacity')
-              .eq('business_name', businessName)
-              .eq('outlet_number', info.outlet || 1)
-              .eq('facility_number', info.number || 1)
+            // Step 1: Get air_permit_id for this business
+            const { data: permitData, error: permitError } = await supabaseAdmin
+              .from('air_permit_info')
+              .select('id')
+              .eq('business_id', business.id)
               .single();
 
-            if (facilityError) {
-              console.error('[EXPORT] 시설 정보 조회 실패:', facilityError);
+            if (permitError) {
+              console.error('[EXPORT] 허가 정보 조회 실패:', permitError);
             }
 
-            if (facilityData) {
-              console.log('[EXPORT] 시설 정보 조회 성공:', facilityData);
-              info.name = facilityData.facility_name;
-              info.capacity = facilityData.capacity;
+            if (permitData) {
+              console.log('[EXPORT] 허가 정보 조회 성공:', permitData);
+
+              // Step 2: Get outlet_id from outlet table using air_permit_id and outlet_number
+              const { data: outletData, error: outletError } = await supabaseAdmin
+                .from(outletTable)
+                .select('id')
+                .eq('air_permit_id', permitData.id)
+                .eq('outlet_number', info.outlet || 1)
+                .single();
+
+              if (outletError) {
+                console.error('[EXPORT] 배출구 조회 실패:', outletError);
+              }
+
+              if (outletData) {
+                console.log('[EXPORT] 배출구 조회 성공:', outletData);
+
+                // Step 3: Query facility by outlet_id and facility order
+                // Since we don't have facility_number in the table, we need to get facilities by outlet and pick the right one by position
+                const { data: facilities, error: facilityError } = await supabaseAdmin
+                  .from(facilityTable)
+                  .select('facility_name, capacity')
+                  .eq('outlet_id', outletData.id)
+                  .order('created_at', { ascending: true });
+
+                if (facilityError) {
+                  console.error('[EXPORT] 시설 정보 조회 실패:', facilityError);
+                }
+
+                if (facilities && facilities.length > 0) {
+                  // Use facility_number as 1-indexed array position
+                  const facilityIndex = (info.number || 1) - 1;
+                  const facilityData = facilities[facilityIndex];
+
+                  if (facilityData) {
+                    console.log('[EXPORT] 시설 정보 조회 성공:', facilityData);
+                    info.name = facilityData.facility_name;
+                    info.capacity = facilityData.capacity;
+                  } else {
+                    console.warn('[EXPORT] 시설 번호에 해당하는 데이터 없음:', facilityIndex);
+                  }
+                } else {
+                  console.warn('[EXPORT] 시설 정보 없음 - 기본 캡션 사용');
+                }
+              } else {
+                console.warn('[EXPORT] 배출구 정보 없음 - 기본 캡션 사용');
+              }
             } else {
-              console.warn('[EXPORT] 시설 정보 없음 - 기본 캡션 사용');
+              console.warn('[EXPORT] 허가 정보 없음 - 기본 캡션 사용');
             }
           }
 
