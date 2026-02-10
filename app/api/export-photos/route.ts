@@ -8,6 +8,7 @@ import {
   generateGatewayCaption,
   FacilityInfo
 } from '@/lib/facilityInfoExtractor';
+import { normalizeFacilityInfo } from '@/lib/facilityInfoFormatter';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { generateExcel } from '@/lib/excelGenerator';
 
@@ -81,9 +82,9 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
     const photosWithCaptions: PhotoData[] = data.map(photo => {
       let facilityCaption = '';
 
-      // DB에 저장된 facility_info 컬럼 직접 사용
+      // DB에 저장된 facility_info 컬럼 직접 사용 (JSON → 한글 변환)
       if (photo.facility_info) {
-        facilityCaption = photo.facility_info;
+        facilityCaption = normalizeFacilityInfo(photo.facility_info);
       } else if (isGatewayOrBasicPhoto(photo.file_path)) {
         facilityCaption = generateGatewayCaption();
       } else {

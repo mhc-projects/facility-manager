@@ -7,6 +7,7 @@ import {
   isGatewayOrBasicPhoto,
   generateGatewayCaption,
 } from '@/lib/facilityInfoExtractor';
+import { normalizeFacilityInfo } from '@/lib/facilityInfoFormatter';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -79,10 +80,13 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
         facility_info: photo.facility_info
       });
 
-      // DB에 저장된 facility_info 컬럼 직접 사용
+      // DB에 저장된 facility_info 컬럼 직접 사용 (JSON → 한글 변환)
       if (photo.facility_info) {
-        facilityCaption = photo.facility_info;
-        console.log('[EXPORT-DATA] DB에서 시설 정보 직접 사용:', facilityCaption);
+        facilityCaption = normalizeFacilityInfo(photo.facility_info);
+        console.log('[EXPORT-DATA] DB에서 시설 정보 사용:', {
+          원본: photo.facility_info,
+          변환: facilityCaption
+        });
       } else if (isGatewayOrBasicPhoto(photo.file_path)) {
         facilityCaption = generateGatewayCaption();
       } else {
