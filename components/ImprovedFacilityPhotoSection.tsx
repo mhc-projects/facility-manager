@@ -457,7 +457,7 @@ export default function ImprovedFacilityPhotoSection({
     }
   }, [businessName, loadUploadedFiles]);
 
-  // 🔧 REALTIME-SYNC-FIX: Phase 1-2 - 하이브리드 폴링 재활성화 (60초 간격)
+  // 🔧 REALTIME-SYNC-FIX: Phase 1-2 - 하이브리드 폴링 재활성화 (15초 간격으로 단축)
   // Realtime이 연결되어 있으면 가벼운 검증만, 연결 안되면 전체 새로고침
   useEffect(() => {
     const interval = setInterval(() => {
@@ -469,7 +469,7 @@ export default function ImprovedFacilityPhotoSection({
         console.log('⚠️ [HYBRID-POLLING] Realtime 연결 끊김, 전체 새로고침 실행');
         loadUploadedFiles(true, true);
       }
-    }, 60000); // 60초 간격
+    }, 15000); // 15초 간격 (60초 → 15초 단축)
     return () => clearInterval(interval);
   }, [loadUploadedFiles, realtimeConnected]);
 
@@ -542,22 +542,18 @@ export default function ImprovedFacilityPhotoSection({
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // 중복 호출 방지를 위한 짧은 debounce (200ms - 즉각 반응)
+        // 🚀 즉시 실행 (debounce 제거) - 페이지 복귀 시 최신 데이터 즉시 표시
         if (refreshTimeout) clearTimeout(refreshTimeout);
-        refreshTimeout = setTimeout(() => {
-          console.log('👁️ [PAGE-VISIBLE] 페이지 포커스 복원 - 데이터 새로고침');
-          loadUploadedFiles(true, false);
-        }, 200);
+        console.log('👁️ [PAGE-VISIBLE] 페이지 포커스 복원 - 즉시 데이터 새로고침');
+        loadUploadedFiles(true, false);
       }
     };
 
     const handleFocus = () => {
-      // 중복 호출 방지를 위한 짧은 debounce (200ms - 즉각 반응)
+      // 🚀 즉시 실행 (debounce 제거) - 윈도우 포커스 시 최신 데이터 즉시 표시
       if (refreshTimeout) clearTimeout(refreshTimeout);
-      refreshTimeout = setTimeout(() => {
-        console.log('🎯 [PAGE-FOCUS] 윈도우 포커스 복원 - 데이터 새로고침');
-        loadUploadedFiles(true, false);
-      }, 200);
+      console.log('🎯 [PAGE-FOCUS] 윈도우 포커스 복원 - 즉시 데이터 새로고침');
+      loadUploadedFiles(true, false);
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
