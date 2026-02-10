@@ -17,12 +17,11 @@ export const runtime = 'nodejs';
 interface PhotoData {
   id: string;
   file_path: string;
-  original_file_name: string;
+  original_filename: string;
   download_url: string;
-  folder_name: string;
   user_caption?: string;
   facility_caption: string; // 시설 정보 캡션
-  uploaded_at: string;
+  created_at: string;
 }
 
 interface ExportRequestBody {
@@ -45,13 +44,13 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
 
     if (section === 'prevention') {
       // 방지시설: gateway + 방지시설
-      query = query.or('folder_name.like.%기본사진/gateway%,folder_name.like.%방지시설/%');
+      query = query.or('file_path.like.%기본사진/gateway%,file_path.like.%방지시설/%');
     } else {
       // 배출시설
-      query = query.like('folder_name', '%배출시설/%');
+      query = query.like('file_path', '%배출시설/%');
     }
 
-    const { data, error } = await query.order('uploaded_at', { ascending: true });
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) {
       console.error(`[EXPORT] ${section} 사진 조회 실패:`, error);
@@ -67,22 +66,21 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
     const photosWithCaptions: PhotoData[] = data.map(photo => {
       let facilityCaption = '';
 
-      if (isGatewayOrBasicPhoto(photo.folder_name)) {
+      if (isGatewayOrBasicPhoto(photo.file_path)) {
         facilityCaption = generateGatewayCaption();
       } else {
-        const facilityInfo = extractFacilityInfoFromFolder(photo.folder_name);
+        const facilityInfo = extractFacilityInfoFromFolder(photo.file_path);
         facilityCaption = generateCaption(facilityInfo);
       }
 
       return {
         id: photo.id,
         file_path: photo.file_path,
-        original_file_name: photo.original_file_name,
+        original_filename: photo.original_filename,
         download_url: photo.download_url,
-        folder_name: photo.folder_name,
         user_caption: photo.caption || undefined,
         facility_caption: facilityCaption,
-        uploaded_at: photo.uploaded_at
+        created_at: photo.created_at
       };
     });
 
