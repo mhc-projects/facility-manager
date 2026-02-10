@@ -71,7 +71,9 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
     }
 
     // 시설 정보 캡션 생성
-    const photosWithCaptions: PhotoData[] = data.map(photo => {
+    const photosWithCaptions: PhotoData[] = [];
+
+    for (const photo of data) {
       let facilityCaption = '';
 
       console.log('[EXPORT-DATA] 파일 정보:', {
@@ -131,7 +133,7 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
         downloadUrl = publicUrl.publicUrl;
       }
 
-      return {
+      photosWithCaptions.push({
         id: photo.id,
         file_path: photo.file_path,
         original_filename: photo.original_filename,
@@ -139,8 +141,8 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
         user_caption: photo.caption || undefined,
         facility_caption: facilityCaption,
         created_at: photo.created_at
-      };
-    });
+      });
+    }
 
     return photosWithCaptions;
   } catch (error) {

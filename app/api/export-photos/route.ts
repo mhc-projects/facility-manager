@@ -79,7 +79,9 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
     }
 
     // 시설 정보 캡션 생성
-    const photosWithCaptions: PhotoData[] = data.map(photo => {
+    const photosWithCaptions: PhotoData[] = [];
+
+    for (const photo of data) {
       let facilityCaption = '';
 
       // DB에 저장된 facility_info 컬럼 직접 사용 (JSON → 한글 변환)
@@ -127,7 +129,7 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
         console.log(`[EXPORT] URL 생성: ${photo.file_path} → ${downloadUrl}`);
       }
 
-      return {
+      photosWithCaptions.push({
         id: photo.id,
         file_path: photo.file_path,
         original_filename: photo.original_filename,
@@ -135,8 +137,8 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
         user_caption: photo.caption || undefined,
         facility_caption: facilityCaption,
         created_at: photo.created_at
-      };
-    });
+      });
+    }
 
     console.log(`[EXPORT] ${section} 사진 ${photosWithCaptions.length}장 수집 완료`);
 
