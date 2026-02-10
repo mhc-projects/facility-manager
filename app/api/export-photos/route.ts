@@ -56,11 +56,11 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
       .eq('business_id', business.id);
 
     if (section === 'prevention') {
-      // 방지시설: gateway + 방지시설
-      query = query.or('file_path.like.%기본사진/gateway%,file_path.like.%방지시설/%');
+      // 방지시설: basic + prevention
+      query = query.or('file_path.like.%/basic/%,file_path.like.%/prevention/%');
     } else {
-      // 배출시설
-      query = query.like('file_path', '%배출시설/%');
+      // 배출시설: discharge
+      query = query.like('file_path', '%/discharge/%');
     }
 
     const { data, error } = await query.order('created_at', { ascending: true });
