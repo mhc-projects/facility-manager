@@ -147,15 +147,17 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
                 }
 
                 if (facilities && facilities.length > 0) {
-                  // Use instance as 1-indexed array position (instance represents order within outlet)
-                  // instance=1 → index 0, instance=2 → index 1, etc.
-                  const facilityIndex = (info.instance || 1) - 1;
+                  // When DB has only 1 facility but photos have multiple instances (4-1, 4-2, etc.),
+                  // all instances should share the same facility info
+                  // If DB has multiple facilities, use instance as array index
+                  const facilityIndex = facilities.length === 1 ? 0 : Math.min((info.instance || 1) - 1, facilities.length - 1);
                   const facilityData = facilities[facilityIndex];
 
                   console.log('[EXPORT] 시설 배열 매칭:', {
                     총_시설_수: facilities.length,
                     instance: info.instance,
                     계산된_인덱스: facilityIndex,
+                    단일_시설_공유: facilities.length === 1,
                     매칭_성공: !!facilityData
                   });
 
