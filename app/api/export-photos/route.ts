@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
+  extractFacilityInfoFromFileName,
   extractFacilityInfoFromFolder,
   generateCaption,
   isGatewayOrBasicPhoto,
@@ -21,6 +22,7 @@ interface PhotoData {
   download_url: string;
   user_caption?: string;
   facility_caption: string; // 시설 정보 캡션
+  facility_info?: string; // DB의 facility_info 컬럼
   created_at: string;
 }
 
@@ -79,10 +81,14 @@ async function collectPhotos(businessName: string, section: 'prevention' | 'disc
     const photosWithCaptions: PhotoData[] = data.map(photo => {
       let facilityCaption = '';
 
-      if (isGatewayOrBasicPhoto(photo.file_path)) {
+      // DB에 저장된 facility_info 컬럼 직접 사용
+      if (photo.facility_info) {
+        facilityCaption = photo.facility_info;
+      } else if (isGatewayOrBasicPhoto(photo.file_path)) {
         facilityCaption = generateGatewayCaption();
       } else {
-        const facilityInfo = extractFacilityInfoFromFolder(photo.file_path);
+        // 폴백: 파일명에서 시설 정보 추출
+        const facilityInfo = extractFacilityInfoFromFileName(photo.original_filename, photo.file_path);
         facilityCaption = generateCaption(facilityInfo);
       }
 
