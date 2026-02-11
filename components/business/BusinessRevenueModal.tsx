@@ -51,6 +51,24 @@ export default function BusinessRevenueModal({
   });
   const [isSavingSurveyFee, setIsSavingSurveyFee] = useState(false);
 
+  // AS 비용 상태
+  const [isEditingAsCost, setIsEditingAsCost] = useState(false);
+  const [asCostForm, setAsCostForm] = useState({
+    amount: 0
+  });
+  const [isSavingAsCost, setIsSavingAsCost] = useState(false);
+
+  // 커스텀 추가비용 상태
+  interface CustomCost {
+    name: string;
+    amount: number;
+  }
+  const [customCosts, setCustomCosts] = useState<CustomCost[]>([]);
+  const [isAddingCustomCost, setIsAddingCustomCost] = useState(false);
+  const [newCustomCost, setNewCustomCost] = useState<CustomCost>({ name: '', amount: 0 });
+  const [isSavingCustomCost, setIsSavingCustomCost] = useState(false);
+  const [editingCustomCostIndex, setEditingCustomCostIndex] = useState<number | null>(null);
+
   // 🔄 모달이 닫힐 때 ref 리셋
   useEffect(() => {
     if (!isOpen) {
@@ -183,6 +201,52 @@ export default function BusinessRevenueModal({
       setSurveyFeeForm({ amount: 0 });
     }
   }, [calculatedData?.survey_fee_adjustment, business?.survey_fee_adjustment]);
+
+  // AS 비용 값 로드
+  useEffect(() => {
+    if (calculatedData?.as_cost !== undefined) {
+      setAsCostForm({
+        amount: calculatedData.as_cost
+      });
+    } else if (business?.as_cost !== undefined) {
+      setAsCostForm({
+        amount: business.as_cost
+      });
+    } else {
+      setAsCostForm({ amount: 0 });
+    }
+  }, [calculatedData?.as_cost, business?.as_cost]);
+
+  // 커스텀 추가비용 값 로드
+  useEffect(() => {
+    let costs: CustomCost[] = [];
+
+    if (calculatedData?.custom_additional_costs) {
+      // calculatedData에서 로드
+      if (typeof calculatedData.custom_additional_costs === 'string') {
+        try {
+          costs = JSON.parse(calculatedData.custom_additional_costs);
+        } catch (e) {
+          costs = [];
+        }
+      } else if (Array.isArray(calculatedData.custom_additional_costs)) {
+        costs = calculatedData.custom_additional_costs;
+      }
+    } else if (business?.custom_additional_costs) {
+      // business에서 로드
+      if (typeof business.custom_additional_costs === 'string') {
+        try {
+          costs = JSON.parse(business.custom_additional_costs);
+        } catch (e) {
+          costs = [];
+        }
+      } else if (Array.isArray(business.custom_additional_costs)) {
+        costs = business.custom_additional_costs;
+      }
+    }
+
+    setCustomCosts(Array.isArray(costs) ? costs : []);
+  }, [calculatedData?.custom_additional_costs, business?.custom_additional_costs]);
 
   // 🗑️ 캐시 무효화 유틸리티 함수
   const invalidateRevenueCache = (businessId: string) => {
@@ -378,6 +442,208 @@ export default function BusinessRevenueModal({
       alert('저장 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.');
     } finally {
       setIsSavingSurveyFee(false);
+    }
+  };
+
+  // AS 비용 저장 핸들러
+  const handleSaveAsCost = async () => {
+    if (!business?.id) return;
+
+    setIsSavingAsCost(true);
+    try {
+      const token = TokenManager.getToken();
+
+      // business_info 테이블에 직접 업데이트
+      const response = await fetch('/api/business-info-direct', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: business.id,
+          as_cost: asCostForm.amount === null || asCostForm.amount === undefined
+            ? null
+            : asCostForm.amount
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 매출 재계산
+        const calcResponse = await fetch('/api/revenue/calculate', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            business_id: business.id,
+            save_result: true
+          })
+        });
+
+        const calcData = await calcResponse.json();
+
+        if (calcData.success && calcData.data && calcData.data.calculation) {
+          setCalculatedData(calcData.data.calculation);
+          invalidateRevenueCache(business.id);
+          setDataChanged(true);
+        }
+
+        setIsEditingAsCost(false);
+        alert('AS 비용이 저장되었습니다.');
+      } else {
+        alert(data.message || 'AS 비용 저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('AS 비용 저장 오류:', error);
+      alert('저장 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.');
+    } finally {
+      setIsSavingAsCost(false);
+    }
+  };
+
+  // 커스텀 추가비용 저장 핸들러
+  const handleSaveCustomCosts = async () => {
+    if (!business?.id) return;
+
+    setIsSavingCustomCost(true);
+    try {
+      const token = TokenManager.getToken();
+
+      // business_info 테이블에 직접 업데이트
+      const response = await fetch('/api/business-info-direct', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: business.id,
+          custom_additional_costs: customCosts
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 매출 재계산
+        const calcResponse = await fetch('/api/revenue/calculate', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            business_id: business.id,
+            save_result: true
+          })
+        });
+
+        const calcData = await calcResponse.json();
+
+        if (calcData.success && calcData.data && calcData.data.calculation) {
+          setCalculatedData(calcData.data.calculation);
+          invalidateRevenueCache(business.id);
+          setDataChanged(true);
+        }
+
+        alert('커스텀 추가비용이 저장되었습니다.');
+      } else {
+        alert(data.message || '커스텀 추가비용 저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('커스텀 추가비용 저장 오류:', error);
+      alert('저장 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.');
+    } finally {
+      setIsSavingCustomCost(false);
+    }
+  };
+
+  // 커스텀 추가비용 항목 추가
+  const handleAddCustomCost = () => {
+    if (!newCustomCost.name.trim()) {
+      alert('항목명을 입력해주세요.');
+      return;
+    }
+    if (newCustomCost.amount < 0) {
+      alert('금액은 0 이상이어야 합니다.');
+      return;
+    }
+
+    setCustomCosts([...customCosts, { ...newCustomCost }]);
+    setNewCustomCost({ name: '', amount: 0 });
+    setIsAddingCustomCost(false);
+  };
+
+  // 커스텀 추가비용 항목 삭제 (즉시 저장)
+  const handleDeleteCustomCost = async (index: number) => {
+    if (!business?.id) return;
+
+    // 삭제 확인
+    if (!confirm('이 항목을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    const updatedCosts = customCosts.filter((_, i) => i !== index);
+    setCustomCosts(updatedCosts);
+
+    // 즉시 DB에 저장
+    setIsSavingCustomCost(true);
+    try {
+      const token = TokenManager.getToken();
+
+      const response = await fetch('/api/business-info-direct', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: business.id,
+          custom_additional_costs: updatedCosts
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 매출 재계산
+        const calcResponse = await fetch('/api/revenue/calculate', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            business_id: business.id,
+            save_result: true
+          })
+        });
+
+        const calcData = await calcResponse.json();
+
+        if (calcData.success && calcData.data && calcData.data.calculation) {
+          setCalculatedData(calcData.data.calculation);
+          invalidateRevenueCache(business.id);
+          setDataChanged(true);
+        }
+
+        alert('항목이 삭제되었습니다.');
+      } else {
+        alert(data.message || '삭제에 실패했습니다.');
+        // 실패 시 원래 상태로 복원
+        setCustomCosts(customCosts);
+      }
+    } catch (error) {
+      console.error('커스텀 추가비용 삭제 오류:', error);
+      alert('삭제 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.');
+      // 실패 시 원래 상태로 복원
+      setCustomCosts(customCosts);
+    } finally {
+      setIsSavingCustomCost(false);
     }
   };
 
@@ -747,6 +1013,8 @@ export default function BusinessRevenueModal({
             <h4 className="text-lg font-semibold text-gray-900 mb-4">💰 비용 상세 내역</h4>
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 왼쪽 컬럼 - 기본 비용 항목들 */}
+
                 {/* 영업비용 */}
                 <div className="bg-white rounded-lg p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-2">
@@ -779,6 +1047,8 @@ export default function BusinessRevenueModal({
                     </p>
                   )}
                 </div>
+
+                {/* 오른쪽 컬럼 - 조정 및 추가 비용 항목들 */}
 
                 {/* 영업비용 조정 카드 */}
                 <div className="bg-yellow-50 rounded-lg p-4 shadow-sm border-2 border-yellow-300">
@@ -1048,6 +1318,79 @@ export default function BusinessRevenueModal({
                   </p>
                 </div>
 
+                {/* AS 비용 카드 */}
+                <div className="bg-blue-50 rounded-lg p-4 shadow-sm border-2 border-blue-300">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">🔧 AS 비용</span>
+                    {!isEditingAsCost && userPermission >= 2 && (
+                      <button
+                        onClick={() => setIsEditingAsCost(true)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {displayData.as_cost && displayData.as_cost !== 0 ? '수정' : '추가'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingAsCost ? (
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        placeholder="AS 비용 금액 입력"
+                        value={asCostForm.amount || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                            setAsCostForm({amount: 0});
+                          } else {
+                            const numValue = Number(value);
+                            setAsCostForm({amount: isNaN(numValue) || numValue < 0 ? 0 : numValue});
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-gray-500">
+                        💡 AS(After Service) 관련 비용을 입력하세요
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveAsCost}
+                          disabled={isSavingAsCost}
+                          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                        >
+                          {isSavingAsCost ? '저장 중...' : '저장'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsEditingAsCost(false);
+                            const currentValue = calculatedData?.as_cost ?? business?.as_cost;
+                            setAsCostForm({amount: currentValue ?? 0});
+                          }}
+                          disabled={isSavingAsCost}
+                          className="flex-1 px-3 py-2 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400 disabled:opacity-50 font-medium"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {displayData.as_cost && displayData.as_cost !== 0 ? (
+                        <p className="text-xl font-bold text-blue-700">
+                          {formatCurrency(displayData.as_cost)}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500">비용 없음</p>
+                      )}
+                      {!userPermission || userPermission < 2 ? (
+                        <p className="text-xs text-gray-400 mt-2">
+                          ℹ️ 권한 레벨 2 이상만 수정 가능합니다
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+
                 {/* 총 비용 */}
                 <div className="bg-gradient-to-br from-gray-700 to-gray-900 rounded-lg p-4 shadow-md text-white">
                   <div className="flex items-center justify-between mb-2">
@@ -1072,6 +1415,106 @@ export default function BusinessRevenueModal({
                   <p className="text-xs opacity-80 mt-1">
                     {displayData.operating_cost_adjustment ? '조정된 영업비용' : '영업비용'} + 실사비용 + 총설치비
                   </p>
+                </div>
+
+                {/* 커스텀 추가비용 카드 */}
+                <div className="bg-orange-50 rounded-lg p-4 shadow-sm border-2 border-orange-300">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">📝 커스텀 추가비용</span>
+                    {!isAddingCustomCost && userPermission >= 2 && (
+                      <button
+                        onClick={() => setIsAddingCustomCost(true)}
+                        className="text-xs text-orange-600 hover:text-orange-800 font-medium"
+                      >
+                        + 추가
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 기존 항목 리스트 */}
+                  {customCosts.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {customCosts.map((cost, index) => (
+                        <div key={index} className="flex items-center justify-between bg-white p-2 rounded border border-orange-200">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">{cost.name}</p>
+                            <p className="text-xs text-orange-600 font-bold">{formatCurrency(cost.amount)}</p>
+                          </div>
+                          {userPermission >= 2 && (
+                            <button
+                              onClick={() => handleDeleteCustomCost(index)}
+                              className="text-red-500 hover:text-red-700 text-xs font-medium"
+                            >
+                              삭제
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 새 항목 추가 폼 */}
+                  {isAddingCustomCost ? (
+                    <div className="space-y-2 bg-white p-3 rounded border border-orange-200">
+                      <input
+                        type="text"
+                        placeholder="항목명 (예: 사무인건비)"
+                        value={newCustomCost.name}
+                        onChange={(e) => setNewCustomCost({...newCustomCost, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                      <input
+                        type="number"
+                        placeholder="금액"
+                        value={newCustomCost.amount || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const numValue = value === '' ? 0 : Number(value);
+                          setNewCustomCost({...newCustomCost, amount: isNaN(numValue) || numValue < 0 ? 0 : numValue});
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleAddCustomCost}
+                          className="flex-1 px-3 py-2 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 font-medium"
+                        >
+                          항목 추가
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsAddingCustomCost(false);
+                            setNewCustomCost({name: '', amount: 0});
+                          }}
+                          className="flex-1 px-3 py-2 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400 font-medium"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* 저장 버튼 (항목이 변경되었을 때) */}
+                  {customCosts.length > 0 && !isAddingCustomCost && userPermission >= 2 && (
+                    <button
+                      onClick={handleSaveCustomCosts}
+                      disabled={isSavingCustomCost}
+                      className="w-full mt-2 px-3 py-2 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    >
+                      {isSavingCustomCost ? '저장 중...' : '변경사항 저장'}
+                    </button>
+                  )}
+
+                  {/* 빈 상태 */}
+                  {customCosts.length === 0 && !isAddingCustomCost && (
+                    <p className="text-sm text-gray-500">추가 비용 항목 없음</p>
+                  )}
+
+                  {!userPermission || userPermission < 2 ? (
+                    <p className="text-xs text-gray-400 mt-2">
+                      ℹ️ 권한 레벨 2 이상만 수정 가능합니다
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -1125,6 +1568,36 @@ export default function BusinessRevenueModal({
                       <span className="font-bold text-orange-700">-{formatCurrency(Number(displayData.additional_installation_revenue))}</span>
                     </div>
                   ) : null}
+                  {Math.round(Number(displayData.as_cost || 0)) > 0 ? (
+                    <div className="flex justify-between border-b border-gray-200 pb-2">
+                      <span>- AS 비용</span>
+                      <span className="font-bold text-blue-700">-{formatCurrency(Number(displayData.as_cost))}</span>
+                    </div>
+                  ) : null}
+                  {(() => {
+                    const customCostTotal = (() => {
+                      let costs: CustomCost[] = [];
+                      if (displayData.custom_additional_costs) {
+                        if (typeof displayData.custom_additional_costs === 'string') {
+                          try {
+                            costs = JSON.parse(displayData.custom_additional_costs);
+                          } catch (e) {
+                            costs = [];
+                          }
+                        } else if (Array.isArray(displayData.custom_additional_costs)) {
+                          costs = displayData.custom_additional_costs;
+                        }
+                      }
+                      return Array.isArray(costs) ? costs.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) : 0;
+                    })();
+
+                    return customCostTotal > 0 ? (
+                      <div className="flex justify-between border-b border-gray-200 pb-2">
+                        <span>- 커스텀 추가비용</span>
+                        <span className="font-bold text-orange-700">-{formatCurrency(customCostTotal)}</span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="flex justify-between border-t-2 border-blue-400 pt-3">
                     <span className="font-bold text-lg">= 순이익</span>
                     <span className={`font-bold text-lg ${Number(displayData.net_profit) >= 0 ? 'text-blue-700' : 'text-red-700'}`}>

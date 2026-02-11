@@ -46,6 +46,8 @@ interface RevenueCalculationResult {
   sales_commission: number;
   survey_costs: number;
   installation_costs: number;
+  as_cost?: number;  // AS 비용
+  custom_additional_costs?: any;  // 커스텀 추가비용 (JSONB)
   net_profit: number;
   equipment_breakdown: EquipmentBreakdown[];
   cost_breakdown: CostBreakdown;
@@ -537,10 +539,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 10. 최종 계산 (조정된 매출 기준)
-    // 순이익 = 매출 - 매입 - 추가설치비 - 조정된 영업비용 - 실사비용 - 설치비용
+    // 10. AS 비용 및 커스텀 추가비용 계산
+    const asCost = Number(businessInfo.as_cost || 0);
+
+    let customCostTotal = 0;
+    if (businessInfo.custom_additional_costs) {
+      try {
+        let costs = [];
+        if (typeof businessInfo.custom_additional_costs === 'string') {
+          costs = JSON.parse(businessInfo.custom_additional_costs);
+        } else if (Array.isArray(businessInfo.custom_additional_costs)) {
+          costs = businessInfo.custom_additional_costs;
+        }
+        customCostTotal = Array.isArray(costs)
+          ? costs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+          : 0;
+      } catch (e) {
+        console.warn('⚠️ [REVENUE-API] 커스텀 추가비용 파싱 오류:', e);
+        customCostTotal = 0;
+      }
+    }
+
+    // 11. 최종 계산 (조정된 매출 기준)
+    // 순이익 = 매출 - 매입 - 추가설치비 - 조정된 영업비용 - 실사비용 - 설치비용 - AS비용 - 커스텀추가비용
     const grossProfit = Math.round(adjustedRevenue - totalCost);
-    const netProfit = Math.round(grossProfit - installationExtraCost - adjustedSalesCommission - totalSurveyCosts - totalInstallationCosts);
+    const netProfit = Math.round(
+      grossProfit
+      - installationExtraCost
+      - adjustedSalesCommission
+      - totalSurveyCosts
+      - totalInstallationCosts
+      - asCost
+      - customCostTotal
+    );
 
     console.log('📊 [REVENUE-API] 순이익 계산:', {
       business_id,
@@ -551,6 +582,8 @@ export async function POST(request: NextRequest) {
       adjustedSalesCommission,
       totalSurveyCosts,
       totalInstallationCosts,
+      asCost,
+      customCostTotal,
       netProfit
     });
 
@@ -570,6 +603,8 @@ export async function POST(request: NextRequest) {
       sales_commission: salesCommission, // 기본 영업비용 (조정 전)
       survey_costs: totalSurveyCosts,
       installation_costs: totalInstallationCosts,
+      as_cost: asCost,  // AS 비용
+      custom_additional_costs: businessInfo.custom_additional_costs,  // 커스텀 추가비용
       net_profit: netProfit,
       equipment_breakdown: equipmentBreakdown,
       cost_breakdown: {

@@ -16,7 +16,8 @@
     "health": "curl http://localhost:3000/api/health",
     "migrate:photos": "node --experimental-modules scripts/migrate-existing-photos.js",
     "migrate:remove-discussions": "tsx scripts/run-remove-discussions.ts",
-    "migrate:sample-employees": "tsx scripts/insert-sample-employees.ts"
+    "migrate:sample-employees": "tsx scripts/insert-sample-employees.ts",
+    "verify-migration": "tsx scripts/verify-business-info-schema.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

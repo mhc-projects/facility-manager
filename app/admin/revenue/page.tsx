@@ -1307,18 +1307,30 @@ function RevenueDashboard() {
 
           <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="p-1 sm:p-1.5 bg-green-50 rounded flex-shrink-0">
-                <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-green-600" />
+              <div className={`p-1 sm:p-1.5 ${showReceivablesOnly ? 'bg-red-50' : 'bg-green-50'} rounded flex-shrink-0`}>
+                <TrendingUp className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${showReceivablesOnly ? 'text-red-600' : 'text-green-600'}`} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 매출금액</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-green-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">
+                  {showReceivablesOnly ? '총 미수금액' : '총 매출금액'}
+                </p>
+                <p className={`text-xs sm:text-sm md:text-base font-bold ${showReceivablesOnly ? 'text-red-600' : 'text-green-600'} break-words`}>
                   {formatCurrency((() => {
-                    const totalRevenue = sortedBusinesses.reduce((sum, b) => {
-                      const revenue = Number(b.total_revenue) || 0;
-                      return sum + revenue;
-                    }, 0);
-                    return totalRevenue;
+                    if (showReceivablesOnly) {
+                      // 미수금 필터 활성화 시: 총 미수금액 계산
+                      const totalReceivables = sortedBusinesses.reduce((sum, b) => {
+                        const receivables = Number(b.total_receivables) || 0;
+                        return sum + receivables;
+                      }, 0);
+                      return totalReceivables;
+                    } else {
+                      // 기본: 총 매출금액 계산
+                      const totalRevenue = sortedBusinesses.reduce((sum, b) => {
+                        const revenue = Number(b.total_revenue) || 0;
+                        return sum + revenue;
+                      }, 0);
+                      return totalRevenue;
+                    }
                   })())}
                 </p>
               </div>

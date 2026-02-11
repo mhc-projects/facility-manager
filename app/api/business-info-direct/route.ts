@@ -418,6 +418,41 @@ export async function PUT(request: Request) {
         updateObject.survey_fee_adjustment = isNaN(numValue) ? null : numValue;
       }
     }
+
+    // AS 비용 처리 (survey_fee_adjustment와 동일한 패턴)
+    if (updateData.as_cost !== undefined) {
+      if (updateData.as_cost === null || updateData.as_cost === '' || updateData.as_cost === undefined) {
+        updateObject.as_cost = null;
+      } else {
+        const numValue = parseInt(updateData.as_cost);
+        updateObject.as_cost = isNaN(numValue) || numValue < 0 ? 0 : numValue;
+      }
+    }
+
+    // 커스텀 추가비용 처리 (JSONB 배열)
+    if (updateData.custom_additional_costs !== undefined) {
+      if (Array.isArray(updateData.custom_additional_costs)) {
+        // 배열의 각 항목 검증: name과 amount 필드 확인
+        const validatedCosts = updateData.custom_additional_costs
+          .filter((item: any) => {
+            return item &&
+                   typeof item === 'object' &&
+                   typeof item.name === 'string' &&
+                   item.name.trim() !== '' &&
+                   (typeof item.amount === 'number' || typeof item.amount === 'string');
+          })
+          .map((item: any) => ({
+            name: item.name.trim(),
+            amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount) || 0
+          }))
+          .filter((item: any) => item.amount >= 0); // 음수 제거
+
+        updateObject.custom_additional_costs = JSON.stringify(validatedCosts);
+      } else {
+        updateObject.custom_additional_costs = '[]';
+      }
+    }
+
     if (updateData.negotiation !== undefined) {
       updateObject.negotiation = normalizeUTF8(updateData.negotiation || '');
     }
