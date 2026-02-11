@@ -116,6 +116,26 @@ const nextConfig = {
           }
         ],
       },
+      // 🔥 개발 환경 - 모든 페이지 캐싱 비활성화 (브라우저 캐시 방지)
+      ...(process.env.NODE_ENV === 'development' ? [
+        {
+          source: '/:path*',
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+            },
+            {
+              key: 'Pragma',
+              value: 'no-cache',
+            },
+            {
+              key: 'Expires',
+              value: '0',
+            },
+          ],
+        },
+      ] : []),
       // 🔥 사진 조회 API - 실시간 업데이트를 위한 캐싱 비활성화
       {
         source: '/api/facility-photos',
