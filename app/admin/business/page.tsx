@@ -2209,9 +2209,12 @@ function BusinessManagementPage() {
       setSelectedBusiness(targetBusiness)
       setIsDetailModalOpen(true)
 
-      if (returnTo && taskId) {
+      // returnTo 파라미터 처리 (tasks, revenue 등)
+      if (returnTo) {
         setReturnPath(returnTo)
-        setReturnTaskId(taskId)
+        if (taskId) {
+          setReturnTaskId(taskId)
+        }
       }
 
       // URL 정리 (비동기로 처리하여 렌더링 블로킹 방지)
@@ -2295,7 +2298,7 @@ function BusinessManagementPage() {
 
   // 🔙 복귀 경로 핸들러 (Revenue → Business 네비게이션)
   const handleReturnToSource = useCallback(() => {
-    if (returnPath === 'revenue' && selectedBusiness) {
+    if ((returnPath === 'revenue' || returnPath === '/admin/revenue') && selectedBusiness) {
       console.log('🔙 [Return] Revenue 페이지로 복귀:', selectedBusiness.사업장명 || selectedBusiness.business_name);
 
       // Revenue 페이지로 이동하면서 해당 사업장의 Revenue 모달 자동 열기
@@ -2913,7 +2916,14 @@ function BusinessManagementPage() {
         attachment_completion_submitted_at: freshData.attachment_completion_submitted_at || ''
       })
 
-      setIsModalOpen(true)
+      // Close detail modal BEFORE opening edit modal
+      // IMPORTANT: Keep returnPath intact so edit modal can return to origin after save
+      setIsDetailModalOpen(false)
+
+      // Use setTimeout to ensure state updates complete before opening edit modal
+      setTimeout(() => {
+        setIsModalOpen(true)
+      }, 0)
 
       // 대기필증 데이터 로딩
       if (freshData.id) {
@@ -4547,12 +4557,15 @@ function BusinessManagementPage() {
             isOpen={isDetailModalOpen}
             business={selectedBusiness}
             onClose={() => {
-              // ✨ 복귀 로직: admin/tasks로 돌아가야 하는 경우
+              // ✨ 복귀 로직: 다른 페이지에서 왔을 경우 돌아가기
               if (returnPath === 'tasks' && returnTaskId) {
                 router.push(`/admin/tasks?openModal=${returnTaskId}`)
-                // 상태 초기화
                 setReturnPath(null)
                 setReturnTaskId(null)
+              } else if (returnPath === '/admin/revenue' || returnPath === 'revenue') {
+                // Revenue 페이지로 복귀
+                router.push('/admin/revenue')
+                setReturnPath(null)
               } else {
                 // 기본 동작: 모달만 닫기
                 setIsDetailModalOpen(false)
@@ -4618,11 +4631,11 @@ function BusinessManagementPage() {
                     type="button"
                     onClick={handleReturnToSource}
                     className="flex items-center px-2 sm:px-3 py-1 sm:py-2 bg-white bg-opacity-20 text-white rounded-md sm:rounded-lg hover:bg-opacity-30 transition-all duration-200 text-sm font-medium border border-white border-opacity-30 hover:border-opacity-50"
-                    title={returnPath === 'revenue' ? '매출 관리로 돌아가기' : '취소'}
+                    title={(returnPath === 'revenue' || returnPath === '/admin/revenue') ? '매출 관리로 돌아가기' : '취소'}
 
                   >
                     <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
-                    <span className="hidden sm:inline">{returnPath === 'revenue' ? '돌아가기' : '취소'}</span>
+                    <span className="hidden sm:inline">{(returnPath === 'revenue' || returnPath === '/admin/revenue') ? '돌아가기' : '취소'}</span>
                     <span className="sm:hidden">✕</span>
                   </button>
                 </div>

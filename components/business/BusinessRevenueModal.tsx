@@ -14,7 +14,6 @@ interface BusinessRevenueModalProps {
   userPermission: number;
 }
 
-
 export default function BusinessRevenueModal({
   business,
   isOpen,
@@ -392,7 +391,7 @@ export default function BusinessRevenueModal({
   const isReadOnly = userPermission < 2;
   const canEditAdjustment = userPermission >= 3;
 
-  // 사업장명 클릭 핸들러 - Business 페이지로 네비게이션
+  // 사업장명 클릭 핸들러 - Business 페이지로 이동하여 전체 기능 사용
   const handleBusinessNameClick = () => {
     if (!business?.id) {
       console.error('❌ [Navigation] Business ID가 없습니다.');
@@ -400,8 +399,9 @@ export default function BusinessRevenueModal({
     }
 
     console.log('🔗 [Navigation] Business 페이지로 이동:', business.business_name || business.사업장명);
-    // returnTo=revenue 파라미터 추가로 복귀 경로 추적
-    router.push(`/admin/business?businessId=${business.id}&openModal=true&returnTo=revenue`);
+
+    // Business 페이지로 이동하며 모달 자동 오픈 + Revenue로 복귀 경로 설정
+    router.push(`/admin/business?openModal=${business.id}&returnTo=/admin/revenue`);
   };
 
   // 모달이 닫혀있거나 business 데이터가 없으면 null 반환 (JSX 조건부 렌더링)
@@ -435,7 +435,7 @@ export default function BusinessRevenueModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 10000 }}>
       <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">

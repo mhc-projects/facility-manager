@@ -331,7 +331,7 @@ export default function BusinessDetailModal({
   if (!isOpen || !business) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-2xl max-w-sm sm:max-w-2xl md:max-w-4xl lg:max-w-7xl w-full max-h-[95vh] overflow-hidden">
         {/* Header with gradient background */}
         <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-3 sm:px-4 md:px-5 lg:px-6 py-3 sm:py-3 md:py-4 text-white relative overflow-hidden">
@@ -373,7 +373,7 @@ export default function BusinessDetailModal({
                   </div>
                   <button
                     onClick={() => {
-                      onClose()
+                      // Don't call onClose() - let onEdit handle modal state
                       onEdit(business)
                     }}
                     className="flex items-center px-2 py-1 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-all duration-200 text-xs font-medium border border-white border-opacity-30"
@@ -415,7 +415,7 @@ export default function BusinessDetailModal({
                 <div className="flex items-center space-x-1 md:space-x-2">
                   <button
                     onClick={() => {
-                      onClose()
+                      // Don't call onClose() - let onEdit handle modal state
                       onEdit(business)
                     }}
                     className="flex items-center px-2 md:px-3 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-all duration-200 text-xs md:text-xs font-medium border border-white border-opacity-30 hover:border-opacity-50"

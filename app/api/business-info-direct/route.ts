@@ -193,7 +193,7 @@ export async function PUT(request: Request) {
     if (updateData.business_name !== undefined) {
       const normalizedName = normalizeUTF8(updateData.business_name || '').trim();
 
-      // 현재 저장된 이름과 다른 경우에만 중복 체크
+      // 현재 저장된 이름과 다른 경우에만 중복 체크 및 업데이트
       if (normalizedName !== business.business_name?.trim()) {
         const existingWithSameName = await queryOne(
           'SELECT id FROM business_info WHERE business_name = $1 AND is_deleted = false AND id != $2',
@@ -207,9 +207,11 @@ export async function PUT(request: Request) {
             error: `이미 동일한 사업장명이 존재합니다: ${normalizedName}`
           }, { status: 409 });  // Conflict
         }
-      }
 
-      updateObject.business_name = normalizedName;
+        // Only update business_name if it actually changed
+        updateObject.business_name = normalizedName;
+      }
+      // If name didn't change, don't include it in updateObject to avoid unique constraint error
     }
     if (updateData.local_government !== undefined) {
       updateObject.local_government = normalizeUTF8(updateData.local_government || '');
