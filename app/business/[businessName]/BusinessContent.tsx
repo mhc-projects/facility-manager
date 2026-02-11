@@ -306,16 +306,17 @@ export default function BusinessContent() {
 
           try {
             // ✅ 브라우저 캐시 무효화: timestamp + cache headers
-            const timestamp = `&_t=${Date.now()}`;
+            const timestamp = `&_t=${Date.now()}${Math.random()}`;  // 🔧 더 강력한 캐시 무효화
             const mgmtResponse = await fetch(
               `/api/facility-management?${queryParam}${timestamp}`,
               {
                 cache: 'no-store',  // Next.js 캐시 비활성화
                 headers: {
-                  'Cache-Control': 'no-cache, no-store, must-revalidate',  // 브라우저 캐시 비활성화
+                  'Cache-Control': 'no-cache, no-store, must-revalidate, proxy-revalidate',  // 프록시 캐시도 비활성화
                   'Pragma': 'no-cache',
                   'Expires': '0'
-                }
+                },
+                next: { revalidate: 0 }  // Next.js 14+ 추가 캐시 비활성화
               }
             );
             const mgmtData = await mgmtResponse.json();

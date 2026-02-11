@@ -93,6 +93,14 @@ export async function GET(request: NextRequest) {
         devices: devices || [],
         files: fileCounts
       }
+    }, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'CDN-Cache-Control': 'no-store',  // Vercel CDN 캐시 비활성화
+        'Vercel-CDN-Cache-Control': 'no-store'  // Vercel 전용
+      }
     });
 
   } catch (error) {
@@ -219,6 +227,14 @@ export async function PUT(request: NextRequest) {
       success: true,
       data: updatedBusiness,
       message: '시설 관리 정보가 업데이트되었습니다.'
+    }, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store'
+      }
     });
 
   } catch (error) {
