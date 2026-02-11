@@ -26,6 +26,9 @@ const BusinessRevenueModal = dynamic(() => import('@/components/business/Busines
   loading: () => <div className="text-center py-4">로딩 중...</div>,
   ssr: false
 });
+
+// Business 상세 모달은 페이지 이동으로 처리 (더 이상 필요 없음)
+
 import {
   BarChart3,
   Calculator,
@@ -263,6 +266,8 @@ function RevenueDashboard() {
     Object.values(CACHE_KEYS).forEach(key => sessionStorage.removeItem(key));
     console.log('✅ [CACHE] 캐시 클리어 완료');
   };
+
+  // Business 상세 기능은 페이지 이동으로 처리 (코드 제거됨)
 
   // 동적 가격 데이터 로드 (병렬 처리 + SessionStorage 캐싱)
   const loadPricingData = async () => {
