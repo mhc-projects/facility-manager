@@ -163,6 +163,24 @@ const nextConfig = {
           }
         ],
       },
+      // 🔥 시설 관리 API - 캐싱 비활성화 (실시간 실사자 정보/특이사항 출력 보장)
+      {
+        source: '/api/facility-management',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+          },
+          {
+            key: 'CDN-Cache-Control',
+            value: 'no-store'
+          },
+          {
+            key: 'Vercel-CDN-Cache-Control',
+            value: 'no-store'
+          }
+        ],
+      },
       // 🔥 일반 API - 적당한 캐싱
       {
         source: '/api/(.*)',
