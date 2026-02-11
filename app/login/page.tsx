@@ -24,9 +24,37 @@ function LoginForm() {
   useEffect(() => {
     if (user && !authLoading) {
       const redirectTo = searchParams?.get('redirect') || '/'
-      console.log('✅ 이미 로그인됨, 리다이렉트:', redirectTo)
-      // ✅ 즉시 리다이렉트 (이미 로그인된 상태이므로 쿠키 존재 보장)
-      window.location.href = redirectTo
+      console.log('✅ 이미 로그인됨, 쿠키 확인 후 리다이렉트:', redirectTo)
+
+      // ✅ 쿠키 확인 폴링 (무한 루프 방지)
+      let attempts = 0
+      const maxAttempts = 10 // 최대 5초 대기
+
+      const checkCookieAndRedirect = () => {
+        attempts++
+        console.log(`🍪 쿠키 확인 시도 ${attempts}/${maxAttempts}`)
+
+        // auth_ready 쿠키 확인
+        const authReady = document.cookie.split('; ').find(row => row.startsWith('auth_ready='))
+
+        if (authReady) {
+          console.log('✅ 쿠키 확인 완료, 안전한 리다이렉트:', redirectTo)
+          window.location.replace(redirectTo)
+          return
+        }
+
+        if (attempts < maxAttempts) {
+          console.log('⏳ auth_ready 쿠키 미발견, 재시도...')
+          setTimeout(checkCookieAndRedirect, 500)
+        } else {
+          console.error('❌ 쿠키 설정 시간 초과')
+          // 최후의 수단: 쿠키 없이도 리다이렉트 (localStorage 토큰 의존)
+          window.location.replace(redirectTo)
+        }
+      }
+
+      // 초기 500ms 대기 후 확인 시작
+      setTimeout(checkCookieAndRedirect, 500)
     }
   }, [user, authLoading, searchParams])
 
