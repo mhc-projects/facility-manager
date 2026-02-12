@@ -24,6 +24,7 @@ import { useBusinessData } from './hooks/useBusinessData'
 import { useFacilityStats } from './hooks/useFacilityStats'
 import { useRevenueData } from './hooks/useRevenueData'
 import { useSupabaseRealtime } from '@/hooks/useSupabaseRealtime'
+import { useIsMobile } from '@/hooks/useIsMobile'
 // 📱 모바일 카드 뷰 컴포넌트
 import BusinessCardList from './components/BusinessCardList'
 
@@ -874,6 +875,10 @@ function BusinessManagementPage() {
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [filterProjectYears, setFilterProjectYears] = useState<string[]>([])
   const [filterCurrentSteps, setFilterCurrentSteps] = useState<string[]>([])
+
+  // 모바일 필터 접기/펼치기 상태
+  const isMobile = useIsMobile()
+  const [isFilterExpanded, setIsFilterExpanded] = useState<boolean>(false)
 
   // 상세 필터 상태 (제출일 + 설치완료)
   const [submissionDateFilters, setSubmissionDateFilters] = useState<{
@@ -4298,29 +4303,52 @@ function BusinessManagementPage() {
 
               {/* 필터 드롭다운 - 헤더와 입력창 통합 행 */}
               <div className="mt-2 md:mt-2 pt-2 md:pt-2 border-t border-gray-200">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                  {/* 필터 라벨 + 초기화 버튼 */}
-                  <div className="flex items-center justify-between sm:justify-start w-full sm:w-auto shrink-0 gap-2">
+                {/* 필터 헤더: 라벨 + 토글 버튼 + 초기화 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
                     <span className="text-xs sm:text-sm font-medium text-gray-700">필터</span>
-                    {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
+                    {/* 모바일에서만 토글 버튼 표시 */}
+                    {isMobile && (
                       <button
-                        onClick={() => {
-                          setFilterOffices([])
-                          setFilterRegions([])
-                          setFilterCategories([])
-                          setFilterProjectYears([])
-                          setFilterCurrentSteps([])
-                        }}
-                        className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                        onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                        className="ml-1 text-gray-500 hover:text-gray-700 transition-colors"
+                        aria-label={isFilterExpanded ? '필터 접기' : '필터 펼치기'}
                       >
-                        <X className="w-3 h-3" />
-                        초기화
+                        {isFilterExpanded ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
                       </button>
                     )}
                   </div>
 
-                  {/* 필터 입력창들 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 flex-1 w-full">
+                  {/* 초기화 버튼 */}
+                  {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
+                    <button
+                      onClick={() => {
+                        setFilterOffices([])
+                        setFilterRegions([])
+                        setFilterCategories([])
+                        setFilterProjectYears([])
+                        setFilterCurrentSteps([])
+                      }}
+                      className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" />
+                      초기화
+                    </button>
+                  )}
+                </div>
+
+                {/* 필터 입력창들 - 접기/펼치기 애니메이션 */}
+                <div
+                  className={`
+                    grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2
+                    transition-all duration-300 ease-in-out overflow-hidden
+                    ${(!isMobile || isFilterExpanded) ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}
+                  `}
+                >
                   <MultiSelectDropdown
                     label="영업점"
                     options={filterOptions.offices}
@@ -4365,7 +4393,6 @@ function BusinessManagementPage() {
                     placeholder="전체"
                     inline
                   />
-                  </div>
                 </div>
 
                 {/* 상세 필터 (제출일 + 설치완료) */}
