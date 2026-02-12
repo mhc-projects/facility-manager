@@ -136,6 +136,16 @@ const nextConfig = {
           ],
         },
       ] : []),
+      // 🔥 비즈니스 페이지 - 최신 JavaScript 번들 로드 보장 (브라우저 캐시 방지)
+      {
+        source: '/business/:businessName*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate, max-age=0',
+          },
+        ],
+      },
       // 🔥 사진 조회 API - 실시간 업데이트를 위한 캐싱 비활성화
       {
         source: '/api/facility-photos',
