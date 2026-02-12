@@ -15,6 +15,7 @@ import TwoStageDropdown from '@/components/ui/TwoStageDropdown';
 import { MANUFACTURER_NAMES_REVERSE, type ManufacturerName } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 // Code Splitting: 무거운 모달 및 디스플레이 컴포넌트를 동적 로딩
 const InvoiceDisplay = dynamic(() => import('@/components/business/InvoiceDisplay').then(mod => ({ default: mod.InvoiceDisplay })), {
@@ -41,7 +42,8 @@ import {
   Filter,
   Download,
   Loader2,
-  Settings
+  Settings,
+  ChevronDown
 } from 'lucide-react';
 
 interface BusinessInfo {
@@ -85,6 +87,7 @@ interface DashboardStats {
 function RevenueDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
   const [businesses, setBusinesses] = useState<BusinessInfo[]>([]);
   const [calculations, setCalculations] = useState<RevenueCalculation[]>([]);
   const [selectedOffices, setSelectedOffices] = useState<string[]>([]);
@@ -120,6 +123,7 @@ function RevenueDashboard() {
   const [selectedSurveyMonths, setSelectedSurveyMonths] = useState<string[]>([]); // 실사 월 필터 ['견적|1', '착공|2', '준공|9']
   const [showReceivablesOnly, setShowReceivablesOnly] = useState(false); // 미수금 필터
   const [showUninstalledOnly, setShowUninstalledOnly] = useState(false); // 미설치 필터
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false); // 필터 섹션 접기/펼치기 상태 (기본값: 접힌 상태)
   const [sortField, setSortField] = useState<string>('business_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -1414,11 +1418,21 @@ function RevenueDashboard() {
 
         {/* 필터 및 검색 */}
         <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-2 sm:p-3 md:p-4">
-          <h3 className="text-xs sm:text-sm md:text-base font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center gap-1.5 sm:gap-2">
-            <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            필터 및 검색
-          </h3>
-          <div className="space-y-2 sm:space-y-3">
+          <button
+            onClick={() => isMobile && setIsFilterExpanded(!isFilterExpanded)}
+            className={`w-full text-xs sm:text-sm md:text-base font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center justify-between gap-1.5 sm:gap-2 ${isMobile ? 'cursor-pointer' : 'cursor-default'}`}
+          >
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              필터 및 검색
+            </div>
+            {isMobile && (
+              <ChevronDown
+                className={`w-4 h-4 transition-transform duration-200 ${isFilterExpanded ? 'rotate-180' : ''}`}
+              />
+            )}
+          </button>
+          <div className={`space-y-2 sm:space-y-3 ${isMobile && !isFilterExpanded ? 'hidden' : ''}`}>
             {/* 첫 번째 행: MultiSelectDropdown 필터들 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
               <MultiSelectDropdown
