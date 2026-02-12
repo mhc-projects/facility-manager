@@ -883,10 +883,10 @@ export default function BusinessDetailModal({
                     <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
                       <div className="text-xs sm:text-sm text-gray-600 mb-1">제조사</div>
                       <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">
-                        {business.manufacturer === '에코센스' ? '🏭 에코센스' :
-                         business.manufacturer === '크린어스' ? '🌍 크린어스' :
-                         business.manufacturer === '가이아씨앤에스' ? '🌿 가이아씨앤에스' :
-                         business.manufacturer === '이브이에스' ? '⚡ 이브이에스' :
+                        {(business.manufacturer === '에코센스' || business.manufacturer === 'ecosense') ? '🏭 에코센스' :
+                         (business.manufacturer === '크린어스' || business.manufacturer === 'cleanearth') ? '🌍 크린어스' :
+                         (business.manufacturer === '가이아씨앤에스' || business.manufacturer === 'gaia_cns') ? '🌿 가이아씨앤에스' :
+                         (business.manufacturer === '이브이에스' || business.manufacturer === 'evs') ? '⚡ 이브이에스' :
                          business.manufacturer || '-'}
                       </div>
                     </div>

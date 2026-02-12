@@ -6,6 +6,8 @@ import { InvoiceDisplay } from './InvoiceDisplay';
 import { MemoSection } from './MemoSection';
 import { TokenManager } from '@/lib/api-client';
 import type { CalculatedData, OperatingCostAdjustment } from '@/types';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileTabs } from '@/components/ui/MobileTabs';
 
 interface BusinessRevenueModalProps {
   business: any;
@@ -27,6 +29,10 @@ export default function BusinessRevenueModal({
 
   // ✅ 데이터 변경 추적 (영업비용 조정 또는 실사비 저장 시 true)
   const [dataChanged, setDataChanged] = useState(false);
+
+  // 🆕 모바일 반응형 상태
+  const isMobile = useIsMobile(768); // md breakpoint
+  const [activeTab, setActiveTab] = useState<'content' | 'memo'>('content');
 
   // 🎯 안정적인 business ID 추출 (의존성 배열용)
   const businessId = business?.id;
@@ -705,7 +711,7 @@ export default function BusinessRevenueModal({
       <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <h3 className="text-base md:text-xl font-bold text-gray-900 flex items-center gap-2">
               <button
                 onClick={handleBusinessNameClick}
                 className="hover:text-blue-600 hover:underline transition-colors cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded px-1"
@@ -713,7 +719,7 @@ export default function BusinessRevenueModal({
               >
                 {business.business_name || business.사업장명}
               </button>
-              <span className="text-gray-500">- 기기 상세 정보</span>
+              <span className="text-xs md:text-base text-gray-500">- 기기 상세 정보</span>
             </h3>
             {isRefreshing && (
               <div className="flex items-center gap-2 text-sm text-blue-600">
@@ -725,7 +731,7 @@ export default function BusinessRevenueModal({
               </div>
             )}
             {calculatedData && (
-              <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+              <span className="text-[10px] md:text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
                 최신 계산 완료
               </span>
             )}
@@ -740,10 +746,21 @@ export default function BusinessRevenueModal({
           </button>
         </div>
 
-        {/* 두 열 레이아웃: 왼쪽 메인 콘텐츠 + 오른쪽 메모 */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* 왼쪽: 메인 콘텐츠 (스크롤 가능) */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* 반응형 레이아웃: 모바일(탭) vs 데스크톱(2열) */}
+        <div className={`flex flex-1 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
+          {isMobile && (
+            <MobileTabs
+              tabs={[
+                { id: 'content', label: '매출 내역', icon: '📊' },
+                { id: 'memo', label: '메모', icon: '📝' }
+              ]}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          )}
+
+          {/* 메인 콘텐츠 */}
+          <div className={`flex-1 overflow-y-auto ${isMobile ? (activeTab === 'content' ? 'p-4 space-y-4' : 'hidden') : 'p-6 space-y-6'}`}>
             {/* 로딩 중 - 스켈레톤 UI */}
             {isRefreshing && !calculatedData ? (
               <div className="space-y-6 animate-pulse">
@@ -779,7 +796,7 @@ export default function BusinessRevenueModal({
               <>
                 {/* 에러 메시지 */}
                 {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 md:p-4 mb-4">
                     <p className="text-sm text-red-800">
                       ⚠️ {error}
                       <br />
@@ -789,15 +806,15 @@ export default function BusinessRevenueModal({
                 )}
 
                 {/* 사업장 기본 정보 */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-50 rounded-lg p-3 md:p-4 space-y-2">
+            <div className="grid grid-cols-2 gap-3 md:gap-4">
               <div>
-                <span className="text-sm font-medium text-gray-600">영업점:</span>
-                <span className="ml-2 text-sm text-gray-900">{business.sales_office || business.영업점 || '미배정'}</span>
+                <span className="text-xs md:text-sm font-medium text-gray-600">영업점:</span>
+                <span className="ml-2 text-xs md:text-sm text-gray-900">{business.sales_office || business.영업점 || '미배정'}</span>
               </div>
               <div>
-                <span className="text-sm font-medium text-gray-600">진행 구분:</span>
-                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                <span className="text-xs md:text-sm font-medium text-gray-600">진행 구분:</span>
+                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] md:text-xs font-medium ${
                   business.category === '보조금' || business.category === '보조금 동시진행'
                     ? 'bg-purple-100 text-purple-800' :
                   business.category === '자비' ? 'bg-green-100 text-green-800' :
@@ -808,31 +825,31 @@ export default function BusinessRevenueModal({
                 </span>
               </div>
               <div>
-                <span className="text-sm font-medium text-gray-600">제조사:</span>
-                <span className="ml-2 text-sm text-gray-900">{business.manufacturer || business.제조사 || '미지정'}</span>
+                <span className="text-xs md:text-sm font-medium text-gray-600">제조사:</span>
+                <span className="ml-2 text-xs md:text-sm text-gray-900">{business.manufacturer || business.제조사 || '미지정'}</span>
               </div>
             </div>
             {(business.address || business.주소) && (
               <div>
-                <span className="text-sm font-medium text-gray-600">주소:</span>
-                <span className="ml-2 text-sm text-gray-900">{business.address || business.주소}</span>
+                <span className="text-xs md:text-sm font-medium text-gray-600">주소:</span>
+                <span className="ml-2 text-xs md:text-sm text-gray-900">{business.address || business.주소}</span>
               </div>
             )}
           </div>
 
           {/* 설치 기기 목록 */}
           <div>
-            <h4 className="text-lg font-semibold text-gray-900 mb-4">설치 기기 목록</h4>
+            <h4 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">설치 기기 목록</h4>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-300">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="border border-gray-300 px-4 py-2 text-left">기기명</th>
-                    <th className="border border-gray-300 px-4 py-2 text-center">수량</th>
-                    <th className="border border-gray-300 px-4 py-2 text-right">매출단가</th>
-                    <th className="border border-gray-300 px-4 py-2 text-right">매입단가</th>
-                    <th className="border border-gray-300 px-4 py-2 text-right">매출합계</th>
-                    <th className="border border-gray-300 px-4 py-2 text-right">매입합계</th>
+                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-left">기기명</th>
+                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-center">수량</th>
+                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매출단가</th>
+                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매입단가</th>
+                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매출합계</th>
+                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매입합계</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -843,7 +860,7 @@ export default function BusinessRevenueModal({
                     if (equipmentBreakdown.length === 0) {
                       return (
                         <tr>
-                          <td colSpan={6} className="border border-gray-300 px-4 py-6 text-center text-gray-500">
+                          <td colSpan={6} className="border border-gray-300 px-2 md:px-4 py-4 md:py-6 text-xs md:text-sm text-center text-gray-500">
                             등록된 기기 정보가 없습니다.
                           </td>
                         </tr>
@@ -857,28 +874,28 @@ export default function BusinessRevenueModal({
                       <>
                         {equipmentBreakdown.map((item: any) => (
                           <tr key={item.equipment_type} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 px-4 py-2">{item.equipment_name}</td>
-                            <td className="border border-gray-300 px-4 py-2 text-center font-medium">{item.quantity}대</td>
-                            <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm">{item.equipment_name}</td>
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-center font-medium">{item.quantity}대</td>
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono">
                               {Math.round(item.unit_official_price).toLocaleString()}
                             </td>
-                            <td className="border border-gray-300 px-4 py-2 text-right font-mono text-red-600">
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-red-600">
                               {Math.round(item.unit_manufacturer_price).toLocaleString()}
                             </td>
-                            <td className="border border-gray-300 px-4 py-2 text-right font-mono font-medium">
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono font-medium">
                               {item.total_revenue.toLocaleString()}
                             </td>
-                            <td className="border border-gray-300 px-4 py-2 text-right font-mono font-medium text-red-600">
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono font-medium text-red-600">
                               {item.total_cost.toLocaleString()}
                             </td>
                           </tr>
                         ))}
                         <tr className="bg-blue-50 font-bold">
-                          <td className="border border-gray-300 px-4 py-2" colSpan={4}>합계</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right font-mono text-blue-600">
+                          <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm" colSpan={4}>합계</td>
+                          <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-blue-600">
                             {totalRevenue.toLocaleString()}원
                           </td>
-                          <td className="border border-gray-300 px-4 py-2 text-right font-mono text-red-600">
+                          <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-red-600">
                             {totalCost.toLocaleString()}원
                           </td>
                         </tr>
@@ -896,7 +913,7 @@ export default function BusinessRevenueModal({
           {/* 추가 비용 정보 */}
           <div>
             <h4 className="text-lg font-semibold text-gray-900 mb-4">추가 비용 정보</h4>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <div className="bg-gray-50 rounded-lg p-3 md:p-4 space-y-3">
               <div className="flex items-center justify-between py-2 border-b border-gray-200">
                 <span className="text-sm font-medium text-gray-700">추가공사비</span>
                 <span className="text-base font-semibold text-green-700">
@@ -923,25 +940,25 @@ export default function BusinessRevenueModal({
           {/* 매출/매입/이익 정보 */}
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-green-50 rounded-lg p-4">
+              <div className="bg-green-50 rounded-lg p-3 md:p-4">
                 <p className="text-xs font-medium text-green-600 mb-1">매출금액</p>
                 <p className="text-lg font-bold text-green-700">
                   {formatCurrency(Number(displayData.total_revenue))}
                 </p>
               </div>
-              <div className="bg-red-50 rounded-lg p-4">
+              <div className="bg-red-50 rounded-lg p-3 md:p-4">
                 <p className="text-xs font-medium text-red-600 mb-1">매입금액</p>
                 <p className="text-lg font-bold text-red-700">
                   {formatCurrency(Number(displayData.total_cost))}
                 </p>
               </div>
-              <div className={`rounded-lg p-4 ${Number(displayData.net_profit) >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+              <div className={`rounded-lg p-3 md:p-4 ${Number(displayData.net_profit) >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
                 <p className={`text-xs font-medium mb-1 ${Number(displayData.net_profit) >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>순이익</p>
                 <p className={`text-lg font-bold ${Number(displayData.net_profit) >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>
                   {formatCurrency(Number(displayData.net_profit))}
                 </p>
               </div>
-              <div className="bg-purple-50 rounded-lg p-4">
+              <div className="bg-purple-50 rounded-lg p-3 md:p-4">
                 <p className="text-xs font-medium text-purple-600 mb-1">이익률</p>
                 <p className="text-lg font-bold text-purple-700">
                   {displayData.total_revenue > 0
@@ -953,21 +970,21 @@ export default function BusinessRevenueModal({
 
             {/* 추가공사비 및 협의사항 */}
             {(business.additional_cost || business.negotiation) ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h5 className="text-sm font-semibold text-gray-800 mb-3">매출 조정 내역</h5>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
+                <h5 className="text-xs md:text-xs md:text-sm font-semibold text-gray-800 mb-2 md:mb-3">매출 조정 내역</h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {Number(business.additional_cost || 0) > 0 ? (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">추가공사비 (+):</span>
-                      <span className="text-sm font-semibold text-green-700">
+                      <span className="text-xs md:text-sm text-gray-600">추가공사비 (+):</span>
+                      <span className="text-xs md:text-sm font-semibold text-green-700">
                         +{formatCurrency(business.additional_cost)}
                       </span>
                     </div>
                   ) : null}
                   {Number(business.negotiation || 0) > 0 ? (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">협의사항/네고 (-):</span>
-                      <span className="text-sm font-semibold text-red-700">
+                      <span className="text-xs md:text-sm text-gray-600">협의사항/네고 (-):</span>
+                      <span className="text-xs md:text-sm font-semibold text-red-700">
                         -{formatCurrency(business.negotiation)}
                       </span>
                     </div>
@@ -977,9 +994,9 @@ export default function BusinessRevenueModal({
             ) : null}
 
             {/* 매출 계산식 */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h5 className="text-sm font-semibold text-gray-800 mb-3">💰 최종 매출금액 계산식</h5>
-              <div className="text-sm text-gray-700 space-y-1">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4">
+              <h5 className="text-xs md:text-xs md:text-sm font-semibold text-gray-800 mb-2 md:mb-3">💰 최종 매출금액 계산식</h5>
+              <div className="text-xs md:text-sm text-gray-700 space-y-1">
                 <div className="flex items-center justify-between border-b border-blue-200 pb-2">
                   <span>기본 매출 (기기 합계)</span>
                   <span className="font-mono">{formatCurrency(
@@ -1012,11 +1029,11 @@ export default function BusinessRevenueModal({
           <div className="mt-6">
             <h4 className="text-lg font-semibold text-gray-900 mb-4">💰 비용 상세 내역</h4>
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
                 {/* 왼쪽 컬럼 - 기본 비용 항목들 */}
 
-                {/* 영업비용 */}
-                <div className="bg-white rounded-lg p-4 shadow-sm">
+                {/* 영업비용 - 모바일: 1번째, 데스크톱: 왼쪽 1번째 */}
+                <div className="bg-white rounded-lg p-3 md:p-4 shadow-sm order-1 md:order-1">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">💼 영업비용</span>
                     <div className="flex items-center gap-2">
@@ -1050,8 +1067,8 @@ export default function BusinessRevenueModal({
 
                 {/* 오른쪽 컬럼 - 조정 및 추가 비용 항목들 */}
 
-                {/* 영업비용 조정 카드 */}
-                <div className="bg-yellow-50 rounded-lg p-4 shadow-sm border-2 border-yellow-300">
+                {/* 영업비용 조정 카드 - 모바일: 5번째, 데스크톱: 오른쪽 1번째 */}
+                <div className="bg-yellow-50 rounded-lg p-3 md:p-4 shadow-sm border-2 border-yellow-300 order-5 md:order-2">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">⚙️ 영업비용 조정</span>
                     {!isEditingAdjustment && canEditAdjustment && (
@@ -1156,7 +1173,7 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* 실사비용 */}
-                <div className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="bg-white rounded-lg p-3 md:p-4 shadow-sm order-2 md:order-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">📋 실사비용</span>
                     <div className="flex items-center gap-2">
@@ -1219,7 +1236,7 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* 실사비용 조정 카드 */}
-                <div className="bg-purple-50 rounded-lg p-4 shadow-sm border-2 border-purple-300">
+                <div className="bg-purple-50 rounded-lg p-3 md:p-4 shadow-sm border-2 border-purple-300 order-6 md:order-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">⚙️ 실사비용 조정</span>
                     {!isEditingSurveyFee && userPermission >= 2 && (
@@ -1298,7 +1315,7 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* 설치비 */}
-                <div className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="bg-white rounded-lg p-3 md:p-4 shadow-sm order-3 md:order-5">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">🔧 총 설치비</span>
                   </div>
@@ -1319,7 +1336,7 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* AS 비용 카드 */}
-                <div className="bg-blue-50 rounded-lg p-4 shadow-sm border-2 border-blue-300">
+                <div className="bg-blue-50 rounded-lg p-3 md:p-4 shadow-sm border-2 border-blue-300 order-7 md:order-6">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">🔧 AS 비용</span>
                     {!isEditingAsCost && userPermission >= 2 && (
@@ -1392,7 +1409,7 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* 총 비용 */}
-                <div className="bg-gradient-to-br from-gray-700 to-gray-900 rounded-lg p-4 shadow-md text-white">
+                <div className="bg-gradient-to-br from-gray-700 to-gray-900 rounded-lg p-3 md:p-4 shadow-md text-white order-4 md:order-7">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">📊 총 비용 합계</span>
                   </div>
@@ -1418,7 +1435,7 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* 커스텀 추가비용 카드 */}
-                <div className="bg-orange-50 rounded-lg p-4 shadow-sm border-2 border-orange-300">
+                <div className="bg-orange-50 rounded-lg p-3 md:p-4 shadow-sm border-2 border-orange-300 order-8 md:order-8">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">📝 커스텀 추가비용</span>
                     {!isAddingCustomCost && userPermission >= 2 && (
@@ -1519,9 +1536,9 @@ export default function BusinessRevenueModal({
               </div>
 
               {/* 최종 이익 계산 공식 */}
-              <div className="mt-4 bg-white rounded-lg p-4 border-2 border-blue-300">
-                <h5 className="text-sm font-semibold text-gray-800 mb-3">📐 순이익 계산 공식</h5>
-                <div className="text-sm text-gray-700 space-y-2 font-mono">
+              <div className="mt-4 bg-white rounded-lg p-3 md:p-4 border-2 border-blue-300">
+                <h5 className="text-xs md:text-xs md:text-sm font-semibold text-gray-800 mb-2 md:mb-3">📐 순이익 계산 공식</h5>
+                <div className="text-xs md:text-sm text-gray-700 space-y-2 font-mono">
                   <div className="flex justify-between border-b border-gray-200 pb-2">
                     <span>매출금액</span>
                     <span className="font-bold text-green-700">{formatCurrency(Number(displayData.total_revenue))}</span>
@@ -1599,8 +1616,8 @@ export default function BusinessRevenueModal({
                     ) : null;
                   })()}
                   <div className="flex justify-between border-t-2 border-blue-400 pt-3">
-                    <span className="font-bold text-lg">= 순이익</span>
-                    <span className={`font-bold text-lg ${Number(displayData.net_profit) >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                    <span className="font-bold text-sm md:text-lg">= 순이익</span>
+                    <span className={`font-bold text-sm md:text-lg ${Number(displayData.net_profit) >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
                       {formatCurrency(Number(displayData.net_profit))}
                     </span>
                   </div>
@@ -1614,7 +1631,7 @@ export default function BusinessRevenueModal({
 
           {/* 계산서 및 입금 현황 */}
           {business.id && (
-            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 md:p-6 border border-purple-200">
+            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-3 md:p-4 md:p-6 border border-purple-200">
               <div className="flex items-center mb-4">
                 <div className="p-2 bg-purple-600 rounded-lg mr-3">
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1633,7 +1650,7 @@ export default function BusinessRevenueModal({
 
             {/* 읽기 전용 안내 (권한 0-1) */}
             {isReadOnly && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4">
                 <p className="text-sm text-blue-800">
                   ℹ️ 현재 읽기 전용 모드입니다. 정보 수정은 권한 레벨 2 이상이 필요합니다.
                 </p>
@@ -1643,8 +1660,8 @@ export default function BusinessRevenueModal({
             )}
           </div>
 
-          {/* 오른쪽: 메모 사이드바 */}
-          <div className="w-80 border-l border-indigo-200 flex flex-col overflow-hidden bg-gradient-to-b from-indigo-50/30 to-white">
+          {/* 메모 섹션 */}
+          <div className={`${isMobile ? (activeTab === 'memo' ? 'flex-1 overflow-hidden' : 'hidden') : 'w-80 border-l border-indigo-200 flex flex-col overflow-hidden bg-gradient-to-b from-indigo-50/30 to-white'}`}>
             <MemoSection
               businessId={business.id}
               businessName={business.business_name || business.사업장명 || ''}
@@ -1653,10 +1670,10 @@ export default function BusinessRevenueModal({
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
+        <div className="sticky bottom-0 bg-gray-50 px-4 md:px-6 py-3 md:py-4 border-t border-gray-200">
           <button
             onClick={() => onClose(dataChanged)}
-            className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="w-full px-4 py-2 text-sm md:text-base bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
             닫기
           </button>
