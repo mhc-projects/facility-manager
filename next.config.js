@@ -136,9 +136,19 @@ const nextConfig = {
           ],
         },
       ] : []),
-      // 🔥 비즈니스 페이지 - 최신 JavaScript 번들 로드 보장 (브라우저 캐시 방지)
+      // 🔥 동적 페이지 - 최신 JavaScript 번들 로드 보장 (개발/배포 환경 공통)
+      // 브라우저 캐시를 비활성화하여 코드 변경 시 하드 리프레시 없이 즉시 반영
       {
         source: '/business/:businessName*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate, max-age=0',
+          },
+        ],
+      },
+      {
+        source: '/admin/:path*',
         headers: [
           {
             key: 'Cache-Control',

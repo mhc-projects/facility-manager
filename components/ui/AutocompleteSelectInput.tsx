@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 
 interface Option {
@@ -31,8 +32,10 @@ export default function AutocompleteSelectInput({
   const [inputValue, setInputValue] = useState('')
   const [filteredOptions, setFilteredOptions] = useState<Option[]>(options)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // value prop이 변경될 때마다 inputValue 동기화
   useEffect(() => {
@@ -58,24 +61,54 @@ export default function AutocompleteSelectInput({
     }
   }, [inputValue, options])
 
+  // 드롭다운 위치 계산
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      const updatePosition = () => {
+        const rect = inputRef.current?.getBoundingClientRect()
+        if (rect) {
+          setDropdownPosition({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width
+          })
+        }
+      }
+
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    }
+  }, [isOpen])
+
   // 외부 클릭 감지
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const isClickInContainer = containerRef.current?.contains(event.target as Node)
+      const isClickInDropdown = dropdownRef.current?.contains(event.target as Node)
+
+      if (!isClickInContainer && !isClickInDropdown) {
         setIsOpen(false)
 
-        if (allowCustomValue && inputValue) {
-          // 수동 입력 허용 모드: 입력값 유지하고 콜백 호출
+        // 선택된 옵션 찾기
+        const selected = options.find(opt => opt.id === value)
+
+        if (allowCustomValue && inputValue && !selected) {
+          // 수동 입력 모드 + 입력값 있음 + 드롭다운에서 선택 안 됨 → 새로운 커스텀 입력으로 간주
           onChange('', inputValue)
-        } else {
-          // 기본 모드: 선택된 옵션으로 복원
-          const selected = options.find(opt => opt.id === value)
-          if (selected) {
-            setInputValue(selected.name)
-          } else {
-            setInputValue('')
-          }
+        } else if (selected) {
+          // 드롭다운에서 선택된 옵션이 있으면 표시 이름 복원 (onChange 호출 안 함)
+          setInputValue(selected.name)
+        } else if (!allowCustomValue) {
+          // 기본 모드에서 선택 안 되어 있으면 빈 값으로 복원
+          setInputValue('')
         }
+        // allowCustomValue=true이고 selected도 있으면 아무것도 안 함 (이미 선택된 상태 유지)
       }
     }
 
@@ -179,6 +212,63 @@ export default function AutocompleteSelectInput({
     setIsOpen(true)
   }
 
+  // 드롭다운 렌더링 함수
+  const renderDropdown = () => {
+    if (!isOpen) return null
+
+    const dropdown = (
+      <div
+        ref={dropdownRef}
+        style={{
+          position: 'absolute',
+          top: `${dropdownPosition.top}px`,
+          left: `${dropdownPosition.left}px`,
+          width: `${dropdownPosition.width}px`,
+          zIndex: 9999
+        }}
+        className="mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
+      >
+        {filteredOptions.length > 0 ? (
+          filteredOptions.map((option, index) => (
+            <div
+              key={option.id}
+              onClick={() => selectOption(option)}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              className={`px-3 py-2 cursor-pointer text-sm ${
+                index === highlightedIndex
+                  ? 'bg-blue-50 text-blue-700'
+                  : option.id === value
+                  ? 'bg-blue-100 text-blue-900 font-medium'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {option.name}
+            </div>
+          ))
+        ) : inputValue ? (
+          allowCustomValue ? (
+            <div
+              onClick={() => {
+                onChange('', inputValue)
+                setIsOpen(false)
+                inputRef.current?.blur()
+              }}
+              className="px-3 py-2 text-sm text-blue-600 cursor-pointer hover:bg-blue-50"
+            >
+              "{inputValue}" 입력
+            </div>
+          ) : (
+            <div className="px-3 py-2 text-sm text-gray-500">
+              검색 결과가 없습니다
+            </div>
+          )
+        ) : null}
+      </div>
+    )
+
+    return typeof window !== 'undefined' ? createPortal(dropdown, document.body) : null
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
@@ -203,47 +293,7 @@ export default function AutocompleteSelectInput({
         />
       </div>
 
-      {isOpen && filteredOptions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-          {filteredOptions.map((option, index) => (
-            <div
-              key={option.id}
-              onClick={() => selectOption(option)}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              className={`px-3 py-2 cursor-pointer text-sm ${
-                index === highlightedIndex
-                  ? 'bg-blue-50 text-blue-700'
-                  : option.id === value
-                  ? 'bg-blue-100 text-blue-900 font-medium'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {option.name}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {isOpen && filteredOptions.length === 0 && inputValue && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-          {allowCustomValue ? (
-            <div
-              onClick={() => {
-                onChange('', inputValue)
-                setIsOpen(false)
-                inputRef.current?.blur()
-              }}
-              className="px-3 py-2 text-sm text-blue-600 cursor-pointer hover:bg-blue-50"
-            >
-              "{inputValue}" 입력
-            </div>
-          ) : (
-            <div className="px-3 py-2 text-sm text-gray-500">
-              검색 결과가 없습니다
-            </div>
-          )}
-        </div>
-      )}
+      {renderDropdown()}
     </div>
   )
 }

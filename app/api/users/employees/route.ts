@@ -17,6 +17,7 @@ export interface EmployeeForAssignment {
   department?: string;
   position?: string;
   is_active: boolean;
+  permission_level: number;
   last_login_at?: string;
 }
 
@@ -79,6 +80,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         department,
         position,
         is_active,
+        permission_level,
         last_login_at,
         created_at
       FROM employees
@@ -98,6 +100,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       department: emp.department || undefined,
       position: emp.position || undefined,
       is_active: emp.is_active,
+      permission_level: emp.permission_level,
       last_login_at: emp.last_login_at || undefined
     }));
 

@@ -51,6 +51,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   // 자동완성용 데이터
   const [businesses, setBusinesses] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
+  const [activeEmployees, setActiveEmployees] = useState<any[]>([]) // 활성 내부 직원 (게스트 제외)
+  const [externalParticipants, setExternalParticipants] = useState<Array<{id: string, name: string, role: string, attended: boolean}>>([]) // 외부 참석자
 
   useEffect(() => {
     setMounted(true)
@@ -81,13 +83,20 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       const employeeRes = await fetch('/api/users/employees')
       const employeeData = await employeeRes.json()
       if (employeeData.success && employeeData.data && employeeData.data.employees) {
-        const employeeArray = Array.isArray(employeeData.data.employees) ? employeeData.data.employees : []
-        setEmployees(employeeArray)
-        console.log('👥 직원 목록 로드됨:', employeeArray.length, '명')
-        console.log('첫 번째 직원:', employeeArray[0])
+        const allEmployees = Array.isArray(employeeData.data.employees) ? employeeData.data.employees : []
+        setEmployees(allEmployees)
+
+        // 활성 내부 직원만 필터링 (게스트 제외: permission_level !== 0)
+        const activeInternalEmployees = allEmployees.filter((emp: any) =>
+          emp.is_active === true && (emp.permission_level !== 0)
+        )
+        setActiveEmployees(activeInternalEmployees)
+
+        console.log('👥 직원 목록 로드됨:', allEmployees.length, '명')
+        console.log('👥 활성 직원:', activeInternalEmployees.length, '명')
       } else {
         setEmployees([])
-        console.log('⚠️ 직원 목록 로드 실패')
+        setActiveEmployees([])
       }
     } catch (error) {
       console.error('[MEETING-MINUTE] Failed to load data:', error)
@@ -132,10 +141,63 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         const agendaData = minute.agenda || []
         const businessIssuesData = minute.content?.business_issues || []
 
-        setParticipants(participantsData)
-        setAgenda(agendaData)
+        // 참석자를 내부/외부로 분류
+        const internalParts: MeetingParticipant[] = []
+        const externalParts: Array<{id: string, name: string, role: string, attended: boolean}> = []
+
+        participantsData.forEach(p => {
+          if (p.is_internal && p.employee_id) {
+            internalParts.push(p)
+          } else {
+            externalParts.push({
+              id: p.id,
+              name: p.name,
+              role: p.role,
+              attended: p.attended
+            })
+          }
+        })
+
+        setParticipants(internalParts)
+        setExternalParticipants(externalParts)
+
+        // 안건 데이터 마이그레이션: 단일 담당자 → 다중 담당자
+        const migratedAgenda = agendaData.map(item => {
+          // 이미 다중 담당자 형식이면 그대로 사용
+          if (item.assignees && Array.isArray(item.assignees)) {
+            return item
+          }
+          // 단일 담당자 형식이면 배열로 변환
+          if (item.assignee_id && item.assignee_name) {
+            return {
+              ...item,
+              assignee_ids: [item.assignee_id],
+              assignees: [{ id: item.assignee_id, name: item.assignee_name }]
+            }
+          }
+          return item
+        })
+
+        // 사업장별 이슈 데이터 마이그레이션: 단일 담당자 → 다중 담당자
+        const migratedBusinessIssues = businessIssuesData.map(issue => {
+          // 이미 다중 담당자 형식이면 그대로 사용
+          if (issue.assignees && Array.isArray(issue.assignees)) {
+            return issue
+          }
+          // 단일 담당자 형식이면 배열로 변환
+          if (issue.assignee_id && issue.assignee_name) {
+            return {
+              ...issue,
+              assignee_ids: [issue.assignee_id],
+              assignees: [{ id: issue.assignee_id, name: issue.assignee_name }]
+            }
+          }
+          return issue
+        })
+
+        setAgenda(migratedAgenda)
         setSummary(minute.content?.summary || '')
-        setBusinessIssues(businessIssuesData)
+        setBusinessIssues(migratedBusinessIssues)
         setStatus(minute.status)
 
         console.log('✅ 상태 설정 완료')
@@ -156,29 +218,52 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     }
   }
 
-  // 참석자 관리
-  const handleAddParticipant = () => {
-    setParticipants([
-      ...participants,
+  // 내부 직원 참석자 토글
+  const toggleInternalParticipant = (employeeId: string) => {
+    const employee = activeEmployees.find(e => e.id === employeeId)
+    if (!employee) return
+
+    const existingIndex = participants.findIndex(p => p.employee_id === employeeId)
+
+    if (existingIndex !== -1) {
+      // 이미 선택된 경우 → 제거
+      const updated = participants.filter((_, idx) => idx !== existingIndex)
+      setParticipants(updated)
+    } else {
+      // 새로 추가
+      const newParticipant: MeetingParticipant = {
+        id: crypto.randomUUID(),
+        name: employee.name,
+        role: employee.department || employee.position || '',
+        employee_id: employeeId,
+        attended: true,
+        is_internal: true
+      }
+      setParticipants([...participants, newParticipant])
+    }
+  }
+
+  // 외부 참석자 관리
+  const addExternalParticipant = () => {
+    setExternalParticipants([
+      ...externalParticipants,
       {
         id: crypto.randomUUID(),
         name: '',
         role: '',
-        employee_id: undefined,  // 명시적으로 undefined 설정 (리렌더링 시 상태 안정성 확보)
-        attended: true,
-        is_internal: false
+        attended: true
       }
     ])
   }
 
-  const handleRemoveParticipant = (index: number) => {
-    setParticipants(participants.filter((_, i) => i !== index))
+  const removeExternalParticipant = (index: number) => {
+    setExternalParticipants(externalParticipants.filter((_, i) => i !== index))
   }
 
-  const handleUpdateParticipant = (index: number, field: keyof MeetingParticipant, value: any) => {
-    const updated = [...participants]
+  const updateExternalParticipant = (index: number, field: 'name' | 'role' | 'attended', value: string | boolean) => {
+    const updated = [...externalParticipants]
     updated[index] = { ...updated[index], [field]: value }
-    setParticipants(updated)
+    setExternalParticipants(updated)
   }
 
   // 안건 관리
@@ -257,11 +342,24 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     try {
       setSaving(true)
 
+      // 내부 + 외부 참석자 병합
+      const allParticipants = [
+        ...participants, // 내부 직원
+        ...externalParticipants.map(ext => ({
+          id: ext.id,
+          name: ext.name,
+          role: ext.role,
+          attended: ext.attended,
+          employee_id: undefined,
+          is_internal: false
+        }))
+      ]
+
       const data: UpdateMeetingMinuteRequest = {
         title,
         meeting_date: new Date(meetingDate).toISOString(),
         meeting_type: meetingType,
-        participants,
+        participants: allParticipants, // 병합된 참석자
         location,
         location_type: locationType,
         agenda,
@@ -371,151 +469,188 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="예: 2025년 1월 정기 회의"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="예: 2024년 1월 주간 정기 회의"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
-                {/* 날짜 + 회의 유형 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
+              {/* 회의 날짜 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  회의 날짜 <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <CalendarIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="datetime-local"
+                    value={meetingDate}
+                    onChange={(e) => setMeetingDate(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* 회의 유형 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  회의 유형
+                </label>
+                <select
+                  value={meetingType}
+                  onChange={(e) => setMeetingType(e.target.value as MeetingType)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="정기회의">정기회의</option>
+                  <option value="임시회의">임시회의</option>
+                  <option value="프로젝트회의">프로젝트회의</option>
+                  <option value="고객미팅">고객미팅</option>
+                </select>
+              </div>
+            </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* 장소 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <CalendarIcon className="w-4 h-4 inline mr-1" />
-                      회의 날짜 <span className="text-red-500">*</span>
+                      장소
                     </label>
-                    <input
-                      type="datetime-local"
-                      value={meetingDate}
-                      onChange={(e) => setMeetingDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <div className="relative">
+                      <MapPin className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="예: 본사 회의실 A"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
                   </div>
 
+                  {/* 장소 유형 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      회의 유형
+                      장소 유형
                     </label>
                     <select
-                      value={meetingType}
-                      onChange={(e) => setMeetingType(e.target.value as MeetingType)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={locationType}
+                      onChange={(e) => setLocationType(e.target.value as LocationType)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="정기회의">정기회의</option>
-                      <option value="임시회의">임시회의</option>
-                      <option value="프로젝트회의">프로젝트회의</option>
-                      <option value="고객미팅">고객미팅</option>
+                      <option value="offline">오프라인</option>
+                      <option value="online">온라인</option>
+                      <option value="hybrid">하이브리드</option>
                     </select>
                   </div>
-                </div>
-
-                {/* 장소 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <MapPin className="w-4 h-4 inline mr-1" />
-                    장소
-                  </label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="예: 본사 3층 회의실"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
                 </div>
               </div>
             </div>
 
             {/* 참석자 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1">
-                  <UsersIcon className="w-4 h-4" />
-                  참석자 ({participants.length})
-                </h2>
-                <button
-                  onClick={handleAddParticipant}
-                  className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>추가</span>
-                </button>
+              <h2 className="text-sm font-semibold text-gray-900 mb-3">참석자</h2>
+
+              {/* 내부 직원 섹션 */}
+              <div className="mb-4">
+                <h3 className="text-xs font-medium text-gray-700 mb-2">내부 직원</h3>
+                {activeEmployees.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500 text-xs">
+                    활성 직원이 없습니다
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                    {activeEmployees.map((employee) => {
+                      const isSelected = participants.some(p => p.employee_id === employee.id)
+                      const participant = participants.find(p => p.employee_id === employee.id)
+
+                      return (
+                        <div
+                          key={employee.id}
+                          className={`flex items-center gap-2 p-2 rounded border transition-colors ${
+                            isSelected ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'
+                          }`}
+                        >
+                          <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleInternalParticipant(employee.id)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">
+                                {employee.name}
+                              </div>
+                              {(employee.department || employee.position) && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  {[employee.department, employee.position].filter(Boolean).join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
-              {participants.length === 0 ? (
-                <div className="text-center py-4 text-gray-500 text-sm">
-                  참석자를 추가해주세요
+              {/* 외부 참석자 섹션 */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-medium text-gray-700">외부 참석자</h3>
+                  <button
+                    onClick={addExternalParticipant}
+                    className="flex items-center gap-1 px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>추가</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {participants.map((participant, index) => (
-                    <div key={participant.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                      {/* 이름 autocomplete */}
-                      <div className="flex-1 min-w-0">
-                        {/* employee_id가 없는 경우(기존 데이터) name을 직접 표시 */}
-                        {!participant.employee_id && participant.name ? (
-                          <input
-                            type="text"
-                            value={participant.name}
-                            onChange={(e) => {
-                              const updated = [...participants]
-                              updated[index] = {
-                                ...updated[index],
-                                name: e.target.value
-                              }
-                              setParticipants(updated)
-                            }}
-                            placeholder="이름"
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        ) : (
-                          <AutocompleteSelectInput
-                            value={participant.employee_id || ''}
-                            onChange={(id, name) => {
-                              const updated = [...participants]
-                              const employee = employees.find(emp => emp.id === id)
-                              updated[index] = {
-                                ...updated[index],
-                                name: name,
-                                employee_id: id,
-                                is_internal: !!id,
-                                role: employee?.department || updated[index].role
-                              }
-                              setParticipants(updated)
-                            }}
-                            options={employees.map((emp) => ({
-                              id: emp.id,
-                              name: emp.name
-                            }))}
-                            placeholder="이름..."
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            allowCustomValue={true}
-                          />
-                        )}
-                      </div>
 
-                      {/* 참석 체크박스 - 컴팩트 */}
-                      <label className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
+                {externalParticipants.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500 text-xs">
+                    외부 참석자를 추가해주세요
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {externalParticipants.map((ext, index) => (
+                      <div key={ext.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
                         <input
-                          type="checkbox"
-                          checked={participant.attended}
-                          onChange={(e) => handleUpdateParticipant(index, 'attended', e.target.checked)}
-                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500"
+                          type="text"
+                          value={ext.name}
+                          onChange={(e) => updateExternalParticipant(index, 'name', e.target.value)}
+                          placeholder="이름"
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                         />
-                        <span>참석</span>
-                      </label>
-
-                      {/* 삭제 버튼 - 컴팩트 */}
-                      <button
-                        onClick={() => handleRemoveParticipant(index)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="삭제"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <input
+                          type="text"
+                          value={ext.role}
+                          onChange={(e) => updateExternalParticipant(index, 'role', e.target.value)}
+                          placeholder="소속/역할"
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        />
+                        <label className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={ext.attended}
+                            onChange={(e) => updateExternalParticipant(index, 'attended', e.target.checked)}
+                            className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span>참석</span>
+                        </label>
+                        <button
+                          onClick={() => removeExternalParticipant(index)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 안건 */}
@@ -557,40 +692,90 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                           <textarea
                             value={item.description}
                             onChange={(e) => handleUpdateAgenda(index, 'description', e.target.value)}
-                            placeholder="안건 설명"
-                            rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                            placeholder="안건 설명 (우측 하단을 드래그하여 크기 조정 가능)"
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-y"
+                            style={{ minHeight: '75px' }}
                           />
 
                           {/* 마감일 + 담당자 */}
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="date"
-                              value={item.deadline || ''}
-                              onChange={(e) => handleUpdateAgenda(index, 'deadline', e.target.value)}
-                              placeholder="마감일"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                            />
-                            <AutocompleteSelectInput
-                              value={item.assignee_id || ''}
-                              onChange={(id, name) => {
-                                const updated = [...agenda]
-                                updated[index] = {
-                                  ...updated[index],
-                                  assignee_name: name,
-                                  assignee_id: id
-                                }
-                                setAgenda(updated)
-                              }}
-                              options={employees.map((emp) => ({
-                                id: emp.id,
-                                name: emp.name
-                              }))}
-                              placeholder="담당자"
-                              className="w-full"
-                              allowCustomValue={true}
-                            />
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">데드라인</label>
+                              <input
+                                type="date"
+                                value={item.deadline || ''}
+                                onChange={(e) => handleUpdateAgenda(index, 'deadline', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">담당자 (여러명 추가 가능)</label>
+                              <AutocompleteSelectInput
+                                value=""
+                                onChange={(selectedId, selectedName) => {
+                                  const updated = [...agenda]
+                                  const currentIds = updated[index].assignee_ids || []
+
+                                  // 중복 체크
+                                  if (currentIds.includes(selectedId)) {
+                                    return
+                                  }
+
+                                  // 담당자 추가
+                                  updated[index] = {
+                                    ...updated[index],
+                                    assignee_ids: [...currentIds, selectedId],
+                                    assignees: [
+                                      ...(updated[index].assignees || []),
+                                      { id: selectedId, name: selectedName }
+                                    ]
+                                  }
+                                  setAgenda(updated)
+                                }}
+                                options={activeEmployees
+                                  .filter(emp => !(item.assignee_ids || []).includes(emp.id))
+                                  .map(emp => ({
+                                    id: emp.id,
+                                    name: emp.name,
+                                    subtitle: `${emp.department || ''} ${emp.position || ''}`.trim()
+                                  }))}
+                                placeholder="담당자 선택..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
                           </div>
+
+                          {/* 선택된 담당자 배지 표시 */}
+                          {(item.assignees && item.assignees.length > 0) && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {item.assignees.map((assignee) => (
+                                <span
+                                  key={assignee.id}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm"
+                                >
+                                  {assignee.name}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...agenda]
+                                      updated[index] = {
+                                        ...updated[index],
+                                        assignee_ids: (updated[index].assignee_ids || []).filter(id => id !== assignee.id),
+                                        assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
+                                      }
+                                      setAgenda(updated)
+                                    }}
+                                    className="hover:bg-blue-200 rounded"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* 삭제 버튼 */}
@@ -691,7 +876,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                 name: biz.business_name
                               }))}
                               placeholder="사업장 선택"
-                              className="w-full"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               allowCustomValue={true}
                             />
                           )}
@@ -700,47 +885,78 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                         <textarea
                           value={issue.issue_description}
                           onChange={(e) => handleUpdateBusinessIssue(index, 'issue_description', e.target.value)}
-                          placeholder="이슈 내용을 입력하세요"
-                          rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                          placeholder="사업장 이슈 내용 (우측 하단을 드래그하여 크기 조정 가능)"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-y text-sm"
+                          style={{ minHeight: '75px' }}
                         />
 
-                        {/* 담당자 */}
-                        {!issue.assignee_id && issue.assignee_name ? (
-                          <input
-                            type="text"
-                            value={issue.assignee_name}
-                            onChange={(e) => {
+                        {/* 담당자 (다중 선택) */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">담당자 (여러명 추가 가능)</label>
+                          <AutocompleteSelectInput
+                            value=""
+                            onChange={(selectedId, selectedName) => {
                               const updated = [...businessIssues]
+                              const currentIds = updated[index].assignee_ids || []
+
+                              // 중복 체크
+                              if (currentIds.includes(selectedId)) {
+                                return
+                              }
+
+                              // 담당자 추가
                               updated[index] = {
                                 ...updated[index],
-                                assignee_name: e.target.value
+                                assignee_ids: [...currentIds, selectedId],
+                                assignees: [
+                                  ...(updated[index].assignees || []),
+                                  { id: selectedId, name: selectedName }
+                                ]
                               }
                               setBusinessIssues(updated)
                             }}
-                            placeholder="담당자명"
+                            options={activeEmployees
+                              .filter(emp => !(issue.assignee_ids || []).includes(emp.id))
+                              .map(emp => ({
+                                id: emp.id,
+                                name: emp.name,
+                                subtitle: `${emp.department || ''} ${emp.position || ''}`.trim()
+                              }))}
+                            placeholder="담당자 선택..."
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
-                        ) : (
-                          <AutocompleteSelectInput
-                            value={issue.assignee_id}
-                            onChange={(id, name) => {
-                              const updated = [...businessIssues]
-                              updated[index] = {
-                                ...updated[index],
-                                assignee_name: name,
-                                assignee_id: id
-                              }
-                              setBusinessIssues(updated)
-                            }}
-                            options={employees.map((emp) => ({
-                              id: emp.id,
-                              name: emp.name
-                            }))}
-                            placeholder="담당자 선택"
-                            className="w-full"
-                            allowCustomValue={true}
-                          />
+                        </div>
+
+                        {/* 선택된 담당자 배지 표시 */}
+                        {(issue.assignees && issue.assignees.length > 0) && (
+                          <div className="flex flex-wrap gap-2">
+                            {issue.assignees.map((assignee) => (
+                              <span
+                                key={assignee.id}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm"
+                              >
+                                {assignee.name}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...businessIssues]
+                                    updated[index] = {
+                                      ...updated[index],
+                                      assignee_ids: (updated[index].assignee_ids || []).filter(id => id !== assignee.id),
+                                      assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
+                                    }
+                                    setBusinessIssues(updated)
+                                  }}
+                                  className="hover:bg-blue-200 rounded"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </span>
+                            ))}
+                          </div>
                         )}
 
                         {/* 하단: 완료 체크 + 삭제 버튼 */}

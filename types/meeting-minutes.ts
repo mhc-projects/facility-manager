@@ -22,8 +22,10 @@ export interface AgendaItem {
   title: string
   description: string
   deadline?: string      // 데드라인 (ISO 날짜, optional)
-  assignee_id?: string   // 담당자 ID (employees 참조, optional)
-  assignee_name?: string // 담당자명 (표시용, optional)
+  assignee_id?: string   // @deprecated 단일 담당자 ID (하위 호환성, optional)
+  assignee_name?: string // @deprecated 단일 담당자명 (하위 호환성, optional)
+  assignee_ids?: string[] // 담당자 ID 배열 (다중 담당자, optional)
+  assignees?: Array<{ id: string, name: string }> // 담당자 정보 배열 (표시용, optional)
 }
 
 /**
@@ -44,8 +46,10 @@ export interface BusinessIssue {
   business_id: string         // 사업장 ID (business_info 참조)
   business_name: string        // 사업장명 (자동완성/표시용)
   issue_description: string    // 사업장 이슈 설명
-  assignee_id: string         // 담당자 ID (employees 참조)
-  assignee_name: string       // 담당자명 (자동완성/표시용)
+  assignee_id?: string         // @deprecated 단일 담당자 ID (하위 호환성, optional)
+  assignee_name?: string       // @deprecated 단일 담당자명 (하위 호환성, optional)
+  assignee_ids?: string[]      // 담당자 ID 배열 (다중 담당자, optional)
+  assignees?: Array<{ id: string, name: string }> // 담당자 정보 배열 (표시용, optional)
   is_completed: boolean       // 완료 여부
   completed_at?: string       // 완료 날짜 (완료시에만)
 }
