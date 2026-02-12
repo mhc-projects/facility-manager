@@ -158,39 +158,41 @@ export default function EnhancedFacilityInfoSection({
     if (!editingFacility) return;
 
     try {
-      const updatedFacilities = { ...facilities };
-      const facilityArray = facilityType === 'discharge' ? updatedFacilities.discharge : updatedFacilities.prevention;
+      // ✅ 깊은 복사로 불변성 보장
+      const updatedFacilities = {
+        discharge: (facilities?.discharge || []).map((f) =>
+          f.outlet === editingFacility.outlet && f.number === editingFacility.number
+            ? { ...editingFacility }  // 편집된 시설은 새 객체로
+            : { ...f }  // 나머지도 새 객체로 복사
+        ),
+        prevention: (facilities?.prevention || []).map(f => ({ ...f }))
+      };
 
-      const index = facilityArray?.findIndex(f =>
-        f.outlet === editingFacility.outlet && f.number === editingFacility.number
-      );
+      // 🔄 DB에 저장
+      console.log('💾 [EnhancedFacilityInfoSection] DB 저장 시작:', businessName);
+      const response = await fetch(`/api/facilities-supabase/${encodeURIComponent(businessName)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          discharge: updatedFacilities.discharge,
+          prevention: updatedFacilities.prevention
+        }),
+      });
 
-      if (index !== -1 && facilityArray) {
-        facilityArray[index] = editingFacility;
+      const result = await response.json();
 
-        // 🔄 DB에 저장
-        console.log('💾 [EnhancedFacilityInfoSection] DB 저장 시작:', businessName);
-        const response = await fetch(`/api/facilities-supabase/${encodeURIComponent(businessName)}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            discharge: updatedFacilities.discharge,
-            prevention: updatedFacilities.prevention
-          }),
-        });
+      if (result.success) {
+        console.log('✅ [EnhancedFacilityInfoSection] DB 저장 성공');
 
-        const result = await response.json();
-
-        if (result.success) {
-          console.log('✅ [EnhancedFacilityInfoSection] DB 저장 성공');
-          onFacilitiesUpdate(updatedFacilities);
-        } else {
-          console.error('❌ [EnhancedFacilityInfoSection] DB 저장 실패:', result.error);
-          alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
-          return;
-        }
+        // ✅ API 응답에 최신 데이터가 있으면 사용, 없으면 로컬 업데이트
+        const latestFacilities = result.data?.facilities || updatedFacilities;
+        onFacilitiesUpdate(latestFacilities);
+      } else {
+        console.error('❌ [EnhancedFacilityInfoSection] DB 저장 실패:', result.error);
+        alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
+        return;
       }
 
       setShowAddForm(false);

@@ -75,7 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTimeout(() => {
         import('@/lib/realtime-manager')
           .then(({ initializeRealtimeConnection }) => {
-            initializeRealtimeConnection()
+            // ✅ 타임아웃 추가: 5초 안에 연결 안되면 무시
+            const realtimeTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Realtime 연결 시간 초과')), 5000)
+            );
+
+            Promise.race([initializeRealtimeConnection(), realtimeTimeout])
               .then(() => console.log('⚡ [AUTH] Realtime 연결 성공'))
               .catch((err) => console.warn('⚠️ [AUTH] Realtime 연결 실패 (무시):', err.message));
           })
