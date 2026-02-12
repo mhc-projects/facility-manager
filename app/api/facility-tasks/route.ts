@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
-import { getTaskStatusKR, createStatusChangeMessage } from '@/lib/task-status-utils';
+import { getTaskStatusKR, getTaskTypeKR, createStatusChangeMessage } from '@/lib/task-status-utils';
 import { createTaskAssignmentNotifications, updateTaskAssignmentNotifications, type TaskAssignee } from '@/lib/task-notification-service';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { logDebug, logError } from '@/lib/logger';
@@ -1052,55 +1052,11 @@ async function createAutoProgressNote(params: {
   let metadata: any = {};
 
   if (changeType === 'status_change' && oldStatus && newStatus) {
-    const statusLabels: { [key: string]: string } = {
-      // 자비 업무 단계
-      'customer_contact': '고객 상담',
-      'site_inspection': '현장 실사',
-      'quotation': '견적서 작성',
-      'contract': '계약 체결',
-      'deposit_confirm': '계약금 확인',
-      'product_order': '제품 발주',
-      'product_shipment': '제품 출고',
-      'installation_schedule': '설치 협의',
-      'installation': '제품 설치',
-      'balance_payment': '잔금 입금',
-      'document_complete': '서류 발송 완료',
-      // 보조금 업무 단계
-      'document_preparation': '신청서 작성 필요',
-      'application_submit': '신청서 제출',
-      'approval_pending': '보조금 승인대기',
-      'approved': '보조금 승인',
-      'rejected': '보조금 탈락',
-      'document_supplement': '신청서 보완',
-      'pre_construction_inspection': '착공 전 실사',
-      'pre_construction_supplement_1st': '착공 보완 1차',
-      'pre_construction_supplement_2nd': '착공 보완 2차',
-      'construction_report_submit': '착공신고서 제출',
-      'pre_completion_document_submit': '준공도서 작성 필요',
-      'completion_inspection': '준공 실사',
-      'completion_supplement_1st': '준공 보완 1차',
-      'completion_supplement_2nd': '준공 보완 2차',
-      'completion_supplement_3rd': '준공 보완 3차',
-      'final_document_submit': '보조금지급신청서 제출',
-      'subsidy_payment': '보조금 입금',
-      // AS 업무 단계
-      'as_customer_contact': 'AS 고객 상담',
-      'as_site_inspection': 'AS 현장 확인',
-      'as_quotation': 'AS 견적 작성',
-      'as_contract': 'AS 계약 체결',
-      'as_part_order': 'AS 부품 발주',
-      'as_completed': 'AS 완료',
-      // 기타 단계
-      'etc_status': '기타',
-      // 기존 단계 (호환성)
-      'pending': '대기',
-      'in_progress': '진행중',
-      'completed': '완료',
-      'cancelled': '취소',
-      'on_hold': '보류'
-    };
+    // ✅ 중앙 매핑 시스템 사용 (67개 전체 상태 지원)
+    const oldStatusLabel = getTaskStatusKR(oldStatus);
+    const newStatusLabel = getTaskStatusKR(newStatus);
 
-    content = `업무 상태가 "${statusLabels[oldStatus] || oldStatus}"에서 "${statusLabels[newStatus] || newStatus}"로 변경되었습니다.`;
+    content = `업무 상태가 "${oldStatusLabel}"에서 "${newStatusLabel}"로 변경되었습니다.`;
     metadata = {
       change_type: 'status',
       old_status: oldStatus,
@@ -1286,29 +1242,9 @@ async function createTaskNotifications(params: {
 // 업무 생성 시 자동 메모 생성 함수
 async function createTaskCreationNote(task: any) {
   try {
-    const taskTypeLabels: { [key: string]: string } = {
-      'self': '자비 설치',
-      'subsidy': '보조금',
-      'as': 'AS',
-      'dealer': '대리점',
-      'outsourcing': '외주설치',
-      'etc': '기타'
-    };
-
-    const statusLabels: { [key: string]: string } = {
-      'customer_contact': '고객 연락',
-      'pending': '대기',
-      'in_progress': '진행중',
-      'quote_requested': '견적 요청',
-      'quote_received': '견적 수신',
-      'work_scheduled': '작업 예정',
-      'work_in_progress': '작업중',
-      'completed': '완료',
-      'cancelled': '취소'
-    };
-
-    const taskTypeLabel = taskTypeLabels[task.task_type] || task.task_type;
-    const statusLabel = statusLabels[task.status] || task.status;
+    // ✅ 중앙 매핑 시스템 사용 (67개 전체 상태 + 6개 업무 타입 지원)
+    const taskTypeLabel = getTaskTypeKR(task.task_type);
+    const statusLabel = getTaskStatusKR(task.status);
     const assigneeList = task.assignees?.map((a: any) => a.name).filter(Boolean).join(', ') || '미배정';
 
     const content = `새로운 ${taskTypeLabel} 업무 "${task.title}"이 생성되었습니다. (상태: ${statusLabel}, 담당자: ${assigneeList})`;
