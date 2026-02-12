@@ -102,8 +102,8 @@ export default function AdminDashboard() {
         permission_level: userData.user.permission_level || 1
       }
 
-      // 권한 확인 (SUPER_ADMIN = 레벨 3 이상 필요)
-      const authResult = AuthGuard.checkComponentAccess(AuthLevel.SUPER_ADMIN, user)
+      // 권한 확인 (ADMIN = 레벨 3 이상 필요)
+      const authResult = AuthGuard.checkComponentAccess(AuthLevel.ADMIN, user)
 
       if (!authResult.allowed) {
         console.warn(`[ADMIN] Access denied - User level: ${authResult.userLevel}, Required: ${authResult.requiredLevel}`)
