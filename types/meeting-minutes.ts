@@ -21,7 +21,9 @@ export interface AgendaItem {
   id: string
   title: string
   description: string
+  department?: string    // 담당 부서 (optional)
   deadline?: string      // 데드라인 (ISO 날짜, optional)
+  progress?: 0 | 25 | 50 | 75 | 100  // 진행률 (%, optional)
   assignee_id?: string   // @deprecated 단일 담당자 ID (하위 호환성, optional)
   assignee_name?: string // @deprecated 단일 담당자명 (하위 호환성, optional)
   assignee_ids?: string[] // 담당자 ID 배열 (다중 담당자, optional)

@@ -1,6 +1,82 @@
 import { useState, useCallback } from 'react'
-import { Task, CreateTaskForm, calculateProgressPercentage } from '../types'
+import { Task, TaskType, CreateTaskForm, calculateProgressPercentage } from '../types'
 import { TokenManager } from '@/lib/api-client'
+
+interface DelayCriteria {
+  self: { delayed: number; risky: number }
+  subsidy: { delayed: number; risky: number }
+  as: { delayed: number; risky: number }
+  etc: { delayed: number; risky: number }
+}
+
+const DEFAULT_CRITERIA: DelayCriteria = {
+  self: { delayed: 7, risky: 14 },
+  subsidy: { delayed: 14, risky: 20 },
+  as: { delayed: 3, risky: 7 },
+  etc: { delayed: 7, risky: 10 }
+}
+
+/**
+ * 지연 기준을 서버에서 가져옴
+ */
+async function fetchDelayCriteria(): Promise<DelayCriteria> {
+  try {
+    const response = await fetch('/api/settings/delay-criteria')
+    if (!response.ok) return DEFAULT_CRITERIA
+    const result = await response.json()
+    return result.data || DEFAULT_CRITERIA
+  } catch {
+    return DEFAULT_CRITERIA
+  }
+}
+
+/**
+ * 업무 유형에 맞는 기준 키 반환
+ * TaskType에 dealer가 있지만 DelayCriteria에는 없으므로 etc로 처리
+ */
+function getCriteriaKey(type: TaskType): keyof DelayCriteria {
+  if (type === 'self' || type === 'subsidy' || type === 'as' || type === 'etc') {
+    return type
+  }
+  return 'etc'
+}
+
+/**
+ * startDate 기준으로 지연 상태 계산
+ */
+function calcDelayStatus(
+  startDate: string | undefined,
+  taskType: TaskType,
+  status: string,
+  criteria: DelayCriteria
+): { delayStatus: Task['delayStatus']; delayDays: number } {
+  // 완료 상태는 on_time
+  const completedStatuses = [
+    'document_complete', 'subsidy_payment', 'as_completed',
+    'dealer_payment_confirmed', 'etc_status', 'balance_payment'
+  ]
+  if (completedStatuses.includes(status)) {
+    return { delayStatus: 'on_time', delayDays: 0 }
+  }
+
+  if (!startDate) return { delayStatus: 'on_time', delayDays: 0 }
+
+  const start = new Date(startDate)
+  const now = new Date()
+  const elapsed = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (elapsed < 0) return { delayStatus: 'on_time', delayDays: 0 }
+
+  const key = getCriteriaKey(taskType)
+  const { delayed, risky } = criteria[key]
+
+  if (elapsed >= delayed) {
+    return { delayStatus: 'delayed', delayDays: elapsed - delayed }
+  } else if (elapsed >= risky) {
+    return { delayStatus: 'at_risk', delayDays: 0 }
+  }
+  return { delayStatus: 'on_time', delayDays: 0 }
+}
 
 interface UseTaskManagementReturn {
   tasks: Task[]
@@ -53,10 +129,11 @@ export function useTaskManagement(): UseTaskManagementReturn {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const response = await fetch('/api/facility-tasks', {
-        method: 'GET',
-        headers
-      })
+      // 업무 목록과 지연 기준을 병렬로 가져옴
+      const [response, criteria] = await Promise.all([
+        fetch('/api/facility-tasks', { method: 'GET', headers }),
+        fetchDelayCriteria()
+      ])
 
       if (!response.ok) {
         throw new Error('업무 목록을 불러오는데 실패했습니다.')
@@ -66,24 +143,32 @@ export function useTaskManagement(): UseTaskManagementReturn {
 
       if (result.success && result.data?.tasks) {
         // 데이터베이스 형식을 UI 형식으로 변환
-        const convertedTasks: Task[] = result.data.tasks.map((dbTask: any) => ({
-          id: dbTask.id,
-          title: dbTask.title,
-          businessName: dbTask.business_name,
-          type: dbTask.task_type,
-          status: dbTask.status,
-          priority: dbTask.priority,
-          assignee: dbTask.assignee || undefined,
-          assignees: dbTask.assignees || [],
-          startDate: dbTask.start_date || undefined,
-          dueDate: dbTask.due_date || undefined,
-          progressPercentage: calculateProgressPercentage(dbTask.task_type, dbTask.status),
-          delayStatus: 'on_time',
-          delayDays: 0,
-          createdAt: dbTask.created_at,
-          description: dbTask.description || undefined,
-          notes: dbTask.notes || undefined
-        }))
+        const convertedTasks: Task[] = result.data.tasks.map((dbTask: any) => {
+          const { delayStatus, delayDays } = calcDelayStatus(
+            dbTask.start_date,
+            dbTask.task_type,
+            dbTask.status,
+            criteria
+          )
+          return {
+            id: dbTask.id,
+            title: dbTask.title,
+            businessName: dbTask.business_name,
+            type: dbTask.task_type,
+            status: dbTask.status,
+            priority: dbTask.priority,
+            assignee: dbTask.assignee || undefined,
+            assignees: dbTask.assignees || [],
+            startDate: dbTask.start_date || undefined,
+            dueDate: dbTask.due_date || undefined,
+            progressPercentage: calculateProgressPercentage(dbTask.task_type, dbTask.status),
+            delayStatus,
+            delayDays,
+            createdAt: dbTask.created_at,
+            description: dbTask.description || undefined,
+            notes: dbTask.notes || undefined
+          }
+        })
 
         setTasks(convertedTasks)
         setLastRefresh(new Date())
@@ -138,6 +223,15 @@ export function useTaskManagement(): UseTaskManagementReturn {
 
       const result = await response.json()
 
+      // 지연 기준 가져와서 신규 업무 상태 계산
+      const criteria = await fetchDelayCriteria()
+      const { delayStatus, delayDays } = calcDelayStatus(
+        form.startDate || undefined,
+        result.data.task.task_type,
+        result.data.task.status,
+        criteria
+      )
+
       // 로컬 상태 업데이트
       const newTask: Task = {
         id: result.data.task.id,
@@ -151,8 +245,8 @@ export function useTaskManagement(): UseTaskManagementReturn {
         startDate: form.startDate || undefined,
         dueDate: result.data.task.due_date || undefined,
         progressPercentage: calculateProgressPercentage(result.data.task.task_type, result.data.task.status),
-        delayStatus: 'on_time',
-        delayDays: 0,
+        delayStatus,
+        delayDays,
         createdAt: result.data.task.created_at,
         description: result.data.task.description || undefined,
         notes: result.data.task.notes || undefined
@@ -201,19 +295,29 @@ export function useTaskManagement(): UseTaskManagementReturn {
 
       const result = await response.json()
 
+      // 지연 기준 가져와서 업데이트된 업무 상태 계산
+      const criteria = await fetchDelayCriteria()
+
       // 로컬 상태 업데이트
-      setTasks(prev => prev.map(task =>
-        task.id === taskId
-          ? {
-              ...task,
-              ...updates,
-              createdAt: result.data.task.created_at,
-              assignee: updates.assignees && updates.assignees.length > 0
-                ? updates.assignees[0].name
-                : undefined
-            }
-          : task
-      ))
+      setTasks(prev => prev.map(task => {
+        if (task.id !== taskId) return task
+        const updatedTask = { ...task, ...updates }
+        const { delayStatus, delayDays } = calcDelayStatus(
+          updatedTask.startDate,
+          updatedTask.type,
+          updatedTask.status,
+          criteria
+        )
+        return {
+          ...updatedTask,
+          createdAt: result.data.task.created_at,
+          assignee: updates.assignees && updates.assignees.length > 0
+            ? updates.assignees[0].name
+            : undefined,
+          delayStatus,
+          delayDays
+        }
+      }))
     } catch (error) {
       throw error
     }

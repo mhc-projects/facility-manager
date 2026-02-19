@@ -3,7 +3,7 @@
 // ============================================
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import {
@@ -17,7 +17,11 @@ import {
   CheckCircle2,
   Clock,
   Archive,
-  Trash2
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Building2,
+  X
 } from 'lucide-react'
 import {
   MeetingMinute,
@@ -34,6 +38,12 @@ function MeetingMinutesContent() {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [viewType, setViewType] = useState<'card' | 'table'>('card')
+
+  // 부서 관리 상태
+  const [deptPanelOpen, setDeptPanelOpen] = useState(false)
+  const [departments, setDepartments] = useState<string[]>([])
+  const [newDeptInput, setNewDeptInput] = useState('')
+  const newDeptInputRef = useRef<HTMLInputElement>(null)
 
   // 데이터 상태
   const [minutes, setMinutes] = useState<MeetingMinute[]>([])
@@ -60,6 +70,11 @@ function MeetingMinutesContent() {
   useEffect(() => {
     setMounted(true)
     loadMeetingMinutes()
+    // localStorage에서 부서 목록 로드
+    try {
+      const saved = localStorage.getItem('meeting_departments')
+      if (saved) setDepartments(JSON.parse(saved))
+    } catch {}
   }, [refreshTrigger])  // refreshTrigger 변경 시 재실행
 
   useEffect(() => {
@@ -121,6 +136,22 @@ function MeetingMinutesContent() {
   const handleStatusFilter = (status: typeof filters.status) => {
     setFilters({ ...filters, status })
     setPagination({ ...pagination, page: 1 })
+  }
+
+  const handleAddDepartment = () => {
+    const trimmed = newDeptInput.trim()
+    if (!trimmed || departments.includes(trimmed)) return
+    const updated = [...departments, trimmed]
+    setDepartments(updated)
+    localStorage.setItem('meeting_departments', JSON.stringify(updated))
+    setNewDeptInput('')
+    newDeptInputRef.current?.focus()
+  }
+
+  const handleRemoveDepartment = (dept: string) => {
+    const updated = departments.filter(d => d !== dept)
+    setDepartments(updated)
+    localStorage.setItem('meeting_departments', JSON.stringify(updated))
   }
 
   if (!mounted) {
@@ -232,6 +263,77 @@ function MeetingMinutesContent() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* 부서 관리 패널 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setDeptPanelOpen(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-gray-400" />
+              <span className="font-medium">부서 관리</span>
+              {departments.length > 0 && (
+                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                  {departments.length}개
+                </span>
+              )}
+            </div>
+            {deptPanelOpen ? (
+              <ChevronUp className="w-4 h-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            )}
+          </button>
+
+          {deptPanelOpen && (
+            <div className="px-4 pb-3 border-t border-gray-100">
+              {/* 부서 추가 입력 */}
+              <div className="flex gap-2 mt-3">
+                <input
+                  ref={newDeptInputRef}
+                  type="text"
+                  value={newDeptInput}
+                  onChange={(e) => setNewDeptInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleAddDepartment()}
+                  placeholder="부서명 입력 후 Enter 또는 추가 클릭"
+                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  onClick={handleAddDepartment}
+                  disabled={!newDeptInput.trim() || departments.includes(newDeptInput.trim())}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  추가
+                </button>
+              </div>
+
+              {/* 등록된 부서 목록 */}
+              {departments.length === 0 ? (
+                <p className="mt-2 text-xs text-gray-400">등록된 부서가 없습니다. 부서를 추가하면 안건 작성 시 선택할 수 있습니다.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {departments.map(dept => (
+                    <span
+                      key={dept}
+                      className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium"
+                    >
+                      {dept}
+                      <button
+                        onClick={() => handleRemoveDepartment(dept)}
+                        className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-gray-300 transition-colors text-gray-500 hover:text-gray-700"
+                        title="삭제"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 회의록 리스트 */}

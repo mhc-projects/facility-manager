@@ -237,35 +237,117 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
         </div>
 
         {/* 안건 */}
-        {minute.agenda.length > 0 && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">안건</h2>
-            <div className="space-y-3">
-              {minute.agenda.map((item, index) => (
-                <div key={item.id} className="flex gap-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{item.description}</p>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                      {item.assignee_name && (
-                        <span>담당자: {item.assignee_name}</span>
-                      )}
-                      {item.deadline && (
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          <span>마감: {new Date(item.deadline).toLocaleDateString('ko-KR')}</span>
-                        </div>
-                      )}
+        {minute.agenda.length > 0 && (() => {
+          // 부서별 그룹화: department가 있는 항목끼리 묶고, 없는 것은 '기타'로
+          const grouped: Record<string, typeof minute.agenda> = {}
+          minute.agenda.forEach(item => {
+            const key = (item as any).department || ''
+            if (!grouped[key]) grouped[key] = []
+            grouped[key].push(item)
+          })
+          const hasDepts = Object.keys(grouped).some(k => k !== '')
+          // 순서: 부서명 알파벳순, 마지막에 '' (부서 미지정)
+          const sortedKeys = Object.keys(grouped).sort((a, b) => {
+            if (a === '') return 1
+            if (b === '') return -1
+            return a.localeCompare(b, 'ko')
+          })
+          let globalIndex = 0
+          return (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">안건</h2>
+              <div className="space-y-4">
+                {sortedKeys.map(deptKey => (
+                  <div key={deptKey || '__no_dept__'}>
+                    {/* 부서가 하나라도 있을 때만 부서 헤더 표시 */}
+                    {hasDepts && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          deptKey
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {deptKey || '부서 미지정'}
+                        </span>
+                        <div className="flex-1 h-px bg-gray-100" />
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {grouped[deptKey].map((item) => {
+                        const displayIndex = ++globalIndex
+                        return (
+                          <div key={item.id} className="flex gap-4 p-4 bg-gray-50 rounded-lg">
+                            <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
+                              {displayIndex}
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
+                              <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{item.description}</p>
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                                {/* 다중 담당자 우선, 없으면 단일 담당자 폴백 */}
+                                {(item.assignees && item.assignees.length > 0) ? (
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-gray-500">담당자:</span>
+                                    {item.assignees.map((assignee: { id: string; name: string }) => (
+                                      <span key={assignee.id} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                        {assignee.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : item.assignee_name ? (
+                                  <span>담당자: {item.assignee_name}</span>
+                                ) : null}
+                                {item.deadline && (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4" />
+                                    <span>마감: {new Date(item.deadline).toLocaleDateString('ko-KR')}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {item.progress !== undefined && (
+                                <div className="mt-2">
+                                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                                    <span>진행률</span>
+                                    <span className={`font-medium ${
+                                      item.progress === 0 ? 'text-gray-500' :
+                                      item.progress <= 25 ? 'text-blue-600' :
+                                      item.progress <= 50 ? 'text-yellow-600' :
+                                      item.progress <= 75 ? 'text-orange-600' :
+                                      'text-green-600'
+                                    }`}>
+                                      {item.progress}%
+                                      {item.progress === 0 && ' 미착수'}
+                                      {item.progress === 25 && ' 시작'}
+                                      {item.progress === 50 && ' 진행중'}
+                                      {item.progress === 75 && ' 마무리'}
+                                      {item.progress === 100 && ' 완료'}
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-300 ${
+                                        item.progress === 0 ? 'bg-gray-400' :
+                                        item.progress <= 25 ? 'bg-blue-500' :
+                                        item.progress <= 50 ? 'bg-yellow-500' :
+                                        item.progress <= 75 ? 'bg-orange-500' :
+                                        'bg-green-500'
+                                      }`}
+                                      style={{ width: `${item.progress}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* 회의 요약 */}
         {minute.content.summary && (
@@ -432,14 +514,19 @@ interface BusinessIssueCardProps {
     business_id: string
     business_name: string
     issue_description: string
-    assignee_id: string
-    assignee_name: string
+    assignee_id?: string
+    assignee_name?: string
+    assignee_ids?: string[]
+    assignees?: { id: string; name: string }[]
     is_completed: boolean
     completed_at?: string
   }
 }
 
 function BusinessIssueCard({ issue }: BusinessIssueCardProps) {
+  const hasMultipleAssignees = issue.assignees && issue.assignees.length > 0
+  const hasSingleAssignee = !hasMultipleAssignees && issue.assignee_name
+
   return (
     <div className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
       <input
@@ -455,8 +542,20 @@ function BusinessIssueCard({ issue }: BusinessIssueCardProps) {
           </span>
         </div>
         <div className="font-medium text-gray-900 mb-2">{issue.issue_description}</div>
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span>담당자: {issue.assignee_name}</span>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+          {/* 다중 담당자 우선, 없으면 단일 담당자 폴백 */}
+          {hasMultipleAssignees ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-gray-500">담당자:</span>
+              {issue.assignees!.map((assignee) => (
+                <span key={assignee.id} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                  {assignee.name}
+                </span>
+              ))}
+            </div>
+          ) : hasSingleAssignee ? (
+            <span>담당자: {issue.assignee_name}</span>
+          ) : null}
           {issue.is_completed && issue.completed_at && (
             <span className="text-green-600">
               완료: {new Date(issue.completed_at).toLocaleDateString('ko-KR')}

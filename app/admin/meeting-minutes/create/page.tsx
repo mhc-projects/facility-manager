@@ -30,6 +30,7 @@ export default function CreateMeetingMinutePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
 
   // 폼 데이터
   const [title, setTitle] = useState('')
@@ -47,6 +48,7 @@ export default function CreateMeetingMinutePage() {
   const [employees, setEmployees] = useState<any[]>([])
   const [activeEmployees, setActiveEmployees] = useState<any[]>([]) // 활성 내부 직원 (게스트 제외)
   const [externalParticipants, setExternalParticipants] = useState<Array<{id: string, name: string, role: string, attended: boolean}>>([]) // 외부 참석자
+  const [departments, setDepartments] = useState<string[]>([]) // 부서 목록 (localStorage)
 
   useEffect(() => {
     setMounted(true)
@@ -59,7 +61,30 @@ export default function CreateMeetingMinutePage() {
 
     // 사업장 목록 및 담당자 목록 로드
     loadBusinessesAndEmployees()
+
+    // localStorage에서 부서 목록 로드
+    try {
+      const saved = localStorage.getItem('meeting_departments')
+      if (saved) setDepartments(JSON.parse(saved))
+    } catch {}
   }, [])
+
+  // 폼 변경 감지: 사용자가 내용을 입력하면 isDirty = true
+  // meetingDate는 자동 초기화되므로 제외
+  useEffect(() => {
+    if (!mounted) return
+    const hasContent =
+      title.trim() !== '' ||
+      participants.length > 0 ||
+      externalParticipants.length > 0 ||
+      agenda.length > 0 ||
+      summary.trim() !== '' ||
+      businessIssues.length > 0 ||
+      location.trim() !== '' ||
+      meetingType !== '정기회의' ||
+      locationType !== 'offline'
+    setIsDirty(hasContent)
+  }, [mounted, title, participants, externalParticipants, agenda, summary, businessIssues, location, meetingType, locationType])
 
   const loadBusinessesAndEmployees = async () => {
     try {
@@ -172,18 +197,20 @@ export default function CreateMeetingMinutePage() {
     setParticipants(updated)
   }
 
-  const handleAddAgenda = () => {
+  const handleAddAgenda = (department?: string) => {
     setAgenda([
       ...agenda,
       {
         id: crypto.randomUUID(),
         title: '',
         description: '',
+        department: department || undefined,
         deadline: '',
-        assignee_id: undefined,    // @deprecated 하위 호환성
-        assignee_name: undefined,  // @deprecated 하위 호환성
-        assignee_ids: [],          // 다중 담당자 ID 배열
-        assignees: []              // 다중 담당자 정보 배열
+        progress: 0 as const,
+        assignee_id: undefined,
+        assignee_name: undefined,
+        assignee_ids: [],
+        assignees: []
       }
     ])
   }
@@ -292,8 +319,15 @@ export default function CreateMeetingMinutePage() {
       const result = await response.json()
 
       if (result.success) {
-        alert(`회의록이 ${status === 'draft' ? '임시 저장' : '저장'}되었습니다.`)
-        router.push(`/admin/meeting-minutes/${result.data.id}`)
+        if (status === 'draft') {
+          alert('회의록이 임시 저장되었습니다.')
+          setIsDirty(false)
+          // 임시저장 시 URL을 새로 생성된 회의록 편집 페이지로 교체 (페이지 이동 없음)
+          router.replace(`/admin/meeting-minutes/${result.data.id}/edit`)
+        } else {
+          alert('회의록이 저장되었습니다.')
+          router.push(`/admin/meeting-minutes/${result.data.id}`)
+        }
       } else {
         alert(`저장 실패: ${result.error}`)
       }
@@ -306,7 +340,9 @@ export default function CreateMeetingMinutePage() {
   }
 
   const handleCancel = () => {
-    if (confirm('작성 중인 내용이 저장되지 않습니다. 취소하시겠습니까?')) {
+    if (!isDirty) {
+      router.push('/admin/meeting-minutes')
+    } else if (confirm('작성 중인 내용이 저장되지 않습니다. 취소하시겠습니까?')) {
       router.push('/admin/meeting-minutes')
     }
   }
@@ -336,7 +372,7 @@ export default function CreateMeetingMinutePage() {
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">취소</span>
+            <span className="hidden sm:inline">{isDirty ? '취소' : '뒤로가기'}</span>
           </button>
           <button
             onClick={() => handleSave('draft')}
@@ -588,142 +624,201 @@ export default function CreateMeetingMinutePage() {
               </div>
             </div>
 
-            {/* 안건 */}
+            {/* 안건 - 부서별 섹션 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold text-gray-900">안건</h2>
-                <button
-                  onClick={handleAddAgenda}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>추가</span>
-                </button>
-              </div>
+              <h2 className="text-base font-semibold text-gray-900 mb-3">안건</h2>
 
-              {agenda.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  안건을 추가해주세요
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {agenda.map((item, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-start gap-2 mb-2">
-                        <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 space-y-2">
-                          <input
-                            type="text"
-                            value={item.title}
-                            onChange={(e) => handleUpdateAgenda(index, 'title', e.target.value)}
-                            placeholder="안건 제목"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <textarea
-                            value={item.description}
-                            onChange={(e) => handleUpdateAgenda(index, 'description', e.target.value)}
-                            placeholder="안건 설명 (우측 하단을 드래그하여 크기 조정 가능)"
-                            rows={6}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
-                            style={{ minHeight: '75px' }}
-                          />
+              {/* 부서가 없으면 공통 섹션 하나, 있으면 부서별 섹션 */}
+              {(() => {
+                const sections = departments.length > 0
+                  ? [...departments, undefined] // undefined = 공통(부서 미지정), 마지막에 위치
+                  : [undefined]
 
-                          {/* 데드라인 + 담당자 (한 줄 배치) */}
-                          <div className="grid grid-cols-2 gap-3">
-                            {/* 데드라인 */}
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                데드라인
-                              </label>
-                              <input
-                                type="date"
-                                value={item.deadline || ''}
-                                onChange={(e) => handleUpdateAgenda(index, 'deadline', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            </div>
+                return (
+                  <div className="space-y-4">
+                    {sections.map((dept) => {
+                      const sectionAgenda = agenda.filter(item =>
+                        dept === undefined
+                          ? !item.department
+                          : item.department === dept
+                      )
+                      const sectionLabel = dept || '부서 미지정'
+                      const isCommon = dept === undefined
 
-                            {/* 담당자 (자동완성 다중 선택) */}
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                담당자 (여러명 추가 가능)
-                              </label>
-                              <AutocompleteSelectInput
-                                value=""
-                                onChange={(selectedId, selectedName) => {
-                                  if (!selectedId) return // 빈 선택 무시
-
-                                  const selectedEmployee = activeEmployees.find(e => e.id === selectedId)
-                                  if (!selectedEmployee) return
-
-                                  // 이미 선택된 담당자인지 확인
-                                  const currentIds = item.assignee_ids || []
-                                  if (currentIds.includes(selectedId)) {
-                                    return // 이미 추가된 담당자는 무시
-                                  }
-
-                                  // 담당자 추가
-                                  const updated = [...agenda]
-                                  updated[index] = {
-                                    ...updated[index],
-                                    assignee_ids: [...currentIds, selectedId],
-                                    assignees: [...(item.assignees || []), { id: selectedId, name: selectedEmployee.name }]
-                                  }
-                                  setAgenda(updated)
-                                }}
-                                options={activeEmployees
-                                  .filter(e => !(item.assignee_ids || []).includes(e.id)) // 이미 선택된 담당자 제외
-                                  .map(e => ({
-                                    id: e.id,
-                                    name: `${e.name}${e.department || e.position ? ` (${[e.department, e.position].filter(Boolean).join(' · ')})` : ''}`
-                                  }))}
-                                placeholder="담당자 입력하여 추가..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            </div>
+                      return (
+                        <div key={dept || '__common__'} className="border border-gray-200 rounded-lg overflow-hidden">
+                          {/* 섹션 헤더 */}
+                          <div className={`flex items-center justify-between px-3 py-2 ${
+                            isCommon
+                              ? 'bg-gray-50 border-b border-gray-200'
+                              : 'bg-indigo-50 border-b border-indigo-100'
+                          }`}>
+                            <span className={`text-sm font-medium ${
+                              isCommon ? 'text-gray-700' : 'text-indigo-700'
+                            }`}>
+                              {sectionLabel}
+                            </span>
+                            <button
+                              onClick={() => handleAddAgenda(dept)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+                                isCommon
+                                  ? 'bg-gray-600 text-white hover:bg-gray-700'
+                                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              }`}
+                            >
+                              <Plus className="w-3 h-3" />
+                              안건 추가
+                            </button>
                           </div>
 
-                          {/* 선택된 담당자 배지 표시 */}
-                          {(item.assignees && item.assignees.length > 0) && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {item.assignees.map(assignee => (
-                                <span
-                                  key={assignee.id}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
-                                >
-                                  {assignee.name}
-                                  <button
-                                    onClick={() => {
-                                      const updated = [...agenda]
-                                      updated[index] = {
-                                        ...updated[index],
-                                        assignee_ids: (updated[index].assignee_ids || []).filter(id => id !== assignee.id),
-                                        assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
-                                      }
-                                      setAgenda(updated)
-                                    }}
-                                    className="hover:text-blue-900"
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {/* 섹션 안건 목록 */}
+                          <div className="p-3">
+                            {sectionAgenda.length === 0 ? (
+                              <div className="text-center py-4 text-gray-400 text-xs">
+                                안건을 추가해주세요
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {sectionAgenda.map((item) => {
+                                  const index = agenda.indexOf(item)
+                                  const sectionIndex = sectionAgenda.indexOf(item)
+                                  return (
+                                    <div key={item.id} className="p-3 bg-gray-50 rounded-lg">
+                                      <div className="flex items-start gap-2 mb-2">
+                                        <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                                          {sectionIndex + 1}
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                          <input
+                                            type="text"
+                                            value={item.title}
+                                            onChange={(e) => handleUpdateAgenda(index, 'title', e.target.value)}
+                                            placeholder="안건 제목"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                          />
+                                          <textarea
+                                            value={item.description}
+                                            onChange={(e) => handleUpdateAgenda(index, 'description', e.target.value)}
+                                            placeholder="안건 설명 (우측 하단을 드래그하여 크기 조정 가능)"
+                                            rows={4}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                                            style={{ minHeight: '75px' }}
+                                          />
+
+                                          {/* 데드라인 + 진행률 + 담당자 */}
+                                          <div className="grid grid-cols-3 gap-3">
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-700 mb-1">데드라인</label>
+                                              <input
+                                                type="date"
+                                                value={item.deadline || ''}
+                                                onChange={(e) => handleUpdateAgenda(index, 'deadline', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-700 mb-1">진행률</label>
+                                              <select
+                                                value={item.progress ?? 0}
+                                                onChange={(e) => handleUpdateAgenda(index, 'progress', Number(e.target.value) as 0 | 25 | 50 | 75 | 100)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                              >
+                                                <option value={0}>0% 미착수</option>
+                                                <option value={25}>25% 시작</option>
+                                                <option value={50}>50% 진행중</option>
+                                                <option value={75}>75% 마무리</option>
+                                                <option value={100}>100% 완료</option>
+                                              </select>
+                                              <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                <div
+                                                  className={`h-full rounded-full transition-all duration-300 ${
+                                                    (item.progress ?? 0) === 0 ? 'bg-gray-400' :
+                                                    (item.progress ?? 0) <= 25 ? 'bg-blue-500' :
+                                                    (item.progress ?? 0) <= 50 ? 'bg-yellow-500' :
+                                                    (item.progress ?? 0) <= 75 ? 'bg-orange-500' :
+                                                    'bg-green-500'
+                                                  }`}
+                                                  style={{ width: `${item.progress ?? 0}%` }}
+                                                />
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-700 mb-1">담당자 (여러명 추가 가능)</label>
+                                              <AutocompleteSelectInput
+                                                value=""
+                                                onChange={(selectedId, _selectedName) => {
+                                                  if (!selectedId) return
+                                                  const selectedEmployee = activeEmployees.find(e => e.id === selectedId)
+                                                  if (!selectedEmployee) return
+                                                  const currentIds = item.assignee_ids || []
+                                                  if (currentIds.includes(selectedId)) return
+                                                  const updated = [...agenda]
+                                                  updated[index] = {
+                                                    ...updated[index],
+                                                    assignee_ids: [...currentIds, selectedId],
+                                                    assignees: [...(item.assignees || []), { id: selectedId, name: selectedEmployee.name }]
+                                                  }
+                                                  setAgenda(updated)
+                                                }}
+                                                options={activeEmployees
+                                                  .filter(e => !(item.assignee_ids || []).includes(e.id))
+                                                  .map(e => ({
+                                                    id: e.id,
+                                                    name: `${e.name}${e.department || e.position ? ` (${[e.department, e.position].filter(Boolean).join(' · ')})` : ''}`
+                                                  }))}
+                                                placeholder="담당자 입력하여 추가..."
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* 선택된 담당자 배지 */}
+                                          {(item.assignees && item.assignees.length > 0) && (
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {item.assignees.map(assignee => (
+                                                <span
+                                                  key={assignee.id}
+                                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                                                >
+                                                  {assignee.name}
+                                                  <button
+                                                    onClick={() => {
+                                                      const updated = [...agenda]
+                                                      updated[index] = {
+                                                        ...updated[index],
+                                                        assignee_ids: (updated[index].assignee_ids || []).filter(id => id !== assignee.id),
+                                                        assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
+                                                      }
+                                                      setAgenda(updated)
+                                                    }}
+                                                    className="hover:text-blue-900"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <button
+                                          onClick={() => handleRemoveAgenda(index)}
+                                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveAgenda(index)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
@@ -915,7 +1010,7 @@ export default function CreateMeetingMinutePage() {
             disabled={saving}
             className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
           >
-            취소
+            {isDirty ? '취소' : '뒤로가기'}
           </button>
           <button
             onClick={() => handleSave('draft')}
