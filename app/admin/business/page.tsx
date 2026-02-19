@@ -101,6 +101,7 @@ interface UnifiedBusinessInfo {
   shipment_date?: string | null;
   inventory_check?: string | null;
   installation_date?: string | null;
+  payment_scheduled_date?: string | null;
   installation_team?: string | null;
   business_type?: string | null;
   business_category?: string | null;
@@ -2884,7 +2885,7 @@ function BusinessManagementPage() {
         order_date: freshData.order_date || '',
         shipment_date: freshData.shipment_date || '',
         installation_date: freshData.installation_date || '',
-        payment_scheduled_date: (freshData as any).payment_scheduled_date || '',
+        payment_scheduled_date: freshData.payment_scheduled_date || '',
 
         // 실사 관리
         estimate_survey_manager: freshData.estimate_survey_manager || '',
@@ -5134,8 +5135,8 @@ function BusinessManagementPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">입금예정일</label>
                       <DateInput
-                        value={(formData as any).payment_scheduled_date || ''}
-                        onChange={(value) => setFormData({...formData, payment_scheduled_date: value} as any)}
+                        value={formData.payment_scheduled_date || ''}
+                        onChange={(value) => setFormData({...formData, payment_scheduled_date: value})}
                       />
                     </div>
 

@@ -2028,7 +2028,13 @@ function VirtualizedTable({
   const showSurveyCostsColumn = selectedSurveyMonths.length > 0;
 
   const columnWidths = (() => {
-    if (showPaymentSchedule) {
+    if (showPaymentSchedule && showReceivablesOnly && showSurveyCostsColumn) {
+      // 자비+미수금+실사비용: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (12컬럼, 카테고리·영업점 숨김)
+      return ['16%', '9%', '9%', '7%', '7%', '7%', '9%', '9%', '9%', '5%', '7%', '7%']; // 총합 101% → 반올림 오차 허용
+    } else if (showPaymentSchedule && showReceivablesOnly) {
+      // 자비+미수금: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 미수금 (11컬럼, 카테고리·영업점 숨김)
+      return ['17%', '8%', '7%', '7%', '8%', '8%', '10%', '10%', '10%', '6%', '9%']; // 총합 100%
+    } else if (showPaymentSchedule) {
       // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
       return ['18%', '10%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%']; // 총합 100%
     } else if (showReceivablesOnly && showSurveyCostsColumn) {
@@ -2091,13 +2097,17 @@ function VirtualizedTable({
           )}
           <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold">지역</div>
           <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold">담당자</div>
-          <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold">카테고리</div>
-          <div
-            className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 text-xs font-semibold"
-            onClick={() => handleSort('sales_office')}
-          >
-            영업점 {sortField === 'sales_office' && (sortOrder === 'asc' ? '↑' : '↓')}
-          </div>
+          {!(showPaymentSchedule && showReceivablesOnly) && (
+            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold">카테고리</div>
+          )}
+          {!(showPaymentSchedule && showReceivablesOnly) && (
+            <div
+              className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+              onClick={() => handleSort('sales_office')}
+            >
+              영업점 {sortField === 'sales_office' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </div>
+          )}
           <div
             className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 text-xs font-semibold"
             onClick={() => handleSort('total_revenue')}
@@ -2227,22 +2237,26 @@ function VirtualizedTable({
                 <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs truncate">
                   {business.manager_name || '미등록'}
                 </div>
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                    business.category === '보조금' || business.category === '보조금 동시진행'
-                      ? 'bg-purple-100 text-purple-800' :
-                    business.category === '자비' ? 'bg-green-100 text-green-800' :
-                    business.category === 'AS' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {business.category || 'N/A'}
-                  </span>
-                </div>
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {business.sales_office || '미배정'}
-                  </span>
-                </div>
+                {!(showPaymentSchedule && showReceivablesOnly) && (
+                  <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      business.category === '보조금' || business.category === '보조금 동시진행'
+                        ? 'bg-purple-100 text-purple-800' :
+                      business.category === '자비' ? 'bg-green-100 text-green-800' :
+                      business.category === 'AS' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {business.category || 'N/A'}
+                    </span>
+                  </div>
+                )}
+                {!(showPaymentSchedule && showReceivablesOnly) && (
+                  <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {business.sales_office || '미배정'}
+                    </span>
+                  </div>
+                )}
                 <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right font-mono text-xs">
                   {formatCurrency(business.total_revenue)}
                 </div>
