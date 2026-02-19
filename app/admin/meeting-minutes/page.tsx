@@ -4,7 +4,7 @@
 'use client'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import {
   Plus,
@@ -33,6 +33,7 @@ import {
 // useSearchParams를 사용하는 내부 컴포넌트
 function MeetingMinutesContent() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const refreshTrigger = searchParams.get('refresh')  // 업데이트 트리거 감지
   const [mounted, setMounted] = useState(false)
@@ -71,7 +72,7 @@ function MeetingMinutesContent() {
     setMounted(true)
     loadMeetingMinutes()
     loadDepartments()
-  }, [refreshTrigger])  // refreshTrigger 변경 시 재실행
+  }, [refreshTrigger, pathname])  // refreshTrigger 또는 pathname 변경 시 재실행
 
   const loadDepartments = async () => {
     try {
