@@ -156,8 +156,8 @@ function MeetingMinutesContent() {
       })
       const result = await res.json()
       if (result.success) {
-        setDepartments([...departments, trimmed])
         setNewDeptInput('')
+        await loadDepartments()
         newDeptInputRef.current?.focus()
       } else {
         const msg = typeof result.error === 'string' ? result.error : '부서 추가에 실패했습니다'
@@ -175,7 +175,7 @@ function MeetingMinutesContent() {
       })
       const result = await res.json()
       if (result.success) {
-        setDepartments(departments.filter(d => d !== dept))
+        await loadDepartments()
       } else {
         alert(result.error || '부서 삭제에 실패했습니다')
       }
