@@ -12,6 +12,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Next.js 프로덕션 캐싱 비활성화
+export const dynamic = 'force-dynamic'
+
 // GET: 부서 목록 조회
 export async function GET() {
   try {
@@ -23,10 +26,10 @@ export async function GET() {
 
     if (error) throw error
 
-    return NextResponse.json({
-      success: true,
-      data: (data || []).map((row: { name: string }) => row.name)
-    })
+    return NextResponse.json(
+      { success: true, data: (data || []).map((row: { name: string }) => row.name) },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (error) {
     console.error('[MEETING-DEPT] GET error:', error)
     return NextResponse.json({ success: false, error: '부서 목록 조회 실패' }, { status: 500 })

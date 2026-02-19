@@ -76,7 +76,7 @@ function MeetingMinutesContent() {
 
   const loadDepartments = async () => {
     try {
-      const res = await fetch('/api/meeting-departments')
+      const res = await fetch('/api/meeting-departments', { cache: 'no-store' })
       const result = await res.json()
       if (result.success) setDepartments(result.data)
     } catch (error) {

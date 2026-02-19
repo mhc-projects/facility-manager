@@ -60,7 +60,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   useEffect(() => {
     setMounted(true)
     // API에서 부서 목록 로드
-    fetch('/api/meeting-departments')
+    fetch('/api/meeting-departments', { cache: 'no-store' })
       .then(r => r.json())
       .then(result => { if (result.success) setDepartments(result.data) })
       .catch(() => {})
