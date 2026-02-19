@@ -2484,6 +2484,7 @@ function BusinessManagementPage() {
           shipment_date: business.shipment_date,
           inventory_check: business.inventory_check,
           installation_date: business.installation_date,
+          payment_scheduled_date: business.payment_scheduled_date || null,
           installation_team: business.installation_team,
           business_type: business.business_type,
           business_category: business.business_category,
@@ -2883,6 +2884,7 @@ function BusinessManagementPage() {
         order_date: freshData.order_date || '',
         shipment_date: freshData.shipment_date || '',
         installation_date: freshData.installation_date || '',
+        payment_scheduled_date: (freshData as any).payment_scheduled_date || '',
 
         // 실사 관리
         estimate_survey_manager: freshData.estimate_survey_manager || '',
@@ -3356,7 +3358,7 @@ function BusinessManagementPage() {
         'invoice_1st_date', 'payment_1st_date', 'invoice_2nd_date', 'payment_2nd_date',
         'invoice_additional_date', 'payment_additional_date',
         'invoice_advance_date', 'payment_advance_date', 'invoice_balance_date', 'payment_balance_date',
-        'representative_birth_date'
+        'representative_birth_date', 'payment_scheduled_date'
       ];
 
       dateFields.forEach(field => {
@@ -3694,6 +3696,7 @@ function BusinessManagementPage() {
               shipment_date: serverData.shipment_date || null,
               inventory_check: serverData.inventory_check || null,
               installation_date: serverData.installation_date || null,
+              payment_scheduled_date: serverData.payment_scheduled_date || null,
               business_category: serverData.business_category || null,
               pollutants: serverData.pollutants || null,
               annual_emission_amount: serverData.annual_emission_amount || null,
@@ -5125,6 +5128,14 @@ function BusinessManagementPage() {
                       <DateInput
                         value={formData.installation_date || ''}
                         onChange={(value) => setFormData({...formData, installation_date: value})}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">입금예정일</label>
+                      <DateInput
+                        value={(formData as any).payment_scheduled_date || ''}
+                        onChange={(value) => setFormData({...formData, payment_scheduled_date: value} as any)}
                       />
                     </div>
 

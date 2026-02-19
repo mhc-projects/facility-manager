@@ -162,7 +162,9 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/meeting-templates/*',  // 회의록 템플릿 API 전체 제외 (JWT 인증 사용)
     '/api/meeting-departments',  // 회의록 부서 관리 API (JWT 인증 사용)
     '/api/meeting-departments/*',  // 회의록 부서 관리 API 전체 제외 (JWT 인증 사용)
-    '/api/equipment-field-checks/*'  // 현장 확인 데이터 개별 API 전체 제외 (공개 사용)
+    '/api/equipment-field-checks/*',  // 현장 확인 데이터 개별 API 전체 제외 (공개 사용)
+    '/api/business-risk/*',  // 미수금 위험도 관리 API (JWT 인증 사용)
+    '/api/business-task-status'  // 업무 상태 조회 API (JWT 인증 사용)
   ];
 
   if (excludePaths.includes(request.nextUrl.pathname)) {

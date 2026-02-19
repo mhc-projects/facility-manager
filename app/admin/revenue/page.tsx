@@ -14,6 +14,7 @@ import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import TwoStageDropdown from '@/components/ui/TwoStageDropdown';
 import { MANUFACTURER_NAMES_REVERSE, type ManufacturerName } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
+import { allSteps } from '@/lib/task-steps';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
@@ -89,6 +90,7 @@ function RevenueDashboard() {
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
   const [businesses, setBusinesses] = useState<BusinessInfo[]>([]);
+  const [riskMap, setRiskMap] = useState<Record<string, string | null>>({}); // 위험도 별도 상태 (businesses 재계산 방지)
   const [calculations, setCalculations] = useState<RevenueCalculation[]>([]);
   const [selectedOffices, setSelectedOffices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,6 +125,10 @@ function RevenueDashboard() {
   const [selectedSurveyMonths, setSelectedSurveyMonths] = useState<string[]>([]); // 실사 월 필터 ['견적|1', '착공|2', '준공|9']
   const [showReceivablesOnly, setShowReceivablesOnly] = useState(false); // 미수금 필터
   const [showUninstalledOnly, setShowUninstalledOnly] = useState(false); // 미설치 필터
+  // 미수금 필터 활성화 시 업무관리 연동
+  const [taskStatusMap, setTaskStatusMap] = useState<Record<string, Array<{ task_type: string; status: string }>>>({});
+  const [selectedTaskTypes, setSelectedTaskTypes] = useState<string[]>([]); // 업무단계 다중 선택
+  const [selectedRiskLevels, setSelectedRiskLevels] = useState<string[]>([]); // 위험도 다중 선택
   const [isFilterExpanded, setIsFilterExpanded] = useState(false); // 필터 섹션 접기/펼치기 상태 (기본값: 접힌 상태)
   const [sortField, setSortField] = useState<string>('business_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -152,7 +158,8 @@ function RevenueDashboard() {
       console.log('🔄 [COMPONENT-LIFECYCLE] pricesLoaded=true → 데이터 로드 시작');
       Promise.all([
         loadBusinesses(),
-        loadCalculations()
+        loadCalculations(),
+        loadTaskStatuses()
       ]).then(() => {
         console.log('✅ 초기 데이터 로드 완료');
       }).catch((error) => {
@@ -196,6 +203,54 @@ function RevenueDashboard() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
+  };
+
+  // 업무단계 고유 라벨 목록 (중복 제거)
+  const uniqueTaskStepLabels = useMemo(() => {
+    const seen = new Set<string>();
+    return allSteps.filter(step => {
+      if (seen.has(step.label)) return false;
+      seen.add(step.label);
+      return true;
+    });
+  }, []);
+
+  // 업무 상태 맵 로드
+  const loadTaskStatuses = async () => {
+    try {
+      const response = await fetch('/api/business-task-status', { headers: getAuthHeaders() });
+      const data = await response.json();
+      if (data.success) {
+        setTaskStatusMap(data.data);
+      }
+    } catch (error) {
+      console.error('[loadTaskStatuses] 오류:', error);
+    }
+  };
+
+  // 위험도 업데이트 (낙관적 업데이트)
+  const handleRiskUpdate = (businessId: string, risk: '상' | '중' | '하' | null) => {
+    // 롤백용 이전 값 보존
+    const previousRisk = riskMap[businessId] ?? null;
+
+    // 즉시 riskMap만 업데이트 (businesses 변경 없음 → filteredBusinesses 재계산 없음)
+    setRiskMap(prev => ({ ...prev, [businessId]: risk }));
+
+    // API는 백그라운드에서 실행 (UI 블로킹 없음)
+    fetch(`/api/business-risk/${businessId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ risk }),
+    }).then(response => {
+      if (!response.ok) throw new Error('위험도 업데이트 실패');
+      // 캐시 무효화: 다음 새로고침 시 DB에서 최신 값을 가져오도록
+      sessionStorage.removeItem('revenue_businesses_cache');
+      sessionStorage.removeItem('revenue_cache_time');
+    }).catch(error => {
+      console.error('[handleRiskUpdate] 오류:', error);
+      // 실패 시 롤백
+      setRiskMap(prev => ({ ...prev, [businessId]: previousRisk }));
+    });
   };
 
   // 🚀 SessionStorage 캐싱 유틸리티
@@ -539,6 +594,13 @@ function RevenueDashboard() {
       const cachedBusinesses = getCachedData(CACHE_KEYS.BUSINESSES);
       if (cachedBusinesses) {
         setBusinesses(cachedBusinesses);
+        const cachedRiskMap: Record<string, string | null> = {};
+        for (const b of cachedBusinesses) {
+          if (b.receivable_risk !== undefined) {
+            cachedRiskMap[b.id] = b.receivable_risk ?? null;
+          }
+        }
+        setRiskMap(cachedRiskMap);
         const endTime = performance.now();
         console.log(`⚡ [LOAD-BUSINESSES] 캐시에서 ${cachedBusinesses.length}개 로드 완료 (${(endTime - startTime).toFixed(0)}ms)`);
         return;
@@ -559,6 +621,15 @@ function RevenueDashboard() {
 
         // 🔧 기존 클라이언트 계산 로직 제거, businesses를 그대로 저장
         setBusinesses(businessData);
+
+        // 위험도 상태를 별도 맵으로 초기화 (클릭 시 전체 재계산 방지)
+        const initialRiskMap: Record<string, string | null> = {};
+        for (const b of businessData) {
+          if (b.receivable_risk !== undefined) {
+            initialRiskMap[b.id] = b.receivable_risk ?? null;
+          }
+        }
+        setRiskMap(initialRiskMap);
 
         // 🚀 캐시 저장
         setCachedData(CACHE_KEYS.BUSINESSES, businessData);
@@ -1064,7 +1135,8 @@ function RevenueDashboard() {
         has_calculation: true, // ✅ 항상 true (실시간 계산)
         additional_cost: business.additional_cost || 0,
         negotiation: business.negotiation ? parseFloat(business.negotiation.toString()) : 0,
-        total_receivables: totalReceivables
+        total_receivables: totalReceivables,
+        task_statuses: taskStatusMap[business.business_name] || [],
       };
     }).filter(business => {
       // 매출 금액 필터 적용
@@ -1083,6 +1155,22 @@ function RevenueDashboard() {
         return true;
       }
       return !business.installation_date || business.installation_date === '';
+    }).filter(business => {
+      // 업무단계 필터 (미수금 필터 활성화 시에만 적용)
+      if (!showReceivablesOnly) return true;
+      if (selectedTaskTypes.length === 0) return true;
+      // 선택된 라벨들에 해당하는 모든 status 코드 수집
+      const matchingStatuses = allSteps
+        .filter(s => selectedTaskTypes.includes(s.label))
+        .map(s => s.status);
+      const taskList = taskStatusMap[business.business_name] ?? [];
+      return taskList.some(ts => matchingStatuses.includes(ts.status as any));
+    }).filter(business => {
+      // 위험도 필터 (미수금 필터 활성화 시에만 적용)
+      if (!showReceivablesOnly) return true;
+      if (selectedRiskLevels.length === 0) return true;
+      const risk = riskMap[business.id] ?? null;
+      return risk !== null && selectedRiskLevels.includes(risk);
     });
   }, [
     businesses,
@@ -1098,7 +1186,11 @@ function RevenueDashboard() {
     selectedSurveyMonths,
     revenueFilter,
     showReceivablesOnly,
-    showUninstalledOnly
+    showUninstalledOnly,
+    taskStatusMap,
+    selectedTaskTypes,
+    selectedRiskLevels,
+    riskMap,
   ]);
 
   // ✅ 실시간 계산 결과로 통계 계산 (filteredBusinesses에서 직접 계산)
@@ -1490,9 +1582,9 @@ function RevenueDashboard() {
               />
             </div>
 
-            {/* 두 번째 행: 검색, 매출금액, 필터 (2줄 압축) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 items-center">
-              <div className="flex items-center gap-1.5 md:col-span-2">
+            {/* 두 번째 행: 검색, 매출금액, 필터 (미수금 ON 시 업무관리 필터 추가) */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 items-center ${showReceivablesOnly ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
+              <div className={`flex items-center gap-1.5 ${showReceivablesOnly ? 'md:col-span-1' : 'md:col-span-2'}`}>
                 <label className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">검색</label>
                 <div className="relative flex-1">
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -1532,13 +1624,44 @@ function RevenueDashboard() {
                 />
               </div>
 
+              {/* 업무단계 필터 (미수금 ON 시에만 표시) */}
+              {showReceivablesOnly && (
+                <MultiSelectDropdown
+                  label="업무단계"
+                  options={uniqueTaskStepLabels.map(s => s.label)}
+                  selectedValues={selectedTaskTypes}
+                  onChange={(vals) => { setSelectedTaskTypes(vals); setCurrentPage(1); }}
+                  placeholder="전체 단계"
+                  inline={true}
+                />
+              )}
+
+              {/* 위험도 필터 (미수금 ON 시에만 표시) */}
+              {showReceivablesOnly && (
+                <MultiSelectDropdown
+                  label="위험도"
+                  options={['상', '중', '하']}
+                  selectedValues={selectedRiskLevels}
+                  onChange={(vals) => { setSelectedRiskLevels(vals); setCurrentPage(1); }}
+                  placeholder="전체"
+                  inline={true}
+                />
+              )}
+
               <div className="flex items-center justify-end gap-3">
                 <div className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
                     id="receivables-filter"
                     checked={showReceivablesOnly}
-                    onChange={(e) => { setShowReceivablesOnly(e.target.checked); setCurrentPage(1); }}
+                    onChange={(e) => {
+                      setShowReceivablesOnly(e.target.checked);
+                      if (!e.target.checked) {
+                        setSelectedTaskTypes([]);
+                        setSelectedRiskLevels([]);
+                      }
+                      setCurrentPage(1);
+                    }}
                     className="w-3.5 h-3.5 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
                   />
                   <label htmlFor="receivables-filter" className="text-xs sm:text-sm font-medium text-gray-700 cursor-pointer whitespace-nowrap">
@@ -1826,6 +1949,9 @@ function RevenueDashboard() {
                   formatCurrency={formatCurrency}
                   setSelectedEquipmentBusiness={setSelectedEquipmentBusiness}
                   setShowEquipmentModal={setShowEquipmentModal}
+                  handleRiskUpdate={handleRiskUpdate}
+                  riskMap={riskMap}
+                  showPaymentSchedule={selectedCategories.length === 1 && selectedCategories[0] === '자비'}
                 />
               </>
             )}
@@ -1871,7 +1997,10 @@ function VirtualizedTable({
   handleSort,
   formatCurrency,
   setSelectedEquipmentBusiness,
-  setShowEquipmentModal
+  setShowEquipmentModal,
+  handleRiskUpdate,
+  riskMap,
+  showPaymentSchedule,
 }: {
   businesses: any[];
   showReceivablesOnly: boolean;
@@ -1882,6 +2011,9 @@ function VirtualizedTable({
   formatCurrency: (value: number) => string;
   setSelectedEquipmentBusiness: (business: any) => void;
   setShowEquipmentModal: (show: boolean) => void;
+  handleRiskUpdate: (businessId: string, risk: '상' | '중' | '하' | null) => void;
+  riskMap: Record<string, string | null>;
+  showPaymentSchedule: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -1896,14 +2028,19 @@ function VirtualizedTable({
   const showSurveyCostsColumn = selectedSurveyMonths.length > 0;
 
   const columnWidths = (() => {
-    if (showReceivablesOnly && showSurveyCostsColumn) {
-      // 미수금 + 실사비용 둘 다 표시
-      return ['17%', '8%', '7%', '7%', '7%', '10%', '10%', '10%', '6%', '9%', '9%']; // 총합 100%
+    if (showPaymentSchedule) {
+      // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
+      return ['18%', '10%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%']; // 총합 100%
+    } else if (showReceivablesOnly && showSurveyCostsColumn) {
+      // 미수금 + 실사비용 + 업무단계 + 위험도 (13컬럼)
+      // 사업장명, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금
+      return ['13%', '8%', '7%', '6%', '6%', '7%', '7%', '8%', '8%', '8%', '5%', '7%', '10%']; // 총합 100%
     } else if (showReceivablesOnly) {
-      // 미수금만 표시
-      return ['18%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%', '10%'];  // 총합 100%
+      // 미수금 + 업무단계 + 위험도 (12컬럼)
+      // 사업장명, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 미수금
+      return ['14%', '9%', '7%', '6%', '6%', '8%', '8%', '9%', '9%', '9%', '5%', '10%']; // 총합 100%
     } else if (showSurveyCostsColumn) {
-      // 실사비용만 표시
+      // 실사비용만 표시 (기존 유지)
       return ['18%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%', '10%'];  // 총합 100%
     } else {
       // 기본 (둘 다 표시 안 함)
@@ -1934,6 +2071,24 @@ function VirtualizedTable({
           >
             사업장명 {sortField === 'business_name' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
+          {showPaymentSchedule && (
+            <div
+              className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center cursor-pointer hover:bg-gray-100 bg-teal-50 text-teal-700 text-xs font-semibold"
+              onClick={() => handleSort('payment_scheduled_date')}
+            >
+              입금예정일 {sortField === 'payment_scheduled_date' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </div>
+          )}
+          {showReceivablesOnly && (
+            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold bg-indigo-50 text-indigo-700">
+              업무단계
+            </div>
+          )}
+          {showReceivablesOnly && (
+            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold bg-orange-50 text-orange-700">
+              위험도
+            </div>
+          )}
           <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold">지역</div>
           <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold">담당자</div>
           <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold">카테고리</div>
@@ -2014,6 +2169,58 @@ function VirtualizedTable({
                     {business.business_name}
                   </button>
                 </div>
+                {/* 입금예정일 (자비 필터 ON 시) */}
+                {showPaymentSchedule && (
+                  <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-xs bg-teal-50/30">
+                    {business.payment_scheduled_date
+                      ? <span className="text-teal-700 font-medium">{business.payment_scheduled_date}</span>
+                      : <span className="text-gray-400">-</span>
+                    }
+                  </div>
+                )}
+                {/* 업무단계 (미수금 ON 시) */}
+                {showReceivablesOnly && (
+                  <div className="border-r border-gray-300 px-1.5 py-1 flex items-center flex-wrap gap-0.5 bg-indigo-50/30">
+                    {(business.task_statuses ?? []).length > 0 ? (
+                      (business.task_statuses as Array<{ task_type: string; status: string }>).map((ts, i) => {
+                        const step = allSteps.find(s => s.status === ts.status);
+                        const label = step?.label ?? ts.status;
+                        return (
+                          <span
+                            key={i}
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 whitespace-nowrap"
+                          >
+                            {label}
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <span className="text-[10px] text-gray-400">-</span>
+                    )}
+                  </div>
+                )}
+                {/* 위험도 (미수금 ON 시) */}
+                {showReceivablesOnly && (
+                  <div className="border-r border-gray-300 px-1 py-1 flex items-center justify-center gap-0.5 bg-orange-50/30">
+                    {(['상', '중', '하'] as const).map(level => {
+                      const isActive = (riskMap[business.id] ?? null) === level;
+                      const colorMap = {
+                        상: isActive ? 'bg-red-100 text-red-700 ring-1 ring-red-400' : 'bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500',
+                        중: isActive ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-400' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500',
+                        하: isActive ? 'bg-green-100 text-green-700 ring-1 ring-green-400' : 'bg-gray-50 text-gray-400 hover:bg-green-50 hover:text-green-500',
+                      };
+                      return (
+                        <button
+                          key={level}
+                          onClick={() => handleRiskUpdate(business.id, isActive ? null : level)}
+                          className={`px-1.5 py-0.5 text-[10px] rounded font-medium transition-all cursor-pointer ${colorMap[level]}`}
+                        >
+                          {level}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs truncate">
                   {business.address ? business.address.split(' ').slice(0, 2).join(' ') : '미등록'}
                 </div>

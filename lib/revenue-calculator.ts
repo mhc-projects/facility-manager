@@ -102,10 +102,6 @@ export function calculateBusinessRevenue(
   const rawManufacturer = business.manufacturer || 'ecosense';
   const normalizedManufacturer = rawManufacturer.toLowerCase().trim();
 
-  console.log('🔍 [CALC] 사업장:', business.business_name);
-  console.log('🔍 [CALC] 제조사:', rawManufacturer, '→', normalizedManufacturer);
-  console.log('🔍 [CALC] 사용 가능한 제조사 목록:', Object.keys(manufacturerPrices));
-
   // 제조사 원가 맵에서 정규화된 이름으로 검색
   let manufacturerCosts = manufacturerPrices[normalizedManufacturer];
 
@@ -113,13 +109,6 @@ export function calculateBusinessRevenue(
   if (!manufacturerCosts) {
     manufacturerCosts = manufacturerPrices[rawManufacturer] || {};
   }
-
-  console.log('🔍 [CALC] 선택된 제조사 원가:', manufacturerCosts);
-  console.log('🔍 [CALC] 원가 데이터 샘플:', {
-    차압계: manufacturerCosts['differential_pressure_meter'],
-    온도계: manufacturerCosts['temperature_meter'],
-    송풍전류계: manufacturerCosts['fan_current_meter']
-  });
 
   // 매출/제조사 매입 계산
   let businessRevenue = 0;
@@ -145,17 +134,7 @@ export function calculateBusinessRevenue(
     // DEFAULT_COSTS 사용 안 함 - 사용자 명시적 요구사항
     let costPrice = manufacturerCosts[field] || 0;
 
-    // 디버깅: 원가가 0인 경우 경고 출력
-    if (costPrice === 0 && quantity > 0) {
-      console.warn(`⚠️ [CALC] ${field}: 제조사별 원가 없음 (제조사: ${normalizedManufacturer})`);
-    }
-
     manufacturerCost += costPrice * quantity;
-
-    // 디버깅: 실제 사용된 원가 출력
-    if (quantity > 0) {
-      console.log(`💰 [CALC] ${field}: 수량=${quantity}, 원가=${costPrice.toLocaleString()}원, 합계=${(costPrice * quantity).toLocaleString()}원`);
-    }
 
     // 기본 설치비 (equipment_installation_cost 테이블)
     const installCost = baseInstallationCosts[field] || 0;

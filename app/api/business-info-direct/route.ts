@@ -72,6 +72,8 @@ export async function GET(request: Request) {
       expansion_device, relay_8ch, relay_16ch,
       main_board_replacement, multiple_stack,
       additional_cost, negotiation,
+      receivable_risk,
+      payment_scheduled_date::text as payment_scheduled_date,
       revenue_source,
       order_date::text as order_date,
       order_manager,
@@ -353,6 +355,9 @@ export async function PUT(request: Request) {
     }
     if (updateData.installation_date !== undefined) {
       updateObject.installation_date = updateData.installation_date || null;
+    }
+    if (updateData.payment_scheduled_date !== undefined) {
+      updateObject.payment_scheduled_date = updateData.payment_scheduled_date || null;
     }
     if (updateData.installation_team !== undefined) {
       updateObject.installation_team = normalizeUTF8(updateData.installation_team || '');
@@ -675,6 +680,7 @@ export async function POST(request: Request) {
       shipment_date: businessData.shipment_date || null,
       inventory_check: normalizeUTF8(businessData.inventory_check || ''),
       installation_date: businessData.installation_date || null,
+      payment_scheduled_date: businessData.payment_scheduled_date || null,
       installation_team: normalizeUTF8(businessData.installation_team || ''),
 
       // Business classification and operational fields

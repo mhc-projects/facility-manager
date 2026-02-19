@@ -65,6 +65,7 @@ interface UnifiedBusinessInfo {
   shipment_date?: string | null
   inventory_check?: string | null
   installation_date?: string | null
+  payment_scheduled_date?: string | null
   installation_team?: string | null
   business_type?: string | null
   business_category?: string | null
@@ -1352,6 +1353,13 @@ export default function BusinessDetailModal({
                       <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
                         <div className="text-xs sm:text-sm text-gray-600 mb-1">설치일</div>
                         <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.installation_date)}</div>
+                      </div>
+                    )}
+
+                    {business.payment_scheduled_date && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">입금예정일</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.payment_scheduled_date)}</div>
                       </div>
                     )}
 

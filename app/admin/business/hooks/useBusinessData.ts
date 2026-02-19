@@ -221,6 +221,7 @@ export function useBusinessData() {
           order_date: business.order_date || null,
           shipment_date: business.shipment_date || null,
           installation_date: business.installation_date || null,
+          payment_scheduled_date: business.payment_scheduled_date || null,
 
           // 추가공사비
           additional_cost: business.additional_cost || null
