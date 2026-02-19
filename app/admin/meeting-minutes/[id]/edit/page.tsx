@@ -36,7 +36,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
-  const [dataLoaded, setDataLoaded] = useState(false)  // 데이터 로드 완료 여부
+  const dataLoadedRef = useRef(false)  // 데이터 로드 완료 여부 (ref: 변경 시 리렌더 없음)
 
   // 폼 데이터
   const [title, setTitle] = useState('')
@@ -66,7 +66,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       .catch(() => {})
     // 먼저 사업장과 직원 목록을 로드한 후, 회의록을 로드
     const initializeData = async () => {
-      setDataLoaded(false)  // 재로드 시 플래그 리셋
+      dataLoadedRef.current = false  // 재로드 시 플래그 리셋
       await loadBusinessesAndEmployees()
       await loadMeetingMinute()
     }
@@ -75,7 +75,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
 
   // 폼 변경 감지: 데이터 로드 완료 후 사용자가 폼을 변경하면 isDirty = true
   useEffect(() => {
-    if (!dataLoaded) return
+    if (!dataLoadedRef.current) return
     setIsDirty(true)
   }, [title, meetingDate, meetingType, location, locationType, participants, externalParticipants, agenda, summary, businessIssues])
 
@@ -230,9 +230,10 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       router.push('/admin/meeting-minutes')
     } finally {
       setLoading(false)
-      // 로드 완료 후 dataLoaded = true로 변경 (이후 폼 변경부터 isDirty 감지)
+      // 로드 완료 후 플래그 활성화 (이후 폼 변경부터 isDirty 감지)
+      // ref 사용: setDataLoaded(true)와 달리 추가 렌더링을 유발하지 않음
       setIsDirty(false)
-      setDataLoaded(true)
+      dataLoadedRef.current = true
     }
   }
 
