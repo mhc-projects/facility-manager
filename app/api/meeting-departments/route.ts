@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('[MEETING-DEPT] POST error:', error)
-    return NextResponse.json({ success: false, error: '부서 추가 실패' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ success: false, error: `부서 추가 실패: ${msg}` }, { status: 500 })
   }
 }
 

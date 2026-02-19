@@ -159,7 +159,8 @@ function MeetingMinutesContent() {
         setNewDeptInput('')
         newDeptInputRef.current?.focus()
       } else {
-        alert(result.error || '부서 추가에 실패했습니다')
+        const msg = typeof result.error === 'string' ? result.error : '부서 추가에 실패했습니다'
+        alert(msg)
       }
     } catch {
       alert('부서 추가 중 오류가 발생했습니다')
