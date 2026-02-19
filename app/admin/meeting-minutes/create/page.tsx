@@ -62,11 +62,11 @@ export default function CreateMeetingMinutePage() {
     // 사업장 목록 및 담당자 목록 로드
     loadBusinessesAndEmployees()
 
-    // localStorage에서 부서 목록 로드
-    try {
-      const saved = localStorage.getItem('meeting_departments')
-      if (saved) setDepartments(JSON.parse(saved))
-    } catch {}
+    // API에서 부서 목록 로드
+    fetch('/api/meeting-departments')
+      .then(r => r.json())
+      .then(result => { if (result.success) setDepartments(result.data) })
+      .catch(() => {})
   }, [])
 
   // 폼 변경 감지: 사용자가 내용을 입력하면 isDirty = true

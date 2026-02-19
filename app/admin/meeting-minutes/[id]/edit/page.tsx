@@ -59,11 +59,11 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
 
   useEffect(() => {
     setMounted(true)
-    // localStorage에서 부서 목록 로드
-    try {
-      const saved = localStorage.getItem('meeting_departments')
-      if (saved) setDepartments(JSON.parse(saved))
-    } catch {}
+    // API에서 부서 목록 로드
+    fetch('/api/meeting-departments')
+      .then(r => r.json())
+      .then(result => { if (result.success) setDepartments(result.data) })
+      .catch(() => {})
     // 먼저 사업장과 직원 목록을 로드한 후, 회의록을 로드
     const initializeData = async () => {
       isInitialLoad.current = true  // 재로드 시에도 플래그 리셋

@@ -70,12 +70,18 @@ function MeetingMinutesContent() {
   useEffect(() => {
     setMounted(true)
     loadMeetingMinutes()
-    // localStorage에서 부서 목록 로드
-    try {
-      const saved = localStorage.getItem('meeting_departments')
-      if (saved) setDepartments(JSON.parse(saved))
-    } catch {}
+    loadDepartments()
   }, [refreshTrigger])  // refreshTrigger 변경 시 재실행
+
+  const loadDepartments = async () => {
+    try {
+      const res = await fetch('/api/meeting-departments')
+      const result = await res.json()
+      if (result.success) setDepartments(result.data)
+    } catch (error) {
+      console.error('[MEETING-DEPT] Load error:', error)
+    }
+  }
 
   useEffect(() => {
     if (mounted) {
@@ -138,20 +144,42 @@ function MeetingMinutesContent() {
     setPagination({ ...pagination, page: 1 })
   }
 
-  const handleAddDepartment = () => {
+  const handleAddDepartment = async () => {
     const trimmed = newDeptInput.trim()
     if (!trimmed || departments.includes(trimmed)) return
-    const updated = [...departments, trimmed]
-    setDepartments(updated)
-    localStorage.setItem('meeting_departments', JSON.stringify(updated))
-    setNewDeptInput('')
-    newDeptInputRef.current?.focus()
+    try {
+      const res = await fetch('/api/meeting-departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed })
+      })
+      const result = await res.json()
+      if (result.success) {
+        setDepartments([...departments, trimmed])
+        setNewDeptInput('')
+        newDeptInputRef.current?.focus()
+      } else {
+        alert(result.error || '부서 추가에 실패했습니다')
+      }
+    } catch {
+      alert('부서 추가 중 오류가 발생했습니다')
+    }
   }
 
-  const handleRemoveDepartment = (dept: string) => {
-    const updated = departments.filter(d => d !== dept)
-    setDepartments(updated)
-    localStorage.setItem('meeting_departments', JSON.stringify(updated))
+  const handleRemoveDepartment = async (dept: string) => {
+    try {
+      const res = await fetch(`/api/meeting-departments?name=${encodeURIComponent(dept)}`, {
+        method: 'DELETE'
+      })
+      const result = await res.json()
+      if (result.success) {
+        setDepartments(departments.filter(d => d !== dept))
+      } else {
+        alert(result.error || '부서 삭제에 실패했습니다')
+      }
+    } catch {
+      alert('부서 삭제 중 오류가 발생했습니다')
+    }
   }
 
   if (!mounted) {
