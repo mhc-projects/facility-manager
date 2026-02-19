@@ -36,7 +36,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
-  const dataLoadedRef = useRef(false)  // 데이터 로드 완료 여부 (ref: 변경 시 리렌더 없음)
+  const dataLoadedRef = useRef(false)  // 데이터 로드 완료 여부
 
   // 폼 데이터
   const [title, setTitle] = useState('')
@@ -230,10 +230,13 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       router.push('/admin/meeting-minutes')
     } finally {
       setLoading(false)
-      // 로드 완료 후 플래그 활성화 (이후 폼 변경부터 isDirty 감지)
-      // ref 사용: setDataLoaded(true)와 달리 추가 렌더링을 유발하지 않음
-      setIsDirty(false)
-      dataLoadedRef.current = true
+      // 로드 완료 후 플래그 활성화
+      // setTimeout(0): 현재 큐에 쌓인 모든 state 업데이트가 flush된 후
+      // isDirty를 false로 고정하고 dataLoadedRef를 활성화
+      setTimeout(() => {
+        setIsDirty(false)
+        dataLoadedRef.current = true
+      }, 0)
     }
   }
 
