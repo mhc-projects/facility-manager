@@ -29,9 +29,15 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [minute, setMinute] = useState<MeetingMinute | null>(null)
+  const [departments, setDepartments] = useState<string[]>([]) // 부서 목록
 
   useEffect(() => {
     setMounted(true)
+    // 부서 목록 로드
+    fetch('/api/meeting-departments', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(result => { if (result.success) setDepartments(result.data) })
+      .catch(() => {})
     loadMeetingMinute()
   }, [updated])  // updated 파라미터 변경 시 재실행
 
@@ -238,7 +244,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
 
         {/* 안건 */}
         {minute.agenda.length > 0 && (() => {
-          // 부서별 그룹화: department가 있는 항목끼리 묶고, 없는 것은 '기타'로
+          // 부서별 그룹화: 편집 페이지와 동일한 순서 적용
           const grouped: Record<string, typeof minute.agenda> = {}
           minute.agenda.forEach(item => {
             const key = (item as any).department || ''
@@ -246,18 +252,23 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
             grouped[key].push(item)
           })
           const hasDepts = Object.keys(grouped).some(k => k !== '')
-          // 순서: 부서명 알파벳순, 마지막에 '' (부서 미지정)
-          const sortedKeys = Object.keys(grouped).sort((a, b) => {
-            if (a === '') return 1
-            if (b === '') return -1
-            return a.localeCompare(b, 'ko')
-          })
+
+          // 편집 페이지와 동일한 순서: departments 배열 순서를 따름
+          const sections = departments.length > 0
+            ? [...departments, undefined] // undefined = 공통(부서 미지정), 마지막에 위치
+            : [undefined]
+
+          // grouped에 실제로 존재하는 부서만 필터링
+          const sortedKeys = sections
+            .map(dept => dept || '')
+            .filter(key => grouped[key] && grouped[key].length > 0)
+
           let globalIndex = 0
           return (
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">안건</h2>
               <div className="space-y-4">
-                {sortedKeys.map(deptKey => (
+                {sortedKeys.filter(key => grouped[key]).map(deptKey => (
                   <div key={deptKey || '__no_dept__'}>
                     {/* 부서가 하나라도 있을 때만 부서 헤더 표시 */}
                     {hasDepts && (
@@ -273,12 +284,12 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                       </div>
                     )}
                     <div className="space-y-3">
-                      {grouped[deptKey].map((item) => {
+                      {grouped[deptKey].map((item, sectionIndex) => {
                         const displayIndex = ++globalIndex
                         return (
                           <div key={item.id} className="flex gap-4 p-4 bg-gray-50 rounded-lg">
                             <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
-                              {displayIndex}
+                              {sectionIndex + 1}
                             </div>
                             <div className="flex-1">
                               <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
