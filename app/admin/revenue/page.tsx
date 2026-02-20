@@ -17,6 +17,8 @@ import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calcul
 import { allSteps } from '@/lib/task-steps';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { CacheManager } from '@/utils/cache-manager';
+import { PaymentDateCell } from '@/components/admin/PaymentDateCell';
 
 // Code Splitting: 무거운 모달 및 디스플레이 컴포넌트를 동적 로딩
 const InvoiceDisplay = dynamic(() => import('@/components/business/InvoiceDisplay').then(mod => ({ default: mod.InvoiceDisplay })), {
@@ -103,6 +105,9 @@ function RevenueDashboard() {
     max: ''
   });
 
+  // 🔧 통합 로딩 상태 머신 (3단계 구현)
+  const [dataLoadingState, setDataLoadingState] = useState<'idle' | 'loading-prices' | 'loading-businesses' | 'ready' | 'error'>('idle');
+
   // 동적 가격 데이터
   const [officialPrices, setOfficialPrices] = useState<Record<string, number>>({});
   const [manufacturerPrices, setManufacturerPrices] = useState<Record<string, Record<string, number>>>({});
@@ -146,29 +151,40 @@ function RevenueDashboard() {
 
   useEffect(() => {
     console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 마운트됨');
-    // 가격 데이터 먼저 로드
-    loadPricingData();
+    // ✅ 통합 초기화 함수 실행
+    initializeData();
 
     return () => {
       console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 언마운트됨');
     };
   }, []);
 
-  useEffect(() => {
-    // 가격 데이터가 로드되면 사업장 데이터와 계산 결과를 병렬로 로드
-    if (pricesLoaded) {
-      console.log('🔄 [COMPONENT-LIFECYCLE] pricesLoaded=true → 데이터 로드 시작');
-      Promise.all([
+  // ✅ 2단계 + 3단계: 통합 데이터 초기화 함수 (레이스 컨디션 완전 제거)
+  const initializeData = async () => {
+    try {
+      console.log('🚀 [INIT] Step 1: 가격 데이터 로드 시작');
+      setDataLoadingState('loading-prices');
+
+      await loadPricingData();
+
+      console.log('🚀 [INIT] Step 2: 사업장 데이터 로드 시작');
+      setDataLoadingState('loading-businesses');
+
+      await Promise.all([
         loadBusinesses(),
         loadCalculations(),
         loadTaskStatuses()
-      ]).then(() => {
-        console.log('✅ 초기 데이터 로드 완료');
-      }).catch((error) => {
-        console.error('❌ 초기 데이터 로드 오류:', error);
-      });
+      ]);
+
+      console.log('✅ [INIT] Step 3: 모든 데이터 로드 완료');
+      setDataLoadingState('ready');
+
+    } catch (error) {
+      console.error('❌ [INIT] 데이터 초기화 실패:', error);
+      setDataLoadingState('error');
+      alert('데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침해주세요.');
     }
-  }, [pricesLoaded]);
+  };
 
   // URL 파라미터로 자동 모달 열기 (from Business page)
   useEffect(() => {
@@ -198,6 +214,48 @@ function RevenueDashboard() {
       window.history.replaceState({}, '', '/admin/revenue');
     }
   }, [searchParams, businesses]);
+
+  // 🔄 Cross-tab synchronization: Listen for cache updates from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Cache field update broadcast from another tab
+      if (e.key === 'cache-field-update' && e.newValue) {
+        try {
+          const update = JSON.parse(e.newValue);
+          const { businessId, field, value } = update;
+
+          console.log(`📡 [Cross-Tab Sync] Received update from another tab: ${field} for ${businessId.slice(0, 8)}...`);
+
+          // Update local cache immediately
+          CacheManager.updateBusinessField(businessId, field, value);
+
+          // Update UI state if needed
+          if (field === 'risk') {
+            setRiskMap(prev => ({ ...prev, [businessId]: value }));
+          } else if (field === 'payment_scheduled_date') {
+            setBusinesses(prev =>
+              prev.map(b => b.id === businessId ? { ...b, payment_scheduled_date: value } : b)
+            );
+          }
+        } catch (error) {
+          console.error('[Cross-Tab Sync] Error processing field update:', error);
+        }
+      }
+
+      // Full cache invalidation broadcast
+      if (e.key === 'cache-invalidate-timestamp') {
+        console.log('📡 [Cross-Tab Sync] Cache invalidation broadcast received');
+        CacheManager.invalidateAll();
+        // Optionally reload data
+        if (pricesLoaded) {
+          loadBusinesses();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [pricesLoaded]);
 
   const getAuthHeaders = () => {
     const token = TokenManager.getToken();
@@ -230,13 +288,17 @@ function RevenueDashboard() {
     }
   };
 
-  // 위험도 업데이트 (낙관적 업데이트)
+  // 위험도 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
   const handleRiskUpdate = (businessId: string, risk: '상' | '중' | '하' | null) => {
     // 롤백용 이전 값 보존
     const previousRisk = riskMap[businessId] ?? null;
 
     // 즉시 riskMap만 업데이트 (businesses 변경 없음 → filteredBusinesses 재계산 없음)
     setRiskMap(prev => ({ ...prev, [businessId]: risk }));
+
+    // 즉시 캐시 업데이트 (UI 상태와 캐시 동기화)
+    CacheManager.updateBusinessField(businessId, 'risk', risk);
+    CacheManager.broadcastFieldUpdate(businessId, 'risk', risk);
 
     // API는 백그라운드에서 실행 (UI 블로킹 없음)
     fetch(`/api/business-risk/${businessId}`, {
@@ -245,14 +307,52 @@ function RevenueDashboard() {
       body: JSON.stringify({ risk }),
     }).then(response => {
       if (!response.ok) throw new Error('위험도 업데이트 실패');
-      // 캐시 무효화: 다음 새로고침 시 DB에서 최신 값을 가져오도록
-      sessionStorage.removeItem('revenue_businesses_cache');
-      sessionStorage.removeItem('revenue_cache_time');
+      console.log(`✅ [handleRiskUpdate] DB 업데이트 완료: ${businessId.slice(0, 8)}...`);
     }).catch(error => {
       console.error('[handleRiskUpdate] 오류:', error);
-      // 실패 시 롤백
+      // 실패 시 롤백 (UI 상태 + 캐시)
       setRiskMap(prev => ({ ...prev, [businessId]: previousRisk }));
+      CacheManager.updateBusinessField(businessId, 'risk', previousRisk);
+      CacheManager.broadcastFieldUpdate(businessId, 'risk', previousRisk);
     });
+  };
+
+  // 입금예정일 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
+  const handlePaymentDateUpdate = async (businessId: string, date: string | null): Promise<void> => {
+    // 롤백용 이전 값 보존
+    const business = businesses.find(b => b.id === businessId);
+    const previousDate = business?.payment_scheduled_date ?? null;
+
+    try {
+      // 즉시 캐시 업데이트 (UI 상태와 캐시 동기화)
+      CacheManager.updateBusinessField(businessId, 'payment_scheduled_date', date);
+      CacheManager.broadcastFieldUpdate(businessId, 'payment_scheduled_date', date);
+
+      // API 호출 (동기적 처리로 컴포넌트가 로딩 상태 관리)
+      const response = await fetch(`/api/businesses/${businessId}/payment-date`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ payment_scheduled_date: date }),
+      });
+
+      if (!response.ok) {
+        throw new Error('입금예정일 업데이트 실패');
+      }
+
+      console.log(`✅ [handlePaymentDateUpdate] DB 업데이트 완료: ${businessId.slice(0, 8)}...`);
+
+      // 성공 시 businesses 배열도 업데이트 (전체 리렌더링 없이 해당 항목만)
+      setBusinesses(prev =>
+        prev.map(b => b.id === businessId ? { ...b, payment_scheduled_date: date } : b)
+      );
+
+    } catch (error) {
+      console.error('[handlePaymentDateUpdate] 오류:', error);
+      // 실패 시 캐시 롤백
+      CacheManager.updateBusinessField(businessId, 'payment_scheduled_date', previousDate);
+      CacheManager.broadcastFieldUpdate(businessId, 'payment_scheduled_date', previousDate);
+      throw error; // PaymentDateCell 컴포넌트에서 롤백 처리
+    }
   };
 
   // 🚀 SessionStorage 캐싱 유틸리티
@@ -435,11 +535,24 @@ function RevenueDashboard() {
 
       // 기본 설치비 처리
       if (installCostData.success) {
+        console.log('🔍 [설치비 API 응답]', {
+          success: installCostData.success,
+          costs배열길이: installCostData.data.costs?.length,
+          첫번째항목: installCostData.data.costs?.[0]
+        });
+
         const installCosts: Record<string, number> = {};
         installCostData.data.costs.forEach((item: any) => {
           installCosts[item.equipment_type] = item.base_installation_cost;
         });
         setBaseInstallationCosts(installCosts);
+
+        console.log('✅ [설치비 로드 완료]', {
+          설치비_항목수: Object.keys(installCosts).length,
+          샘플: Object.entries(installCosts).slice(0, 3)
+        });
+      } else {
+        console.error('❌ [설치비 API 실패]', installCostData);
       }
 
       // 제조사별 수수료율 처리
@@ -485,7 +598,7 @@ function RevenueDashboard() {
           return acc;
         }, {}) : {},
         installation: installCostData.success ? installCostData.data.costs.reduce((acc: any, item: any) => {
-          acc[item.equipment_type] = item.installation_cost;
+          acc[item.equipment_type] = item.base_installation_cost; // ✅ 올바른 필드명 사용
           return acc;
         }, {}) : {},
         commission: commissionData.success ? (() => {
@@ -1012,8 +1125,8 @@ function RevenueDashboard() {
 
   // ✅ 실시간 매출 계산 (useMemo로 성능 최적화)
   const filteredBusinesses = useMemo(() => {
-    // 가격 데이터가 로드되지 않았으면 빈 배열 반환
-    if (!pricesLoaded || !costSettingsLoaded) {
+    // 🔄 State Machine: 데이터가 준비되지 않았으면 빈 배열 반환
+    if (dataLoadingState !== 'ready') {
       return [];
     }
 
@@ -1071,9 +1184,21 @@ function RevenueDashboard() {
       }
 
       return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch;
-    }).map(business => {
+    }).map((business, idx) => {
       // ✅ 실시간 계산 적용 (Admin 대시보드와 동일한 계산식)
       const calculatedData = calculateBusinessRevenue(business, pricingData);
+
+      // 🔍 디버깅: 첫 번째 사업장의 계산 결과 확인
+      if (idx === 0) {
+        console.log('🔍 [첫 번째 사업장 계산 결과]', {
+          사업장명: business.business_name,
+          설치비_계산결과: calculatedData.installation_costs,
+          추가설치비_계산결과: calculatedData.installation_extra_cost,
+          DB의_추가설치비: business.installation_extra_cost,
+          pricingData에_baseInstallationCosts있나: !!pricingData.baseInstallationCosts,
+          baseInstallationCosts_개수: Object.keys(pricingData.baseInstallationCosts || {}).length
+        });
+      }
 
       // 기기 수 계산
       const equipmentFields = [
@@ -1131,6 +1256,7 @@ function RevenueDashboard() {
         adjusted_sales_commission: calculatedData.adjusted_sales_commission,
         survey_costs: calculatedData.survey_costs,
         installation_costs: calculatedData.installation_costs,
+        installation_extra_cost: calculatedData.installation_extra_cost, // ✅ 추가설치비 포함 (총 설치비용 통계 정확도 개선)
         equipment_count: totalEquipment,
         calculation_date: new Date().toISOString(), // 실시간 계산 시각
         category: business.progress_status || 'N/A',
@@ -1156,7 +1282,7 @@ function RevenueDashboard() {
       if (!showUninstalledOnly) {
         return true;
       }
-      return !business.installation_date || business.installation_date === '';
+      return !(business as any).installation_date || (business as any).installation_date === '';
     }).filter(business => {
       // 업무단계 필터 (미수금 필터 활성화 시에만 적용)
       if (!showReceivablesOnly) return true;
@@ -1176,8 +1302,7 @@ function RevenueDashboard() {
     });
   }, [
     businesses,
-    pricesLoaded,
-    costSettingsLoaded,
+    dataLoadingState, // 🔧 State Machine dependency 추가
     pricingData, // 🎯 안정화된 객체 사용
     searchTerm,
     selectedOffices,
@@ -1390,21 +1515,43 @@ function RevenueDashboard() {
         */}
 
         {/* 요약 통계 */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
+        {dataLoadingState === 'loading-prices' || dataLoadingState === 'loading-businesses' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
+            {[...Array(7)].map((_, idx) => (
+              <div key={idx} className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="p-1 sm:p-1.5 bg-gray-50 rounded flex-shrink-0 animate-pulse">
+                    <div className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 bg-gray-300 rounded"></div>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="h-3 sm:h-4 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 sm:h-5 bg-gray-300 rounded animate-pulse w-3/4"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : dataLoadingState === 'error' ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+            <p className="text-red-600 font-medium">⚠️ 데이터를 불러오는 중 오류가 발생했습니다</p>
+            <p className="text-sm text-red-500 mt-1">페이지를 새로고침해주세요</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
 
           {/* Card #1: 총 매출금액 / 총 미수금액 */}
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
-            {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            {/* Tooltip - Below card, left-aligned */}
+            <div className="absolute top-full left-0 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 {showReceivablesOnly
                   ? '미수금 = Σ(선수금 + 계산서잔액 - 입금잔액)'
                   : '매출 = Σ(환경부 고시가 × 수량 + 추가공사비 - 협의사항)'
                 }
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, positioned on left */}
+                <div className="absolute bottom-full left-4 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1441,13 +1588,13 @@ function RevenueDashboard() {
           {/* Card #2: 총 매입금액 - NEW */}
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
-            {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            {/* Tooltip - Below card, centered */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 매입 = Σ(제조사별 원가 × 수량)
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, centered */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1475,12 +1622,12 @@ function RevenueDashboard() {
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
             {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 영업비용 = Σ(기본 영업비용 또는 조정된 영업비용)
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, centered */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1505,12 +1652,12 @@ function RevenueDashboard() {
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
             {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 설치비용 = Σ(기본설치비 + 추가설치비)
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, centered */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1526,8 +1673,16 @@ function RevenueDashboard() {
                     const totalInstallation = sortedBusinesses.reduce((sum, b) => {
                       const baseCost = Number(b.installation_costs) || 0;
                       const extraCost = Number(b.installation_extra_cost) || 0;
+
+                      // 🔍 디버깅: 처음 3개 사업장의 설치비용 로그
+                      if (sum === 0 && (baseCost > 0 || extraCost > 0)) {
+                        console.log(`[설치비용 디버깅] ${b.business_name?.slice(0, 15)}...: base=${baseCost}, extra=${extraCost}`);
+                      }
+
                       return sum + baseCost + extraCost;
                     }, 0);
+
+                    console.log(`📊 [총 설치비용] 전체: ${totalInstallation.toLocaleString()}원 (${sortedBusinesses.length}개 사업장)`);
                     return totalInstallation;
                   })())}
                 </p>
@@ -1539,12 +1694,12 @@ function RevenueDashboard() {
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
             {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 기타 비용 = Σ(실사비용 + AS 비용 + 커스텀 비용)
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, centered */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1593,12 +1748,12 @@ function RevenueDashboard() {
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
             {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 순이익 = 매출 - 매입 - 영업비용 - 설치비용 - 기타 비용
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, centered */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1625,13 +1780,13 @@ function RevenueDashboard() {
           {/* Card #7: 사업장 평균 이익률 */}
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
 
-            {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            {/* Tooltip - Below card, right-aligned */}
+            <div className="absolute top-full right-0 mt-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
               <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
                 평균 이익률 = (Σ(순이익 ÷ 매출 × 100) ÷ 사업장 수)%
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                {/* Arrow pointing UP, positioned on right */}
+                <div className="absolute bottom-full right-4 mb-px">
+                  <div className="border-4 border-transparent border-b-gray-900"></div>
                 </div>
               </div>
             </div>
@@ -1651,7 +1806,8 @@ function RevenueDashboard() {
             </div>
           </div>
 
-        </div>
+          </div>
+        )}
 
         {/* 필터 및 검색 */}
         <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-2 sm:p-3 md:p-4">
@@ -2095,6 +2251,7 @@ function RevenueDashboard() {
                   setSelectedEquipmentBusiness={setSelectedEquipmentBusiness}
                   setShowEquipmentModal={setShowEquipmentModal}
                   handleRiskUpdate={handleRiskUpdate}
+                  handlePaymentDateUpdate={handlePaymentDateUpdate}
                   riskMap={riskMap}
                   showPaymentSchedule={selectedCategories.length === 1 && selectedCategories[0] === '자비'}
                 />
@@ -2144,6 +2301,7 @@ function VirtualizedTable({
   setSelectedEquipmentBusiness,
   setShowEquipmentModal,
   handleRiskUpdate,
+  handlePaymentDateUpdate,
   riskMap,
   showPaymentSchedule,
 }: {
@@ -2157,6 +2315,7 @@ function VirtualizedTable({
   setSelectedEquipmentBusiness: (business: any) => void;
   setShowEquipmentModal: (show: boolean) => void;
   handleRiskUpdate: (businessId: string, risk: '상' | '중' | '하' | null) => void;
+  handlePaymentDateUpdate: (businessId: string, date: string | null) => Promise<void>;
   riskMap: Record<string, string | null>;
   showPaymentSchedule: boolean;
 }) {
@@ -2174,14 +2333,17 @@ function VirtualizedTable({
 
   const columnWidths = (() => {
     if (showPaymentSchedule && showReceivablesOnly && showSurveyCostsColumn) {
-      // 자비+미수금+실사비용: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (12컬럼, 카테고리·영업점 숨김)
-      return ['16%', '9%', '9%', '7%', '7%', '7%', '9%', '9%', '9%', '5%', '7%', '7%']; // 총합 101% → 반올림 오차 허용
+      // 자비+미수금+실사비용: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (12컬럼)
+      // 입금예정일 9%→11% (+2%), 매출/매입/이익 9%→8% (각 -1%)
+      return ['16%', '11%', '9%', '7%', '7%', '7%', '8%', '8%', '8%', '5%', '7%', '7%']; // 총합 100%
     } else if (showPaymentSchedule && showReceivablesOnly) {
-      // 자비+미수금: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 미수금 (11컬럼, 카테고리·영업점 숨김)
-      return ['17%', '8%', '7%', '7%', '8%', '8%', '10%', '10%', '10%', '6%', '9%']; // 총합 100%
+      // 자비+미수금: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 미수금 (11컬럼)
+      // 사업장명 17%→16% (-1%), 입금예정일 8%→11% (+3%), 매출/매입/이익 10%→9% (각 -1%)
+      return ['16%', '11%', '7%', '7%', '8%', '8%', '9%', '9%', '9%', '6%', '9%']; // 총합 99%
     } else if (showPaymentSchedule) {
       // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
-      return ['18%', '10%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%']; // 총합 100%
+      // 사업장명 18%→17% (-1%), 입금예정일 10%→12% (+2%), 매출/매입/이익 11%→10% (각 -1%)
+      return ['17%', '12%', '9%', '7%', '8%', '8%', '10%', '10%', '10%', '7%']; // 총합 98%
     } else if (showReceivablesOnly && showSurveyCostsColumn) {
       // 미수금 + 실사비용 + 업무단계 + 위험도 (13컬럼)
       // 사업장명, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금
@@ -2324,13 +2486,14 @@ function VirtualizedTable({
                     {business.business_name}
                   </button>
                 </div>
-                {/* 입금예정일 (자비 필터 ON 시) */}
+                {/* 입금예정일 (자비 필터 ON 시) - 인라인 편집 */}
                 {showPaymentSchedule && (
                   <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-xs bg-teal-50/30">
-                    {business.payment_scheduled_date
-                      ? <span className="text-teal-700 font-medium">{business.payment_scheduled_date}</span>
-                      : <span className="text-gray-400">-</span>
-                    }
+                    <PaymentDateCell
+                      businessId={business.id}
+                      currentDate={business.payment_scheduled_date}
+                      onUpdate={handlePaymentDateUpdate}
+                    />
                   </div>
                 )}
                 {/* 업무단계 (미수금 ON 시) */}
