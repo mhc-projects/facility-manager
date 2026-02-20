@@ -877,6 +877,17 @@ function BusinessManagementPage() {
   const [filterProjectYears, setFilterProjectYears] = useState<string[]>([])
   const [filterCurrentSteps, setFilterCurrentSteps] = useState<string[]>([])
 
+  // 🔍 필터 상태 변경 감시 (디버깅용)
+  useEffect(() => {
+    console.log('🎛️ 필터 상태 변경:', {
+      영업점: filterOffices,
+      지역: filterRegions,
+      진행구분: filterCategories,
+      사업진행연도: filterProjectYears,
+      현재단계: filterCurrentSteps
+    })
+  }, [filterOffices, filterRegions, filterCategories, filterProjectYears, filterCurrentSteps])
+
   // 모바일 필터 접기/펼치기 상태
   const isMobile = useIsMobile()
   const [isFilterExpanded, setIsFilterExpanded] = useState<boolean>(false)
@@ -1683,7 +1694,33 @@ function BusinessManagementPage() {
       completion_supplement_3rd: '완공 보완 3차',
       final_document_submit: '서류 제출',
       subsidy_payment: '보조금 입금',
-      etc_status: '기타'
+      etc_status: '기타',
+
+      // 보조금 관련 추가 상태
+      subsidy_site_inspection: '보조금 현장 실사',
+      subsidy_rejected: '보조금 반려',
+      subsidy_product_order: '보조금 제품 발주',
+      subsidy_pre_completion_document_submit: '보조금 사전 서류 제출',
+      subsidy_needs_check: '보조금 확인 필요',
+      subsidy_installation_schedule: '보조금 설치 협의',
+      subsidy_final_document_submit: '보조금 최종 서류 제출',
+      subsidy_document_preparation: '보조금 서류 준비',
+      subsidy_completion_supplement_2nd: '보조금 준공 보완 2차',
+      subsidy_completion_supplement_1st: '보조금 준공 보완 1차',
+      subsidy_approval_pending: '보조금 승인 대기',
+
+      // 자비 관련 추가 상태
+      self_quotation: '자비 견적서 작성',
+      self_needs_check: '자비 확인 필요',
+      self_installation_schedule: '자비 설치 협의',
+      self_document_complete: '자비 서류 발송 완료',
+
+      // 외주 관련 추가 상태
+      outsourcing_needs_check: '외주 확인 필요',
+
+      // 대리점 관련 추가 상태
+      dealer_product_ordered: '대리점 제품 발주',
+      dealer_needs_check: '대리점 확인 필요'
     }
 
     // 사업장별로 업무 그룹화
@@ -1730,36 +1767,57 @@ function BusinessManagementPage() {
 
     // 드롭다운 필터 적용 (다중 선택)
     if (filterOffices.length > 0) {
+      console.log('🏢 영업점 필터 적용:', filterOffices)
       filtered = filtered.filter(b => {
         const office = b.영업점 || b.sales_office || ''
         return filterOffices.includes(office)
       })
+      console.log('🏢 영업점 필터 후:', filtered.length, '개')
     }
     if (filterRegions.length > 0) {
+      console.log('🗺️ 지역 필터 적용:', filterRegions)
       filtered = filtered.filter(b => {
         const address = b.주소 || b.address || ''
         return filterRegions.some(region => address.includes(region))
       })
+      console.log('🗺️ 지역 필터 후:', filtered.length, '개')
     }
     if (filterCategories.length > 0) {
+      console.log('📂 진행구분 필터 적용:', filterCategories)
+      const before = filtered.length
       filtered = filtered.filter(b => {
         const value = (b as any).진행상태 || b.progress_status || ''
-        return filterCategories.includes(String(value).trim())
+        const trimmedValue = String(value).trim()
+        const matches = filterCategories.includes(trimmedValue)
+        if (!matches && before < 5) {
+          console.log('  ❌ 불일치:', { 진행상태: (b as any).진행상태, progress_status: b.progress_status, trimmedValue, filterCategories })
+        }
+        return matches
       })
+      console.log('📂 진행구분 필터 후:', filtered.length, '개')
     }
     if (filterProjectYears.length > 0) {
+      console.log('📅 사업진행연도 필터 적용:', filterProjectYears)
+      const before = filtered.length
       filtered = filtered.filter(b => {
         const year = (b as any).사업진행연도 || b.project_year
-        // "2024년" 형태로 저장되므로 비교 시 "년" 접미사 추가
-        return filterProjectYears.includes(`${year}년`)
+        const yearWithSuffix = `${year}년`
+        const matches = filterProjectYears.includes(yearWithSuffix)
+        if (!matches && before < 5) {
+          console.log('  ❌ 불일치:', { 사업진행연도: (b as any).사업진행연도, project_year: b.project_year, year, yearWithSuffix, filterProjectYears })
+        }
+        return matches
       })
+      console.log('📅 사업진행연도 필터 후:', filtered.length, '개')
     }
     if (filterCurrentSteps.length > 0) {
+      console.log('📊 현재단계 필터 적용:', filterCurrentSteps)
       filtered = filtered.filter(b => {
         const businessName = b.사업장명 || b.business_name || ''
         const currentStep = calculateBusinessCurrentSteps[businessName]
         return currentStep && filterCurrentSteps.includes(currentStep.trim())
       })
+      console.log('📊 현재단계 필터 후:', filtered.length, '개')
     }
 
     // 상세 필터 적용 (제출일 + 설치완료)
@@ -1871,6 +1929,14 @@ function BusinessManagementPage() {
         .map(status => status.trim())
         .filter(Boolean)
     )] as string[]
+
+    console.log('🎛️ 필터 옵션 생성:', {
+      offices: offices.length,
+      regions: regions.length,
+      categories,
+      years,
+      currentSteps: currentSteps.length
+    })
 
     return {
       offices: offices.sort(),
@@ -4349,8 +4415,8 @@ function BusinessManagementPage() {
                 <div
                   className={`
                     grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2
-                    transition-all duration-300 ease-in-out overflow-hidden
-                    ${(!isMobile || isFilterExpanded) ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}
+                    transition-all duration-300 ease-in-out
+                    ${(!isMobile || isFilterExpanded) ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}
                   `}
                 >
                   <MultiSelectDropdown

@@ -38,10 +38,15 @@ export default function MultiSelectDropdown({
   }, []);
 
   const toggleOption = (option: string) => {
+    console.log('🔘 toggleOption 호출:', { option, currentSelected: selectedValues })
     if (selectedValues.includes(option)) {
-      onChange(selectedValues.filter(v => v !== option));
+      const newValues = selectedValues.filter(v => v !== option)
+      console.log('  → 선택 해제:', newValues)
+      onChange(newValues);
     } else {
-      onChange([...selectedValues, option]);
+      const newValues = [...selectedValues, option]
+      console.log('  → 선택 추가:', newValues)
+      onChange(newValues);
     }
   };
 
@@ -64,7 +69,10 @@ export default function MultiSelectDropdown({
       <div ref={dropdownRef} className={`relative ${inline ? 'flex-1' : ''}`}>
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            console.log(`🔽 드롭다운 버튼 클릭: ${label}, isOpen: ${isOpen} → ${!isOpen}, options: ${options.length}개`)
+            setIsOpen(!isOpen)
+          }}
           className="w-full px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between gap-1"
         >
           <span className={`truncate ${selectedValues.length === 0 ? 'text-gray-500' : 'text-gray-900'}`}>
