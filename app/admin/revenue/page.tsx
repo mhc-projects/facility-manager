@@ -44,7 +44,9 @@ import {
   Download,
   Loader2,
   Settings,
-  ChevronDown
+  ChevronDown,
+  ShoppingCart,
+  PackagePlus
 } from 'lucide-react';
 
 interface BusinessInfo {
@@ -1388,19 +1390,9 @@ function RevenueDashboard() {
         */}
 
         {/* 요약 통계 */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="p-1 sm:p-1.5 bg-blue-50 rounded flex-shrink-0">
-                <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 사업장</p>
-                <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900">{sortedBusinesses.length}</p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
 
+          {/* Card #1: 총 매출금액 / 총 미수금액 */}
           <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className={`p-1 sm:p-1.5 ${showReceivablesOnly ? 'bg-red-50' : 'bg-green-50'} rounded flex-shrink-0`}>
@@ -1413,14 +1405,12 @@ function RevenueDashboard() {
                 <p className={`text-xs sm:text-sm md:text-base font-bold ${showReceivablesOnly ? 'text-red-600' : 'text-green-600'} break-words`}>
                   {formatCurrency((() => {
                     if (showReceivablesOnly) {
-                      // 미수금 필터 활성화 시: 총 미수금액 계산
                       const totalReceivables = sortedBusinesses.reduce((sum, b) => {
                         const receivables = Number(b.total_receivables) || 0;
                         return sum + receivables;
                       }, 0);
                       return totalReceivables;
                     } else {
-                      // 기본: 총 매출금액 계산
                       const totalRevenue = sortedBusinesses.reduce((sum, b) => {
                         const revenue = Number(b.total_revenue) || 0;
                         return sum + revenue;
@@ -1433,26 +1423,28 @@ function RevenueDashboard() {
             </div>
           </div>
 
+          {/* Card #2: 총 매입금액 - NEW */}
           <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="p-1 sm:p-1.5 bg-purple-50 rounded flex-shrink-0">
-                <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-purple-600" />
+              <div className="p-1 sm:p-1.5 bg-teal-50 rounded flex-shrink-0">
+                <ShoppingCart className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-teal-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 이익금액</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-purple-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 매입금액</p>
+                <p className="text-xs sm:text-sm md:text-base font-bold text-teal-600 break-words">
                   {formatCurrency((() => {
-                    const totalProfit = sortedBusinesses.reduce((sum, b) => {
-                      const profit = Number(b.net_profit) || 0;
-                      return sum + profit;
+                    const totalPurchase = sortedBusinesses.reduce((sum, b) => {
+                      const cost = Number(b.total_cost) || 0;
+                      return sum + cost;
                     }, 0);
-                    return totalProfit;
+                    return totalPurchase;
                   })())}
                 </p>
               </div>
             </div>
           </div>
 
+          {/* Card #3: 총 영업비용 */}
           <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-orange-50 rounded flex-shrink-0">
@@ -1470,6 +1462,7 @@ function RevenueDashboard() {
             </div>
           </div>
 
+          {/* Card #4: 총 설치비용 */}
           <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-blue-50 rounded flex-shrink-0">
@@ -1491,6 +1484,70 @@ function RevenueDashboard() {
             </div>
           </div>
 
+          {/* Card #5: 기타 비용 - NEW */}
+          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="p-1 sm:p-1.5 bg-amber-50 rounded flex-shrink-0">
+                <PackagePlus className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">기타 비용</p>
+                <p className="text-xs sm:text-sm md:text-base font-bold text-amber-600 break-words">
+                  {formatCurrency((() => {
+                    const totalOtherCosts = sortedBusinesses.reduce((sum, b) => {
+                      // 1. 실사비용 (항상 포함)
+                      const surveyCosts = Number(b.survey_costs) || 0;
+
+                      // 2. AS 비용 (있는 경우)
+                      const asCost = Number((b as any).as_cost) || 0;
+
+                      // 3. 커스텀 추가비용 (있는 경우)
+                      let customCosts = 0;
+                      if ((b as any).custom_additional_costs) {
+                        try {
+                          const costs = typeof (b as any).custom_additional_costs === 'string'
+                            ? JSON.parse((b as any).custom_additional_costs)
+                            : (b as any).custom_additional_costs;
+
+                          if (Array.isArray(costs)) {
+                            customCosts = costs.reduce((total: number, c: any) => total + (Number(c.amount) || 0), 0);
+                          }
+                        } catch (e) {
+                          customCosts = 0;
+                        }
+                      }
+
+                      return sum + surveyCosts + asCost + customCosts;
+                    }, 0);
+                    return totalOtherCosts;
+                  })())}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card #6: 총 이익금액 */}
+          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="p-1 sm:p-1.5 bg-purple-50 rounded flex-shrink-0">
+                <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-purple-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 이익금액</p>
+                <p className="text-xs sm:text-sm md:text-base font-bold text-purple-600 break-words">
+                  {formatCurrency((() => {
+                    const totalProfit = sortedBusinesses.reduce((sum, b) => {
+                      const profit = Number(b.net_profit) || 0;
+                      return sum + profit;
+                    }, 0);
+                    return totalProfit;
+                  })())}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card #7: 사업장 평균 이익률 */}
           <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-indigo-50 rounded flex-shrink-0">
@@ -1506,6 +1563,7 @@ function RevenueDashboard() {
               </div>
             </div>
           </div>
+
         </div>
 
         {/* 필터 및 검색 */}
