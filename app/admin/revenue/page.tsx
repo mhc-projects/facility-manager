@@ -1393,7 +1393,22 @@ function RevenueDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
 
           {/* Card #1: 총 매출금액 / 총 미수금액 */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                {showReceivablesOnly
+                  ? '미수금 = Σ(선수금 + 계산서잔액 - 입금잔액)'
+                  : '매출 = Σ(환경부 고시가 × 수량 + 추가공사비 - 협의사항)'
+                }
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className={`p-1 sm:p-1.5 ${showReceivablesOnly ? 'bg-red-50' : 'bg-green-50'} rounded flex-shrink-0`}>
                 <TrendingUp className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${showReceivablesOnly ? 'text-red-600' : 'text-green-600'}`} />
@@ -1424,7 +1439,19 @@ function RevenueDashboard() {
           </div>
 
           {/* Card #2: 총 매입금액 - NEW */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                매입 = Σ(제조사별 원가 × 수량)
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-teal-50 rounded flex-shrink-0">
                 <ShoppingCart className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-teal-600" />
@@ -1445,7 +1472,19 @@ function RevenueDashboard() {
           </div>
 
           {/* Card #3: 총 영업비용 */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                영업비용 = Σ(기본 영업비용 또는 조정된 영업비용)
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-orange-50 rounded flex-shrink-0">
                 <Calculator className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-orange-600" />
@@ -1463,7 +1502,19 @@ function RevenueDashboard() {
           </div>
 
           {/* Card #4: 총 설치비용 */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                설치비용 = Σ(기본설치비 + 추가설치비)
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-blue-50 rounded flex-shrink-0">
                 <Settings className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-blue-600" />
@@ -1485,7 +1536,19 @@ function RevenueDashboard() {
           </div>
 
           {/* Card #5: 기타 비용 - NEW */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                기타 비용 = Σ(실사비용 + AS 비용 + 커스텀 비용)
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-amber-50 rounded flex-shrink-0">
                 <PackagePlus className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-amber-600" />
@@ -1527,7 +1590,19 @@ function RevenueDashboard() {
           </div>
 
           {/* Card #6: 총 이익금액 */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                순이익 = 매출 - 매입 - 영업비용 - 설치비용 - 기타 비용
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-purple-50 rounded flex-shrink-0">
                 <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-purple-600" />
@@ -1548,7 +1623,19 @@ function RevenueDashboard() {
           </div>
 
           {/* Card #7: 사업장 평균 이익률 */}
-          <div className="bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+          <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-md py-1.5 px-3 whitespace-nowrap shadow-lg">
+                평균 이익률 = (Σ(순이익 ÷ 매출 × 100) ÷ 사업장 수)%
+                {/* Arrow */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="p-1 sm:p-1.5 bg-indigo-50 rounded flex-shrink-0">
                 <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-indigo-600" />
