@@ -535,24 +535,11 @@ function RevenueDashboard() {
 
       // 기본 설치비 처리
       if (installCostData.success) {
-        console.log('🔍 [설치비 API 응답]', {
-          success: installCostData.success,
-          costs배열길이: installCostData.data.costs?.length,
-          첫번째항목: installCostData.data.costs?.[0]
-        });
-
         const installCosts: Record<string, number> = {};
         installCostData.data.costs.forEach((item: any) => {
           installCosts[item.equipment_type] = item.base_installation_cost;
         });
         setBaseInstallationCosts(installCosts);
-
-        console.log('✅ [설치비 로드 완료]', {
-          설치비_항목수: Object.keys(installCosts).length,
-          샘플: Object.entries(installCosts).slice(0, 3)
-        });
-      } else {
-        console.error('❌ [설치비 API 실패]', installCostData);
       }
 
       // 제조사별 수수료율 처리
@@ -1184,21 +1171,9 @@ function RevenueDashboard() {
       }
 
       return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch;
-    }).map((business, idx) => {
+    }).map((business) => {
       // ✅ 실시간 계산 적용 (Admin 대시보드와 동일한 계산식)
       const calculatedData = calculateBusinessRevenue(business, pricingData);
-
-      // 🔍 디버깅: 첫 번째 사업장의 계산 결과 확인
-      if (idx === 0) {
-        console.log('🔍 [첫 번째 사업장 계산 결과]', {
-          사업장명: business.business_name,
-          설치비_계산결과: calculatedData.installation_costs,
-          추가설치비_계산결과: calculatedData.installation_extra_cost,
-          DB의_추가설치비: business.installation_extra_cost,
-          pricingData에_baseInstallationCosts있나: !!pricingData.baseInstallationCosts,
-          baseInstallationCosts_개수: Object.keys(pricingData.baseInstallationCosts || {}).length
-        });
-      }
 
       // 기기 수 계산
       const equipmentFields = [
@@ -1669,22 +1644,13 @@ function RevenueDashboard() {
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 설치비용</p>
                 <p className="text-[9px] sm:text-[10px] md:text-xs font-bold text-blue-600 break-words">
-                  {formatCurrency((() => {
-                    const totalInstallation = sortedBusinesses.reduce((sum, b) => {
+                  {formatCurrency(
+                    sortedBusinesses.reduce((sum, b) => {
                       const baseCost = Number(b.installation_costs) || 0;
                       const extraCost = Number(b.installation_extra_cost) || 0;
-
-                      // 🔍 디버깅: 처음 3개 사업장의 설치비용 로그
-                      if (sum === 0 && (baseCost > 0 || extraCost > 0)) {
-                        console.log(`[설치비용 디버깅] ${b.business_name?.slice(0, 15)}...: base=${baseCost}, extra=${extraCost}`);
-                      }
-
                       return sum + baseCost + extraCost;
-                    }, 0);
-
-                    console.log(`📊 [총 설치비용] 전체: ${totalInstallation.toLocaleString()}원 (${sortedBusinesses.length}개 사업장)`);
-                    return totalInstallation;
-                  })())}
+                    }, 0)
+                  )}
                 </p>
               </div>
             </div>
