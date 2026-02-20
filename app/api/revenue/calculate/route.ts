@@ -532,10 +532,12 @@ export async function POST(request: NextRequest) {
     let hasAdjustment = false;
     if (operatingCostAdjustment) {
       hasAdjustment = true;
+      // 🔧 Number() 변환으로 문자열 연결 방지
+      const adjustmentAmount = Number(operatingCostAdjustment.adjustment_amount) || 0;
       if (operatingCostAdjustment.adjustment_type === 'add') {
-        adjustedSalesCommission = salesCommission + operatingCostAdjustment.adjustment_amount;
+        adjustedSalesCommission = salesCommission + adjustmentAmount;
       } else {
-        adjustedSalesCommission = salesCommission - operatingCostAdjustment.adjustment_amount;
+        adjustedSalesCommission = salesCommission - adjustmentAmount;
       }
     }
 

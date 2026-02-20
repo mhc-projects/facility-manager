@@ -8,6 +8,7 @@ import { TokenManager } from '@/lib/api-client';
 import type { CalculatedData, OperatingCostAdjustment } from '@/types';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileTabs } from '@/components/ui/MobileTabs';
+import { useCostChangeLogger } from '@/hooks/useCostChangeLogger';
 
 interface BusinessRevenueModalProps {
   business: any;
@@ -23,9 +24,13 @@ export default function BusinessRevenueModal({
   userPermission
 }: BusinessRevenueModalProps) {
   const router = useRouter();
+  const { createCostChangeLog } = useCostChangeLogger(business?.id || '');
   const [calculatedData, setCalculatedData] = useState<CalculatedData | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 🆕 메모 섹션 refresh 함수 참조
+  const memoRefreshRef = React.useRef<(() => Promise<void>) | null>(null);
 
   // ✅ 데이터 변경 추적 (영업비용 조정 또는 실사비 저장 시 true)
   const [dataChanged, setDataChanged] = useState(false);
@@ -74,6 +79,33 @@ export default function BusinessRevenueModal({
   const [newCustomCost, setNewCustomCost] = useState<CustomCost>({ name: '', amount: 0 });
   const [isSavingCustomCost, setIsSavingCustomCost] = useState(false);
   const [editingCustomCostIndex, setEditingCustomCostIndex] = useState<number | null>(null);
+
+  // 🆕 자동 로그 생성 후 메모 새로 고침 헬퍼 함수
+  const createCostChangeLogWithRefresh = async (params: {
+    type: 'operating_cost' | 'survey_fee' | 'as_cost' | 'custom_cost';
+    action: 'added' | 'updated' | 'deleted';
+    oldValue?: any;
+    newValue?: any;
+    itemName?: string;
+  }) => {
+    try {
+      await createCostChangeLog(params);
+
+      // 메모 새로 고침 (0.5초 대기 후 - DB 저장 시간 고려)
+      if (memoRefreshRef.current) {
+        setTimeout(async () => {
+          try {
+            await memoRefreshRef.current?.();
+            console.log('✅ [MEMO-REFRESH] 자동 로그 생성 후 메모 목록 갱신 완료');
+          } catch (refreshError) {
+            console.error('❌ [MEMO-REFRESH] 메모 새로 고침 실패:', refreshError);
+          }
+        }, 500);
+      }
+    } catch (logError) {
+      console.error('📝 [AUTO-LOG] 자동 로그 생성 실패 (비침습적):', logError);
+    }
+  };
 
   // 🔄 모달이 닫힐 때 ref 리셋
   useEffect(() => {
@@ -320,7 +352,20 @@ export default function BusinessRevenueModal({
         }
 
         setIsEditingAdjustment(false);
+
         alert('영업비용 조정이 저장되었습니다.');
+
+        // 🆕 자동 로그 생성 후 메모 새로 고침
+        await createCostChangeLogWithRefresh({
+          type: 'operating_cost',
+          action: hasExisting ? 'updated' : 'added',
+          oldValue: hasExisting ? calculatedData?.operating_cost_adjustment : undefined,
+          newValue: {
+            amount: adjustmentForm.amount,
+            type: adjustmentForm.type,
+            reason: adjustmentForm.reason
+          }
+        });
       } else {
         alert(data.message || '조정 저장에 실패했습니다.');
       }
@@ -377,7 +422,15 @@ export default function BusinessRevenueModal({
 
         setAdjustmentForm({ amount: 0, type: 'add', reason: '' });
         setIsEditingAdjustment(false);
+
         alert('영업비용 조정이 삭제되었습니다.');
+
+        // 🆕 자동 로그 생성 후 메모 새로 고침
+        await createCostChangeLogWithRefresh({
+          type: 'operating_cost',
+          action: 'deleted',
+          oldValue: calculatedData.operating_cost_adjustment
+        });
       } else {
         alert(data.message || '조정 삭제에 실패했습니다.');
       }
@@ -439,7 +492,29 @@ export default function BusinessRevenueModal({
         }
 
         setIsEditingSurveyFee(false);
+
         alert('실사비 조정이 저장되었습니다.');
+
+        // 🆕 자동 로그 생성 후 메모 새로 고침
+        // 로직: 0으로 저장 = 삭제, 기존값 있음 = 수정, 기존값 없음 = 추가
+        const isDeleting = surveyFeeForm.amount === 0 || surveyFeeForm.amount === null;
+        const hasExistingValue = calculatedData?.survey_fee_adjustment !== undefined && calculatedData?.survey_fee_adjustment !== null && calculatedData?.survey_fee_adjustment !== 0;
+
+        let action: 'added' | 'updated' | 'deleted';
+        if (isDeleting && hasExistingValue) {
+          action = 'deleted';
+        } else if (hasExistingValue) {
+          action = 'updated';
+        } else {
+          action = 'added';
+        }
+
+        await createCostChangeLogWithRefresh({
+          type: 'survey_fee',
+          action,
+          oldValue: calculatedData?.survey_fee_adjustment,
+          newValue: isDeleting ? undefined : surveyFeeForm.amount
+        });
       } else {
         alert(data.message || '실사비 조정 저장에 실패했습니다.');
       }
@@ -499,7 +574,29 @@ export default function BusinessRevenueModal({
         }
 
         setIsEditingAsCost(false);
+
         alert('AS 비용이 저장되었습니다.');
+
+        // 🆕 자동 로그 생성 후 메모 새로 고침
+        // 로직: 0으로 저장 = 삭제, 기존값 있음 = 수정, 기존값 없음 = 추가
+        const isDeleting = asCostForm.amount === 0 || asCostForm.amount === null;
+        const hasExistingValue = calculatedData?.as_cost !== undefined && calculatedData?.as_cost !== null && calculatedData?.as_cost !== 0;
+
+        let action: 'added' | 'updated' | 'deleted';
+        if (isDeleting && hasExistingValue) {
+          action = 'deleted';
+        } else if (hasExistingValue) {
+          action = 'updated';
+        } else {
+          action = 'added';
+        }
+
+        await createCostChangeLogWithRefresh({
+          type: 'as_cost',
+          action,
+          oldValue: calculatedData?.as_cost,
+          newValue: isDeleting ? undefined : asCostForm.amount
+        });
       } else {
         alert(data.message || 'AS 비용 저장에 실패했습니다.');
       }
@@ -557,6 +654,34 @@ export default function BusinessRevenueModal({
         }
 
         alert('커스텀 추가비용이 저장되었습니다.');
+
+        // 🆕 개별 항목별 자동 로그 생성
+        const oldCosts = calculatedData?.custom_additional_costs || [];
+        const newCosts = customCosts || [];
+
+        // 새로 추가되거나 수정된 항목 감지
+        for (const newCost of newCosts) {
+          const oldCost = oldCosts.find((c: any) => c.name === newCost.name);
+
+          if (!oldCost) {
+            // 새로 추가된 항목
+            await createCostChangeLogWithRefresh({
+              type: 'custom_cost',
+              action: 'added',
+              newValue: newCost.amount,
+              itemName: newCost.name
+            });
+          } else if (oldCost.amount !== newCost.amount) {
+            // 금액이 변경된 항목
+            await createCostChangeLogWithRefresh({
+              type: 'custom_cost',
+              action: 'updated',
+              oldValue: oldCost.amount,
+              newValue: newCost.amount,
+              itemName: newCost.name
+            });
+          }
+        }
       } else {
         alert(data.message || '커스텀 추가비용 저장에 실패했습니다.');
       }
@@ -592,6 +717,9 @@ export default function BusinessRevenueModal({
     if (!confirm('이 항목을 삭제하시겠습니까?')) {
       return;
     }
+
+    // 🆕 삭제될 항목 정보 저장 (로깅용)
+    const deletedCost = customCosts[index];
 
     const updatedCosts = customCosts.filter((_, i) => i !== index);
     setCustomCosts(updatedCosts);
@@ -638,6 +766,14 @@ export default function BusinessRevenueModal({
         }
 
         alert('항목이 삭제되었습니다.');
+
+        // 🆕 삭제 로그 생성 후 메모 새로 고침
+        await createCostChangeLogWithRefresh({
+          type: 'custom_cost',
+          action: 'deleted',
+          oldValue: deletedCost.amount,
+          itemName: deletedCost.name
+        });
       } else {
         alert(data.message || '삭제에 실패했습니다.');
         // 실패 시 원래 상태로 복원
@@ -1666,6 +1802,9 @@ export default function BusinessRevenueModal({
               businessId={business.id}
               businessName={business.business_name || business.사업장명 || ''}
               userPermission={userPermission}
+              onRefreshReady={(refreshFn) => {
+                memoRefreshRef.current = refreshFn;
+              }}
             />
           </div>
         </div>

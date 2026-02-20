@@ -163,3 +163,43 @@ export function logWithTimestamp(message: string, type: 'info' | 'error' | 'succ
   const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
   console.log(`${prefix} [${timestamp}] ${message}`);
 }
+
+// 비용 변경 데이터 검증 (useCostChangeLogger용)
+export function validateCostChange(params: {
+  type: string;
+  action: string;
+  oldValue?: any;
+  newValue?: any;
+}): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // 비용 타입 검증
+  const validTypes = ['operating_cost', 'survey_fee', 'as_cost', 'custom_cost'];
+  if (!validTypes.includes(params.type)) {
+    errors.push(`Invalid cost type: ${params.type}. Must be one of: ${validTypes.join(', ')}`);
+  }
+
+  // 액션 검증
+  const validActions = ['added', 'updated', 'deleted'];
+  if (!validActions.includes(params.action)) {
+    errors.push(`Invalid action: ${params.action}. Must be one of: ${validActions.join(', ')}`);
+  }
+
+  // 액션별 값 검증
+  if (params.action === 'added' || params.action === 'updated') {
+    if (params.newValue === undefined || params.newValue === null) {
+      errors.push('newValue is required for added/updated actions');
+    }
+  }
+
+  if (params.action === 'updated' || params.action === 'deleted') {
+    if (params.oldValue === undefined || params.oldValue === null) {
+      errors.push('oldValue is required for updated/deleted actions');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
