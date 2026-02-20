@@ -1402,7 +1402,7 @@ function RevenueDashboard() {
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">
                   {showReceivablesOnly ? '총 미수금액' : '총 매출금액'}
                 </p>
-                <p className={`text-xs sm:text-sm md:text-base font-bold ${showReceivablesOnly ? 'text-red-600' : 'text-green-600'} break-words`}>
+                <p className={`text-[10px] sm:text-xs md:text-sm font-bold ${showReceivablesOnly ? 'text-red-600' : 'text-green-600'} break-words`}>
                   {formatCurrency((() => {
                     if (showReceivablesOnly) {
                       const totalReceivables = sortedBusinesses.reduce((sum, b) => {
@@ -1431,7 +1431,7 @@ function RevenueDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 매입금액</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-teal-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-bold text-teal-600 break-words">
                   {formatCurrency((() => {
                     const totalPurchase = sortedBusinesses.reduce((sum, b) => {
                       const cost = Number(b.total_cost) || 0;
@@ -1452,7 +1452,7 @@ function RevenueDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 영업비용</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-orange-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-bold text-orange-600 break-words">
                   {formatCurrency(sortedBusinesses.reduce((sum, b) => {
                     const salesCommission = Number(b.adjusted_sales_commission || b.sales_commission || 0);
                     return sum + (isNaN(salesCommission) ? 0 : salesCommission);
@@ -1470,7 +1470,7 @@ function RevenueDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 설치비용</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-blue-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-bold text-blue-600 break-words">
                   {formatCurrency((() => {
                     const totalInstallation = sortedBusinesses.reduce((sum, b) => {
                       const baseCost = Number(b.installation_costs) || 0;
@@ -1492,7 +1492,7 @@ function RevenueDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">기타 비용</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-amber-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-bold text-amber-600 break-words">
                   {formatCurrency((() => {
                     const totalOtherCosts = sortedBusinesses.reduce((sum, b) => {
                       // 1. 실사비용 (항상 포함)
@@ -1534,7 +1534,7 @@ function RevenueDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">총 이익금액</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-purple-600 break-words">
+                <p className="text-[10px] sm:text-xs md:text-sm font-bold text-purple-600 break-words">
                   {formatCurrency((() => {
                     const totalProfit = sortedBusinesses.reduce((sum, b) => {
                       const profit = Number(b.net_profit) || 0;
@@ -1555,7 +1555,7 @@ function RevenueDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">사업장 평균 이익률</p>
-                <p className="text-xs sm:text-sm md:text-base font-bold text-indigo-600">
+                <p className="text-[10px] sm:text-xs md:text-sm font-bold text-indigo-600">
                   {sortedBusinesses.length > 0 ?
                     ((sortedBusinesses.reduce((sum, b) => sum + (b.total_revenue > 0 ? ((b.net_profit || 0) / b.total_revenue * 100) : 0), 0) / sortedBusinesses.length)).toFixed(1)
                     : '0'}%
