@@ -478,8 +478,8 @@ function RevenueDashboard() {
           acc[item.sales_office] = { sales_cost_rate: item.sales_cost_rate };
           return acc;
         }, {}) : {},
-        surveyCost: surveyCostData.success ? surveyCostData.data.costs.reduce((acc: any, item: any) => {
-          acc[item.survey_type] = item.cost;
+        surveyCost: surveyCostData.success ? surveyCostData.data.reduce((acc: any, item: any) => {
+          acc[item.survey_type] = item.base_cost;
           return acc;
         }, {}) : {},
         installation: installCostData.success ? installCostData.data.costs.reduce((acc: any, item: any) => {
