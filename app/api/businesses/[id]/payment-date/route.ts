@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { verifyToken } from '@/utils/auth';
 
 /**
  * PATCH /api/businesses/[id]/payment-date
@@ -12,6 +13,25 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    // 인증 확인
+    const token = request.headers.get('authorization')?.replace('Bearer ', '') ||
+      request.headers.get('cookie')?.match(/auth-token=([^;]+)/)?.[1];
+
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: '인증이 필요합니다' },
+        { status: 401 }
+      );
+    }
+
+    const tokenPayload = await verifyToken(token);
+    if (!tokenPayload) {
+      return NextResponse.json(
+        { success: false, error: '유효하지 않은 토큰입니다' },
+        { status: 401 }
+      );
+    }
+
     const supabase = getSupabaseAdmin();
     const { payment_scheduled_date } = await request.json();
 
@@ -23,9 +43,9 @@ export async function PATCH(
       );
     }
 
-    // Update payment scheduled date in database
+    // Update payment scheduled date in database (business_info 테이블)
     const { data, error } = await supabase
-      .from('businesses')
+      .from('business_info')
       .update({ payment_scheduled_date })
       .eq('id', params.id)
       .select()

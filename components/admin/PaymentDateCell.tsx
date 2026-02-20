@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar } from 'lucide-react';
 
 interface PaymentDateCellProps {
@@ -19,6 +20,8 @@ export function PaymentDateCell({
   const [isOpen, setIsOpen] = useState(false);
   const [localDate, setLocalDate] = useState(currentDate);
   const [isLoading, setIsLoading] = useState(false);
+  const [triggerPosition, setTriggerPosition] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Update local state when prop changes (from external updates)
@@ -36,8 +39,8 @@ export function PaymentDateCell({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mouseup', handleClickOutside);
+    return () => document.removeEventListener('mouseup', handleClickOutside);
   }, [isOpen]);
 
   // Close on Escape key
@@ -52,6 +55,25 @@ export function PaymentDateCell({
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
+
+  // Update calendar position on scroll
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current) return;
+
+    const updatePosition = () => {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setTriggerPosition({
+          top: rect.bottom + 4,
+          left: rect.left
+        });
+      }
+    };
+
+    // Update position on scroll
+    window.addEventListener('scroll', updatePosition, true); // true = capture phase for all scrollable elements
+    return () => window.removeEventListener('scroll', updatePosition, true);
   }, [isOpen]);
 
   const handleDateSelect = async (date: string | null) => {
@@ -78,43 +100,60 @@ export function PaymentDateCell({
   }
 
   return (
-    <div className="relative">
-      {/* Display/Trigger Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        disabled={isLoading}
-        className="w-full px-2 py-1 text-xs text-left hover:bg-teal-50 rounded transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        title="클릭하여 입금예정일 수정"
-      >
-        <Calendar className="w-3 h-3 text-teal-600 flex-shrink-0" />
-        <span className={localDate ? 'text-teal-700 font-medium' : 'text-gray-400'}>
-          {isLoading ? '저장 중...' : (localDate || '-')}
-        </span>
-      </button>
+    <>
+      <div className="relative">
+        {/* Display/Trigger Button */}
+        <button
+          ref={triggerRef}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent table row click handlers
+            if (triggerRef.current) {
+              const rect = triggerRef.current.getBoundingClientRect();
+              setTriggerPosition({
+                top: rect.bottom + 4,
+                left: rect.left
+              });
+            }
+            setIsOpen(!isOpen);
+          }}
+          disabled={isLoading}
+          className="w-full px-2 py-1 text-xs text-left hover:bg-teal-50 rounded transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="클릭하여 입금예정일 수정"
+        >
+          <Calendar className="w-3 h-3 text-teal-600 flex-shrink-0" />
+          <span className={localDate ? 'text-teal-700 font-medium' : 'text-gray-400'}>
+            {isLoading ? '저장 중...' : (localDate || '-')}
+          </span>
+        </button>
+      </div>
 
-      {/* Calendar Popover - Fixed Interactivity and Transparency */}
-      {isOpen && (
+      {/* Render calendar via Portal - OUTSIDE table DOM */}
+      {isOpen && typeof window !== 'undefined' && createPortal(
         <>
-          {/* Background overlay - dims table and focuses attention on calendar */}
+          {/* Background overlay - visual only, doesn't block clicks */}
           <div
-            className="fixed inset-0 bg-black/10 z-40"
-            onClick={() => setIsOpen(false)}
+            className="fixed inset-0 bg-black/10 z-40 pointer-events-none"
             aria-hidden="true"
           />
 
-          {/* Calendar container - positioned near trigger, highest z-index layer */}
+          {/* Calendar container - rendered at document.body, outside table DOM */}
           <div
             ref={popoverRef}
-            className="absolute top-full left-0 mt-1 z-50 bg-white pointer-events-auto rounded-lg shadow-2xl border-2 border-gray-300 p-3 w-64"
+            className="fixed z-50 bg-white pointer-events-auto rounded-lg shadow-2xl border-2 border-gray-300 p-3 w-64"
+            style={{
+              top: triggerPosition ? `${triggerPosition.top}px` : undefined,
+              left: triggerPosition ? `${triggerPosition.left}px` : undefined
+            }}
           >
             <SimpleDatePicker
               value={localDate}
               onChange={handleDateSelect}
             />
           </div>
-        </>
+        </>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -197,7 +236,10 @@ function SimpleDatePicker({ value, onChange }: SimpleDatePickerProps) {
     calendarDays.push(
       <button
         key={day}
-        onClick={() => handleDayClick(day)}
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent table row click handlers
+          handleDayClick(day);
+        }}
         className={`w-8 h-8 text-xs rounded flex items-center justify-center transition-colors ${
           isSelected
             ? 'bg-teal-600 text-white font-bold'
@@ -216,7 +258,10 @@ function SimpleDatePicker({ value, onChange }: SimpleDatePickerProps) {
       {/* Month/Year Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={handlePrevMonth}
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePrevMonth();
+          }}
           className="p-1 hover:bg-gray-100 rounded transition-colors"
           title="이전 달"
         >
@@ -228,7 +273,10 @@ function SimpleDatePicker({ value, onChange }: SimpleDatePickerProps) {
           {currentYear}년 {currentMonth + 1}월
         </div>
         <button
-          onClick={handleNextMonth}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleNextMonth();
+          }}
           className="p-1 hover:bg-gray-100 rounded transition-colors"
           title="다음 달"
         >
@@ -255,13 +303,19 @@ function SimpleDatePicker({ value, onChange }: SimpleDatePickerProps) {
       {/* Action Buttons */}
       <div className="flex gap-2 pt-2 border-t border-gray-200">
         <button
-          onClick={handleClear}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleClear();
+          }}
           className="flex-1 px-3 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
         >
           삭제
         </button>
         <button
-          onClick={handleToday}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToday();
+          }}
           className="flex-1 px-3 py-1.5 text-xs text-teal-700 bg-teal-50 hover:bg-teal-100 rounded transition-colors font-medium"
         >
           오늘

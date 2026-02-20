@@ -90,6 +90,7 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/order-management',   // 발주 관리 API (Bearer 토큰 or 쿠키 인증)
     '/api/migrate-business-id', // 마이그레이션 API (관리자 전용)
     '/api/test-caption',       // Caption 테스트 API (개발용)
+    '/api/businesses',         // 사업장 관리 API (Bearer 토큰 인증)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }
