@@ -1,5 +1,5 @@
-import { createClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
  * PATCH /api/businesses/[id]/payment-date
@@ -12,7 +12,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
     const { payment_scheduled_date } = await request.json();
 
     // Validate date format (YYYY-MM-DD or null)
