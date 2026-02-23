@@ -171,6 +171,103 @@ export async function PUT(
 }
 
 /**
+ * PATCH /api/meeting-minutes/[id]
+ * 사업장별 이슈 완료 상태 토글
+ *
+ * Request Body:
+ * {
+ *   "type": "toggle_business_issue",
+ *   "issue_id": "이슈 ID",
+ *   "is_completed": true | false
+ * }
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getUserFromToken(request)
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: '인증이 필요합니다.' },
+        { status: 401 }
+      )
+    }
+
+    const { id } = params
+    const body = await request.json()
+    const { type, issue_id, is_completed } = body
+
+    if (type !== 'toggle_business_issue' || !issue_id || is_completed === undefined) {
+      return NextResponse.json(
+        { success: false, error: 'type, issue_id, is_completed는 필수입니다.' },
+        { status: 400 }
+      )
+    }
+
+    // 현재 회의록 조회
+    const { data: minute, error: fetchError } = await supabase
+      .from('meeting_minutes')
+      .select('id, content')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !minute) {
+      return NextResponse.json(
+        { success: false, error: '회의록을 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+    }
+
+    // 해당 이슈 업데이트
+    const businessIssues = minute.content?.business_issues || []
+    let found = false
+    const updatedIssues = businessIssues.map((issue: any) => {
+      if (issue.id === issue_id) {
+        found = true
+        return {
+          ...issue,
+          is_completed,
+          completed_at: is_completed ? new Date().toISOString() : null,
+          completed_by: is_completed ? user.id : null
+        }
+      }
+      return issue
+    })
+
+    if (!found) {
+      return NextResponse.json(
+        { success: false, error: '이슈를 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+    }
+
+    const updatedContent = { ...minute.content, business_issues: updatedIssues }
+
+    const { error: updateError } = await supabase
+      .from('meeting_minutes')
+      .update({ content: updatedContent, updated_by: user.id })
+      .eq('id', id)
+
+    if (updateError) {
+      console.error('[MEETING-MINUTES] PATCH error:', updateError)
+      return NextResponse.json(
+        { success: false, error: '업데이트에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('[MEETING-MINUTES] PATCH error:', error)
+    return NextResponse.json(
+      { success: false, error: '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * DELETE /api/meeting-minutes/[id]
  * 회의록 삭제
  */

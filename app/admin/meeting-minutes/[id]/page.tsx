@@ -102,6 +102,21 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
     router.push(`/admin/meeting-minutes?refresh=${timestamp}`)
   }
 
+  const handleIssueToggle = (issueId: string, newValue: boolean) => {
+    if (!minute) return
+    setMinute({
+      ...minute,
+      content: {
+        ...minute.content,
+        business_issues: minute.content.business_issues?.map(issue =>
+          issue.id === issueId
+            ? { ...issue, is_completed: newValue, completed_at: newValue ? new Date().toISOString() : undefined }
+            : issue
+        )
+      }
+    })
+  }
+
   if (!mounted || loading) {
     return (
       <AdminLayout title="회의록 상세">
@@ -416,7 +431,12 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
             <h2 className="text-lg font-semibold text-gray-900 mb-4">사업장별 이슈</h2>
             <div className="space-y-3">
               {minute.content.business_issues.map((issue) => (
-                <BusinessIssueCard key={issue.id} issue={issue} />
+                <BusinessIssueCard
+                  key={issue.id}
+                  issue={issue}
+                  meetingId={params.id}
+                  onToggle={handleIssueToggle}
+                />
               ))}
             </div>
           </div>
@@ -532,27 +552,70 @@ interface BusinessIssueCardProps {
     is_completed: boolean
     completed_at?: string
   }
+  meetingId: string
+  onToggle: (issueId: string, newValue: boolean) => void
 }
 
-function BusinessIssueCard({ issue }: BusinessIssueCardProps) {
+function BusinessIssueCard({ issue, meetingId, onToggle }: BusinessIssueCardProps) {
+  const [loading, setLoading] = useState(false)
   const hasMultipleAssignees = issue.assignees && issue.assignees.length > 0
   const hasSingleAssignee = !hasMultipleAssignees && issue.assignee_name
 
+  const handleToggle = async () => {
+    if (loading) return
+    setLoading(true)
+    const newValue = !issue.is_completed
+    try {
+      const response = await fetch(`/api/meeting-minutes/${meetingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'toggle_business_issue',
+          issue_id: issue.id,
+          is_completed: newValue
+        })
+      })
+      const result = await response.json()
+      if (result.success) {
+        onToggle(issue.id, newValue)
+      } else {
+        alert('상태 변경에 실패했습니다.')
+      }
+    } catch {
+      alert('상태 변경에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+    <div
+      className={`flex items-start gap-4 p-4 border rounded-lg transition-colors cursor-pointer ${
+        issue.is_completed
+          ? 'border-green-200 bg-green-50 hover:bg-green-100'
+          : 'border-gray-200 hover:bg-gray-50'
+      }`}
+      onClick={handleToggle}
+    >
       <input
         type="checkbox"
         checked={issue.is_completed}
-        readOnly
-        className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mt-0.5"
+        onChange={() => {}}
+        disabled={loading}
+        className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mt-0.5 cursor-pointer"
       />
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-2">
           <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
             {issue.business_name}
           </span>
+          {issue.is_completed && (
+            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">완료</span>
+          )}
         </div>
-        <div className="font-medium text-gray-900 mb-2">{issue.issue_description}</div>
+        <div className={`font-medium mb-2 ${issue.is_completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+          {issue.issue_description}
+        </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
           {/* 다중 담당자 우선, 없으면 단일 담당자 폴백 */}
           {hasMultipleAssignees ? (
