@@ -71,10 +71,11 @@ export default function RecurringIssuesPanel({
         const fetchedGroups: GroupedIssues[] = data.data.grouped_issues || []
         setGroups(fetchedGroups)
 
-        // 첫 번째(가장 최근) 그룹만 펼쳐두기
+        // 마지막(가장 최근) 그룹만 펼쳐두기
+        const lastIdx = fetchedGroups.length - 1
         const initialExpanded: Record<string, boolean> = {}
         fetchedGroups.forEach((g, idx) => {
-          initialExpanded[g.meeting_id] = idx === 0
+          initialExpanded[g.meeting_id] = idx === lastIdx
         })
         setExpandedGroups(initialExpanded)
       } else {
