@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     // 정기회의에서 미해결 이슈 조회
     let query = supabase
       .from('meeting_minutes')
-      .select('id, title, meeting_date, meeting_type, content')
+      .select('id, title, meeting_date, meeting_type, content, agenda')
       .eq('meeting_type', '정기회의')
       .neq('status', 'archived')
       .order('meeting_date', { ascending: false })
@@ -123,37 +123,80 @@ export async function GET(request: NextRequest) {
     const today = new Date()
 
     for (const meeting of meetings) {
+      const meetingDate = new Date(meeting.meeting_date)
+      const daysElapsed = Math.floor((today.getTime() - meetingDate.getTime()) / (1000 * 60 * 60 * 24))
+
+      // 1) 사업장별 이슈: is_completed === false
       const businessIssues = meeting.content?.business_issues || []
-
       for (const issue of businessIssues) {
-        // is_completed가 false인 이슈만 포함
         if (issue.is_completed === false) {
-          const meetingDate = new Date(meeting.meeting_date)
-          const daysElapsed = Math.floor((today.getTime() - meetingDate.getTime()) / (1000 * 60 * 60 * 24))
-
           recurringIssues.push({
             ...issue,
             original_meeting_id: meeting.id,
             original_meeting_title: meeting.title,
             original_meeting_date: meeting.meeting_date,
             days_elapsed: daysElapsed,
-            is_recurring: true
+            is_recurring: true,
+            issue_type: 'business_issue'
+          })
+        }
+      }
+
+      // 2) 안건: progress < 100 (또는 progress 미정의)
+      const agendaItems = meeting.agenda || []
+      for (const item of agendaItems) {
+        const progress = item.progress ?? 0
+        if (progress < 100) {
+          // AgendaItem → RecurringIssue 형태로 변환
+          const assignees = item.assignees && item.assignees.length > 0
+            ? item.assignees
+            : item.assignee_name
+              ? [{ id: item.assignee_id || item.id, name: item.assignee_name }]
+              : []
+
+          recurringIssues.push({
+            id: item.id,
+            business_id: '',
+            business_name: item.department || '안건',
+            issue_description: item.title + (item.description ? ` — ${item.description.slice(0, 60)}${item.description.length > 60 ? '…' : ''}` : ''),
+            assignee_id: item.assignee_id,
+            assignee_name: item.assignee_name,
+            assignee_ids: item.assignee_ids || [],
+            assignees,
+            is_completed: false,
+            original_meeting_id: meeting.id,
+            original_meeting_title: meeting.title,
+            original_meeting_date: meeting.meeting_date,
+            days_elapsed: daysElapsed,
+            is_recurring: true,
+            issue_type: 'agenda_item',
+            original_progress: progress
           })
         }
       }
     }
 
+    // 중복 제거: 동일 id의 이슈는 가장 최근 회의록(days_elapsed 최소) 것만 유지
+    const deduped = new Map<string, any>()
+    for (const issue of recurringIssues) {
+      const existing = deduped.get(issue.id)
+      if (!existing || issue.days_elapsed < existing.days_elapsed) {
+        deduped.set(issue.id, issue)
+      }
+    }
+    const uniqueIssues = Array.from(deduped.values())
+
     // days_elapsed 기준으로 오래된 순서로 정렬
-    recurringIssues.sort((a, b) => b.days_elapsed - a.days_elapsed)
+    uniqueIssues.sort((a, b) => b.days_elapsed - a.days_elapsed)
 
     // 페이지네이션 적용
-    const paginatedIssues = recurringIssues.slice(offset, offset + limit)
+    const paginatedIssues = uniqueIssues.slice(offset, offset + limit)
 
     return NextResponse.json({
       success: true,
       data: {
         recurring_issues: paginatedIssues,
-        total_count: recurringIssues.length,
+        total_count: uniqueIssues.length,
         limit,
         offset
       }

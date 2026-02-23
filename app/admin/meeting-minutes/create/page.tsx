@@ -493,10 +493,13 @@ export default function CreateMeetingMinutePage() {
             {meetingType === '정기회의' && (
               <RecurringIssuesPanel
                 onAddIssue={(issue) => {
-                  // 이슈를 businessIssues 배열에 추가
                   setBusinessIssues([...businessIssues, issue])
                 }}
+                onAddAgendaItem={(item) => {
+                  setAgenda([...agenda, item])
+                }}
                 addedIssueIds={businessIssues.map(issue => issue.id)}
+                addedAgendaIds={agenda.map(item => item.id)}
               />
             )}
 

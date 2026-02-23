@@ -57,7 +57,7 @@ export interface BusinessIssue {
 }
 
 /**
- * 반복 이슈 (정기회의에서 미해결된 사업장별 이슈)
+ * 반복 이슈 (정기회의에서 미해결된 사업장별 이슈 + 미완료 안건)
  */
 export interface RecurringIssue extends BusinessIssue {
   original_meeting_id: string    // 원본 회의록 ID
@@ -65,6 +65,8 @@ export interface RecurringIssue extends BusinessIssue {
   original_meeting_date: string  // 원본 회의 날짜 (YYYY-MM-DD)
   days_elapsed: number           // 경과 일수
   is_recurring: true             // 반복 이슈 식별자
+  issue_type: 'business_issue' | 'agenda_item'  // 이슈 출처 타입
+  original_progress?: number     // 안건 아이템인 경우 원래 진행률 (0~100)
 }
 
 /**

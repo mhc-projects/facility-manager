@@ -1,19 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { RecurringIssue, BusinessIssue } from '@/types/meeting-minutes'
+import { RecurringIssue, BusinessIssue, AgendaItem } from '@/types/meeting-minutes'
 import RecurringIssueCard from './RecurringIssueCard'
 import { AlertCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface RecurringIssuesPanelProps {
-  onAddIssue: (issue: BusinessIssue) => void // 이슈를 회의록에 추가하는 콜백
-  addedIssueIds?: string[] // 이미 추가된 이슈 ID 목록
+  onAddIssue: (issue: BusinessIssue) => void // 사업장 이슈를 추가하는 콜백
+  onAddAgendaItem?: (item: AgendaItem) => void // 미완료 안건을 안건 섹션에 추가하는 콜백
+  addedIssueIds?: string[] // 이미 추가된 이슈 ID 목록 (businessIssues)
+  addedAgendaIds?: string[] // 이미 추가된 안건 ID 목록 (agenda)
   className?: string
 }
 
 export default function RecurringIssuesPanel({
   onAddIssue,
+  onAddAgendaItem,
   addedIssueIds = [],
+  addedAgendaIds = [],
   className = ''
 }: RecurringIssuesPanelProps) {
   const [issues, setIssues] = useState<RecurringIssue[]>([])
@@ -21,8 +25,11 @@ export default function RecurringIssuesPanel({
   const [error, setError] = useState<string | null>(null)
   const [isExpanded, setIsExpanded] = useState(true)
 
-  // 이미 추가된 이슈를 필터링
-  const filteredIssues = issues.filter(issue => !addedIssueIds.includes(issue.id))
+  // 이미 추가된 이슈/안건을 필터링
+  const filteredIssues = issues.filter(issue => {
+    if (issue.issue_type === 'agenda_item') return !addedAgendaIds.includes(issue.id)
+    return !addedIssueIds.includes(issue.id)
+  })
 
   // 미해결 이슈 조회
   const fetchRecurringIssues = async () => {
@@ -57,22 +64,41 @@ export default function RecurringIssuesPanel({
 
   // 이슈 가져오기 핸들러
   const handleAddToMeeting = (issue: RecurringIssue) => {
-    // RecurringIssue에서 BusinessIssue로 변환 (메타데이터 제거)
-    const businessIssue: BusinessIssue = {
-      id: issue.id,
-      business_id: issue.business_id,
-      business_name: issue.business_name,
-      issue_description: issue.issue_description,
-      assignee_id: issue.assignee_id,
-      assignee_name: issue.assignee_name,
-      is_completed: false, // 새 회의록에서는 미완료 상태로 시작
-      completed_at: undefined
+    if (issue.issue_type === 'agenda_item' && onAddAgendaItem) {
+      // 안건 타입: AgendaItem으로 변환하여 안건 섹션에 추가
+      const agendaItem: AgendaItem = {
+        id: issue.id, // 원본 ID 유지 (필터링에 사용)
+        title: issue.issue_description.split(' — ')[0], // "제목 — 설명" 형태에서 제목만 추출
+        description: issue.issue_description.includes(' — ')
+          ? issue.issue_description.split(' — ').slice(1).join(' — ')
+          : '',
+        department: issue.business_name === '안건' ? undefined : issue.business_name,
+        deadline: '',
+        progress: (issue.original_progress ?? 0) as 0 | 25 | 50 | 75 | 100,
+        assignee_id: issue.assignee_id,
+        assignee_name: issue.assignee_name,
+        assignee_ids: issue.assignee_ids || [],
+        assignees: issue.assignees || []
+      }
+      onAddAgendaItem(agendaItem)
+      alert(`"${issue.issue_description.split(' — ')[0]}" 안건이 안건 섹션에 추가되었습니다.`)
+    } else {
+      // 사업장 이슈 타입: BusinessIssue로 변환하여 사업장별 이슈에 추가
+      const businessIssue: BusinessIssue = {
+        id: crypto.randomUUID(), // 새 ID 생성 (원본과 충돌 방지)
+        business_id: issue.business_id,
+        business_name: issue.business_name,
+        issue_description: issue.issue_description,
+        assignee_id: issue.assignee_id,
+        assignee_name: issue.assignee_name,
+        assignee_ids: issue.assignee_ids,
+        assignees: issue.assignees,
+        is_completed: false,
+        completed_at: undefined
+      }
+      onAddIssue(businessIssue)
+      alert(`"${issue.business_name}" 이슈가 사업장별 이슈 섹션에 추가되었습니다.`)
     }
-
-    onAddIssue(businessIssue)
-
-    // 알림 표시
-    alert(`"${issue.business_name}" 이슈가 사업장별 이슈 섹션에 추가되었습니다.`)
   }
 
   // 이슈 완료 처리 핸들러
@@ -191,9 +217,9 @@ export default function RecurringIssuesPanel({
               {/* 안내 메시지 */}
               <div className="mb-2 p-2 bg-blue-100 border border-blue-300 rounded">
                 <p className="text-xs text-blue-900 leading-snug">
-                  💡 <strong>이전 정기회의에서 미해결된 사업장별 이슈</strong>입니다.
+                  💡 <strong>이전 정기회의에서 미해결된 사업장 이슈 및 100% 미달 안건</strong>입니다.
                   <br />
-                  "이슈 가져오기"를 클릭하면 현재 회의록에 추가되며, "해결 완료"를 클릭하면 모든 회의록에서 완료 처리됩니다.
+                  "이슈 가져오기"를 클릭하면 현재 회의록의 사업장별 이슈 섹션에 추가됩니다. 사업장 이슈는 "해결 완료"로 일괄 처리할 수 있습니다.
                 </p>
               </div>
 
