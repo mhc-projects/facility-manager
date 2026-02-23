@@ -3,14 +3,30 @@
 import { useState, useEffect } from 'react'
 import { RecurringIssue, BusinessIssue, AgendaItem } from '@/types/meeting-minutes'
 import RecurringIssueCard from './RecurringIssueCard'
-import { AlertCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { AlertCircle, RefreshCw, ChevronDown, ChevronUp, Calendar } from 'lucide-react'
+
+interface GroupedIssues {
+  meeting_id: string
+  meeting_title: string
+  meeting_date: string
+  days_elapsed: number
+  issues: RecurringIssue[]
+}
 
 interface RecurringIssuesPanelProps {
-  onAddIssue: (issue: BusinessIssue) => void // 사업장 이슈를 추가하는 콜백
-  onAddAgendaItem?: (item: AgendaItem) => void // 미완료 안건을 안건 섹션에 추가하는 콜백
-  addedIssueIds?: string[] // 이미 추가된 이슈 ID 목록 (businessIssues)
-  addedAgendaIds?: string[] // 이미 추가된 안건 ID 목록 (agenda)
+  onAddIssue: (issue: BusinessIssue) => void
+  onAddAgendaItem?: (item: AgendaItem) => void
+  addedIssueIds?: string[]
+  addedAgendaIds?: string[]
   className?: string
+}
+
+function getDaysElapsedLabel(days: number): string {
+  if (days === 0) return '오늘'
+  if (days === 1) return '1일 전'
+  if (days < 7) return `${days}일 전`
+  if (days < 30) return `${Math.floor(days / 7)}주 전`
+  return `${Math.floor(days / 30)}개월 전`
 }
 
 export default function RecurringIssuesPanel({
@@ -20,24 +36,31 @@ export default function RecurringIssuesPanel({
   addedAgendaIds = [],
   className = ''
 }: RecurringIssuesPanelProps) {
-  const [issues, setIssues] = useState<RecurringIssue[]>([])
+  const [groups, setGroups] = useState<GroupedIssues[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isExpanded, setIsExpanded] = useState(true)
+  const [isPanelExpanded, setIsPanelExpanded] = useState(true)
+  // 각 그룹의 접기/펼치기 상태: meeting_id → boolean (true = 펼침)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
-  // 이미 추가된 이슈/안건을 필터링
-  const filteredIssues = issues.filter(issue => {
-    if (issue.issue_type === 'agenda_item') return !addedAgendaIds.includes(issue.id)
-    return !addedIssueIds.includes(issue.id)
-  })
+  // 추가된 이슈를 필터링한 그룹 목록
+  const filteredGroups = groups
+    .map(group => ({
+      ...group,
+      issues: group.issues.filter(issue => {
+        if (issue.issue_type === 'agenda_item') return !addedAgendaIds.includes(issue.id)
+        return !addedIssueIds.includes(issue.id)
+      })
+    }))
+    .filter(group => group.issues.length > 0)
 
-  // 미해결 이슈 조회
+  const totalCount = filteredGroups.reduce((sum, g) => sum + g.issues.length, 0)
+
   const fetchRecurringIssues = async () => {
     setLoading(true)
     setError(null)
-
     try {
-      const response = await fetch('/api/meeting-minutes/recurring-issues?limit=20')
+      const response = await fetch('/api/meeting-minutes/recurring-issues?limit=100')
       const data = await response.json()
 
       if (!response.ok) {
@@ -45,7 +68,15 @@ export default function RecurringIssuesPanel({
       }
 
       if (data.success) {
-        setIssues(data.data.recurring_issues || [])
+        const fetchedGroups: GroupedIssues[] = data.data.grouped_issues || []
+        setGroups(fetchedGroups)
+
+        // 첫 번째(가장 최근) 그룹만 펼쳐두기
+        const initialExpanded: Record<string, boolean> = {}
+        fetchedGroups.forEach((g, idx) => {
+          initialExpanded[g.meeting_id] = idx === 0
+        })
+        setExpandedGroups(initialExpanded)
       } else {
         throw new Error(data.error || '이슈 조회에 실패했습니다.')
       }
@@ -57,18 +88,19 @@ export default function RecurringIssuesPanel({
     }
   }
 
-  // 초기 로딩
   useEffect(() => {
     fetchRecurringIssues()
   }, [])
 
-  // 이슈 가져오기 핸들러
+  const toggleGroup = (meetingId: string) => {
+    setExpandedGroups(prev => ({ ...prev, [meetingId]: !prev[meetingId] }))
+  }
+
   const handleAddToMeeting = (issue: RecurringIssue) => {
     if (issue.issue_type === 'agenda_item' && onAddAgendaItem) {
-      // 안건 타입: AgendaItem으로 변환하여 안건 섹션에 추가
       const agendaItem: AgendaItem = {
-        id: issue.id, // 원본 ID 유지 (필터링에 사용)
-        title: issue.issue_description.split(' — ')[0], // "제목 — 설명" 형태에서 제목만 추출
+        id: issue.id,
+        title: issue.issue_description.split(' — ')[0],
         description: issue.issue_description.includes(' — ')
           ? issue.issue_description.split(' — ').slice(1).join(' — ')
           : '',
@@ -83,9 +115,8 @@ export default function RecurringIssuesPanel({
       onAddAgendaItem(agendaItem)
       alert(`"${issue.issue_description.split(' — ')[0]}" 안건이 안건 섹션에 추가되었습니다.`)
     } else {
-      // 사업장 이슈 타입: BusinessIssue로 변환하여 사업장별 이슈에 추가
       const businessIssue: BusinessIssue = {
-        id: crypto.randomUUID(), // 새 ID 생성 (원본과 충돌 방지)
+        id: crypto.randomUUID(),
         business_id: issue.business_id,
         business_name: issue.business_name,
         issue_description: issue.issue_description,
@@ -101,13 +132,11 @@ export default function RecurringIssuesPanel({
     }
   }
 
-  // 이슈 완료 처리 핸들러
   const handleMarkComplete = async (issue: RecurringIssue) => {
     const confirmed = confirm(
       `"${issue.business_name}" 이슈를 완료 처리하시겠습니까?\n\n` +
       `모든 회의록에서 동일한 이슈가 완료로 표시됩니다.`
     )
-
     if (!confirmed) return
 
     try {
@@ -120,7 +149,6 @@ export default function RecurringIssuesPanel({
           issue_content: issue.issue_description
         })
       })
-
       const data = await response.json()
 
       if (!response.ok) {
@@ -129,7 +157,6 @@ export default function RecurringIssuesPanel({
 
       if (data.success) {
         alert(`${data.data.updated_count}개의 회의록에서 이슈가 완료 처리되었습니다.`)
-        // 목록 새로고침
         await fetchRecurringIssues()
       } else {
         throw new Error(data.error || '완료 처리에 실패했습니다.')
@@ -140,36 +167,30 @@ export default function RecurringIssuesPanel({
     }
   }
 
-  // 이슈가 없으면 렌더링하지 않음 (접기/펼치기 상태와 무관)
-  if (filteredIssues.length === 0) {
+  if (!loading && filteredGroups.length === 0) {
     return null
   }
 
   return (
     <div className={`border border-blue-200 rounded-lg bg-blue-50 ${className}`}>
-      {/* 헤더 - 항상 표시 */}
+      {/* 패널 헤더 */}
       <div
-        className="flex items-center justify-between p-2 bg-blue-100 cursor-pointer hover:bg-blue-200 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between p-2 bg-blue-100 cursor-pointer hover:bg-blue-200 transition-colors rounded-t-lg"
+        onClick={() => setIsPanelExpanded(!isPanelExpanded)}
       >
         <div className="flex items-center gap-1.5">
           <AlertCircle className="w-4 h-4 text-blue-600" />
-          <h3 className="text-sm font-semibold text-blue-900">
-            미해결 반복 이슈
-          </h3>
-          {filteredIssues.length > 0 && (
+          <h3 className="text-sm font-semibold text-blue-900">미해결 반복 이슈</h3>
+          {totalCount > 0 && (
             <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-medium rounded-full">
-              {filteredIssues.length}
+              {totalCount}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1">
-          {isExpanded && (
+          {isPanelExpanded && (
             <button
-              onClick={(e) => {
-                e.stopPropagation() // 헤더 클릭 이벤트 전파 방지
-                fetchRecurringIssues()
-              }}
+              onClick={(e) => { e.stopPropagation(); fetchRecurringIssues() }}
               disabled={loading}
               className="p-1 text-blue-600 hover:bg-blue-300 rounded transition-colors disabled:opacity-50"
               title="새로고침"
@@ -178,25 +199,18 @@ export default function RecurringIssuesPanel({
             </button>
           )}
           <button
-            onClick={(e) => {
-              e.stopPropagation() // 헤더 클릭 이벤트 전파 방지
-              setIsExpanded(!isExpanded)
-            }}
+            onClick={(e) => { e.stopPropagation(); setIsPanelExpanded(!isPanelExpanded) }}
             className="p-1 text-blue-600 hover:bg-blue-300 rounded transition-colors"
-            title={isExpanded ? '접기' : '펼치기'}
+            title={isPanelExpanded ? '접기' : '펼치기'}
           >
-            {isExpanded ? (
-              <ChevronUp className="w-3 h-3" />
-            ) : (
-              <ChevronDown className="w-3 h-3" />
-            )}
+            {isPanelExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
         </div>
       </div>
 
-      {/* 내용 */}
-      {isExpanded && (
-        <div className="p-2">
+      {/* 패널 내용 */}
+      {isPanelExpanded && (
+        <div className="p-2 space-y-2">
           {loading ? (
             <div className="flex items-center justify-center py-4">
               <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
@@ -207,33 +221,61 @@ export default function RecurringIssuesPanel({
               <AlertCircle className="w-4 h-4 mr-1.5" />
               <span className="text-xs">{error}</span>
             </div>
-          ) : filteredIssues.length === 0 ? (
-            <div className="text-center py-4 text-gray-500">
-              <p className="text-xs">미해결 반복 이슈가 없습니다.</p>
-              <p className="text-[10px] mt-0.5">모든 이슈가 해결되었습니다! 🎉</p>
-            </div>
           ) : (
             <>
               {/* 안내 메시지 */}
-              <div className="mb-2 p-2 bg-blue-100 border border-blue-300 rounded">
+              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
                 <p className="text-xs text-blue-900 leading-snug">
                   💡 <strong>이전 정기회의에서 미해결된 사업장 이슈 및 100% 미달 안건</strong>입니다.
                   <br />
-                  "이슈 가져오기"를 클릭하면 현재 회의록의 사업장별 이슈 섹션에 추가됩니다. 사업장 이슈는 "해결 완료"로 일괄 처리할 수 있습니다.
+                  "이슈 가져오기"를 클릭하면 현재 회의록의 사업장별 이슈 섹션에 추가됩니다.
                 </p>
               </div>
 
-              {/* 이슈 카드 그리드 */}
-              <div className="grid gap-2 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {filteredIssues.map((issue) => (
-                  <RecurringIssueCard
-                    key={issue.id}
-                    issue={issue}
-                    onAddToMeeting={handleAddToMeeting}
-                    onMarkComplete={handleMarkComplete}
-                  />
-                ))}
-              </div>
+              {/* 회의록별 그룹 */}
+              {filteredGroups.map((group) => {
+                const isGroupExpanded = expandedGroups[group.meeting_id] ?? false
+                return (
+                  <div key={group.meeting_id} className="border border-blue-200 rounded-lg overflow-hidden">
+                    {/* 그룹 헤더 */}
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-blue-50 transition-colors text-left"
+                      onClick={() => toggleGroup(group.meeting_id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                        <span className="text-xs font-semibold text-gray-800">{group.meeting_title}</span>
+                        <span className="text-[10px] text-gray-500">
+                          • {getDaysElapsedLabel(group.days_elapsed)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded-full">
+                          {group.issues.length}건
+                        </span>
+                        {isGroupExpanded
+                          ? <ChevronUp className="w-3 h-3 text-gray-400" />
+                          : <ChevronDown className="w-3 h-3 text-gray-400" />
+                        }
+                      </div>
+                    </button>
+
+                    {/* 그룹 이슈 목록 */}
+                    {isGroupExpanded && (
+                      <div className="p-2 bg-gray-50 grid gap-2 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                        {group.issues.map((issue) => (
+                          <RecurringIssueCard
+                            key={issue.id}
+                            issue={issue}
+                            onAddToMeeting={handleAddToMeeting}
+                            onMarkComplete={handleMarkComplete}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </>
           )}
         </div>

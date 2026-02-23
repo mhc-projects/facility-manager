@@ -577,6 +577,18 @@ function BusinessIssueCard({ issue, meetingId, onToggle }: BusinessIssueCardProp
       })
       const result = await response.json()
       if (result.success) {
+        // 완료로 표시하는 경우 모든 정기회의에서 동일 이슈 일괄 완료 처리
+        if (newValue) {
+          await fetch('/api/meeting-minutes/business-issues/complete', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              issue_id: issue.id,
+              business_id: issue.business_id,
+              issue_content: issue.issue_description
+            })
+          })
+        }
         onToggle(issue.id, newValue)
       } else {
         alert('상태 변경에 실패했습니다.')

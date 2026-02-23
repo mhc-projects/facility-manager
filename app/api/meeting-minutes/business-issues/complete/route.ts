@@ -82,9 +82,9 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { issue_id, business_id, issue_content } = body
 
-    if (!issue_id || !business_id || !issue_content) {
+    if (!issue_id) {
       return NextResponse.json(
-        { success: false, error: 'issue_id, business_id, issue_content는 필수입니다.' },
+        { success: false, error: 'issue_id는 필수입니다.' },
         { status: 400 }
       )
     }

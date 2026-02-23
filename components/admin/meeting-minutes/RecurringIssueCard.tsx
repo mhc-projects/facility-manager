@@ -1,7 +1,7 @@
 'use client'
 
 import { RecurringIssue } from '@/types/meeting-minutes'
-import { Clock, Building2, User, Calendar, ClipboardList, BarChart2 } from 'lucide-react'
+import { Clock, Building2, User, ClipboardList, BarChart2 } from 'lucide-react'
 
 interface RecurringIssueCardProps {
   issue: RecurringIssue
@@ -87,15 +87,6 @@ export default function RecurringIssueCard({
         <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${colorClass}`}>
           <Clock className="w-3 h-3" />
           <span>{daysLabel}</span>
-        </div>
-      </div>
-
-      {/* 원본 회의 정보 */}
-      <div className="flex items-start gap-1.5 mb-2">
-        <Calendar className="w-3 h-3 text-gray-400 mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-[10px] text-gray-600">출처:</p>
-          <p className="text-xs font-medium text-gray-900">{issue.original_meeting_title}</p>
         </div>
       </div>
 

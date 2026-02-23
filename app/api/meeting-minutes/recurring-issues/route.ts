@@ -186,17 +186,40 @@ export async function GET(request: NextRequest) {
     }
     const uniqueIssues = Array.from(deduped.values())
 
-    // days_elapsed 기준으로 오래된 순서로 정렬
-    uniqueIssues.sort((a, b) => b.days_elapsed - a.days_elapsed)
+    // 회의록별로 그룹핑
+    const groupMap = new Map<string, {
+      meeting_id: string
+      meeting_title: string
+      meeting_date: string
+      days_elapsed: number
+      issues: any[]
+    }>()
 
-    // 페이지네이션 적용
-    const paginatedIssues = uniqueIssues.slice(offset, offset + limit)
+    for (const issue of uniqueIssues) {
+      const key = issue.original_meeting_id
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          meeting_id: issue.original_meeting_id,
+          meeting_title: issue.original_meeting_title,
+          meeting_date: issue.original_meeting_date,
+          days_elapsed: issue.days_elapsed,
+          issues: []
+        })
+      }
+      groupMap.get(key)!.issues.push(issue)
+    }
+
+    // 오래된 회의록 순으로 정렬 (days_elapsed 내림차순)
+    const groupedIssues = Array.from(groupMap.values())
+      .sort((a, b) => b.days_elapsed - a.days_elapsed)
+
+    const totalCount = uniqueIssues.length
 
     return NextResponse.json({
       success: true,
       data: {
-        recurring_issues: paginatedIssues,
-        total_count: uniqueIssues.length,
+        grouped_issues: groupedIssues,
+        total_count: totalCount,
         limit,
         offset
       }
