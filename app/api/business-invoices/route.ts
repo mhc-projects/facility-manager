@@ -50,20 +50,20 @@ export async function GET(request: NextRequest) {
     let totalReceivables = 0;
     let invoicesData: any = {};
 
-    // business_category 또는 progress_status 사용
-    const rawCategory = business.business_category || business.progress_status;
+    // progress_status(진행구분)를 사용 (business_category는 대기필증 종별이므로 무관)
+    const rawCategory = business.progress_status;
 
     // 진행구분을 보조금/자비로 매핑
     const mapCategoryToInvoiceType = (category: string | null | undefined): '보조금' | '자비' => {
       const normalized = category?.trim() || '';
 
       // 보조금 처리
-      if (normalized === '보조금' || normalized === '보조금 동시진행') {
+      if (normalized === '보조금' || normalized === '보조금 동시진행' || normalized === '보조금 추가승인') {
         return '보조금';
       }
 
-      // 자비 처리: 자비, 대리점, AS
-      if (normalized === '자비' || normalized === '대리점' || normalized === 'AS') {
+      // 자비 처리: 자비, 대리점, AS, 외주설치
+      if (normalized === '자비' || normalized === '대리점' || normalized === 'AS' || normalized === '외주설치') {
         return '자비';
       }
 

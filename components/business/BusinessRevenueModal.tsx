@@ -1778,7 +1778,7 @@ export default function BusinessRevenueModal({
               </div>
               <InvoiceDisplay
                 businessId={business.id}
-                businessCategory={business.category || business.business_category || business.progress_status}
+                businessCategory={business.progress_status || business.category}
                 additionalCost={business.additional_cost}
               />
             </div>

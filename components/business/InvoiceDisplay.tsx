@@ -14,12 +14,12 @@ const mapCategoryToInvoiceType = (category: string): '보조금' | '자비' => {
   const normalized = category?.trim() || '';
 
   // 보조금 처리
-  if (normalized === '보조금' || normalized === '보조금 동시진행') {
+  if (normalized === '보조금' || normalized === '보조금 동시진행' || normalized === '보조금 추가승인') {
     return '보조금';
   }
 
-  // 자비 처리: 자비, 대리점, AS
-  if (normalized === '자비' || normalized === '대리점' || normalized === 'AS') {
+  // 자비 처리: 자비, 대리점, AS, 외주설치
+  if (normalized === '자비' || normalized === '대리점' || normalized === 'AS' || normalized === '외주설치') {
     return '자비';
   }
 

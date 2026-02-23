@@ -1461,7 +1461,8 @@ export default function BusinessDetailModal({
                     <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">계산서 및 입금 현황</h3>
                   </div>
                   {(() => {
-                    const category = business.business_category || business.진행구분 || (business as any).progress_status;
+                    // progress_status(진행구분)을 우선 사용. business_category는 대기필증 종별이므로 사용하지 않음
+                    const category = (business as any).progress_status || business.진행구분;
                     const mappedCategory = mapCategoryToInvoiceType(category);
 
                     return (
