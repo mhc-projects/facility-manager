@@ -21,6 +21,15 @@ interface AttachedFile {
 }
 
 /**
+ * 대한민국 공휴일 타입
+ */
+interface Holiday {
+  date: string;   // YYYY-MM-DD
+  name: string;   // 공휴일명
+  isHoliday: boolean;
+}
+
+/**
  * 캘린더 이벤트 데이터 타입
  */
 interface CalendarEvent {
@@ -77,6 +86,9 @@ export default function CalendarBoard() {
   const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   const [allEventsLoaded, setAllEventsLoaded] = useState(false);
   const [allEventsLoading, setAllEventsLoading] = useState(false);
+
+  // 공휴일 상태
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   // 스크롤 요청 추적용 ref
   const scrollToBottomRef = React.useRef(false);
@@ -172,6 +184,28 @@ export default function CalendarBoard() {
 
   useEffect(() => {
     fetchEvents();
+  }, [currentDate]);
+
+  /**
+   * 공휴일 데이터 조회 (월 변경 시)
+   */
+  const fetchHolidays = async (date: Date) => {
+    try {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const response = await fetch(`/api/holidays?year=${year}&month=${month}`);
+      const result = await response.json();
+      if (result.success) {
+        setHolidays(result.data || []);
+      }
+    } catch (err) {
+      // 공휴일 로드 실패는 조용히 처리 (캘린더 동작에 영향 없음)
+      console.warn('[공휴일] 로드 실패:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHolidays(currentDate);
   }, [currentDate]);
 
   /**
@@ -600,6 +634,17 @@ export default function CalendarBoard() {
   };
 
   /**
+   * 공휴일을 날짜별로 인덱싱 (O(1) 조회)
+   */
+  const holidaysByDate = useMemo(() => {
+    const map = new Map<string, Holiday>();
+    holidays.forEach(holiday => {
+      map.set(holiday.date, holiday);
+    });
+    return map;
+  }, [holidays]);
+
+  /**
    * 캘린더 날짜 배열 생성 (메모이제이션)
    * currentDate가 변경될 때만 재계산
    */
@@ -823,6 +868,7 @@ export default function CalendarBoard() {
             const isCurrentMonth = day.getMonth() === currentDate.getMonth();
             const isToday = dateString === today;
             const dayEvents = getEventsForDate(day);
+            const holiday = holidaysByDate.get(dateString);
 
             // 기간 이벤트 우선 정렬 (기간 이벤트를 먼저 표시)
             const sortedDayEvents = [...dayEvents].sort((a, b) => {
@@ -837,19 +883,31 @@ export default function CalendarBoard() {
                 onClick={() => handleDayClick(day)}
                 className={`
                   h-[65px] sm:h-[70px] md:h-[110px] p-0.5 sm:p-1 md:p-2 border rounded cursor-pointer flex flex-col touch-manipulation
-                  ${isCurrentMonth ? 'bg-white hover:bg-gray-50' : 'bg-gray-50 hover:bg-gray-100'}
+                  ${isCurrentMonth
+                    ? holiday ? 'bg-red-50 hover:bg-red-100' : 'bg-white hover:bg-gray-50'
+                    : 'bg-gray-50 hover:bg-gray-100'}
                   ${isToday ? 'ring-2 ring-purple-500' : ''}
                   transition-colors
                 `}
               >
                 <div className={`text-[10px] sm:text-xs md:text-sm font-medium mb-0.5 flex-shrink-0 ${
                   !isCurrentMonth ? 'text-gray-400' :
-                  index % 7 === 0 ? 'text-red-600' :
+                  holiday || index % 7 === 0 ? 'text-red-600' :
                   index % 7 === 6 ? 'text-blue-600' :
                   'text-gray-900'
                 }`}>
                   {day.getDate()}
                 </div>
+                {/* 공휴일명 (데스크톱) */}
+                {holiday && isCurrentMonth && (
+                  <div className="hidden md:block text-[9px] leading-tight text-red-500 font-medium truncate mb-0.5" title={holiday.name}>
+                    {holiday.name}
+                  </div>
+                )}
+                {/* 공휴일 도트 (모바일) */}
+                {holiday && isCurrentMonth && (
+                  <div className="md:hidden w-1 h-1 rounded-full bg-red-400 mb-0.5" title={holiday.name} />
+                )}
 
                 {/* 데스크톱: 이벤트 박스 표시 */}
                 <div className="hidden md:flex flex-1 flex-col overflow-hidden space-y-0">
@@ -976,6 +1034,10 @@ export default function CalendarBoard() {
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4 mt-2 sm:mt-3 md:mt-4 text-[10px] sm:text-xs text-gray-600">
           {/* 데스크톱: 박스 표시 */}
           <div className="hidden md:flex items-center gap-1">
+            <div className="w-3 h-3 bg-red-50 rounded border border-red-200"></div>
+            <span className="text-red-600">공휴일</span>
+          </div>
+          <div className="hidden md:flex items-center gap-1">
             <div className="w-3 h-3 bg-blue-100 rounded"></div>
             <span>할일</span>
           </div>
@@ -993,6 +1055,10 @@ export default function CalendarBoard() {
           </div>
 
           {/* 모바일: 도트 표시 */}
+          <div className="md:hidden flex items-center gap-1">
+            <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+            <span className="text-red-600">공휴일</span>
+          </div>
           <div className="md:hidden flex items-center gap-1">
             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
             <span>할일</span>
