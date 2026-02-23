@@ -904,9 +904,11 @@ export default function CalendarBoard() {
                     {holiday.name}
                   </div>
                 )}
-                {/* 공휴일 도트 (모바일) */}
+                {/* 공휴일명 배지 (모바일) */}
                 {holiday && isCurrentMonth && (
-                  <div className="md:hidden w-1 h-1 rounded-full bg-red-400 mb-0.5" title={holiday.name} />
+                  <div className="md:hidden text-[8px] leading-tight text-red-500 font-medium truncate mb-0.5 w-full">
+                    {holiday.name}
+                  </div>
                 )}
 
                 {/* 데스크톱: 이벤트 박스 표시 */}
@@ -1056,7 +1058,7 @@ export default function CalendarBoard() {
 
           {/* 모바일: 도트 표시 */}
           <div className="md:hidden flex items-center gap-1">
-            <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+            <span className="text-[8px] text-red-500 font-medium">공휴일명</span>
             <span className="text-red-600">공휴일</span>
           </div>
           <div className="md:hidden flex items-center gap-1">
