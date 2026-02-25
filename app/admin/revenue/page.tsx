@@ -528,7 +528,7 @@ function RevenueDashboard() {
       if (surveyCostData.success) {
         const surveyCosts: Record<string, number> = {};
         surveyCostData.data.forEach((item: any) => {
-          surveyCosts[item.survey_type] = item.base_cost;
+          surveyCosts[item.survey_type] = Number(item.base_cost) || 0;
         });
         setSurveyCostSettings(surveyCosts);
       }
@@ -1130,7 +1130,8 @@ function RevenueDashboard() {
         business.address && business.address.toLowerCase().includes(region.toLowerCase())
       );
       const categoryMatch = selectedCategories.length === 0 || selectedCategories.includes(business.progress_status || '');
-      const yearMatch = selectedProjectYears.length === 0 || selectedProjectYears.includes(String(business.project_year || ''));
+      const installYear = business.installation_date ? String(new Date(business.installation_date).getFullYear()) : '';
+      const yearMatch = selectedProjectYears.length === 0 || (installYear && selectedProjectYears.includes(installYear));
 
       // 월별 필터 (설치일 기준, 다중 선택)
       let monthMatch = true;
@@ -1333,7 +1334,10 @@ function RevenueDashboard() {
 
   const salesOffices = [...new Set(businesses.map(b => b.sales_office).filter(Boolean))];
   const regions = [...new Set(businesses.map(b => b.address ? b.address.split(' ').slice(0, 2).join(' ') : '').filter(Boolean))];
-  const projectYears = [...new Set(businesses.map(b => b.project_year).filter(Boolean))].sort((a, b) => b - a);
+  const projectYears = [...new Set(businesses
+    .map(b => b.installation_date ? new Date(b.installation_date).getFullYear() : null)
+    .filter(Boolean) as number[]
+  )].sort((a, b) => b - a);
 
   // 정렬 함수
   const handleSort = (field: string) => {
@@ -1765,7 +1769,7 @@ function RevenueDashboard() {
                 <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600">사업장 평균 이익률</p>
                 <p className="text-[9px] sm:text-[10px] md:text-xs font-bold text-indigo-600">
                   {sortedBusinesses.length > 0 ?
-                    ((sortedBusinesses.reduce((sum, b) => sum + (b.total_revenue > 0 ? ((b.net_profit || 0) / b.total_revenue * 100) : 0), 0) / sortedBusinesses.length)).toFixed(1)
+                    (() => { const bizWithRevenue = sortedBusinesses.filter(b => b.total_revenue > 0); return bizWithRevenue.length > 0 ? (bizWithRevenue.reduce((sum, b) => sum + ((b.net_profit || 0) / b.total_revenue * 100), 0) / bizWithRevenue.length).toFixed(1) : '0'; })()
                     : '0'}%
                 </p>
               </div>
@@ -1964,7 +1968,7 @@ function RevenueDashboard() {
               <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4 w-full sm:w-auto">
                 <div className="text-[10px] sm:text-xs md:text-sm text-gray-500">
                   사업장 평균 이익률: {sortedBusinesses.length > 0 ?
-                    ((sortedBusinesses.reduce((sum, b) => sum + (b.total_revenue > 0 ? ((b.net_profit || 0) / b.total_revenue * 100) : 0), 0) / sortedBusinesses.length)).toFixed(1)
+                    (() => { const bizWithRevenue = sortedBusinesses.filter(b => b.total_revenue > 0); return bizWithRevenue.length > 0 ? (bizWithRevenue.reduce((sum, b) => sum + ((b.net_profit || 0) / b.total_revenue * 100), 0) / bizWithRevenue.length).toFixed(1) : '0'; })()
                     : '0'}%
                 </div>
                 {/* 재계산 버튼 - 권한 레벨 4 (슈퍼관리자) 전용 */}

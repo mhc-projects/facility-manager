@@ -7,7 +7,7 @@
  * - 매출 = (환경부 고시가 × 수량) + 추가공사비 - 협의사항
  * - 매입 = 제조사별 원가 × 수량
  * - 총이익 = 매출 - 매입
- * - 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비
+ * - 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비 - AS비용 - 커스텀비용
  */
 
 export interface BusinessInfo {
@@ -169,17 +169,17 @@ export function calculateBusinessRevenue(
 
   // 견적실사 비용 (견적실사일이 있는 경우에만)
   if (business.estimate_survey_date) {
-    totalSurveyCosts += surveyCostSettings.estimate || surveyCostSettings['estimate'] || 100000;
+    totalSurveyCosts += Number(surveyCostSettings.estimate ?? surveyCostSettings['estimate']) || 100000;
   }
 
   // 착공전실사 비용 (착공전실사일이 있는 경우에만)
   if (business.pre_construction_survey_date) {
-    totalSurveyCosts += surveyCostSettings.pre_construction || surveyCostSettings['pre_construction'] || 150000;
+    totalSurveyCosts += Number(surveyCostSettings.pre_construction ?? surveyCostSettings['pre_construction']) || 150000;
   }
 
   // 준공실사 비용 (준공실사일이 있는 경우에만)
   if (business.completion_survey_date) {
-    totalSurveyCosts += surveyCostSettings.completion || surveyCostSettings['completion'] || 200000;
+    totalSurveyCosts += Number(surveyCostSettings.completion ?? surveyCostSettings['completion']) || 200000;
   }
 
   // 실사비용 조정은 DB 조회가 필요하므로 클라이언트에서는 생략
@@ -195,12 +195,30 @@ export function calculateBusinessRevenue(
   // 총이익 = 매출 - 제조사 매입
   const grossProfit = (Number(businessRevenue) || 0) - totalCost;
 
-  // 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비
+  // AS비용
+  const asCost = Number(business.as_cost) || 0;
+
+  // 커스텀 추가비용
+  let customCosts = 0;
+  if (business.custom_additional_costs) {
+    try {
+      const costs = typeof business.custom_additional_costs === 'string'
+        ? JSON.parse(business.custom_additional_costs)
+        : business.custom_additional_costs;
+      if (Array.isArray(costs)) {
+        customCosts = costs.reduce((t: number, c: any) => t + (Number(c.amount) || 0), 0);
+      }
+    } catch (e) {}
+  }
+
+  // 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비 - AS비용 - 커스텀비용
   const netProfit = grossProfit -
                     (Number(salesCommission) || 0) -
                     (Number(totalSurveyCosts) || 0) -
                     (Number(totalInstallationCosts) || 0) -
-                    (Number(installationExtraCost) || 0);
+                    (Number(installationExtraCost) || 0) -
+                    asCost -
+                    customCosts;
 
   return {
     total_revenue: Math.round(businessRevenue),

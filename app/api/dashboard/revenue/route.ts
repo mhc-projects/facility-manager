@@ -137,82 +137,14 @@ export async function GET(request: NextRequest) {
     // 기본 설치비 맵 생성
     const installationCostMap: Record<string, number> = {};
     installationCostData?.forEach(item => {
-      installationCostMap[item.equipment_type] = item.base_installation_cost;
+      installationCostMap[item.equipment_type] = Number(item.base_installation_cost) || 0; // 🔧 PostgreSQL DECIMAL 타입이 문자열로 반환되므로 Number()로 변환
     });
 
     console.log('📊 [Dashboard Revenue API] Installation costs loaded:', Object.keys(installationCostMap).length, 'equipment types');
 
-    // 사업장 ID 목록 추출 (이후 조회에 사용)
-    const businessIds = filteredBusinesses.map(b => b.id).filter(Boolean) || [];
-
-    // 2-3. 사업장별 추가 설치비 조회 (매출관리와 동일)
-    const businessAdditionalCostsMap: Record<string, Record<string, number>> = {};
-
-    if (businessIds.length > 0) {
-      const additionalCosts = await queryAll(
-        `SELECT * FROM business_additional_installation_cost
-         WHERE business_id = ANY($1)
-         AND is_active = true
-         AND applied_date <= $2`,
-        [businessIds, calcDate]
-      );
-
-      // 사업장별 추가 설치비 맵 생성
-      additionalCosts?.forEach(item => {
-        if (!businessAdditionalCostsMap[item.business_id]) {
-          businessAdditionalCostsMap[item.business_id] = {};
-        }
-        const key = item.equipment_type || 'all';
-        if (!businessAdditionalCostsMap[item.business_id][key]) {
-          businessAdditionalCostsMap[item.business_id][key] = 0;
-        }
-        businessAdditionalCostsMap[item.business_id][key] += Number(item.additional_cost) || 0;
-      });
-
-      console.log('📊 [Dashboard Revenue API] Business additional costs loaded for', Object.keys(businessAdditionalCostsMap).length, 'businesses');
-    }
-
-    // 2-4. 실사비용 조정 일괄 조회 (N+1 쿼리 문제 해결)
-    const surveyAdjustmentsMap: Record<string, number> = {};
-
-    if (businessIds.length > 0) {
-      // 직접 PostgreSQL 연결 사용
-      const allSurveyAdjustments = await queryAll(
-        'SELECT * FROM survey_cost_adjustments WHERE business_id = ANY($1) AND applied_date <= $2',
-        [businessIds, calcDate]
-      );
-
-      // 사업장별 실사비용 조정 맵 생성
-      allSurveyAdjustments?.forEach(adj => {
-        if (!surveyAdjustmentsMap[adj.business_id]) {
-          surveyAdjustmentsMap[adj.business_id] = 0;
-        }
-        surveyAdjustmentsMap[adj.business_id] += adj.adjustment_amount;
-      });
-
-      console.log('📊 [Dashboard Revenue API] Survey adjustments loaded for', Object.keys(surveyAdjustmentsMap).length, 'businesses');
-    }
-
-    // 2-5. 영업비용 조정 조회 (매출관리와 동일)
-    const operatingCostAdjustmentsMap: Record<string, any> = {};
-
-    if (businessIds.length > 0) {
-      const operatingAdjustments = await queryAll(
-        `SELECT * FROM operating_cost_adjustments WHERE business_id = ANY($1)`,
-        [businessIds]
-      );
-
-      operatingAdjustments?.forEach(adj => {
-        operatingCostAdjustmentsMap[adj.business_id] = {
-          adjustment_type: adj.adjustment_type,
-          adjustment_amount: Number(adj.adjustment_amount) || 0
-        };
-      });
-
-      console.log('📊 [Dashboard Revenue API] Operating cost adjustments loaded for', Object.keys(operatingCostAdjustmentsMap).length, 'businesses');
-    }
-
-    // ✅ 하이브리드 로직 제거 - 매출관리와 동일하게 실시간 계산만 사용
+    // ✅ 매출관리 페이지와 동일한 계산 방식 사용
+    // 실사비용 조정(survey_cost_adjustments), 영업비용 조정(operating_cost_adjustments)은
+    // 매출관리(revenue-calculator.ts)에서 적용하지 않으므로 대시보드에서도 미적용
 
     // 3. 집계 단위 결정 및 데이터 맵 초기화
     let aggregationLevel: AggregationLevel = 'monthly'; // 기본값
@@ -293,7 +225,7 @@ export async function GET(request: NextRequest) {
     );
 
     const surveyCostMap = surveyCosts?.reduce((acc, item) => {
-      acc[item.survey_type] = item.base_cost;
+      acc[item.survey_type] = Number(item.base_cost) || 0;
       return acc;
     }, {} as Record<string, number>) || {
       estimate: 100000,
@@ -320,6 +252,10 @@ export async function GET(request: NextRequest) {
     // 통계 집계 변수 초기화
     let totalSalesCommissionSum = 0;
     let totalInstallationCostSum = 0;
+    let totalCostSum = 0;
+    let totalOtherCostsSum = 0;
+    let totalProfitRateSum = 0;
+    let profitRateCount = 0;
 
     for (const business of filteredBusinesses) {
       if (!business.installation_date) continue;
@@ -392,124 +328,94 @@ export async function GET(request: NextRequest) {
 
         manufacturerCost += costPrice * quantity;
 
-        // 기본 설치비 (equipment_installation_cost 테이블 - 매출 관리와 동일)
-        // 🔧 게이트웨이(1,2), 게이트웨이(3,4) 모두 gateway 기본설치비 사용
-        let baseInstallCost = installationCostMap[field] || 0;
-        if ((field === 'gateway_1_2' || field === 'gateway_3_4') && baseInstallCost === 0) {
-          baseInstallCost = installationCostMap['gateway'] || 0;
-        }
+        // 기본 설치비 (equipment_installation_cost 테이블 - revenue-calculator.ts와 동일)
+        const installCost = installationCostMap[field] || 0;
 
-        // 사업장별 추가 설치비 (매출관리와 동일)
-        const additionalCostMap = businessAdditionalCostsMap[business.id] || {};
-        const commonAdditionalCost = additionalCostMap['all'] || 0;
-        const equipmentAdditionalCost = additionalCostMap[field] || 0;
-        const unitInstallation = baseInstallCost + commonAdditionalCost + equipmentAdditionalCost;
-
-        totalInstallationCosts += unitInstallation * quantity;
+        totalInstallationCosts += installCost * quantity;
         totalEquipmentCount += quantity;
       });
 
-      // 추가공사비 및 협의사항 (매출관리와 동일: 나중에 최종 매출에 반영)
+      // 추가공사비 및 협의사항 반영 (매출관리와 동일: revenue-calculator.ts 기준)
       const additionalCost = Number(business.additional_cost) || 0;
       const negotiationDiscount = Number(business.negotiation) || 0;
 
-      // 영업비용 계산
+      // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항 (revenue-calculator.ts Line 150과 동일)
+      const adjustedRevenue = businessRevenue + additionalCost - negotiationDiscount;
+
+      // 영업비용 계산 기준: 최종 매출 기준 (매출관리와 동일 - revenue-calculator.ts Line 162)
       const salesOffice = business.sales_office || '기본';
       const commissionSettings = salesSettingsMap.get(salesOffice) || defaultCommission;
 
-      let salesCommission = 0;
-      if (commissionSettings.commission_type === 'percentage') {
-        salesCommission = businessRevenue * (commissionSettings.commission_percentage / 100);
-      } else {
-        salesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
-      }
-
-      // 실사비용 계산 (매출 관리와 동일: 실사일이 있는 경우에만 비용 추가)
-      let totalSurveyCosts = 0;
-
-      // 견적실사 비용 (견적실사일이 있는 경우에만)
-      // 직접 PostgreSQL에서는 Date 객체 또는 null로 반환되므로 null 체크만 수행
-      if (business.estimate_survey_date) {
-        totalSurveyCosts += surveyCostMap.estimate || 0;
-      }
-
-      // 착공전실사 비용 (착공전실사일이 있는 경우에만)
-      if (business.pre_construction_survey_date) {
-        totalSurveyCosts += surveyCostMap.pre_construction || 0;
-      }
-
-      // 준공실사 비용 (준공실사일이 있는 경우에만)
-      if (business.completion_survey_date) {
-        totalSurveyCosts += surveyCostMap.completion || 0;
-      }
-
-      // 실사비용 조정 (미리 로드된 맵에서 가져오기 - N+1 쿼리 해결)
-      const totalAdjustments = surveyAdjustmentsMap[business.id] || 0;
-
-      // 실사비 조정 (매출관리와 동일: survey_fee_adjustment 필드)
-      const surveyFeeAdjustment = Math.round(Number(business.survey_fee_adjustment) || 0);
-
-      totalSurveyCosts += totalAdjustments + surveyFeeAdjustment;
-
-      // 추가설치비 (설치팀 요청 추가 비용)
-      const installationExtraCost = Number(business.installation_extra_cost) || 0;
-
-      // 영업비용 계산 기준: 기본 매출 - 협의사항 (추가공사비 제외) - 매출관리와 동일
-      const commissionBaseRevenue = businessRevenue - negotiationDiscount;
-
-      // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항
-      const adjustedRevenue = businessRevenue + additionalCost - negotiationDiscount;
-
-      // 영업비용 재계산 (commissionBaseRevenue 기준)
       let adjustedSalesCommission = 0;
       if (commissionSettings.commission_type === 'percentage') {
-        adjustedSalesCommission = commissionBaseRevenue * (commissionSettings.commission_percentage / 100);
+        adjustedSalesCommission = adjustedRevenue * (commissionSettings.commission_percentage / 100);
       } else {
         adjustedSalesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
       }
 
-      // 영업비용 조정 (매출관리와 동일: operating_cost_adjustments)
-      const operatingAdjustment = operatingCostAdjustmentsMap[business.id];
-      if (operatingAdjustment) {
-        if (operatingAdjustment.adjustment_type === 'add') {
-          adjustedSalesCommission += operatingAdjustment.adjustment_amount;
-        } else {
-          adjustedSalesCommission -= operatingAdjustment.adjustment_amount;
-        }
+      // 실사비용 계산 (매출관리와 동일: 실사일이 있는 경우에만 비용 추가, DB 조정값 미적용)
+      // revenue-calculator.ts Line 167-183과 동일
+      let totalSurveyCosts = 0;
+
+      if (business.estimate_survey_date) {
+        totalSurveyCosts += surveyCostMap.estimate || 0;
       }
+
+      if (business.pre_construction_survey_date) {
+        totalSurveyCosts += surveyCostMap.pre_construction || 0;
+      }
+
+      if (business.completion_survey_date) {
+        totalSurveyCosts += surveyCostMap.completion || 0;
+      }
+
+      // 추가설치비 (설치팀 요청 추가 비용)
+      const installationExtraCost = Number(business.installation_extra_cost) || 0;
 
       // 매출 관리와 동일한 계산 방식
       const totalCost = Number(manufacturerCost) || 0;
 
-      // 총이익 = 최종 매출 - 제조사 매입
+      // 총이익 = 최종 매출 - 제조사 매입 (revenue-calculator.ts Line 196과 동일)
       const grossProfit = Math.round(adjustedRevenue - totalCost);
 
-      // 순이익 = 총이익 - 추가설치비 - 조정된 영업비용 - 실사비용 - 설치비용 (매출관리와 100% 동일)
-      // 모든 값을 명시적으로 Number로 변환하여 NaN 방지
+      // AS비용 및 커스텀 추가비용
+      const asCost = Number(business.as_cost) || 0;
+      let customCosts = 0;
+      if (business.custom_additional_costs) {
+        try {
+          const costs = typeof business.custom_additional_costs === 'string'
+            ? JSON.parse(business.custom_additional_costs)
+            : business.custom_additional_costs;
+          if (Array.isArray(costs)) {
+            customCosts = costs.reduce((t: number, c: any) => t + (Number(c.amount) || 0), 0);
+          }
+        } catch (e) {}
+      }
+
+      // 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비 - AS비용 - 커스텀비용
       const netProfit = Math.round(
         grossProfit -
-        (Number(installationExtraCost) || 0) -
         (Number(adjustedSalesCommission) || 0) -
         (Number(totalSurveyCosts) || 0) -
-        (Number(totalInstallationCosts) || 0)
+        (Number(totalInstallationCosts) || 0) -
+        (Number(installationExtraCost) || 0) -
+        asCost -
+        customCosts
       );
-
-      // 디버깅: 계산 결과
-      if (aggregationKey === '2025-07' && aggregationData.get(aggregationKey).count < 3) {
-        console.log(`[DEBUG] 💰 ${business.business_name}:`);
-        console.log(`[DEBUG]   - 최종 매출: ${adjustedRevenue.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 매입금액: ${totalCost.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 총이익: ${grossProfit.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 영업비용(조정): ${adjustedSalesCommission.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 실사비용: ${totalSurveyCosts.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 설치비용: ${totalInstallationCosts.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 추가설치비: ${installationExtraCost.toLocaleString()}원`);
-        console.log(`[DEBUG]   - 순이익: ${netProfit.toLocaleString()}원`);
-      }
 
       // 통계 집계
       totalSalesCommissionSum += adjustedSalesCommission;
       totalInstallationCostSum += (totalInstallationCosts || 0) + (installationExtraCost || 0);
+      totalCostSum += totalCost;
+
+      // 기타비용 집계 (실사비용 + AS비용 + 커스텀비용)
+      totalOtherCostsSum += (Number(totalSurveyCosts) || 0) + asCost + customCosts;
+
+      // 사업장 평균 이익률 집계 (매출이 있는 사업장만)
+      if (adjustedRevenue > 0) {
+        totalProfitRateSum += (netProfit / adjustedRevenue) * 100;
+        profitRateCount += 1;
+      }
 
       // 월별 데이터 업데이트
       const current = aggregationData.get(aggregationKey);
@@ -591,6 +497,8 @@ export async function GET(request: NextRequest) {
       avgProfitRate: Math.round(avgProfitRate * 100) / 100,
       totalRevenue,
       totalProfit,
+      totalCost: Math.round(totalCostSum),
+      totalOtherCosts: Math.round(totalOtherCostsSum),
       totalSalesCommission: Math.round(totalSalesCommissionSum),
       totalInstallationCost: Math.round(totalInstallationCostSum)
     });
@@ -603,6 +511,11 @@ export async function GET(request: NextRequest) {
         avgProfitRate: Math.round(avgProfitRate * 100) / 100,
         totalRevenue,
         totalProfit,
+        totalCost: Math.round(totalCostSum),
+        totalOtherCosts: Math.round(totalOtherCostsSum),
+        avgProfitRateByBiz: profitRateCount > 0
+          ? Math.round((totalProfitRateSum / profitRateCount) * 10) / 10
+          : 0,
         totalSalesCommission: Math.round(totalSalesCommissionSum),
         totalInstallationCost: Math.round(totalInstallationCostSum)
       }
@@ -620,6 +533,9 @@ export async function GET(request: NextRequest) {
           avgProfitRate: 0,
           totalRevenue: 0,
           totalProfit: 0,
+          totalCost: 0,
+          totalOtherCosts: 0,
+          avgProfitRateByBiz: 0,
           totalSalesCommission: 0,
           totalInstallationCost: 0
         }

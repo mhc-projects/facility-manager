@@ -212,30 +212,34 @@ export default function RevenueChart({ filters }: RevenueChartProps) {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-          <div className="bg-blue-50 p-3 rounded">
-            <p className="text-xs text-gray-600">평균 순이익</p>
-            <p className="text-base md:text-lg font-bold">{summary.avgProfit.toLocaleString()}원</p>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">
           <div className="bg-green-50 p-3 rounded">
-            <p className="text-xs text-gray-600">평균 이익률</p>
-            <p className="text-base md:text-lg font-bold">{summary.avgProfitRate}%</p>
+            <p className="text-xs text-gray-600">총 매출금액</p>
+            <p className="text-sm font-bold text-green-600">{summary.totalRevenue.toLocaleString()}원</p>
           </div>
-          <div className="bg-purple-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 매출</p>
-            <p className="text-base md:text-lg font-bold">{summary.totalRevenue.toLocaleString()}원</p>
-          </div>
-          <div className="bg-indigo-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 순이익</p>
-            <p className="text-base md:text-lg font-bold">{summary.totalProfit.toLocaleString()}원</p>
+          <div className="bg-teal-50 p-3 rounded">
+            <p className="text-xs text-gray-600">총 매입금액</p>
+            <p className="text-sm font-bold text-teal-600">{(summary.totalCost || 0).toLocaleString()}원</p>
           </div>
           <div className="bg-orange-50 p-3 rounded">
             <p className="text-xs text-gray-600">총 영업비용</p>
-            <p className="text-base md:text-lg font-bold">{(summary.totalSalesCommission || 0).toLocaleString()}원</p>
+            <p className="text-sm font-bold text-orange-600">{(summary.totalSalesCommission || 0).toLocaleString()}원</p>
           </div>
-          <div className="bg-rose-50 p-3 rounded">
+          <div className="bg-blue-50 p-3 rounded">
             <p className="text-xs text-gray-600">총 설치비용</p>
-            <p className="text-base md:text-lg font-bold">{(summary.totalInstallationCost || 0).toLocaleString()}원</p>
+            <p className="text-sm font-bold text-blue-600">{(summary.totalInstallationCost || 0).toLocaleString()}원</p>
+          </div>
+          <div className="bg-amber-50 p-3 rounded">
+            <p className="text-xs text-gray-600">기타 비용</p>
+            <p className="text-sm font-bold text-amber-600">{(summary.totalOtherCosts || 0).toLocaleString()}원</p>
+          </div>
+          <div className="bg-purple-50 p-3 rounded">
+            <p className="text-xs text-gray-600">총 이익금액</p>
+            <p className="text-sm font-bold text-purple-600">{summary.totalProfit.toLocaleString()}원</p>
+          </div>
+          <div className="bg-indigo-50 p-3 rounded">
+            <p className="text-xs text-gray-600">사업장 평균 이익률</p>
+            <p className="text-sm font-bold text-indigo-600">{summary.avgProfitRateByBiz || 0}%</p>
           </div>
         </div>
       )}

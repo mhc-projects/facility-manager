@@ -59,6 +59,11 @@ export interface RevenueSummary {
   avgProfitRate: number;        // 평균 이익률
   totalRevenue: number;         // 총 매출
   totalProfit: number;          // 총 순이익
+  totalCost: number;            // 총 매입금액
+  totalOtherCosts: number;      // 기타 비용 (실사비+AS비+커스텀비)
+  avgProfitRateByBiz: number;   // 사업장 평균 이익률
+  totalSalesCommission?: number;   // 총 영업비용
+  totalInstallationCost?: number;  // 총 설치비용
 }
 
 export interface ReceivableSummary {
