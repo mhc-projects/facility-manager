@@ -181,24 +181,35 @@ async function protectAPIRoute(request: NextRequest): Promise<NextResponse | nul
 
 // 페이지 인증 및 권한 확인
 async function checkPageAuthentication(request: NextRequest): Promise<NextResponse | null> {
-  // 🔧 httpOnly 쿠키에서 session_token 확인 (auth_token에서 변경됨)
+  // 1. httpOnly 쿠키에서 session_token 확인 (주요 인증)
   const token = request.cookies.get('session_token')?.value;
+  // 2. auth_ready 쿠키 확인 (session_token이 없을 때 보조 신호)
+  //    동일한 로그인 API에서 함께 설정되므로 신뢰 가능
+  const authReady = request.cookies.get('auth_ready')?.value;
 
   // 🔍 디버깅: 쿠키 정보 로깅
   console.log(`🔍 [MIDDLEWARE] 페이지 인증 체크 - Path: ${request.nextUrl.pathname}`, {
-    hasCookie: !!token,
+    hasSessionToken: !!token,
+    hasAuthReady: !!authReady,
     cookieNames: Array.from(request.cookies.getAll().map(c => c.name)),
     userAgent: request.headers.get('user-agent')?.substring(0, 50)
   });
 
-  if (!token) {
-    // 로그인 페이지로 리다이렉트
+  if (!token && !authReady) {
+    // 두 쿠키 모두 없을 때만 로그인 페이지로 리다이렉트
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
 
     console.warn(`[SECURITY] Unauthenticated access attempt to ${request.nextUrl.pathname} from ${request.ip}`);
 
     return NextResponse.redirect(loginUrl);
+  }
+
+  // auth_ready는 있지만 session_token이 없는 경우: 통과시킴
+  // 클라이언트 측 AuthContext가 localStorage 토큰으로 인증 처리
+  if (!token && authReady) {
+    console.log(`✅ [MIDDLEWARE] auth_ready 쿠키로 통과 허용 - Path: ${request.nextUrl.pathname}`);
+    return null;
   }
 
   // ✅ Edge Runtime 호환: JWT 검증을 간소화

@@ -113,12 +113,16 @@ class ApiClient {
     const response = await fetch(`${this.baseURL}/api${endpoint}`, config);
 
     if (response.status === 401) {
-      TokenManager.removeTokens();
-      if (typeof window !== 'undefined') {
-        // 이미 로그인 페이지에 있으면 리다이렉트하지 않음 (무한 루프 방지)
-        const isLoginPage = window.location.pathname === '/login';
-        if (!isLoginPage) {
-          window.location.href = '/login';
+      // /api/auth/verify의 401은 정상적인 응답 (토큰 없거나 만료) - 토큰 삭제 안 함
+      // 다른 보호된 API의 401만 토큰 삭제 및 리다이렉트 처리
+      const isVerifyEndpoint = endpoint === '/auth/verify';
+      if (!isVerifyEndpoint) {
+        TokenManager.removeTokens();
+        if (typeof window !== 'undefined') {
+          const isLoginPage = window.location.pathname === '/login';
+          if (!isLoginPage) {
+            window.location.href = '/login';
+          }
         }
       }
       throw new Error('Unauthorized');
