@@ -202,18 +202,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSocialAccounts(null);
       }
     } catch (error: any) {
-      // Rate limit 오류인 경우 로그만 남기고 계속 진행
-      if (error?.message?.includes('429')) {
-        console.warn('⚠️ [AUTH-CONTEXT] 인증 API Rate Limit - 공개 페이지는 정상 작동');
+      const isUnauthorized = error?.message === 'Unauthorized';
+      const isRateLimit = error?.message?.includes('429');
+      const isNetworkError = error instanceof TypeError;
+
+      if (isRateLimit) {
+        console.warn('⚠️ [AUTH-CONTEXT] 인증 API Rate Limit - 토큰 유지');
+        // Rate limit는 일시적 오류 - 토큰 삭제하지 않고 로딩만 완료
+      } else if (isNetworkError) {
+        console.warn('⚠️ [AUTH-CONTEXT] 네트워크 오류 - 토큰 유지');
+        // 네트워크 오류는 일시적 - 토큰 삭제하지 않음
+      } else if (isUnauthorized) {
+        // 실제 인증 실패 (401) - 토큰 삭제
+        console.warn('⚠️ [AUTH-CONTEXT] 토큰 무효 (401) - 로그아웃 처리');
+        TokenManager.removeToken();
+        setUser(null);
+        setPermissions(null);
+        setSocialAccounts(null);
       } else {
         console.error('❌ [AUTH-CONTEXT] 인증 확인 오류:', error);
+        // 알 수 없는 오류도 토큰은 유지 (서버 오류일 수 있음)
       }
-
-      // 인증 실패 시 토큰 제거 및 로그아웃 상태로 설정
-      TokenManager.removeToken();
-      setUser(null);
-      setPermissions(null);
-      setSocialAccounts(null);
     } finally {
       setLoading(false);
     }

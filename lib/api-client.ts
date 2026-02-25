@@ -115,7 +115,11 @@ class ApiClient {
     if (response.status === 401) {
       TokenManager.removeTokens();
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        // 이미 로그인 페이지에 있으면 리다이렉트하지 않음 (무한 루프 방지)
+        const isLoginPage = window.location.pathname === '/login';
+        if (!isLoginPage) {
+          window.location.href = '/login';
+        }
       }
       throw new Error('Unauthorized');
     }
