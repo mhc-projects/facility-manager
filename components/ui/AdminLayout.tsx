@@ -219,6 +219,8 @@ export default function AdminLayout({ children, title, description, actions }: A
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState('')
   const [mounted, setMounted] = useState(false)
+  // 초기 인증 확인이 완료될 때까지 리다이렉트를 지연시키기 위한 플래그
+  const [authChecked, setAuthChecked] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
@@ -241,15 +243,23 @@ export default function AdminLayout({ children, title, description, actions }: A
     return () => clearInterval(interval)
   }, [])
 
-  // 인증 체크 및 리다이렉트
+  // authLoading이 false가 된 순간을 기록 (한번 false가 되면 authChecked = true 유지)
   useEffect(() => {
-    if (mounted && !authLoading && !user) {
+    if (!authLoading) {
+      setAuthChecked(true)
+    }
+  }, [authLoading])
+
+  // 인증 체크 및 리다이렉트 - authChecked가 true인 상태에서만 리다이렉트
+  useEffect(() => {
+    if (mounted && authChecked && !authLoading && !user) {
       console.log('🔒 [ADMIN-LAYOUT] 인증되지 않은 접근 - 로그인 페이지로 리다이렉트')
       router.push('/login?redirect=' + encodeURIComponent(pathname || '/admin'))
     }
-  }, [mounted, authLoading, user, router, pathname])
+  }, [mounted, authChecked, authLoading, user, router, pathname])
 
-  if (!mounted || authLoading) {
+  // 마운트 전이거나 인증 로딩 중이면 로딩 화면 표시
+  if (!mounted || authLoading || !authChecked) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -260,7 +270,7 @@ export default function AdminLayout({ children, title, description, actions }: A
     )
   }
 
-  // 사용자가 인증되지 않았으면 로딩 화면 유지 (리다이렉트가 진행 중)
+  // 인증 확인이 완료됐는데 user가 없으면 리다이렉트 대기 화면
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">

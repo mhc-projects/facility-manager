@@ -61,7 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 토큰을 직접 저장
       TokenManager.setToken(token);
 
-      // 사용자 정보 설정
+      // 사용자 정보 설정 - setLoading(false)보다 먼저 user를 설정해야
+      // AdminLayout의 (!authLoading && !user) 조건이 잘못 발동하지 않음
       setUser(userData.user);
       setPermissions(userData.permissions);
       setSocialAccounts([]); // 일반 로그인은 소셜 계정 없음
@@ -87,16 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .catch((err) => console.warn('⚠️ [AUTH] Realtime 모듈 로드 실패 (무시):', err.message));
       }, 100);
 
+      // loading은 user 설정 이후에 false로 전환
+      setLoading(false);
       return { success: true };
     } catch (error) {
       console.error('일반 로그인 오류:', error);
       TokenManager.removeToken();
+      setUser(null);
+      setPermissions(null);
+      setLoading(false);
       return {
         success: false,
         error: '일반 로그인 중 오류가 발생했습니다.'
       };
-    } finally {
-      setLoading(false);
     }
   };
 
