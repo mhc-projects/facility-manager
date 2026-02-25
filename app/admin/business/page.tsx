@@ -383,6 +383,7 @@ function BusinessManagementPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [businessToDelete, setBusinessToDelete] = useState<UnifiedBusinessInfo | null>(null)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [isRestoringPhotos, setIsRestoringPhotos] = useState(false)
 
   // 🔒 안전한 연속 삭제를 위한 상태 관리
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set())
@@ -3074,6 +3075,37 @@ function BusinessManagementPage() {
     }
   }
 
+  // 전체교체 후 orphaned 사진 복원
+  const handleRestorePhotos = async () => {
+    if (!confirm('전체교체 이후 연결이 끊어진 사진들을 복원합니다. 계속하시겠습니까?')) return;
+    setIsRestoringPhotos(true);
+    try {
+      const csrfResponse = await fetch('/api/csrf-token');
+      const csrfToken = csrfResponse.headers.get('X-CSRF-Token');
+      const token = TokenManager.getToken();
+      const res = await fetch('/api/admin/restore-photos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ dry_run: false }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ 사진 복원 완료: ${data.data.restored}건\n${data.data.unmatched > 0 ? `⚠️ 매칭 실패: ${data.data.unmatched}건` : ''}`);
+      } else {
+        alert(`❌ 복원 실패: ${data.error || '알 수 없는 오류'}`);
+      }
+    } catch (err) {
+      alert('복원 중 오류가 발생했습니다.');
+      console.error('[RESTORE-PHOTOS]', err);
+    } finally {
+      setIsRestoringPhotos(false);
+    }
+  };
+
   // 엑셀 파일 업로드 처리 (배치 업데이트/생성)
   const handleFileUpload = async (file: File) => {
     try {
@@ -4273,6 +4305,17 @@ function BusinessManagementPage() {
       description="사업장 정보 등록 및 관리 시스템"
       actions={
         <>
+          {/* 전체교체 후 사진 복원 버튼 (권한 4 이상, 데스크탑) */}
+          {userPermission >= 4 && (
+            <button
+              onClick={handleRestorePhotos}
+              disabled={isRestoringPhotos}
+              className="hidden md:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 md:px-4 md:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm lg:text-sm disabled:opacity-50"
+            >
+              {isRestoringPhotos ? '복원 중...' : '사진 복원'}
+            </button>
+          )}
+
           {/* 데스크탑에서는 모든 버튼 표시 */}
           <button
             onClick={() => setIsUploadModalOpen(true)}
