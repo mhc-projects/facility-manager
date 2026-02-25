@@ -222,6 +222,8 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       preview,
       unmatchedSample: unmatched.slice(0, 10).map(u => u.filePath),
       unmatchedBySegment,
+      // 전체 미매칭 목록 (segment + 대표 파일 경로)
+      unmatchedAll: unmatched.map(u => ({ segment: u.segment, filePath: u.filePath })),
     });
   }
 

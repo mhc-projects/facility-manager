@@ -3083,18 +3083,32 @@ function BusinessManagementPage() {
       const csrfResponse = await fetch('/api/csrf-token');
       const csrfToken = csrfResponse.headers.get('X-CSRF-Token');
       const token = TokenManager.getToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      // 1단계: dry_run으로 미매칭 목록 콘솔 출력 (진단용)
+      const dryRes = await fetch('/api/admin/restore-photos', {
+        method: 'POST', headers, body: JSON.stringify({ dry_run: true }),
+      });
+      const dryData = await dryRes.json();
+      if (dryData.success && dryData.data.unmatched > 0) {
+        console.group('⚠️ [RESTORE-PHOTOS] 미매칭 목록 (사업장을 찾지 못한 파일들)');
+        console.log('세그먼트별 건수:', dryData.data.unmatchedBySegment);
+        console.table(dryData.data.unmatchedAll);
+        console.groupEnd();
+      }
+
+      // 2단계: 실제 복원 실행
       const res = await fetch('/api/admin/restore-photos', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ dry_run: false }),
+        method: 'POST', headers, body: JSON.stringify({ dry_run: false }),
       });
       const data = await res.json();
       if (data.success) {
-        alert(`✅ 사진 복원 완료: ${data.data.restored}건\n${data.data.unmatched > 0 ? `⚠️ 매칭 실패: ${data.data.unmatched}건` : ''}`);
+        const unmatchedMsg = data.data.unmatched > 0
+          ? `\n⚠️ 매칭 실패: ${data.data.unmatched}건 (브라우저 콘솔 F12에서 확인)`
+          : '';
+        alert(`✅ 사진 복원 완료: ${data.data.restored}건${unmatchedMsg}`);
       } else {
         alert(`❌ 복원 실패: ${data.error || '알 수 없는 오류'}`);
       }
