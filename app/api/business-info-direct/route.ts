@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { queryAll, queryOne, query as pgQuery } from '@/lib/supabase-direct';
+import { queryAll, queryOne, query as pgQuery, transaction } from '@/lib/supabase-direct';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -23,6 +23,91 @@ function normalizeDateField(value: any): string | null {
     return null;
   }
   return value;
+}
+
+// Business data normalization - used by both batch upload and replaceAll
+function normalizeBusinessData(business: any, normalizedName: string) {
+  return {
+    business_name: normalizedName,
+    local_government: normalizeUTF8(business.local_government || ''),
+    address: normalizeUTF8(business.address || ''),
+    representative_name: normalizeUTF8(business.representative_name || ''),
+    business_registration_number: normalizeUTF8(business.business_registration_number || ''),
+    business_type: normalizeUTF8(business.business_type || ''),
+    business_contact: normalizeUTF8(business.business_contact || ''),
+    manager_name: normalizeUTF8(business.manager_name || ''),
+    manager_contact: normalizeUTF8(business.manager_contact || ''),
+    manager_position: normalizeUTF8(business.manager_position || ''),
+    fax_number: normalizeUTF8(business.fax_number || ''),
+    email: normalizeUTF8(business.email || ''),
+    ph_meter: parseInt(business.ph_meter || '0') || 0,
+    differential_pressure_meter: parseInt(business.differential_pressure_meter || '0') || 0,
+    temperature_meter: parseInt(business.temperature_meter || '0') || 0,
+    discharge_current_meter: parseInt(business.discharge_current_meter || '0') || 0,
+    fan_current_meter: parseInt(business.fan_current_meter || '0') || 0,
+    pump_current_meter: parseInt(business.pump_current_meter || '0') || 0,
+    gateway: parseInt(business.gateway || '0') || 0,
+    gateway_1_2: parseInt(business.gateway_1_2 || '0') || 0,
+    gateway_3_4: parseInt(business.gateway_3_4 || '0') || 0,
+    vpn_wired: parseInt(business.vpn_wired || '0') || 0,
+    vpn_wireless: parseInt(business.vpn_wireless || '0') || 0,
+    multiple_stack: parseInt(business.multiple_stack || '0') || 0,
+    explosion_proof_differential_pressure_meter_domestic: parseInt(business.explosion_proof_differential_pressure_meter_domestic || '0') || 0,
+    explosion_proof_temperature_meter_domestic: parseInt(business.explosion_proof_temperature_meter_domestic || '0') || 0,
+    expansion_device: parseInt(business.expansion_device || '0') || 0,
+    relay_8ch: parseInt(business.relay_8ch || '0') || 0,
+    relay_16ch: parseInt(business.relay_16ch || '0') || 0,
+    main_board_replacement: parseInt(business.main_board_replacement || '0') || 0,
+    business_management_code: parseInt(business.business_management_code || '0') || 0,
+    department: normalizeUTF8(business.department || ''),
+    progress_status: normalizeUTF8(business.progress_status || ''),
+    project_year: business.project_year ? parseInt(business.project_year) : null,
+    installation_team: normalizeUTF8(business.installation_team || ''),
+    business_category: normalizeUTF8(business.business_category || ''),
+    manufacturer: business.manufacturer || null,
+    sales_office: normalizeUTF8(business.sales_office || ''),
+    greenlink_id: normalizeUTF8(business.greenlink_id || ''),
+    greenlink_pw: normalizeUTF8(business.greenlink_pw || ''),
+    additional_cost: business.additional_cost ? parseInt(business.additional_cost) : null,
+    negotiation: normalizeUTF8(business.negotiation || ''),
+    order_manager: normalizeUTF8(business.order_manager || ''),
+    order_request_date: normalizeDateField(business.order_request_date),
+    order_date: normalizeDateField(business.order_date),
+    shipment_date: normalizeDateField(business.shipment_date),
+    installation_date: normalizeDateField(business.installation_date),
+    estimate_survey_manager: normalizeUTF8(business.estimate_survey_manager || ''),
+    estimate_survey_date: normalizeDateField(business.estimate_survey_date),
+    pre_construction_survey_manager: normalizeUTF8(business.pre_construction_survey_manager || ''),
+    pre_construction_survey_date: normalizeDateField(business.pre_construction_survey_date),
+    completion_survey_manager: normalizeUTF8(business.completion_survey_manager || ''),
+    completion_survey_date: normalizeDateField(business.completion_survey_date),
+    invoice_1st_date: normalizeDateField(business.invoice_1st_date),
+    invoice_1st_amount: business.invoice_1st_amount ? parseInt(business.invoice_1st_amount) : null,
+    payment_1st_date: normalizeDateField(business.payment_1st_date),
+    payment_1st_amount: business.payment_1st_amount ? parseInt(business.payment_1st_amount) : null,
+    invoice_2nd_date: normalizeDateField(business.invoice_2nd_date),
+    invoice_2nd_amount: business.invoice_2nd_amount ? parseInt(business.invoice_2nd_amount) : null,
+    payment_2nd_date: normalizeDateField(business.payment_2nd_date),
+    payment_2nd_amount: business.payment_2nd_amount ? parseInt(business.payment_2nd_amount) : null,
+    invoice_additional_date: normalizeDateField(business.invoice_additional_date),
+    payment_additional_date: normalizeDateField(business.payment_additional_date),
+    payment_additional_amount: business.payment_additional_amount ? parseInt(business.payment_additional_amount) : null,
+    invoice_advance_date: normalizeDateField(business.invoice_advance_date),
+    invoice_advance_amount: business.invoice_advance_amount ? parseInt(business.invoice_advance_amount) : null,
+    payment_advance_date: normalizeDateField(business.payment_advance_date),
+    payment_advance_amount: business.payment_advance_amount ? parseInt(business.payment_advance_amount) : null,
+    invoice_balance_date: normalizeDateField(business.invoice_balance_date),
+    invoice_balance_amount: business.invoice_balance_amount ? parseInt(business.invoice_balance_amount) : null,
+    payment_balance_date: normalizeDateField(business.payment_balance_date),
+    payment_balance_amount: business.payment_balance_amount ? parseInt(business.payment_balance_amount) : null,
+    construction_report_submitted_at: normalizeDateField(business.construction_report_submitted_at),
+    greenlink_confirmation_submitted_at: normalizeDateField(business.greenlink_confirmation_submitted_at),
+    attachment_completion_submitted_at: normalizeDateField(business.attachment_completion_submitted_at),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    is_active: true,
+    is_deleted: false
+  };
 }
 
 export async function GET(request: Request) {
@@ -618,6 +703,11 @@ export async function POST(request: Request) {
 
       log('📦 [BATCH-UPLOAD] 시작 -', businessData.businesses.length, '개 사업장 / 모드:', uploadMode);
 
+      // 🔄 전체 교체 모드
+      if (uploadMode === 'replaceAll') {
+        return await executeReplaceAll(businessData.businesses, startTime);
+      }
+
       // 🚀 배치 INSERT 최적화: 대량 데이터를 한 번에 처리
       return await executeBatchUpload(businessData.businesses, uploadMode, startTime);
     }
@@ -795,7 +885,10 @@ async function executeBatchUpload(
   uploadMode: 'overwrite' | 'merge' | 'skip',
   startTime: number
 ) {
-  const BATCH_SIZE = 1000; // PostgreSQL 파라미터 제한 (65,535) 고려
+  // PostgreSQL 파라미터 제한: 65,535개
+  // normalizeBusinessData 필드 수: 79개
+  // 최대 안전 배치: floor(65535 / 79) = 829 → 여유있게 500 사용
+  const BATCH_SIZE = 500;
   const errorDetails: Array<{ business_name: string; error: string }> = [];
 
   let totalCreated = 0;
@@ -815,87 +908,7 @@ async function executeBatchUpload(
           return null;
         }
 
-        return {
-          business_name: normalizedName,
-          local_government: normalizeUTF8(business.local_government || ''),
-          address: normalizeUTF8(business.address || ''),
-          representative_name: normalizeUTF8(business.representative_name || ''),
-          business_registration_number: normalizeUTF8(business.business_registration_number || ''),
-          business_type: normalizeUTF8(business.business_type || ''),
-          business_contact: normalizeUTF8(business.business_contact || ''),
-          manager_name: normalizeUTF8(business.manager_name || ''),
-          manager_contact: normalizeUTF8(business.manager_contact || ''),
-          manager_position: normalizeUTF8(business.manager_position || ''),
-          fax_number: normalizeUTF8(business.fax_number || ''),
-          email: normalizeUTF8(business.email || ''),
-          ph_meter: parseInt(business.ph_meter || '0') || 0,
-          differential_pressure_meter: parseInt(business.differential_pressure_meter || '0') || 0,
-          temperature_meter: parseInt(business.temperature_meter || '0') || 0,
-          discharge_current_meter: parseInt(business.discharge_current_meter || '0') || 0,
-          fan_current_meter: parseInt(business.fan_current_meter || '0') || 0,
-          pump_current_meter: parseInt(business.pump_current_meter || '0') || 0,
-          gateway: parseInt(business.gateway || '0') || 0,
-          gateway_1_2: parseInt(business.gateway_1_2 || '0') || 0,
-          gateway_3_4: parseInt(business.gateway_3_4 || '0') || 0,
-          vpn_wired: parseInt(business.vpn_wired || '0') || 0,
-          vpn_wireless: parseInt(business.vpn_wireless || '0') || 0,
-          multiple_stack: parseInt(business.multiple_stack || '0') || 0,
-          explosion_proof_differential_pressure_meter_domestic: parseInt(business.explosion_proof_differential_pressure_meter_domestic || '0') || 0,
-          explosion_proof_temperature_meter_domestic: parseInt(business.explosion_proof_temperature_meter_domestic || '0') || 0,
-          expansion_device: parseInt(business.expansion_device || '0') || 0,
-          relay_8ch: parseInt(business.relay_8ch || '0') || 0,
-          relay_16ch: parseInt(business.relay_16ch || '0') || 0,
-          main_board_replacement: parseInt(business.main_board_replacement || '0') || 0,
-          business_management_code: parseInt(business.business_management_code || '0') || 0,
-          department: normalizeUTF8(business.department || ''),
-          progress_status: normalizeUTF8(business.progress_status || ''),
-          project_year: business.project_year ? parseInt(business.project_year) : null,
-          installation_team: normalizeUTF8(business.installation_team || ''),
-          business_category: normalizeUTF8(business.business_category || ''),
-          manufacturer: business.manufacturer || null,
-          sales_office: normalizeUTF8(business.sales_office || ''),
-          greenlink_id: normalizeUTF8(business.greenlink_id || ''),
-          greenlink_pw: normalizeUTF8(business.greenlink_pw || ''),
-          additional_cost: business.additional_cost ? parseInt(business.additional_cost) : null,
-          negotiation: normalizeUTF8(business.negotiation || ''),
-          order_manager: normalizeUTF8(business.order_manager || ''),
-          order_request_date: normalizeDateField(business.order_request_date),
-          order_date: normalizeDateField(business.order_date),
-          shipment_date: normalizeDateField(business.shipment_date),
-          installation_date: normalizeDateField(business.installation_date),
-          estimate_survey_manager: normalizeUTF8(business.estimate_survey_manager || ''),
-          estimate_survey_date: normalizeDateField(business.estimate_survey_date),
-          pre_construction_survey_manager: normalizeUTF8(business.pre_construction_survey_manager || ''),
-          pre_construction_survey_date: normalizeDateField(business.pre_construction_survey_date),
-          completion_survey_manager: normalizeUTF8(business.completion_survey_manager || ''),
-          completion_survey_date: normalizeDateField(business.completion_survey_date),
-          invoice_1st_date: normalizeDateField(business.invoice_1st_date),
-          invoice_1st_amount: business.invoice_1st_amount ? parseInt(business.invoice_1st_amount) : null,
-          payment_1st_date: normalizeDateField(business.payment_1st_date),
-          payment_1st_amount: business.payment_1st_amount ? parseInt(business.payment_1st_amount) : null,
-          invoice_2nd_date: normalizeDateField(business.invoice_2nd_date),
-          invoice_2nd_amount: business.invoice_2nd_amount ? parseInt(business.invoice_2nd_amount) : null,
-          payment_2nd_date: normalizeDateField(business.payment_2nd_date),
-          payment_2nd_amount: business.payment_2nd_amount ? parseInt(business.payment_2nd_amount) : null,
-          invoice_additional_date: normalizeDateField(business.invoice_additional_date),
-          payment_additional_date: normalizeDateField(business.payment_additional_date),
-          payment_additional_amount: business.payment_additional_amount ? parseInt(business.payment_additional_amount) : null,
-          invoice_advance_date: normalizeDateField(business.invoice_advance_date),
-          invoice_advance_amount: business.invoice_advance_amount ? parseInt(business.invoice_advance_amount) : null,
-          payment_advance_date: normalizeDateField(business.payment_advance_date),
-          payment_advance_amount: business.payment_advance_amount ? parseInt(business.payment_advance_amount) : null,
-          invoice_balance_date: normalizeDateField(business.invoice_balance_date),
-          invoice_balance_amount: business.invoice_balance_amount ? parseInt(business.invoice_balance_amount) : null,
-          payment_balance_date: normalizeDateField(business.payment_balance_date),
-          payment_balance_amount: business.payment_balance_amount ? parseInt(business.payment_balance_amount) : null,
-          construction_report_submitted_at: normalizeDateField(business.construction_report_submitted_at),
-          greenlink_confirmation_submitted_at: normalizeDateField(business.greenlink_confirmation_submitted_at),
-          attachment_completion_submitted_at: normalizeDateField(business.attachment_completion_submitted_at),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          is_active: true,
-          is_deleted: false
-        };
+        return normalizeBusinessData(business, normalizedName);
       } catch (error: any) {
         totalErrors++;
         errorDetails.push({
@@ -1069,6 +1082,245 @@ async function executeSingleBatch(
   }
 }
 
+
+/**
+ * 🔄 전체 교체(replaceAll) 모드
+ * 1. 기존 데이터 JSON 백업 → backup_snapshots 저장
+ * 2. 트랜잭션: revenue/survey NULL 처리 → DELETE → INSERT → air_permit 재연결
+ */
+async function executeReplaceAll(businesses: any[], startTime: number) {
+  if (!businesses || businesses.length === 0) {
+    return NextResponse.json({ success: false, error: '업로드할 사업장 데이터가 없습니다' }, { status: 400 });
+  }
+
+  // ─── Step 1: 백업 생성 (트랜잭션 외부) ─────────────────────────────────
+  log('💾 [REPLACE-ALL] Step1: 백업 생성 시작');
+  let snapshotId: string;
+  try {
+    const backupRows = await queryAll(`
+      SELECT
+        bi.business_name,
+        json_agg(
+          json_build_object(
+            'business_type',              api.business_type,
+            'annual_pollutant_emission',  api.annual_pollutant_emission,
+            'first_report_date',          api.first_report_date,
+            'operation_start_date',       api.operation_start_date,
+            'additional_info',            api.additional_info,
+            'outlets', (
+              SELECT json_agg(
+                json_build_object(
+                  'outlet_number',  do2.outlet_number,
+                  'outlet_name',    do2.outlet_name,
+                  'additional_info', do2.additional_info,
+                  'facilities', (
+                    SELECT json_agg(json_build_object(
+                      'facility_name', df.facility_name,
+                      'capacity',      df.capacity,
+                      'quantity',      df.quantity
+                    )) FROM discharge_facilities df WHERE df.outlet_id = do2.id
+                  ),
+                  'prevention_facilities', (
+                    SELECT json_agg(json_build_object(
+                      'facility_name', pf.facility_name,
+                      'capacity',      pf.capacity,
+                      'quantity',      pf.quantity
+                    )) FROM prevention_facilities pf WHERE pf.outlet_id = do2.id
+                  )
+                )
+              ) FROM discharge_outlets do2 WHERE do2.air_permit_id = api.id
+            )
+          )
+        ) FILTER (WHERE api.id IS NOT NULL) AS air_permits
+      FROM business_info bi
+      LEFT JOIN air_permit_info api ON api.business_id = bi.id
+      WHERE bi.is_deleted = false
+      GROUP BY bi.business_name
+    `);
+
+    const snapshotResult = await pgQuery(
+      `INSERT INTO backup_snapshots (snapshot_type, data, record_count)
+       VALUES ('business_replace_all', $1, $2)
+       RETURNING id`,
+      [JSON.stringify({ businesses: backupRows }), backupRows.length]
+    );
+    snapshotId = snapshotResult.rows[0].id;
+    log('✅ [REPLACE-ALL] 백업 완료 - snapshotId:', snapshotId, '/ 사업장 수:', backupRows.length);
+  } catch (err) {
+    logError('❌ [REPLACE-ALL] 백업 실패:', err);
+    return NextResponse.json({ success: false, error: '백업 생성에 실패했습니다. 업로드를 중단합니다.' }, { status: 500 });
+  }
+
+  // ─── Step 2: 데이터 정규화 ──────────────────────────────────────────────
+  const normalizedBusinesses = businesses
+    .map((b: any) => {
+      const name = normalizeUTF8(b.business_name || '');
+      if (!name) return null;
+      return normalizeBusinessData(b, name);
+    })
+    .filter(Boolean);
+
+  if (normalizedBusinesses.length === 0) {
+    return NextResponse.json({ success: false, error: '유효한 사업장 데이터가 없습니다' }, { status: 400 });
+  }
+
+  // ─── Step 3: 순차 처리 (트랜잭션 없이, 백업으로 롤백 가능) ─────────────
+  log('🔄 [REPLACE-ALL] Step3: 데이터 교체 시작');
+  let created = 0;
+  let airPermitRestored = 0;
+  const airPermitNotRestored: string[] = [];
+  const replaceStartTime = Date.now();
+
+  try {
+    const backupData = await queryOne(
+      `SELECT data FROM backup_snapshots WHERE id = $1`, [snapshotId]
+    );
+    const backupBusinesses: any[] = backupData?.data?.businesses || [];
+
+    // 3a-1. NOT NULL no-action FK: 먼저 삭제
+    await pgQuery(`DELETE FROM estimate_history
+      WHERE business_id IN (SELECT id FROM business_info WHERE is_deleted = false)`);
+    await pgQuery(`DELETE FROM operating_cost_adjustments
+      WHERE business_id IN (SELECT id FROM business_info WHERE is_deleted = false)`);
+
+    // 3a-2. nullable no-action FK: NULL 처리
+    await pgQuery(`UPDATE revenue_calculations SET business_id = NULL
+      WHERE business_id IN (SELECT id FROM business_info WHERE is_deleted = false)`);
+    await pgQuery(`UPDATE survey_cost_adjustments SET business_id = NULL
+      WHERE business_id IN (SELECT id FROM business_info WHERE is_deleted = false)`);
+    await pgQuery(`UPDATE calendar_events SET business_id = NULL
+      WHERE business_id IN (SELECT id FROM business_info WHERE is_deleted = false)`);
+
+    // 3b. 기존 사업장 전체 삭제
+    await pgQuery(`DELETE FROM business_info WHERE is_deleted = false`);
+    log('🗑️ [REPLACE-ALL] 기존 사업장 삭제 완료');
+
+    // 3c. 새 사업장 INSERT (배치)
+    // 배치 크기: 필드수(~80) × 50 = 4000 파라미터로 안전하게 유지
+    const validBusinesses = normalizedBusinesses.filter((b): b is NonNullable<typeof b> => b !== null);
+    const BATCH = 50;
+    for (let i = 0; i < validBusinesses.length; i += BATCH) {
+      const batchSlice = validBusinesses.slice(i, i + BATCH);
+      const fields = Object.keys(batchSlice[0]);
+      const fieldCount = fields.length;
+      const valuePlaceholders = batchSlice.map((_, idx) => {
+        const start = idx * fieldCount;
+        return `(${Array.from({ length: fieldCount }, (_, j) => `$${start + j + 1}`).join(', ')})`;
+      }).join(', ');
+      const values = batchSlice.flatMap(b => fields.map(f => (b as any)[f]));
+      await pgQuery(
+        `INSERT INTO business_info (${fields.join(', ')}) VALUES ${valuePlaceholders}
+         ON CONFLICT (business_name) DO NOTHING`,
+        values
+      );
+      created += batchSlice.length;
+      log(`📝 [REPLACE-ALL] INSERT ${Math.min(i + BATCH, validBusinesses.length)}/${validBusinesses.length}`);
+    }
+
+    // 3d. 새 사업장 UUID 맵 생성 (business_name → new_id)
+    const newBusinessRows = await pgQuery(
+      `SELECT id, business_name FROM business_info WHERE is_deleted = false`
+    );
+    const nameToId: Record<string, string> = {};
+    for (const row of newBusinessRows.rows) {
+      nameToId[row.business_name] = row.id;
+    }
+
+    // 3e. 대기필증 재연결
+    for (const backupBiz of backupBusinesses) {
+      const newBizId = nameToId[backupBiz.business_name];
+      if (!newBizId) {
+        if (backupBiz.air_permits && backupBiz.air_permits.length > 0) {
+          airPermitNotRestored.push(backupBiz.business_name);
+        }
+        continue;
+      }
+      if (!backupBiz.air_permits || backupBiz.air_permits.length === 0) continue;
+
+      for (const permit of backupBiz.air_permits) {
+        const permitResult = await pgQuery(
+          `INSERT INTO air_permit_info (
+            business_id, business_type, annual_pollutant_emission,
+            first_report_date, operation_start_date, additional_info,
+            is_active, is_deleted
+          ) VALUES ($1,$2,$3,$4,$5,$6, true, false)
+          RETURNING id`,
+          [
+            newBizId,
+            permit.business_type || null,
+            permit.annual_pollutant_emission || null,
+            permit.first_report_date || null,
+            permit.operation_start_date || null,
+            JSON.stringify(permit.additional_info || {}),
+          ]
+        );
+        const newPermitId = permitResult.rows[0].id;
+        airPermitRestored++;
+
+        if (!permit.outlets) continue;
+        for (const outlet of permit.outlets) {
+          const outletResult = await pgQuery(
+            `INSERT INTO discharge_outlets (
+              air_permit_id, outlet_number, outlet_name, additional_info
+            ) VALUES ($1,$2,$3,$4)
+            RETURNING id`,
+            [
+              newPermitId,
+              outlet.outlet_number,
+              outlet.outlet_name || null,
+              JSON.stringify(outlet.additional_info || {}),
+            ]
+          );
+          const newOutletId = outletResult.rows[0].id;
+
+          if (outlet.facilities) {
+            for (const f of outlet.facilities) {
+              await pgQuery(
+                `INSERT INTO discharge_facilities (outlet_id, facility_name, capacity, quantity)
+                 VALUES ($1,$2,$3,$4)`,
+                [newOutletId, f.facility_name, f.capacity || null, f.quantity || 1]
+              );
+            }
+          }
+          if (outlet.prevention_facilities) {
+            for (const pf of outlet.prevention_facilities) {
+              await pgQuery(
+                `INSERT INTO prevention_facilities (outlet_id, facility_name, capacity, quantity)
+                 VALUES ($1,$2,$3,$4)`,
+                [newOutletId, pf.facility_name, pf.capacity || null, pf.quantity || 1]
+              );
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logError('❌ [REPLACE-ALL] 실패:', err);
+    return NextResponse.json({
+      success: false,
+      error: `교체 중 오류가 발생했습니다. 백업 ID로 복원하세요: ${snapshotId}`,
+      snapshotId
+    }, { status: 500 });
+  }
+
+  const elapsed = Date.now() - replaceStartTime;
+  log(`✅ [REPLACE-ALL] 완료 - ${created}개 사업장, 대기필증 복원: ${airPermitRestored}건, 소요: ${elapsed}ms`);
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      snapshotId,
+      created,
+      airPermitRestored,
+      airPermitNotRestored,
+      elapsedMs: elapsed,
+      message: `${created}개 사업장 교체 완료. 대기필증 ${airPermitRestored}건 재연결.` +
+        (airPermitNotRestored.length > 0
+          ? ` ⚠️ 대기필증 유실 ${airPermitNotRestored.length}건: ${airPermitNotRestored.join(', ')}`
+          : '')
+    }
+  });
+}
 
 export async function DELETE(request: Request) {
   try {

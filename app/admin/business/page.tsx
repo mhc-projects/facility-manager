@@ -824,7 +824,7 @@ function BusinessManagementPage() {
   
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadMode, setUploadMode] = useState<'overwrite' | 'merge' | 'skip'>('overwrite')
+  const [uploadMode, setUploadMode] = useState<'overwrite' | 'merge' | 'skip' | 'replaceAll'>('overwrite')
   const [uploadResults, setUploadResults] = useState<{
     total: number
     success: number
@@ -833,6 +833,9 @@ function BusinessManagementPage() {
     created?: number
     updated?: number
     skipped?: number
+    snapshotId?: string
+    airPermitRestored?: number
+    airPermitNotRestored?: string[]
   } | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   
@@ -3089,51 +3092,79 @@ function BusinessManagementPage() {
 
       // 데이터 파싱 진행률 20%
       setUploadProgress(20)
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[]
-      
-      if (jsonData.length === 0) {
+      const rawJsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null }) as any[]
+
+      if (rawJsonData.length === 0) {
         alert('파일에 데이터가 없습니다.')
         return
       }
-      
+
+      // 헤더 키의 앞뒤 공백 제거 (예: ' 1차계산서금액 ' → '1차계산서금액')
+      const jsonData = rawJsonData.map((row: any) => {
+        const trimmed: any = {}
+        for (const key of Object.keys(row)) {
+          trimmed[key.trim()] = row[key]
+        }
+        return trimmed
+      })
+
       console.log('📊 엑셀 데이터 샘플:', jsonData.slice(0, 2))
 
       // 엑셀 날짜 변환 함수 (Excel serial date → YYYY-MM-DD)
+      // 주의: 모든 경로에서 로컬 날짜 기준으로 YYYY-MM-DD 문자열만 반환 (UTC 변환 없음)
       const parseExcelDate = (value: any): string | null => {
         if (!value || value === '-' || value === '') return null
 
-        // 이미 YYYY-MM-DD 형식인 경우 (정확한 날짜 형식만)
+        // 이미 YYYY-MM-DD 형식인 경우
         if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
           return value
         }
 
-        // ISO 8601 형식에서 시간 부분 제거 (YYYY-MM-DDTHH:mm:ss.sssZ → YYYY-MM-DD)
+        // ISO 8601 형식에서 날짜 부분만 추출 (YYYY-MM-DDTHH:mm:ss.sssZ → YYYY-MM-DD)
+        // new Date()로 변환하지 않고 직접 슬라이싱 → 시간대 오류 없음
         if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
-          return value.split('T')[0]
+          return value.substring(0, 10)
         }
 
-        // 엑셀 시리얼 날짜 (숫자)인 경우
+        // 엑셀 시리얼 날짜 (숫자)인 경우 - UTC 기준으로 계산하면 시간대 오류 없음
         if (typeof value === 'number') {
-          // Excel epoch: 1900-01-01 (단, Excel의 1900년 윤년 버그 고려)
-          const excelEpoch = new Date(1899, 11, 30) // 1899-12-30
-          const date = new Date(excelEpoch.getTime() + value * 86400000)
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
+          // Excel epoch: 1899-12-30 기준 serial → UTC 날짜
+          const MS_PER_DAY = 86400000
+          const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30) // 1899-12-30 UTC
+          const utcMs = EXCEL_EPOCH_MS + value * MS_PER_DAY
+          const date = new Date(utcMs)
+          const year = date.getUTCFullYear()
+          const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(date.getUTCDate()).padStart(2, '0')
           return `${year}-${month}-${day}`
         }
 
-        // 다른 문자열 형식 시도
+        // YY.MM.DD / YYYY.MM.DD / YYYY/MM/DD 등 다양한 구분자 형식
         if (typeof value === 'string') {
-          const date = new Date(value)
-          if (!isNaN(date.getTime())) {
-            const year = date.getFullYear()
-            const month = String(date.getMonth() + 1).padStart(2, '0')
-            const day = String(date.getDate()).padStart(2, '0')
-            return `${year}-${month}-${day}`
+          const normalized = value.replace(/[./]/g, '-').trim()
+          if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+            return normalized
+          }
+          // 두 자리 연도 처리 (YY-MM-DD → 20YY-MM-DD)
+          if (/^\d{2}-\d{2}-\d{2}$/.test(normalized)) {
+            return `20${normalized}`
           }
         }
 
+        return null
+      }
+
+      // 엑셀 금액 파싱 함수 (콤마 포함 문자열, 숫자 모두 처리)
+      const parseExcelAmount = (value: any): number | null => {
+        if (value === null || value === undefined || value === '' || value === '-') return null
+        if (typeof value === 'number') return Math.round(value)
+        if (typeof value === 'string') {
+          // 콤마 제거 후 파싱 ("1,500,000" → 1500000)
+          const cleaned = value.replace(/,/g, '').trim()
+          if (cleaned === '' || cleaned === '-') return null
+          const parsed = parseInt(cleaned, 10)
+          return isNaN(parsed) ? null : parsed
+        }
         return null
       }
 
@@ -3285,32 +3316,32 @@ function BusinessManagementPage() {
 
         // 계산서 및 입금 관리 (보조금 사업장)
         invoice_1st_date: parseExcelDate(row['1차계산서일']),
-        invoice_1st_amount: row['1차계산서금액'] ? parseInt(row['1차계산서금액']) : null,
+        invoice_1st_amount: parseExcelAmount(row['1차계산서금액']),
         payment_1st_date: parseExcelDate(row['1차입금일']),
-        payment_1st_amount: row['1차입금액'] ? parseInt(row['1차입금액']) : null,
+        payment_1st_amount: parseExcelAmount(row['1차입금액']),
         invoice_2nd_date: parseExcelDate(row['2차계산서일']),
-        invoice_2nd_amount: row['2차계산서금액'] ? parseInt(row['2차계산서금액']) : null,
+        invoice_2nd_amount: parseExcelAmount(row['2차계산서금액']),
         payment_2nd_date: parseExcelDate(row['2차입금일']),
-        payment_2nd_amount: row['2차입금액'] ? parseInt(row['2차입금액']) : null,
+        payment_2nd_amount: parseExcelAmount(row['2차입금액']),
         invoice_additional_date: parseExcelDate(row['추가계산서일']),
         payment_additional_date: parseExcelDate(row['추가입금일']),
-        payment_additional_amount: row['추가입금액'] ? parseInt(row['추가입금액']) : null,
+        payment_additional_amount: parseExcelAmount(row['추가입금액']),
 
         // 계산서 및 입금 관리 (자비 사업장)
         invoice_advance_date: parseExcelDate(row['선금계산서일']),
-        invoice_advance_amount: row['선금계산서금액'] ? parseInt(row['선금계산서금액']) : null,
+        invoice_advance_amount: parseExcelAmount(row['선금계산서금액']),
         payment_advance_date: parseExcelDate(row['선금입금일']),
-        payment_advance_amount: row['선금입금액'] ? parseInt(row['선금입금액']) : null,
+        payment_advance_amount: parseExcelAmount(row['선금입금액']),
         invoice_balance_date: parseExcelDate(row['잔금계산서일']),
-        invoice_balance_amount: row['잔금계산서금액'] ? parseInt(row['잔금계산서금액']) : null,
+        invoice_balance_amount: parseExcelAmount(row['잔금계산서금액']),
         payment_balance_date: parseExcelDate(row['잔금입금일']),
-        payment_balance_amount: row['잔금입금액'] ? parseInt(row['잔금입금액']) : null,
+        payment_balance_amount: parseExcelAmount(row['잔금입금액']),
 
         // 비용 정보
-        additional_cost: row['추가공사비'] ? parseInt(row['추가공사비']) : null,
-        installation_extra_cost: row['추가설치비'] ? parseInt(row['추가설치비']) : null,
-        survey_fee_adjustment: row['실사비조정'] ? parseInt(row['실사비조정']) : null,
-        multiple_stack_cost: row['복수굴뚝비용'] ? parseInt(row['복수굴뚝비용']) : null,
+        additional_cost: parseExcelAmount(row['추가공사비']),
+        installation_extra_cost: parseExcelAmount(row['추가설치비']),
+        survey_fee_adjustment: parseExcelAmount(row['실사비조정']),
+        multiple_stack_cost: parseExcelAmount(row['복수굴뚝비용']),
         expansion_pack: row['확장팩'] || '',
         negotiation: row['네고'] || '',
         other_equipment: row['기타'] || '',
@@ -3357,13 +3388,18 @@ function BusinessManagementPage() {
           setUploadProgress(100) // 완료시 100%
           
           setUploadResults({
-            total: result.data.results.total,
-            success: result.data.results.created + result.data.results.updated,
-            failed: result.data.results.errors,
-            errors: result.data.results.errorDetails || [],
-            created: result.data.results.created,
-            updated: result.data.results.updated,
-            skipped: result.data.results.skipped || 0
+            total: result.data.results?.total ?? result.data.created ?? 0,
+            success: (result.data.results?.created ?? result.data.created ?? 0) + (result.data.results?.updated ?? 0),
+            failed: result.data.results?.errors ?? 0,
+            errors: (result.data.results?.errorDetails || []).map((e: any) =>
+              typeof e === 'string' ? e : `${e.business_name}: ${e.error}`
+            ),
+            created: result.data.results?.created ?? result.data.created ?? 0,
+            updated: result.data.results?.updated ?? 0,
+            skipped: result.data.results?.skipped ?? 0,
+            snapshotId: result.data.snapshotId,
+            airPermitRestored: result.data.airPermitRestored,
+            airPermitNotRestored: result.data.airPermitNotRestored,
           })
           
           console.log('✅ 배치 업로드 완료:', result.data.results)
