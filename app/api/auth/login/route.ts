@@ -188,41 +188,32 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString()
     });
 
-    // ✅ httpOnly 쿠키 설정 - Set-Cookie 헤더 직접 설정 방식 사용
-    // 🔧 중요: 쿠키 이름을 session_token으로 변경 (localStorage의 auth_token과 충돌 방지)
+    // ✅ httpOnly 쿠키 설정 - Next.js cookies.set() API 사용 (권장 방식)
     const isProduction = process.env.NODE_ENV === 'production';
     const maxAge = 24 * 60 * 60; // 24시간
-    const cookiePath = '/';
 
-    // session_token 쿠키 (httpOnly - 보안) ← localStorage auth_token과 다른 이름!
-    const sessionTokenCookie = [
-      `session_token=${token}`,
-      'HttpOnly',
-      isProduction ? 'Secure' : '',
-      'SameSite=Lax',
-      `Max-Age=${maxAge}`,
-      `Path=${cookiePath}`
-    ].filter(Boolean).join('; ');
+    // session_token 쿠키 (httpOnly - 보안)
+    response.cookies.set('session_token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge,
+      path: '/',
+    });
 
-    // auth_ready 쿠키 (JavaScript 접근 가능)
-    const authReadyCookie = [
-      'auth_ready=true',
-      isProduction ? 'Secure' : '',
-      'SameSite=Lax',
-      `Max-Age=${maxAge}`,
-      `Path=${cookiePath}`
-    ].filter(Boolean).join('; ');
+    // auth_ready 쿠키 (JavaScript 접근 가능 - 인증 상태 확인용)
+    response.cookies.set('auth_ready', 'true', {
+      httpOnly: false,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge,
+      path: '/',
+    });
 
-    // Set-Cookie 헤더 직접 설정
-    response.headers.append('Set-Cookie', sessionTokenCookie);
-    response.headers.append('Set-Cookie', authReadyCookie);
-
-    console.log('🍪 [AUTH] 쿠키 설정 완료 (Set-Cookie 헤더):', {
-      session_token: 'httpOnly=true (쿠키)',
-      auth_token: 'localStorage에 저장됨',
-      auth_ready: 'httpOnly=false (쿠키)',
+    console.log('🍪 [AUTH] 쿠키 설정 완료 (cookies.set API):', {
+      session_token: 'httpOnly=true',
+      auth_ready: 'httpOnly=false',
       isProduction,
-      cookiePreview: sessionTokenCookie.substring(0, 100) + '...'
     });
 
     return response;
