@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { formatDate } from '@/utils/formatters';
 import type { InvoiceRecord, InvoiceStage, LegacyInvoiceStage } from '@/types/invoice';
 import { INVOICE_STAGE_LABELS as STAGE_LABELS } from '@/types/invoice';
@@ -129,7 +129,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
     return supply + tax;
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setError('');
 
     const supply = parseInt(form.supply_amount.replace(/,/g, ''), 10) || 0;
@@ -177,12 +177,12 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
     } finally {
       setSaving(false);
     }
-  };
+  }, [form, existingRecord, businessId, stage, onSaved]);
 
   // 부모(InvoiceTabSection)에서 호출할 수 있도록 save 메서드 노출
   useImperativeHandle(ref, () => ({
     save: handleSave,
-  }));
+  }), [handleSave]);
 
   const total = calcTotal();
   const hasExistingRecord = !!existingRecord;

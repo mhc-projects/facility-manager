@@ -70,7 +70,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
       }
       // 'extra' 탭은 ExtraInvoiceList 내부에서 각자 저장하므로 별도 처리 불필요
     },
-  }));
+  }), [activeTab]);
 
   if (loading) {
     return (

@@ -209,6 +209,58 @@ export async function GET(request: NextRequest) {
             extraReceivables += (record.total_amount || 0) - (record.payment_amount || 0);
           }
         });
+
+        // invoice_records 데이터가 있는 단계는 해당 값으로 totalReceivables 재계산
+        // (legacy business_info 컬럼에 반영 안 된 입금도 포함)
+        const getStageRecord = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
+          invoiceRecordsByStage[stage].find(r => r.record_type === 'original') || null;
+
+        if (category === '보조금') {
+          const rec1st = getStageRecord('subsidy_1st');
+          const rec2nd = getStageRecord('subsidy_2nd');
+          const recAdditional = getStageRecord('subsidy_additional');
+
+          const invoiceAmt1st   = rec1st       ? rec1st.total_amount       : (business.invoice_1st_amount || 0);
+          const paymentAmt1st   = rec1st       ? rec1st.payment_amount      : (business.payment_1st_amount || 0);
+          const invoiceAmt2nd   = rec2nd       ? rec2nd.total_amount        : (business.invoice_2nd_amount || 0);
+          const paymentAmt2nd   = rec2nd       ? rec2nd.payment_amount      : (business.payment_2nd_amount || 0);
+
+          // 추가공사비: invoice_records 레코드가 있으면 그 값, 없으면 legacy(발행일 있을 때만)
+          const hasAdditionalInvoice = business.invoice_additional_date;
+          const additionalCostInvoice = hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0;
+          const invoiceAmtAdditional  = recAdditional ? recAdditional.total_amount   : additionalCostInvoice;
+          const paymentAmtAdditional  = recAdditional ? recAdditional.payment_amount : (business.payment_additional_amount || 0);
+
+          totalReceivables = (invoiceAmt1st + invoiceAmt2nd + invoiceAmtAdditional)
+                           - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
+
+          // invoicesData도 invoice_records 우선값으로 업데이트
+          invoicesData.first.payment_amount  = paymentAmt1st;
+          invoicesData.first.receivable      = invoiceAmt1st - paymentAmt1st;
+          invoicesData.second.invoice_amount = invoiceAmt2nd;
+          invoicesData.second.payment_amount = paymentAmt2nd;
+          invoicesData.second.receivable     = invoiceAmt2nd - paymentAmt2nd;
+          invoicesData.additional.payment_amount = paymentAmtAdditional;
+          invoicesData.additional.receivable     = invoiceAmtAdditional - paymentAmtAdditional;
+        } else if (category === '자비') {
+          const recAdvance = getStageRecord('self_advance');
+          const recBalance = getStageRecord('self_balance');
+
+          const invoiceAmtAdvance = recAdvance ? recAdvance.total_amount   : (business.invoice_advance_amount || 0);
+          const paymentAmtAdvance = recAdvance ? recAdvance.payment_amount  : (business.payment_advance_amount || 0);
+          const invoiceAmtBalance = recBalance ? recBalance.total_amount   : (business.invoice_balance_amount || 0);
+          const paymentAmtBalance = recBalance ? recBalance.payment_amount  : (business.payment_balance_amount || 0);
+
+          totalReceivables = (invoiceAmtAdvance + invoiceAmtBalance)
+                           - (paymentAmtAdvance + paymentAmtBalance);
+
+          invoicesData.advance.invoice_amount = invoiceAmtAdvance;
+          invoicesData.advance.payment_amount = paymentAmtAdvance;
+          invoicesData.advance.receivable     = invoiceAmtAdvance - paymentAmtAdvance;
+          invoicesData.balance.invoice_amount = invoiceAmtBalance;
+          invoicesData.balance.payment_amount = paymentAmtBalance;
+          invoicesData.balance.receivable     = invoiceAmtBalance - paymentAmtBalance;
+        }
       }
     } catch (recordsError) {
       // invoice_records 테이블이 없는 경우(마이그레이션 전) 빈 값으로 처리

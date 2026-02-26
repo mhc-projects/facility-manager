@@ -3676,7 +3676,9 @@ function BusinessManagementPage() {
           수정일: new Date().toISOString()
         };
 
-        // 원자적 상태 업데이트 함수 호출
+        // Optimistic Update: selectedBusiness 즉시 업데이트 + 상세 모달 열기
+        setSelectedBusiness(optimisticUpdate);
+        setIsDetailModalOpen(true);
         updateBusinessState(optimisticUpdate, editingBusiness.id);
 
         // ✅ [SYNC-CHECK] Optimistic Update 완료 로깅
@@ -3963,47 +3965,9 @@ function BusinessManagementPage() {
               }
             });
 
-            // 🔄 [AUTO-REFRESH] 상세보기 모달 자동 새로고침
-            if (isDetailModalOpen && selectedBusiness?.id === editingBusiness.id) {
-              console.log('🔄 [AUTO-REFRESH] 상세보기 모달 자동 새로고침 시작:', {
-                businessId: editingBusiness.id,
-                businessName: editingBusiness.사업장명
-              });
-
-              try {
-                // 강제 새로고침 (캐시 무시하고 최신 데이터 가져오기)
-                const freshData = await refreshBusinessData(editingBusiness.id, editingBusiness.사업장명, true);
-                if (freshData) {
-                  setSelectedBusiness(freshData);
-                  console.log('✅ [AUTO-REFRESH] 상세보기 모달 새로고침 완료:', {
-                    businessId: freshData.id,
-                    businessName: freshData.사업장명,
-                    계산서_입금_데이터: {
-                      invoice_1st_amount: freshData.invoice_1st_amount,
-                      payment_1st_amount: freshData.payment_1st_amount,
-                      invoice_2nd_amount: freshData.invoice_2nd_amount,
-                      payment_2nd_amount: freshData.payment_2nd_amount,
-                      invoice_advance_amount: freshData.invoice_advance_amount,
-                      payment_advance_amount: freshData.payment_advance_amount,
-                      invoice_balance_amount: freshData.invoice_balance_amount,
-                      payment_balance_amount: freshData.payment_balance_amount
-                    }
-                  });
-                } else {
-                  console.warn('⚠️ [AUTO-REFRESH] refreshBusinessData 반환값이 null입니다');
-                }
-              } catch (refreshError) {
-                console.error('❌ [AUTO-REFRESH] 모달 새로고침 실패:', refreshError);
-                // 새로고침 실패해도 이미 Optimistic Update는 완료되었으므로 무시
-              }
-            } else {
-              console.log('ℹ️ [AUTO-REFRESH] 모달 자동 새로고침 건너뜀:', {
-                isDetailModalOpen,
-                selectedBusinessId: selectedBusiness?.id,
-                editingBusinessId: editingBusiness.id,
-                일치여부: selectedBusiness?.id === editingBusiness.id
-              });
-            }
+            // 🔄 [AUTO-REFRESH] 서버 데이터로 selectedBusiness 항상 업데이트 후 상세 모달 열기
+            setSelectedBusiness(updatedBusiness as unknown as UnifiedBusinessInfo);
+            setIsDetailModalOpen(true);
           } else {
             // 새 사업장 추가의 경우: 전체 목록 새로고침
             await loadAllBusinesses()
