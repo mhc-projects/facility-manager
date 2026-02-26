@@ -72,6 +72,7 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     negotiation: normalizeUTF8(business.negotiation || ''),
     order_manager: normalizeUTF8(business.order_manager || ''),
     order_request_date: normalizeDateField(business.order_request_date),
+    receipt_date: normalizeDateField(business.receipt_date),
     order_date: normalizeDateField(business.order_date),
     shipment_date: normalizeDateField(business.shipment_date),
     installation_date: normalizeDateField(business.installation_date),
@@ -163,6 +164,7 @@ export async function GET(request: Request) {
       order_date::text as order_date,
       order_manager,
       order_request_date::text as order_request_date,
+      receipt_date::text as receipt_date,
       shipment_date::text as shipment_date,
       installation_date::text as installation_date,
       subsidy_approval_date::text as subsidy_approval_date,
@@ -419,6 +421,9 @@ export async function PUT(request: Request) {
     }
     if (updateData.order_request_date !== undefined) {
       updateObject.order_request_date = updateData.order_request_date || null;
+    }
+    if (updateData.receipt_date !== undefined) {
+      updateObject.receipt_date = updateData.receipt_date || null;
     }
     if (updateData.wireless_document !== undefined) {
       updateObject.wireless_document = normalizeUTF8(updateData.wireless_document || '');
@@ -763,6 +768,7 @@ export async function POST(request: Request) {
       project_year: businessData.project_year ? parseInt(businessData.project_year) : null,
       contract_document: normalizeUTF8(businessData.contract_document || ''),
       order_request_date: businessData.order_request_date || null,
+      receipt_date: businessData.receipt_date || null,
       wireless_document: normalizeUTF8(businessData.wireless_document || ''),
       installation_support: normalizeUTF8(businessData.installation_support || ''),
       order_manager: normalizeUTF8(businessData.order_manager || ''),

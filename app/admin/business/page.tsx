@@ -94,6 +94,7 @@ interface UnifiedBusinessInfo {
   revenue_source?: string | null; // 매출처 (블루온이 계산서를 발행하는 사업체)
   contract_document?: string | null;
   order_request_date?: string | null;
+  receipt_date?: string | null;
   wireless_document?: string | null;
   installation_support?: string | null;
   order_manager?: string | null;
@@ -2560,6 +2561,7 @@ function BusinessManagementPage() {
           revenue_source: business.revenue_source,
           contract_document: business.contract_document,
           order_request_date: business.order_request_date,
+          receipt_date: business.receipt_date,
           wireless_document: business.wireless_document,
           installation_support: business.installation_support,
           order_manager: business.order_manager,
@@ -2960,6 +2962,7 @@ function BusinessManagementPage() {
         revenue_source: freshData.revenue_source || '',
         installation_team: freshData.installation_team || '',
         order_manager: freshData.order_manager || '',
+        receipt_date: freshData.receipt_date || '',
 
         // 일정 관리
         subsidy_approval_date: freshData.subsidy_approval_date || '',
@@ -3797,6 +3800,7 @@ function BusinessManagementPage() {
               installation_team: serverData.installation_team || null,
               설치팀: serverData.installation_team || null,
               order_manager: serverData.order_manager || null,
+              receipt_date: serverData.receipt_date || null,
               // 시스템 필드 (한글/영어 병행)
               manufacturer: serverData.manufacturer || null,
               vpn: serverData.vpn || null,
@@ -3884,6 +3888,7 @@ function BusinessManagementPage() {
               department: serverData.department || null,
               contract_document: serverData.contract_document || null,
               order_request_date: serverData.order_request_date || null,
+              receipt_date: serverData.receipt_date || null,
               wireless_document: serverData.wireless_document || null,
               installation_support: serverData.installation_support || null,
               order_date: serverData.order_date || null,
@@ -5303,6 +5308,14 @@ function BusinessManagementPage() {
                         onChange={(e) => setFormData({...formData, revenue_source: e.target.value})}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                         placeholder="계산서 발행 대상"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">접수일</label>
+                      <DateInput
+                        value={formData.receipt_date || ''}
+                        onChange={(value) => setFormData({...formData, receipt_date: value || null})}
                       />
                     </div>
                     </div>

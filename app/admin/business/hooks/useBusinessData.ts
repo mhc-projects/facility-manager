@@ -218,6 +218,7 @@ export function useBusinessData() {
 
           // 일정 관리 (발주요청일, 발주일, 출하일, 설치일)
           order_request_date: business.order_request_date || null,
+          receipt_date: business.receipt_date || null,
           order_date: business.order_date || null,
           shipment_date: business.shipment_date || null,
           installation_date: business.installation_date || null,
