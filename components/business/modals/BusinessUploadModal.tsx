@@ -20,8 +20,8 @@ interface BusinessUploadModalProps {
   uploadProgress: number
   setUploadProgress: (progress: number) => void
   isUploading: boolean
-  uploadMode: 'overwrite' | 'merge' | 'skip'
-  setUploadMode: (mode: 'overwrite' | 'merge' | 'skip') => void
+  uploadMode: 'overwrite' | 'merge' | 'skip' | 'replaceAll'
+  setUploadMode: (mode: 'overwrite' | 'merge' | 'skip' | 'replaceAll') => void
   handleFileUpload: (file: File) => Promise<void>
   downloadExcelTemplate: () => Promise<void>
 }
@@ -161,6 +161,25 @@ export default function BusinessUploadModal({
                       <div className="text-xs text-gray-600">
                         중복된 사업장은 무시하고, 새로운 사업장만 추가합니다.
                         <span className="block text-orange-600 mt-0.5">💡 신규 데이터만 추가할 때 적합</span>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="uploadMode"
+                      value="replaceAll"
+                      checked={uploadMode === 'replaceAll'}
+                      onChange={(e) => setUploadMode(e.target.value as any)}
+                      className="mt-1 mr-3"
+                      disabled={isUploading}
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900 group-hover:text-red-700">전체교체 ⚠️</div>
+                      <div className="text-xs text-gray-600">
+                        기존 사업장 데이터를 모두 삭제하고 엑셀 데이터로 완전히 교체합니다.
+                        <span className="block text-red-600 mt-0.5 font-medium">⚠️ 주의: 기존 데이터가 삭제됩니다. 사진이 등록된 사업장은 삭제 차단됩니다.</span>
                       </div>
                     </div>
                   </label>

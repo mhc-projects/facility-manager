@@ -3363,6 +3363,7 @@ function BusinessManagementPage() {
         // 일정 관리
         installation_team: row['설치팀'] || '',
         order_manager: row['발주담당'] || '',
+        receipt_date: parseExcelDate(row['접수일']),
         order_request_date: parseExcelDate(row['발주요청일']),
         order_date: parseExcelDate(row['발주일']),
         shipment_date: parseExcelDate(row['출고일']),
@@ -3548,7 +3549,7 @@ function BusinessManagementPage() {
       // 날짜 필드에서 시간 정보 제거 (YYYY-MM-DDTHH:mm:ss.sssZ → YYYY-MM-DD)
       const dateFields = [
         'subsidy_approval_date', 'contract_sent_date',
-        'order_request_date', 'order_date', 'shipment_date', 'installation_date',
+        'receipt_date', 'order_request_date', 'order_date', 'shipment_date', 'installation_date',
         'construction_report_submitted_at', 'greenlink_confirmation_submitted_at',
         'attachment_completion_submitted_at',
         'estimate_survey_date', 'pre_construction_survey_date', 'completion_survey_date',
