@@ -897,42 +897,45 @@ function BusinessManagementPage() {
   const [isFilterExpanded, setIsFilterExpanded] = useState<boolean>(false)
 
   // 상세 필터 상태 (제출일 + 설치완료)
+  // null: 비활성, true: 있는 것만, false: 없는 것만
   const [submissionDateFilters, setSubmissionDateFilters] = useState<{
-    order_date: boolean;
-    construction_report: boolean;
-    greenlink_confirmation: boolean;
-    attachment_completion: boolean;
-    installation_complete: boolean;
+    order_date: boolean | null;
+    construction_report: boolean | null;
+    greenlink_confirmation: boolean | null;
+    attachment_completion: boolean | null;
+    installation_complete: boolean | null;
   }>({
-    order_date: false,
-    construction_report: false,
-    greenlink_confirmation: false,
-    attachment_completion: false,
-    installation_complete: false
+    order_date: null,
+    construction_report: null,
+    greenlink_confirmation: null,
+    attachment_completion: null,
+    installation_complete: null
   })
   const [isSubmissionFilterExpanded, setIsSubmissionFilterExpanded] = useState<boolean>(false)
 
-  // 제출일 필터 토글 함수
+  // 제출일 필터 토글 함수 (null → true → false → null 순환)
+  // null: 비활성, true: 있는 것만, false: 없는 것만
   const toggleSubmissionFilter = (filterKey: keyof typeof submissionDateFilters) => {
-    setSubmissionDateFilters(prev => ({
-      ...prev,
-      [filterKey]: !prev[filterKey]
-    }))
+    setSubmissionDateFilters(prev => {
+      const current = prev[filterKey]
+      const next = current === null ? true : current === true ? false : null
+      return { ...prev, [filterKey]: next }
+    })
   }
 
   // 상세 필터 초기화 함수
   const clearSubmissionFilters = () => {
     setSubmissionDateFilters({
-      order_date: false,
-      construction_report: false,
-      greenlink_confirmation: false,
-      attachment_completion: false,
-      installation_complete: false
+      order_date: null,
+      construction_report: null,
+      greenlink_confirmation: null,
+      attachment_completion: null,
+      installation_complete: null
     })
   }
 
-  // 제출일 필터가 활성화되어 있는지 확인
-  const hasActiveSubmissionFilter = Object.values(submissionDateFilters).some(v => v)
+  // 제출일 필터가 활성화되어 있는지 확인 (null이 아닌 값이 하나라도 있으면 활성)
+  const hasActiveSubmissionFilter = Object.values(submissionDateFilters).some(v => v !== null)
 
   // 📱 무한 스크롤 상태 (모바일 전용)
   const [displayedBusinesses, setDisplayedBusinesses] = useState<any[]>([])
@@ -1830,20 +1833,30 @@ function BusinessManagementPage() {
         // 하나라도 활성화된 필터가 있으면, 해당 필터 조건을 만족해야 함
         let matchesFilter = true
 
-        if (submissionDateFilters.order_date) {
+        if (submissionDateFilters.order_date === true) {
           matchesFilter = matchesFilter && !!b.order_date
+        } else if (submissionDateFilters.order_date === false) {
+          matchesFilter = matchesFilter && !b.order_date
         }
-        if (submissionDateFilters.construction_report) {
+        if (submissionDateFilters.construction_report === true) {
           matchesFilter = matchesFilter && !!b.construction_report_submitted_at
+        } else if (submissionDateFilters.construction_report === false) {
+          matchesFilter = matchesFilter && !b.construction_report_submitted_at
         }
-        if (submissionDateFilters.greenlink_confirmation) {
+        if (submissionDateFilters.greenlink_confirmation === true) {
           matchesFilter = matchesFilter && !!b.greenlink_confirmation_submitted_at
+        } else if (submissionDateFilters.greenlink_confirmation === false) {
+          matchesFilter = matchesFilter && !b.greenlink_confirmation_submitted_at
         }
-        if (submissionDateFilters.attachment_completion) {
+        if (submissionDateFilters.attachment_completion === true) {
           matchesFilter = matchesFilter && !!b.attachment_completion_submitted_at
+        } else if (submissionDateFilters.attachment_completion === false) {
+          matchesFilter = matchesFilter && !b.attachment_completion_submitted_at
         }
-        if (submissionDateFilters.installation_complete) {
+        if (submissionDateFilters.installation_complete === true) {
           matchesFilter = matchesFilter && !!b.installation_date
+        } else if (submissionDateFilters.installation_complete === false) {
+          matchesFilter = matchesFilter && !b.installation_date
         }
 
         return matchesFilter
@@ -4619,88 +4632,111 @@ function BusinessManagementPage() {
                   </div>
 
                   {/* 상세 필터 버튼들 (접기/펼치기 애니메이션) */}
-                  <div className={`grid grid-cols-2 md:grid-cols-5 gap-2 transition-all duration-300 overflow-hidden ${
+                  <div className={`space-y-2 transition-all duration-300 overflow-hidden ${
                     isSubmissionFilterExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
                   }`}>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    {/* 발주일 */}
                     <button
                       onClick={() => toggleSubmissionFilter('order_date')}
                       className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                        submissionDateFilters.order_date
+                        submissionDateFilters.order_date === true
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : submissionDateFilters.order_date === false
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-300 hover:border-blue-300 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${
-                          submissionDateFilters.order_date ? 'bg-blue-500' : 'bg-gray-300'
-                        }`} />
+                        {submissionDateFilters.order_date === true && <span className="text-blue-500 font-bold text-xs">✓</span>}
+                        {submissionDateFilters.order_date === false && <span className="text-orange-500 font-bold text-xs">✕</span>}
+                        {submissionDateFilters.order_date === null && <div className="w-3 h-3 rounded-full bg-gray-300" />}
                         발주일
                       </div>
                     </button>
 
+                    {/* 착공신고서 */}
                     <button
                       onClick={() => toggleSubmissionFilter('construction_report')}
                       className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                        submissionDateFilters.construction_report
+                        submissionDateFilters.construction_report === true
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : submissionDateFilters.construction_report === false
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-300 hover:border-blue-300 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${
-                          submissionDateFilters.construction_report ? 'bg-blue-500' : 'bg-gray-300'
-                        }`} />
+                        {submissionDateFilters.construction_report === true && <span className="text-blue-500 font-bold text-xs">✓</span>}
+                        {submissionDateFilters.construction_report === false && <span className="text-orange-500 font-bold text-xs">✕</span>}
+                        {submissionDateFilters.construction_report === null && <div className="w-3 h-3 rounded-full bg-gray-300" />}
                         착공신고서
                       </div>
                     </button>
 
+                    {/* 그린링크 */}
                     <button
                       onClick={() => toggleSubmissionFilter('greenlink_confirmation')}
                       className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                        submissionDateFilters.greenlink_confirmation
+                        submissionDateFilters.greenlink_confirmation === true
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : submissionDateFilters.greenlink_confirmation === false
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-300 hover:border-blue-300 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${
-                          submissionDateFilters.greenlink_confirmation ? 'bg-blue-500' : 'bg-gray-300'
-                        }`} />
+                        {submissionDateFilters.greenlink_confirmation === true && <span className="text-blue-500 font-bold text-xs">✓</span>}
+                        {submissionDateFilters.greenlink_confirmation === false && <span className="text-orange-500 font-bold text-xs">✕</span>}
+                        {submissionDateFilters.greenlink_confirmation === null && <div className="w-3 h-3 rounded-full bg-gray-300" />}
                         그린링크
                       </div>
                     </button>
 
+                    {/* 부착완료 */}
                     <button
                       onClick={() => toggleSubmissionFilter('attachment_completion')}
                       className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                        submissionDateFilters.attachment_completion
+                        submissionDateFilters.attachment_completion === true
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : submissionDateFilters.attachment_completion === false
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-300 hover:border-blue-300 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${
-                          submissionDateFilters.attachment_completion ? 'bg-blue-500' : 'bg-gray-300'
-                        }`} />
+                        {submissionDateFilters.attachment_completion === true && <span className="text-blue-500 font-bold text-xs">✓</span>}
+                        {submissionDateFilters.attachment_completion === false && <span className="text-orange-500 font-bold text-xs">✕</span>}
+                        {submissionDateFilters.attachment_completion === null && <div className="w-3 h-3 rounded-full bg-gray-300" />}
                         부착완료
                       </div>
                     </button>
 
+                    {/* 설치완료 */}
                     <button
                       onClick={() => toggleSubmissionFilter('installation_complete')}
                       className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                        submissionDateFilters.installation_complete
+                        submissionDateFilters.installation_complete === true
                           ? 'border-green-500 bg-green-50 text-green-700'
+                          : submissionDateFilters.installation_complete === false
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-300 hover:border-green-300 text-gray-700'
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${
-                          submissionDateFilters.installation_complete ? 'bg-green-500' : 'bg-gray-300'
-                        }`} />
+                        {submissionDateFilters.installation_complete === true && <span className="text-green-500 font-bold text-xs">✓</span>}
+                        {submissionDateFilters.installation_complete === false && <span className="text-orange-500 font-bold text-xs">✕</span>}
+                        {submissionDateFilters.installation_complete === null && <div className="w-3 h-3 rounded-full bg-gray-300" />}
                         설치완료
                       </div>
                     </button>
+                    </div>
+                    {/* 범례 */}
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300 inline-block" /> 비활성</span>
+                      <span className="flex items-center gap-1 text-blue-500">✓ 있음</span>
+                      <span className="flex items-center gap-1 text-orange-500">✕ 없음</span>
+                    </div>
                   </div>
                 </div>
               </div>
