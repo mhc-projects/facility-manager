@@ -2461,10 +2461,23 @@ function BusinessManagementPage() {
       } else {
         console.log(`ℹ️ [CACHE-INVALIDATE] 캐시 없음 (무효화 불필요): ${businessId}`);
       }
+      // sessionStorage의 매출 계산 캐시도 함께 무효화
+      sessionStorage.removeItem(`revenue_calc_${businessId}`);
+      console.log(`🗑️ [CACHE-INVALIDATE] sessionStorage 매출 계산 캐시 무효화: revenue_calc_${businessId}`);
     } else {
       const size = businessCacheRef.current.size;
       businessCacheRef.current.clear();
       console.log(`🧹 [CACHE-INVALIDATE-ALL] 전체 캐시 무효화 (${size}개 항목 삭제)`);
+      // sessionStorage의 모든 매출 계산 캐시 무효화
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith('revenue_calc_')) keysToRemove.push(key);
+      }
+      keysToRemove.forEach(key => sessionStorage.removeItem(key));
+      if (keysToRemove.length > 0) {
+        console.log(`🧹 [CACHE-INVALIDATE-ALL] sessionStorage 매출 계산 캐시 전체 무효화 (${keysToRemove.length}개)`);
+      }
     }
   }, []);
 
