@@ -57,6 +57,7 @@ interface UnifiedBusinessInfo {
   revenue_source?: string | null
   contract_document?: string | null
   order_request_date?: string | null
+  receipt_date?: string | null
   wireless_document?: string | null
   installation_support?: string | null
   order_manager?: string | null
@@ -1262,6 +1263,13 @@ export default function BusinessDetailModal({
                       <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
                         <div className="text-xs sm:text-sm text-gray-600 mb-1">매출처</div>
                         <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{business.revenue_source}</div>
+                      </div>
+                    )}
+
+                    {business.receipt_date && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">접수일</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{business.receipt_date}</div>
                       </div>
                     )}
 
