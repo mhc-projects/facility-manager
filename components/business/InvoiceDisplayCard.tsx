@@ -36,8 +36,8 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
   const revisions = invoiceRecord?.revisions || [];
 
   const receivable = (displayAmount || 0) - (displayPaymentAmount || 0);
-  const hasInvoice = displayDate && displayAmount && displayAmount > 0;
-  const hasPayment = displayPaymentDate && displayPaymentAmount && displayPaymentAmount > 0;
+  const hasInvoice = !!(displayAmount && displayAmount > 0);  // 날짜 없이 금액만 있어도 표시
+  const hasPayment = !!(displayPaymentDate && displayPaymentAmount && displayPaymentAmount > 0);
   const hasAnyData = hasInvoice || hasPayment;
   const isFullyPaid = receivable === 0 && hasInvoice;
 
@@ -45,7 +45,7 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
     if (!hasInvoice) return null;
     if (isFullyPaid) return null;
     if (receivable <= 0) return null;
-    if (!hasPayment) return '계산서 발행 후 미입금';
+    if (!hasPayment) return displayDate ? '계산서 발행 후 미입금' : '계산서 금액 등록 (발행일 미입력)';
     if (displayPaymentAmount && displayPaymentAmount < (displayAmount || 0)) {
       return `일부 입금 (${((displayPaymentAmount / (displayAmount || 1)) * 100).toFixed(0)}%)`;
     }
@@ -75,7 +75,9 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
             <div className="bg-blue-50 rounded p-2 space-y-1">
               <div className="flex justify-between">
                 <span className="text-gray-600">📄 발행일</span>
-                <span className="font-medium text-gray-900">{formatDate(displayDate || '')}</span>
+                <span className={`font-medium ${displayDate ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {displayDate ? formatDate(displayDate) : '미발행'}
+                </span>
               </div>
               {displayInvoiceNumber && (
                 <div className="flex justify-between">

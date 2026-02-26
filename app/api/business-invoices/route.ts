@@ -220,16 +220,16 @@ export async function GET(request: NextRequest) {
           const rec2nd = getStageRecord('subsidy_2nd');
           const recAdditional = getStageRecord('subsidy_additional');
 
-          const invoiceAmt1st   = rec1st       ? rec1st.total_amount       : (business.invoice_1st_amount || 0);
-          const paymentAmt1st   = rec1st       ? rec1st.payment_amount      : (business.payment_1st_amount || 0);
-          const invoiceAmt2nd   = rec2nd       ? rec2nd.total_amount        : (business.invoice_2nd_amount || 0);
-          const paymentAmt2nd   = rec2nd       ? rec2nd.payment_amount      : (business.payment_2nd_amount || 0);
+          const invoiceAmt1st   = rec1st ? rec1st.total_amount   : (business.invoice_1st_amount || 0);
+          const paymentAmt1st   = rec1st ? rec1st.payment_amount : (business.payment_1st_amount || 0);
+          const invoiceAmt2nd   = rec2nd ? rec2nd.total_amount   : (business.invoice_2nd_amount || 0);
+          const paymentAmt2nd   = rec2nd ? rec2nd.payment_amount : (business.payment_2nd_amount || 0);
 
-          // 추가공사비: invoice_records 레코드가 있으면 그 값, 없으면 legacy(발행일 있을 때만)
-          const hasAdditionalInvoice = business.invoice_additional_date;
+          // 추가공사비: 계산서 발행일이 있을 때만 미수금으로 계산 (invoice_records 또는 legacy 모두 동일 규칙)
+          const hasAdditionalInvoice = recAdditional ? recAdditional.issue_date : business.invoice_additional_date;
           const additionalCostInvoice = hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0;
-          const invoiceAmtAdditional  = recAdditional ? recAdditional.total_amount   : additionalCostInvoice;
-          const paymentAmtAdditional  = recAdditional ? recAdditional.payment_amount : (business.payment_additional_amount || 0);
+          const invoiceAmtAdditional  = hasAdditionalInvoice ? (recAdditional ? recAdditional.total_amount : additionalCostInvoice) : 0;
+          const paymentAmtAdditional  = hasAdditionalInvoice ? (recAdditional ? recAdditional.payment_amount : (business.payment_additional_amount || 0)) : 0;
 
           totalReceivables = (invoiceAmt1st + invoiceAmt2nd + invoiceAmtAdditional)
                            - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
@@ -247,9 +247,9 @@ export async function GET(request: NextRequest) {
           const recBalance = getStageRecord('self_balance');
 
           const invoiceAmtAdvance = recAdvance ? recAdvance.total_amount   : (business.invoice_advance_amount || 0);
-          const paymentAmtAdvance = recAdvance ? recAdvance.payment_amount  : (business.payment_advance_amount || 0);
+          const paymentAmtAdvance = recAdvance ? recAdvance.payment_amount : (business.payment_advance_amount || 0);
           const invoiceAmtBalance = recBalance ? recBalance.total_amount   : (business.invoice_balance_amount || 0);
-          const paymentAmtBalance = recBalance ? recBalance.payment_amount  : (business.payment_balance_amount || 0);
+          const paymentAmtBalance = recBalance ? recBalance.payment_amount : (business.payment_balance_amount || 0);
 
           totalReceivables = (invoiceAmtAdvance + invoiceAmtBalance)
                            - (paymentAmtAdvance + paymentAmtBalance);

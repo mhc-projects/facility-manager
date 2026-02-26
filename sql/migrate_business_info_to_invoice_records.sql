@@ -30,7 +30,8 @@ BEGIN
     v_count_total := v_count_total + 1;
 
     -- ── 1차 계산서 ──────────────────────────────────────────────
-    IF (rec.invoice_1st_amount IS NOT NULL AND rec.invoice_1st_amount > 0)
+    -- 발행일이 있거나 금액이 있는 경우 마이그레이션 (발행일 기준 우선)
+    IF (rec.invoice_1st_date IS NOT NULL OR (rec.invoice_1st_amount IS NOT NULL AND rec.invoice_1st_amount > 0))
        AND NOT EXISTS (
          SELECT 1 FROM invoice_records
          WHERE business_id = rec.id AND invoice_stage = 'subsidy_1st' AND record_type = 'original'
@@ -64,7 +65,8 @@ BEGIN
     END IF;
 
     -- ── 2차 계산서 ──────────────────────────────────────────────
-    IF (rec.invoice_2nd_amount IS NOT NULL AND rec.invoice_2nd_amount > 0)
+    -- 발행일이 있거나 금액이 있는 경우 마이그레이션 (발행일 기준 우선)
+    IF (rec.invoice_2nd_date IS NOT NULL OR (rec.invoice_2nd_amount IS NOT NULL AND rec.invoice_2nd_amount > 0))
        AND NOT EXISTS (
          SELECT 1 FROM invoice_records
          WHERE business_id = rec.id AND invoice_stage = 'subsidy_2nd' AND record_type = 'original'
@@ -145,7 +147,8 @@ BEGIN
     v_count_total := v_count_total + 1;
 
     -- ── 선금 계산서 ──────────────────────────────────────────────
-    IF (rec.invoice_advance_amount IS NOT NULL AND rec.invoice_advance_amount > 0)
+    -- 발행일이 있거나 금액이 있는 경우 마이그레이션
+    IF (rec.invoice_advance_date IS NOT NULL OR (rec.invoice_advance_amount IS NOT NULL AND rec.invoice_advance_amount > 0))
        AND NOT EXISTS (
          SELECT 1 FROM invoice_records
          WHERE business_id = rec.id AND invoice_stage = 'self_advance' AND record_type = 'original'
