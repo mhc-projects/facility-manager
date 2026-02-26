@@ -12,7 +12,7 @@ import StatsCard from '@/components/ui/StatsCard';
 import Modal, { ModalActions } from '@/components/ui/Modal';
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import TwoStageDropdown from '@/components/ui/TwoStageDropdown';
-import { MANUFACTURER_NAMES_REVERSE, type ManufacturerName } from '@/constants/manufacturers';
+import { MANUFACTURER_NAMES } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
 import { allSteps } from '@/lib/task-steps';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -127,9 +127,11 @@ function RevenueDashboard() {
   const [commissionRatesLoaded, setCommissionRatesLoaded] = useState(false);
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // 카테고리(진행구분) 필터
-  const [selectedProjectYears, setSelectedProjectYears] = useState<string[]>([]); // 사업 진행 연도 필터
+  const [selectedProjectYears, setSelectedProjectYears] = useState<string[]>([]); // 설치 연도 필터
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]); // 월별 필터 (1-12) - 설치일 기준
   const [selectedSurveyMonths, setSelectedSurveyMonths] = useState<string[]>([]); // 실사 월 필터 ['견적|1', '착공|2', '준공|9']
+  const [selectedInvoiceYears, setSelectedInvoiceYears] = useState<string[]>([]); // 세금계산서 발행 연도 필터
+  const [selectedInvoiceMonths, setSelectedInvoiceMonths] = useState<string[]>([]); // 세금계산서 발행 월 필터
   const [showReceivablesOnly, setShowReceivablesOnly] = useState(false); // 미수금 필터
   const [showUninstalledOnly, setShowUninstalledOnly] = useState(false); // 미설치 필터
   // 미수금 필터 활성화 시 업무관리 연동
@@ -1056,36 +1058,109 @@ function RevenueDashboard() {
     }).format(value);
   };
 
-  const exportData = () => {
-    if (!calculations.length) {
+  const exportData = async () => {
+    if (!sortedBusinesses.length) {
       alert('내보낼 데이터가 없습니다.');
       return;
     }
 
-    const csvData = calculations.map(calc => ({
-      '계산일': calc.calculation_date,
-      '사업장명': calc.business_name,
-      '영업점': calc.sales_office,
-      '총 매출': calc.total_revenue,
-      '총 매입': calc.total_cost,
-      '총 이익': calc.gross_profit,
-      '영업비용': calc.sales_commission,
-      '실사비용': calc.survey_costs,
-      '설치비용': calc.installation_costs,
-      '순이익': calc.net_profit,
-      '이익률': ((calc.net_profit / calc.total_revenue) * 100).toFixed(2) + '%'
-    }));
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('매출관리');
 
-    const csvContent = [
-      Object.keys(csvData[0]).join(','),
-      ...csvData.map(row => Object.values(row).join(','))
-    ].join('\n');
+    // 금액 컬럼 인덱스 (1-based): 환경부고시가(J), 매출(K), 발주금액(L), 기본설치비(M), 영업비(N), 실사비(O)
+    const CURRENCY_COLS = [10, 11, 12, 13, 14, 15];
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    // 헤더
+    sheet.columns = [
+      { header: '설치날짜',    key: 'installation_date',    width: 14 },
+      { header: '설치팀',      key: 'installation_team',    width: 12 },
+      { header: '매출처',      key: 'revenue_source',       width: 20 },
+      { header: '영업점',      key: 'sales_office',         width: 12 },
+      { header: '지역대구분',  key: 'region_category',      width: 16 },
+      { header: '지자체',      key: 'local_government',     width: 14 },
+      { header: '사업장명',    key: 'business_name',        width: 24 },
+      { header: '제조사',      key: 'manufacturer',         width: 14 },
+      { header: '장착구분',    key: 'progress_status',      width: 14 },
+      { header: '환경부고시가', key: 'official_price_total', width: 16 },
+      { header: '매출',        key: 'total_revenue',        width: 16 },
+      { header: '발주금액',    key: 'total_cost',           width: 16 },
+      { header: '기본설치비',  key: 'installation_costs',   width: 16 },
+      { header: '영업비',      key: 'sales_commission',     width: 16 },
+      { header: '실사비',      key: 'survey_costs',         width: 16 },
+    ];
+
+    // 헤더 스타일
+    sheet.getRow(1).eachCell(cell => {
+      cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FF4472C4' } }
+      };
+    });
+
+    // 환경부고시가 계산: Σ(고시가 × 수량) - 추가공사비/협의사항 제외
+    const EQUIPMENT_EXPORT_FIELDS = [
+      'ph_meter', 'differential_pressure_meter', 'temperature_meter',
+      'discharge_current_meter', 'fan_current_meter', 'pump_current_meter',
+      'gateway_1_2', 'gateway_3_4', 'vpn_wired', 'vpn_wireless',
+      'explosion_proof_differential_pressure_meter_domestic',
+      'explosion_proof_temperature_meter_domestic', 'expansion_device',
+      'relay_8ch', 'relay_16ch', 'main_board_replacement', 'multiple_stack'
+    ];
+
+    sortedBusinesses.forEach(business => {
+      const b = business as any;
+
+      // 지역대구분: 주소에서 첫 두 단어 추출 (예: '경상북도 문경시')
+      const addressParts = (b.address || '').trim().split(/\s+/);
+      const regionCategory = addressParts.slice(0, 2).join(' ');
+
+      // 제조사 한글 변환
+      const manufacturerKo = b.manufacturer
+        ? (MANUFACTURER_NAMES[b.manufacturer as keyof typeof MANUFACTURER_NAMES] || b.manufacturer)
+        : '';
+
+      // 환경부고시가 합계: 고시가 × 수량 합산
+      const officialPriceTotal = EQUIPMENT_EXPORT_FIELDS.reduce((sum, field) => {
+        const qty = Number(b[field]) || 0;
+        const price = officialPrices[field] || 0;
+        return sum + qty * price;
+      }, 0);
+
+      const row = sheet.addRow({
+        installation_date:    b.installation_date || '',
+        installation_team:    b.installation_team || '',
+        revenue_source:       b.revenue_source || '',
+        sales_office:         b.sales_office || '',
+        region_category:      regionCategory,
+        local_government:     b.local_government || '',
+        business_name:        b.business_name || '',
+        manufacturer:         manufacturerKo,
+        progress_status:      b.progress_status || '',
+        official_price_total: officialPriceTotal,
+        total_revenue:        b.total_revenue || 0,
+        total_cost:           b.total_cost || 0,
+        installation_costs:   b.installation_costs || 0,
+        sales_commission:     b.sales_commission || 0,
+        survey_costs:         b.survey_costs || 0,
+      });
+
+      // 금액 컬럼 숫자 서식 적용 (천단위 콤마)
+      CURRENCY_COLS.forEach(colIdx => {
+        const cell = row.getCell(colIdx);
+        cell.numFmt = '#,##0';
+        cell.alignment = { horizontal: 'right' };
+      });
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    const today = new Date().toISOString().split('T')[0];
-    link.download = `매출관리_${today}.csv`;
+    link.download = `매출관리_${today}.xlsx`;
     link.click();
   };
 
@@ -1122,7 +1197,8 @@ function RevenueDashboard() {
       const searchMatch = !searchTerm ||
         business.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (business.sales_office && business.sales_office.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (business.manager_name && business.manager_name.toLowerCase().includes(searchTerm.toLowerCase()));
+        (business.manager_name && business.manager_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (business.address && business.address.toLowerCase().includes(searchTerm.toLowerCase()));
 
       // 드롭다운 필터 (다중 선택)
       const officeMatch = selectedOffices.length === 0 || selectedOffices.includes(business.sales_office || '');
@@ -1171,7 +1247,29 @@ function RevenueDashboard() {
         }
       }
 
-      return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch;
+      // 세금계산서 발행일 필터 (invoice_1st_date, invoice_2nd_date, invoice_advance_date, invoice_balance_date, invoice_additional_date 중 하나라도 일치하면 포함)
+      let invoiceMatch = true;
+      if (selectedInvoiceYears.length > 0 || selectedInvoiceMonths.length > 0) {
+        const b = business as any;
+        const invoiceDates = [
+          b.invoice_1st_date,
+          b.invoice_2nd_date,
+          b.invoice_advance_date,
+          b.invoice_balance_date,
+          b.invoice_additional_date,
+        ].filter(Boolean) as string[];
+
+        invoiceMatch = invoiceDates.some(dateStr => {
+          const d = new Date(dateStr);
+          const yearStr = String(d.getFullYear());
+          const monthStr = String(d.getMonth() + 1);
+          const yearOk = selectedInvoiceYears.length === 0 || selectedInvoiceYears.includes(yearStr);
+          const monthOk = selectedInvoiceMonths.length === 0 || selectedInvoiceMonths.includes(monthStr);
+          return yearOk && monthOk;
+        });
+      }
+
+      return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch && invoiceMatch;
     }).map((business) => {
       // ✅ 실시간 계산 적용 (Admin 대시보드와 동일한 계산식)
       const calculatedData = calculateBusinessRevenue(business, pricingData);
@@ -1287,6 +1385,8 @@ function RevenueDashboard() {
     selectedProjectYears,
     selectedMonths,
     selectedSurveyMonths,
+    selectedInvoiceYears,
+    selectedInvoiceMonths,
     revenueFilter,
     showReceivablesOnly,
     showUninstalledOnly,
@@ -1338,6 +1438,14 @@ function RevenueDashboard() {
     .map(b => b.installation_date ? new Date(b.installation_date).getFullYear() : null)
     .filter(Boolean) as number[]
   )].sort((a, b) => b - a);
+
+  // 세금계산서 발행 연도 목록 (5가지 계산서 날짜 필드에서 추출)
+  const invoiceYears = [...new Set(businesses.flatMap(b => {
+    const ba = b as any;
+    return [ba.invoice_1st_date, ba.invoice_2nd_date, ba.invoice_advance_date, ba.invoice_balance_date, ba.invoice_additional_date]
+      .filter(Boolean)
+      .map((d: string) => new Date(d).getFullYear());
+  }))].sort((a, b) => b - a);
 
   // 정렬 함수
   const handleSort = (field: string) => {
@@ -1797,7 +1905,8 @@ function RevenueDashboard() {
           </button>
           <div className={`space-y-2 sm:space-y-3 ${isMobile && !isFilterExpanded ? 'hidden' : ''}`}>
             {/* 첫 번째 행: MultiSelectDropdown 필터들 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+              {/* 영업점 필터 - 주석처리 (검색창에서 영업점명 검색 가능)
               <MultiSelectDropdown
                 label="영업점"
                 options={salesOffices}
@@ -1806,7 +1915,9 @@ function RevenueDashboard() {
                 placeholder="전체"
                 inline
               />
+              */}
 
+              {/* 지역 필터 - 주석처리 (검색창에서 주소 검색 가능)
               <MultiSelectDropdown
                 label="지역"
                 options={regions.sort()}
@@ -1815,6 +1926,7 @@ function RevenueDashboard() {
                 placeholder="전체"
                 inline
               />
+              */}
 
               <MultiSelectDropdown
                 label="진행구분"
@@ -1826,7 +1938,7 @@ function RevenueDashboard() {
               />
 
               <MultiSelectDropdown
-                label="사업연도"
+                label="설치연도"
                 options={projectYears.map(year => String(year))}
                 selectedValues={selectedProjectYears}
                 onChange={(values) => { setSelectedProjectYears(values); setCurrentPage(1); }}
@@ -1851,6 +1963,24 @@ function RevenueDashboard() {
                 placeholder="전체"
                 inline
               />
+
+              <MultiSelectDropdown
+                label="계산서연도"
+                options={invoiceYears.map(year => String(year))}
+                selectedValues={selectedInvoiceYears}
+                onChange={(values) => { setSelectedInvoiceYears(values); setCurrentPage(1); }}
+                placeholder="전체"
+                inline
+              />
+
+              <MultiSelectDropdown
+                label="계산서월"
+                options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
+                selectedValues={selectedInvoiceMonths}
+                onChange={(values) => { setSelectedInvoiceMonths(values); setCurrentPage(1); }}
+                placeholder="전체"
+                inline
+              />
             </div>
 
             {/* 두 번째 행: 검색, 매출금액, 필터 (미수금 ON 시 업무관리 필터 추가) */}
@@ -1861,7 +1991,7 @@ function RevenueDashboard() {
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="사업장명/영업점"
+                    placeholder="사업장명/영업점/주소"
                     value={searchTerm}
                     onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                     className="w-full pl-7 pr-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2104,6 +2234,8 @@ function RevenueDashboard() {
                     setSelectedRegion('');
                     setRevenueFilter({ min: '', max: '' });
                     setShowReceivablesOnly(false);
+                    setSelectedInvoiceYears([]);
+                    setSelectedInvoiceMonths([]);
                     setCurrentPage(1);
                   }}
                   className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm"
@@ -2223,7 +2355,7 @@ function RevenueDashboard() {
                   handleRiskUpdate={handleRiskUpdate}
                   handlePaymentDateUpdate={handlePaymentDateUpdate}
                   riskMap={riskMap}
-                  showPaymentSchedule={selectedCategories.length === 1 && selectedCategories[0] === '자비'}
+                  showPaymentSchedule={selectedCategories.includes('자비')}
                 />
               </>
             )}
