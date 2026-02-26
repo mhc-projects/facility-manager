@@ -159,6 +159,7 @@ export async function GET(request: Request) {
       main_board_replacement, multiple_stack,
       additional_cost, negotiation,
       receivable_risk,
+      risk_is_manual,
       payment_scheduled_date::text as payment_scheduled_date,
       revenue_source,
       order_date::text as order_date,
@@ -199,12 +200,89 @@ export async function GET(request: Request) {
       completion_survey_manager
     `;
 
+    // invoice_records의 계산서·입금 데이터를 우선 사용 (legacy business_info 컬럼 override)
+    // total_amount: 계산서 발행금액, payment_amount: 입금금액
     const queryText = `
-      SELECT ${selectFields}
-      FROM business_info
-      WHERE ${whereClause}
-      ORDER BY updated_at DESC
-      LIMIT $${paramIndex}
+      WITH ir AS (
+        SELECT
+          business_id,
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN total_amount   END) AS ir_invoice_1st,
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN payment_amount END) AS ir_payment_1st,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' THEN total_amount   END) AS ir_invoice_2nd,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' THEN payment_amount END) AS ir_payment_2nd,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN total_amount   END) AS ir_invoice_additional,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN payment_amount END) AS ir_payment_additional,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN total_amount   END) AS ir_invoice_advance,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN payment_amount END) AS ir_payment_advance,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN total_amount   END) AS ir_invoice_balance,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN payment_amount END) AS ir_payment_balance
+        FROM invoice_records
+        WHERE is_active = TRUE
+        GROUP BY business_id
+      )
+      SELECT
+        bi.id, bi.business_name, bi.address, bi.local_government,
+        bi.manager_name, bi.manager_contact, bi.manager_position, bi.business_contact,
+        bi.representative_name, bi.business_registration_number,
+        bi.manufacturer, bi.sales_office, bi.progress_status, bi.business_category,
+        bi.project_year, bi.installation_team, bi.is_active, bi.is_deleted,
+        bi.updated_at, bi.created_at, bi.additional_info,
+        bi.ph_meter, bi.differential_pressure_meter, bi.temperature_meter,
+        bi.discharge_current_meter, bi.fan_current_meter, bi.pump_current_meter,
+        bi.gateway, bi.gateway_1_2, bi.gateway_3_4,
+        bi.vpn_wired, bi.vpn_wireless,
+        bi.explosion_proof_differential_pressure_meter_domestic,
+        bi.explosion_proof_temperature_meter_domestic,
+        bi.expansion_device, bi.relay_8ch, bi.relay_16ch,
+        bi.main_board_replacement, bi.multiple_stack,
+        bi.additional_cost, bi.negotiation,
+        bi.receivable_risk, bi.risk_is_manual,
+        bi.payment_scheduled_date::text AS payment_scheduled_date,
+        bi.revenue_source,
+        bi.order_date::text AS order_date,
+        bi.order_manager,
+        bi.order_request_date::text AS order_request_date,
+        bi.receipt_date::text AS receipt_date,
+        bi.shipment_date::text AS shipment_date,
+        bi.installation_date::text AS installation_date,
+        bi.subsidy_approval_date::text AS subsidy_approval_date,
+        bi.contract_sent_date::text AS contract_sent_date,
+        bi.construction_report_submitted_at::text AS construction_report_submitted_at,
+        bi.greenlink_confirmation_submitted_at::text AS greenlink_confirmation_submitted_at,
+        bi.attachment_completion_submitted_at::text AS attachment_completion_submitted_at,
+        bi.invoice_1st_date::text AS invoice_1st_date,
+        COALESCE(ir.ir_invoice_1st,        bi.invoice_1st_amount)        AS invoice_1st_amount,
+        bi.payment_1st_date::text AS payment_1st_date,
+        COALESCE(ir.ir_payment_1st,        bi.payment_1st_amount)        AS payment_1st_amount,
+        bi.invoice_2nd_date::text AS invoice_2nd_date,
+        COALESCE(ir.ir_invoice_2nd,        bi.invoice_2nd_amount)        AS invoice_2nd_amount,
+        bi.payment_2nd_date::text AS payment_2nd_date,
+        COALESCE(ir.ir_payment_2nd,        bi.payment_2nd_amount)        AS payment_2nd_amount,
+        bi.invoice_additional_date::text AS invoice_additional_date,
+        bi.payment_additional_date::text AS payment_additional_date,
+        COALESCE(ir.ir_payment_additional, bi.payment_additional_amount) AS payment_additional_amount,
+        bi.invoice_advance_date::text AS invoice_advance_date,
+        COALESCE(ir.ir_invoice_advance,    bi.invoice_advance_amount)    AS invoice_advance_amount,
+        bi.payment_advance_date::text AS payment_advance_date,
+        COALESCE(ir.ir_payment_advance,    bi.payment_advance_amount)    AS payment_advance_amount,
+        bi.invoice_balance_date::text AS invoice_balance_date,
+        COALESCE(ir.ir_invoice_balance,    bi.invoice_balance_amount)    AS invoice_balance_amount,
+        bi.payment_balance_date::text AS payment_balance_date,
+        COALESCE(ir.ir_payment_balance,    bi.payment_balance_amount)    AS payment_balance_amount,
+        bi.estimate_survey_date::text AS estimate_survey_date,
+        bi.estimate_survey_manager,
+        bi.pre_construction_survey_date::text AS pre_construction_survey_date,
+        bi.pre_construction_survey_manager,
+        bi.completion_survey_date::text AS completion_survey_date,
+        bi.completion_survey_manager
+      FROM (
+        SELECT ${selectFields}
+        FROM business_info
+        WHERE ${whereClause}
+        ORDER BY updated_at DESC
+        LIMIT $${paramIndex}
+      ) bi
+      LEFT JOIN ir ON ir.business_id = bi.id
     `;
     params.push(limit);
 

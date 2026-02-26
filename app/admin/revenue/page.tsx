@@ -89,12 +89,34 @@ interface DashboardStats {
   top_performing_office: string;
 }
 
+/**
+ * 설치일로부터 오늘까지 경과한 월 수 기반으로 위험도 자동 계산
+ * - 1개월 이상: 하
+ * - 2개월 이상: 중
+ * - 3개월 이상: 상
+ */
+function calcAutoRisk(installationDate: string | null | undefined): '상' | '중' | '하' | null {
+  if (!installationDate) return null;
+  const install = new Date(installationDate);
+  if (isNaN(install.getTime())) return null;
+  const today = new Date();
+  const monthsElapsed =
+    (today.getFullYear() - install.getFullYear()) * 12 +
+    (today.getMonth() - install.getMonth()) +
+    (today.getDate() >= install.getDate() ? 0 : -1);
+  if (monthsElapsed >= 3) return '상';
+  if (monthsElapsed >= 2) return '중';
+  if (monthsElapsed >= 1) return '하';
+  return null;
+}
+
 function RevenueDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
   const [businesses, setBusinesses] = useState<BusinessInfo[]>([]);
   const [riskMap, setRiskMap] = useState<Record<string, string | null>>({}); // 위험도 별도 상태 (businesses 재계산 방지)
+  const [riskIsManualMap, setRiskIsManualMap] = useState<Record<string, boolean>>({}); // 수동 설정 여부
   const [calculations, setCalculations] = useState<RevenueCalculation[]>([]);
   const [selectedOffices, setSelectedOffices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -291,29 +313,40 @@ function RevenueDashboard() {
   };
 
   // 위험도 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
+  // risk=null: 수동 해제 → 자동화 재개, risk=값: 수동 설정 → 자동화 비활성화
   const handleRiskUpdate = (businessId: string, risk: '상' | '중' | '하' | null) => {
     // 롤백용 이전 값 보존
     const previousRisk = riskMap[businessId] ?? null;
+    const previousIsManual = riskIsManualMap[businessId] ?? false;
 
-    // 즉시 riskMap만 업데이트 (businesses 변경 없음 → filteredBusinesses 재계산 없음)
-    setRiskMap(prev => ({ ...prev, [businessId]: risk }));
+    // 수동 설정 여부 결정: risk가 null이면 수동 해제(자동화 재개)
+    const isManual = risk !== null;
 
-    // 즉시 캐시 업데이트 (UI 상태와 캐시 동기화)
-    CacheManager.updateBusinessField(businessId, 'risk', risk);
-    CacheManager.broadcastFieldUpdate(businessId, 'risk', risk);
+    // 자동화 재개 시 설치일 기준으로 자동 계산하여 표시
+    const business = businesses.find(b => b.id === businessId);
+    const effectiveRisk = isManual ? risk : calcAutoRisk(business?.installation_date);
+
+    // 즉시 업데이트 (businesses 변경 없음 → filteredBusinesses 재계산 없음)
+    setRiskMap(prev => ({ ...prev, [businessId]: effectiveRisk }));
+    setRiskIsManualMap(prev => ({ ...prev, [businessId]: isManual }));
+
+    // 즉시 캐시 업데이트
+    CacheManager.updateBusinessField(businessId, 'risk', effectiveRisk);
+    CacheManager.broadcastFieldUpdate(businessId, 'risk', effectiveRisk);
 
     // API는 백그라운드에서 실행 (UI 블로킹 없음)
     fetch(`/api/business-risk/${businessId}`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ risk }),
+      body: JSON.stringify({ risk, is_manual: isManual }),
     }).then(response => {
       if (!response.ok) throw new Error('위험도 업데이트 실패');
-      console.log(`✅ [handleRiskUpdate] DB 업데이트 완료: ${businessId.slice(0, 8)}...`);
+      console.log(`✅ [handleRiskUpdate] DB 업데이트 완료: ${businessId.slice(0, 8)}... (${isManual ? '수동' : '자동화 재개'})`);
     }).catch(error => {
       console.error('[handleRiskUpdate] 오류:', error);
       // 실패 시 롤백 (UI 상태 + 캐시)
       setRiskMap(prev => ({ ...prev, [businessId]: previousRisk }));
+      setRiskIsManualMap(prev => ({ ...prev, [businessId]: previousIsManual }));
       CacheManager.updateBusinessField(businessId, 'risk', previousRisk);
       CacheManager.broadcastFieldUpdate(businessId, 'risk', previousRisk);
     });
@@ -727,13 +760,21 @@ function RevenueDashboard() {
         setBusinesses(businessData);
 
         // 위험도 상태를 별도 맵으로 초기화 (클릭 시 전체 재계산 방지)
+        // 수동 설정(risk_is_manual=true): DB 저장값 사용
+        // 자동 모드(risk_is_manual=false): 설치일 기준 자동 계산
         const initialRiskMap: Record<string, string | null> = {};
+        const initialManualMap: Record<string, boolean> = {};
         for (const b of businessData) {
-          if (b.receivable_risk !== undefined) {
+          const isManual = Boolean(b.risk_is_manual);
+          initialManualMap[b.id] = isManual;
+          if (isManual) {
             initialRiskMap[b.id] = b.receivable_risk ?? null;
+          } else {
+            initialRiskMap[b.id] = calcAutoRisk(b.installation_date);
           }
         }
         setRiskMap(initialRiskMap);
+        setRiskIsManualMap(initialManualMap);
 
         // 🚀 캐시 저장
         setCachedData(CACHE_KEYS.BUSINESSES, businessData);
@@ -1303,20 +1344,23 @@ function RevenueDashboard() {
     const normalizedCategory = progressStatus.trim();
 
     if (normalizedCategory === '보조금' || normalizedCategory === '보조금 동시진행') {
-      // 보조금: 1차 + 2차 + 추가공사비
-      const receivable1st = ((business as any).invoice_1st_amount || 0) - ((business as any).payment_1st_amount || 0);
-      const receivable2nd = ((business as any).invoice_2nd_amount || 0) - ((business as any).payment_2nd_amount || 0);
-      // 추가공사비는 계산서가 발행된 경우에만 미수금 계산 (invoice_additional_date 존재 여부 확인)
+      // 보조금: 총액 방식 (계산서 합계 - 입금 합계)
+      // invoice_records 우선값이 COALESCE로 이미 반영된 상태
       const hasAdditionalInvoice = (business as any).invoice_additional_date;
-      const receivableAdditional = hasAdditionalInvoice
-        ? (business.additional_cost || 0) - ((business as any).payment_additional_amount || 0)
-        : 0;
-      totalReceivables = receivable1st + receivable2nd + receivableAdditional;
+      const totalInvoices = ((business as any).invoice_1st_amount || 0)
+                          + ((business as any).invoice_2nd_amount || 0)
+                          + (hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0);
+      const totalPayments = ((business as any).payment_1st_amount || 0)
+                          + ((business as any).payment_2nd_amount || 0)
+                          + ((business as any).payment_additional_amount || 0);
+      totalReceivables = totalInvoices - totalPayments;
     } else if (normalizedCategory === '자비' || normalizedCategory === '대리점' || normalizedCategory === 'AS') {
-      // 자비: 선금 + 잔금
-      const receivableAdvance = ((business as any).invoice_advance_amount || 0) - ((business as any).payment_advance_amount || 0);
-      const receivableBalance = ((business as any).invoice_balance_amount || 0) - ((business as any).payment_balance_amount || 0);
-      totalReceivables = receivableAdvance + receivableBalance;
+      // 자비: 총액 방식 (계산서 합계 - 입금 합계)
+      const totalInvoices = ((business as any).invoice_advance_amount || 0)
+                          + ((business as any).invoice_balance_amount || 0);
+      const totalPayments = ((business as any).payment_advance_amount || 0)
+                          + ((business as any).payment_balance_amount || 0);
+      totalReceivables = totalInvoices - totalPayments;
     }
 
       return {
@@ -2355,6 +2399,7 @@ function RevenueDashboard() {
                   handleRiskUpdate={handleRiskUpdate}
                   handlePaymentDateUpdate={handlePaymentDateUpdate}
                   riskMap={riskMap}
+                  riskIsManualMap={riskIsManualMap}
                   showPaymentSchedule={selectedCategories.includes('자비')}
                 />
               </>
@@ -2405,6 +2450,7 @@ function VirtualizedTable({
   handleRiskUpdate,
   handlePaymentDateUpdate,
   riskMap,
+  riskIsManualMap,
   showPaymentSchedule,
 }: {
   businesses: any[];
@@ -2419,6 +2465,7 @@ function VirtualizedTable({
   handleRiskUpdate: (businessId: string, risk: '상' | '중' | '하' | null) => void;
   handlePaymentDateUpdate: (businessId: string, date: string | null) => Promise<void>;
   riskMap: Record<string, string | null>;
+  riskIsManualMap: Record<string, boolean>;
   showPaymentSchedule: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -2622,6 +2669,15 @@ function VirtualizedTable({
                 {/* 위험도 (미수금 ON 시) */}
                 {showReceivablesOnly && (
                   <div className="border-r border-gray-300 px-1 py-1 flex items-center justify-center gap-0.5 bg-orange-50/30">
+                    {/* 자동/수동 구분 아이콘 */}
+                    {(riskMap[business.id] ?? null) !== null && (
+                      <span
+                        title={riskIsManualMap[business.id] ? '수동 설정됨 (자동화 비활성화)' : '자동 계산됨 (설치일 기준)'}
+                        className="text-[9px] leading-none select-none"
+                      >
+                        {riskIsManualMap[business.id] ? '✏️' : '🔄'}
+                      </span>
+                    )}
                     {(['상', '중', '하'] as const).map(level => {
                       const isActive = (riskMap[business.id] ?? null) === level;
                       const colorMap = {

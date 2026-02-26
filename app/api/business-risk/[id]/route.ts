@@ -9,7 +9,10 @@ type RiskLevel = '상' | '중' | '하' | null;
 /**
  * PATCH /api/business-risk/[id]
  * 사업장 미수금 위험도 업데이트
- * Body: { risk: '상' | '중' | '하' | null }
+ * Body: {
+ *   risk: '상' | '중' | '하' | null,
+ *   is_manual: boolean  -- true: 수동 설정, false: 자동화 재개
+ * }
  */
 export async function PATCH(
   request: NextRequest,
@@ -33,6 +36,8 @@ export async function PATCH(
 
     const body = await request.json();
     const risk: RiskLevel = body.risk ?? null;
+    // is_manual 미전달 시 하위 호환: risk가 있으면 수동, null이면 자동
+    const isManual: boolean = body.is_manual !== undefined ? Boolean(body.is_manual) : risk !== null;
 
     // 허용값 검증
     if (risk !== null && !['상', '중', '하'].includes(risk)) {
@@ -42,12 +47,17 @@ export async function PATCH(
       );
     }
 
+    // 자동화 재개 시 receivable_risk는 NULL로 초기화
+    const riskToStore = isManual ? risk : null;
+
     const result = await pgQuery(
       `UPDATE business_info
-       SET receivable_risk = $1, updated_at = NOW()
-       WHERE id = $2 AND is_deleted = false
-       RETURNING id, business_name, receivable_risk`,
-      [risk, id]
+       SET receivable_risk = $1,
+           risk_is_manual = $2,
+           updated_at = NOW()
+       WHERE id = $3 AND is_deleted = false
+       RETURNING id, business_name, receivable_risk, risk_is_manual`,
+      [riskToStore, isManual, id]
     );
 
     if (result.rows.length === 0) {
