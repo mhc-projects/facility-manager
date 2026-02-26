@@ -265,10 +265,7 @@ export function useBusinessData() {
     const originalBusinesses = [...allBusinesses];
 
     try {
-      // 1️⃣ 낙관적 UI 업데이트 (즉시 제거)
-      setAllBusinesses(prev => prev.filter(b => b.id !== businessId));
-
-      // 2️⃣ 서버 삭제 요청
+      // 1️⃣ 서버 삭제 요청 (낙관적 업데이트 전에 먼저 확인)
       const response = await fetch('/api/business-info-direct', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -277,17 +274,23 @@ export function useBusinessData() {
 
       const result = await response.json();
 
+      // 사진 등록된 사업장 삭제 차단 (409)
+      if (response.status === 409) {
+        return { success: false, error: result.error || '사진이 등록된 사업장은 삭제할 수 없습니다' };
+      }
+
       if (!response.ok || !result.success) {
         throw new Error(result.error || '삭제 실패');
       }
 
-      // 3️⃣ 성공
+      // 2️⃣ 성공 시 낙관적 UI 업데이트
+      setAllBusinesses(prev => prev.filter(b => b.id !== businessId));
       console.log('✅ [useBusinessData.deleteBusiness] 삭제 성공:', businessId);
       return { success: true, message: '삭제 완료' };
 
     } catch (error) {
-      // 4️⃣ 실패: 원본 데이터로 자동 롤백
-      console.error('❌ [useBusinessData.deleteBusiness] 삭제 실패 - 자동 롤백:', businessId, error);
+      // 3️⃣ 실패: 낙관적 업데이트 없었으므로 롤백 불필요
+      console.error('❌ [useBusinessData.deleteBusiness] 삭제 실패:', businessId, error);
       setAllBusinesses(originalBusinesses);
 
       const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';

@@ -139,6 +139,24 @@ export async function DELETE(
 
     const { id: businessId } = params;
 
+    // 사진이 등록된 사업장은 삭제 불가
+    const url = new URL(request.url);
+    const force = url.searchParams.get('force') === 'true';
+    if (!force) {
+      const { supabaseAdmin } = await import('@/lib/supabase');
+      const { count } = await supabaseAdmin
+        .from('uploaded_files')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', businessId);
+
+      if (count && count > 0) {
+        return createErrorResponse(
+          `이 사업장에 등록된 사진 ${count}장이 있어 삭제할 수 없습니다. 사진을 먼저 삭제하거나 ?force=true 를 사용하세요.`,
+          409
+        );
+      }
+    }
+
     const result = await deleteBusiness(businessId);
 
     if (!(result as any).success) {

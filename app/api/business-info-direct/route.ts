@@ -705,7 +705,7 @@ export async function POST(request: Request) {
 
       // 🔄 전체 교체 모드
       if (uploadMode === 'replaceAll') {
-        return await executeReplaceAll(businessData.businesses, startTime);
+        return await executeReplaceAll(businessData.businesses, startTime, businessData.force_replace === true);
       }
 
       // 🚀 배치 INSERT 최적화: 대량 데이터를 한 번에 처리
@@ -1088,9 +1088,31 @@ async function executeSingleBatch(
  * 1. 기존 데이터 JSON 백업 → backup_snapshots 저장
  * 2. 트랜잭션: revenue/survey NULL 처리 → DELETE → INSERT → air_permit 재연결
  */
-async function executeReplaceAll(businesses: any[], startTime: number) {
+async function executeReplaceAll(businesses: any[], startTime: number, forceReplace: boolean = false) {
   if (!businesses || businesses.length === 0) {
     return NextResponse.json({ success: false, error: '업로드할 사업장 데이터가 없습니다' }, { status: 400 });
+  }
+
+  // ─── Step 0: 사진 등록된 사업장 체크 ────────────────────────────────────
+  if (!forceReplace) {
+    const photoBizRows = await queryAll(`
+      SELECT bi.business_name, COUNT(uf.id)::int AS photo_count
+      FROM business_info bi
+      JOIN uploaded_files uf ON uf.business_id = bi.id
+      WHERE bi.is_deleted = false
+      GROUP BY bi.business_name
+      HAVING COUNT(uf.id) > 0
+      ORDER BY bi.business_name
+    `);
+    if (photoBizRows && photoBizRows.length > 0) {
+      const list = photoBizRows.map((r: any) => `${r.business_name}(${r.photo_count}장)`).join(', ');
+      log('🚫 [REPLACE-ALL] 사진 등록 사업장 존재로 전체교체 차단:', list);
+      return NextResponse.json({
+        success: false,
+        error: `사진이 등록된 사업장이 있어 전체교체를 진행할 수 없습니다: ${list}`,
+        photo_businesses: photoBizRows,
+      }, { status: 409 });
+    }
   }
 
   // ─── Step 1: 백업 생성 (트랜잭션 외부) ─────────────────────────────────
@@ -1354,6 +1376,19 @@ export async function DELETE(request: Request) {
         success: false,
         error: '이미 삭제된 사업장입니다'
       }, { status: 400 });
+    }
+
+    // 사진이 등록된 사업장은 삭제 불가
+    const photoCheck = await queryOne(
+      `SELECT COUNT(*)::int AS cnt FROM uploaded_files WHERE business_id = $1`,
+      [id]
+    );
+    if (photoCheck?.cnt > 0) {
+      return NextResponse.json({
+        success: false,
+        error: `이 사업장에 등록된 사진 ${photoCheck.cnt}장이 있어 삭제할 수 없습니다. 사진을 먼저 삭제해주세요.`,
+        photo_count: photoCheck.cnt,
+      }, { status: 409 });
     }
 
     // Soft delete: is_deleted 플래그를 true로 설정

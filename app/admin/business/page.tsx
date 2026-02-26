@@ -3429,8 +3429,40 @@ function BusinessManagementPage() {
         setUploadProgress(95) // API 완료시 95%
         
         const result = await response.json()
-        
-        if (response.ok && result.success) {
+
+        // 사진 등록된 사업장 존재로 전체교체 차단된 경우 (409)
+        if (response.status === 409 && result.photo_businesses) {
+          clearInterval(progressInterval)
+          setIsUploading(false)
+          setUploadProgress(0)
+          const bizList = (result.photo_businesses as any[])
+            .map((b: any) => `• ${b.business_name} (${b.photo_count}장)`)
+            .join('\n')
+          const confirmed = confirm(
+            `⚠️ 아래 사업장에 사진이 등록되어 있습니다. 전체교체 시 사진 연결이 끊어질 수 있습니다.\n\n${bizList}\n\n그래도 전체교체를 진행하시겠습니까?`
+          )
+          if (!confirmed) return
+          // force_replace=true 로 재요청
+          const forceTimestamp = Date.now()
+          const forceResponse = await fetch(`/api/business-info-direct?_t=${forceTimestamp}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              isBatchUpload: true,
+              uploadMode: uploadMode,
+              force_replace: true,
+              businesses: mappedBusinesses
+            })
+          })
+          const forceResult = await forceResponse.json()
+          if (!forceResponse.ok || !forceResult.success) {
+            throw new Error(forceResult.error || '전체교체 실패')
+          }
+          Object.assign(result, forceResult)
+          // success 분기로 이어서 처리
+        }
+
+        if (result.success) {
           setUploadProgress(100) // 완료시 100%
           
           setUploadResults({
