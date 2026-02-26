@@ -91,6 +91,8 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/migrate-business-id', // 마이그레이션 API (관리자 전용)
     '/api/test-caption',       // Caption 테스트 API (개발용)
     '/api/businesses',         // 사업장 관리 API (Bearer 토큰 인증)
+    '/api/invoice-records',    // 계산서 레코드 CRUD API (쿠키 인증)
+    '/api/business-invoices',  // 계산서 조회 API (쿠키 인증)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }
