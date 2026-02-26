@@ -27,6 +27,7 @@ import { useSupabaseRealtime } from '@/hooks/useSupabaseRealtime'
 import { useIsMobile } from '@/hooks/useIsMobile'
 // 📱 모바일 카드 뷰 컴포넌트
 import BusinessCardList from './components/BusinessCardList'
+import InvoiceTabSection, { type InvoiceTabSectionHandle } from '@/components/business/invoices/InvoiceTabSection'
 
 interface Contact {
   name: string;
@@ -368,6 +369,7 @@ function BusinessManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
   const [formData, setFormData] = useState<Partial<UnifiedBusinessInfo>>({})
+  const invoiceTabRef = useRef<InvoiceTabSectionHandle>(null)
   const [localGovSuggestions, setLocalGovSuggestions] = useState<string[]>([])
   const [showLocalGovSuggestions, setShowLocalGovSuggestions] = useState(false)
   const [selectedBusiness, setSelectedBusiness] = useState<UnifiedBusinessInfo | null>(null)
@@ -3573,6 +3575,16 @@ function BusinessManagementPage() {
 
       console.log('📤 [FRONTEND] 전송할 데이터:', JSON.stringify(body, null, 2));
 
+      // 0. 계산서 탭의 활성 폼 저장 (편집 모드에서만)
+      if (editingBusiness && invoiceTabRef.current) {
+        try {
+          await invoiceTabRef.current.saveActiveTab();
+        } catch (invoiceErr) {
+          console.error('계산서 저장 중 오류:', invoiceErr);
+          // 계산서 저장 실패해도 사업장 정보 저장은 계속 진행
+        }
+      }
+
       // 1. 즉시 모달 닫기 (사용자 경험 개선)
       setIsModalOpen(false)
       setShowLocalGovSuggestions(false)
@@ -5947,11 +5959,8 @@ function BusinessManagementPage() {
                   </div>
                 </div>
 
-                {/* 계산서 및 입금 정보 - 진행구분에 따라 동적 표시 */}
-                {formData.progress_status && (() => {
-                  // 진행구분을 보조금/자비로 매핑 (모든 진행구분 허용)
-                  const mappedCategory = mapCategoryToInvoiceType(formData.progress_status);
-
+                {/* 계산서 및 입금 정보 - InvoiceTabSection */}
+                {editingBusiness && formData.progress_status && (() => {
                   return (
                     <div>
                       <div className="flex items-center mb-3 sm:mb-4">
@@ -5962,411 +5971,12 @@ function BusinessManagementPage() {
                           계산서 및 입금 정보 ({formData.progress_status})
                         </h3>
                       </div>
-
-                      {/* 보조금: 1차/2차/추가공사비 */}
-                      {mappedCategory === '보조금' && (
-                      <div className="space-y-4 sm:space-y-6">
-                        {/* 1차 계산서 */}
-                        <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                          <h4 className="text-xs sm:text-sm font-semibold text-blue-900 mb-3">1차 계산서</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 발행일</label>
-                              <DateInput
-                                value={formData.invoice_1st_date || ''}
-                                onChange={(value) => setFormData({...formData, invoice_1st_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.invoice_1st_amount ? formData.invoice_1st_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, invoice_1st_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-blue-500"
-                                placeholder="예: 10,000,000"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금일</label>
-                              <DateInput
-                                value={formData.payment_1st_date || ''}
-                                onChange={(value) => setFormData({...formData, payment_1st_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.payment_1st_amount ? formData.payment_1st_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, payment_1st_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-blue-500"
-                                placeholder="예: 10,000,000"
-                              />
-                            </div>
-                          </div>
-                          {formData.invoice_1st_date && formData.invoice_1st_amount && formData.invoice_1st_amount > 0 && (
-                            <div className="mt-2 p-2 bg-white rounded border border-blue-200">
-                              <div className="flex justify-between text-[10px] sm:text-xs">
-                                <span className="text-gray-600">미수금:</span>
-                                <span className={`font-bold ${
-                                  ((formData.invoice_1st_amount || 0) - (formData.payment_1st_amount || 0)) === 0
-                                    ? 'text-green-600' : 'text-orange-600'
-                                }`}>
-                                  {((formData.invoice_1st_amount || 0) - (formData.payment_1st_amount || 0)).toLocaleString()}원
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 2차 계산서 */}
-                        <div className="p-3 sm:p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                          <h4 className="text-xs sm:text-sm font-semibold text-green-900 mb-3">2차 계산서</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 발행일</label>
-                              <DateInput
-                                value={formData.invoice_2nd_date || ''}
-                                onChange={(value) => setFormData({...formData, invoice_2nd_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.invoice_2nd_amount ? formData.invoice_2nd_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, invoice_2nd_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-green-500"
-                                placeholder="예: 5,000,000"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금일</label>
-                              <DateInput
-                                value={formData.payment_2nd_date || ''}
-                                onChange={(value) => setFormData({...formData, payment_2nd_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.payment_2nd_amount ? formData.payment_2nd_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, payment_2nd_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-green-500"
-                                placeholder="예: 5,000,000"
-                              />
-                            </div>
-                          </div>
-                          {formData.invoice_2nd_date && formData.invoice_2nd_amount && formData.invoice_2nd_amount > 0 && (
-                            <div className="mt-2 p-2 bg-white rounded border border-green-200">
-                              <div className="flex justify-between text-[10px] sm:text-xs">
-                                <span className="text-gray-600">미수금:</span>
-                                <span className={`font-bold ${
-                                  ((formData.invoice_2nd_amount || 0) - (formData.payment_2nd_amount || 0)) === 0
-                                    ? 'text-green-600' : 'text-orange-600'
-                                }`}>
-                                  {((formData.invoice_2nd_amount || 0) - (formData.payment_2nd_amount || 0)).toLocaleString()}원
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 추가공사비 계산서 */}
-                        {formData.additional_cost && formData.additional_cost > 0 && (
-                          <div className="p-3 sm:p-4 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-200">
-                            <h4 className="text-xs sm:text-sm font-semibold text-amber-900 mb-3">추가공사비 계산서</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">계산서 발행일</label>
-                                <DateInput
-                                  value={formData.invoice_additional_date || ''}
-                                  onChange={(value) => setFormData({...formData, invoice_additional_date: value || null})}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">계산서 금액 (원)</label>
-                                <input
-                                  type="text"
-                                  value={Math.round(formData.additional_cost * 1.1).toLocaleString()}
-                                  disabled
-                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs bg-gray-100 cursor-not-allowed"
-                                />
-                                <p className="text-[9px] text-gray-500 mt-1">※ 추가공사비 + 부가세 10% (공급가액: {formData.additional_cost.toLocaleString()}원)</p>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">입금일</label>
-                                <DateInput
-                                  value={formData.payment_additional_date || ''}
-                                  onChange={(value) => setFormData({...formData, payment_additional_date: value || null})}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">입금 금액 (원)</label>
-                                <input
-                                  type="text"
-                                  value={formData.payment_additional_amount ? formData.payment_additional_amount.toLocaleString() : ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value.replace(/,/g, '');
-                                    setFormData({...formData, payment_additional_amount: value ? parseInt(value) : null});
-                                  }}
-                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-amber-500"
-                                  placeholder="예: 500,000"
-                                />
-                              </div>
-                            </div>
-                            {formData.invoice_additional_date && (
-                              <div className="mt-2 p-2 bg-white rounded border border-amber-200">
-                                <div className="flex justify-between text-[10px] sm:text-xs">
-                                  <span className="text-gray-600">미수금:</span>
-                                  <span className={`font-bold ${
-                                    (Math.round((formData.additional_cost || 0) * 1.1) - (formData.payment_additional_amount || 0)) === 0
-                                      ? 'text-green-600' : 'text-orange-600'
-                                  }`}>
-                                    {(Math.round((formData.additional_cost || 0) * 1.1) - (formData.payment_additional_amount || 0)).toLocaleString()}원
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 전체 미수금 요약 */}
-                        <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-100 to-gray-100 rounded-lg border-2 border-slate-300">
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 mb-2">전체 미수금 요약</h4>
-                          <div className="space-y-1 text-[10px] sm:text-xs">
-                            {formData.invoice_1st_date && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">1차 미수금:</span>
-                                <span className="font-medium">{((formData.invoice_1st_amount || 0) - (formData.payment_1st_amount || 0)).toLocaleString()}원</span>
-                              </div>
-                            )}
-                            {formData.invoice_2nd_date && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">2차 미수금:</span>
-                                <span className="font-medium">{((formData.invoice_2nd_amount || 0) - (formData.payment_2nd_amount || 0)).toLocaleString()}원</span>
-                              </div>
-                            )}
-                            {formData.invoice_additional_date && formData.additional_cost && formData.additional_cost > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">추가공사비 미수금:</span>
-                                <span className="font-medium">{(Math.round((formData.additional_cost || 0) * 1.1) - (formData.payment_additional_amount || 0)).toLocaleString()}원</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between pt-2 mt-2 border-t-2 border-slate-300">
-                              <span className="font-bold text-gray-900">총 미수금:</span>
-                              <span className={`font-bold text-base ${
-                                (() => {
-                                  // 추가공사비는 계산서가 발행된 경우에만 미수금 계산 (부가세 10% 포함)
-                                  const additionalCostInvoice = formData.invoice_additional_date ? Math.round((formData.additional_cost || 0) * 1.1) : 0;
-                                  // 총액 방식: 전체 계산서 합계 - 전체 입금 합계
-                                  const totalInvoices = (formData.invoice_1st_amount || 0) +
-                                                       (formData.invoice_2nd_amount || 0) +
-                                                       additionalCostInvoice;
-                                  const totalPayments = (formData.payment_1st_amount || 0) +
-                                                       (formData.payment_2nd_amount || 0) +
-                                                       (formData.payment_additional_amount || 0);
-                                  return totalInvoices - totalPayments;
-                                })() === 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {(() => {
-                                  // 추가공사비는 계산서가 발행된 경우에만 미수금 계산 (부가세 10% 포함)
-                                  const additionalCostInvoice = formData.invoice_additional_date ? Math.round((formData.additional_cost || 0) * 1.1) : 0;
-                                  const totalInvoices = (formData.invoice_1st_amount || 0) +
-                                                       (formData.invoice_2nd_amount || 0) +
-                                                       additionalCostInvoice;
-                                  const totalPayments = (formData.payment_1st_amount || 0) +
-                                                       (formData.payment_2nd_amount || 0) +
-                                                       (formData.payment_additional_amount || 0);
-                                  return (totalInvoices - totalPayments).toLocaleString();
-                                })()}원
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                      {/* 자비: 선금/잔금 */}
-                      {mappedCategory === '자비' && (
-                      <div className="space-y-4 sm:space-y-6">
-                        {/* 선금 계산서 */}
-                        <div className="p-3 sm:p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                          <h4 className="text-xs sm:text-sm font-semibold text-purple-900 mb-3">선금 계산서</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 발행일</label>
-                              <DateInput
-                                value={formData.invoice_advance_date || ''}
-                                onChange={(value) => setFormData({...formData, invoice_advance_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.invoice_advance_amount ? formData.invoice_advance_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, invoice_advance_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-purple-500"
-                                placeholder="예: 15,000,000 (기본 50%)"
-                              />
-                              <p className="text-[9px] text-gray-500 mt-1">※ 기본 50%, 사업장에 따라 100%도 가능</p>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금일</label>
-                              <DateInput
-                                value={formData.payment_advance_date || ''}
-                                onChange={(value) => setFormData({...formData, payment_advance_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.payment_advance_amount ? formData.payment_advance_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, payment_advance_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-purple-500"
-                                placeholder="예: 15,000,000"
-                              />
-                            </div>
-                          </div>
-                          {formData.invoice_advance_date && formData.invoice_advance_amount && formData.invoice_advance_amount > 0 && (
-                            <div className="mt-2 p-2 bg-white rounded border border-purple-200">
-                              <div className="flex justify-between text-[10px] sm:text-xs">
-                                <span className="text-gray-600">미수금:</span>
-                                <span className={`font-bold ${
-                                  ((formData.invoice_advance_amount || 0) - (formData.payment_advance_amount || 0)) === 0
-                                    ? 'text-green-600' : 'text-orange-600'
-                                }`}>
-                                  {((formData.invoice_advance_amount || 0) - (formData.payment_advance_amount || 0)).toLocaleString()}원
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 잔금 계산서 */}
-                        <div className="p-3 sm:p-4 bg-gradient-to-r from-cyan-50 to-teal-50 rounded-lg border border-cyan-200">
-                          <h4 className="text-xs sm:text-sm font-semibold text-cyan-900 mb-3">잔금 계산서</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 발행일</label>
-                              <DateInput
-                                value={formData.invoice_balance_date || ''}
-                                onChange={(value) => setFormData({...formData, invoice_balance_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">계산서 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.invoice_balance_amount ? formData.invoice_balance_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, invoice_balance_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-cyan-500"
-                                placeholder="예: 15,000,000 (기본 50%)"
-                              />
-                              <p className="text-[9px] text-gray-500 mt-1">※ 선금 100% 경우 0원 가능</p>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금일</label>
-                              <DateInput
-                                value={formData.payment_balance_date || ''}
-                                onChange={(value) => setFormData({...formData, payment_balance_date: value || null})}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">입금 금액 (원)</label>
-                              <input
-                                type="text"
-                                value={formData.payment_balance_amount ? formData.payment_balance_amount.toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  setFormData({...formData, payment_balance_amount: value ? parseInt(value) : null});
-                                }}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-[10px] sm:text-xs focus:ring-1 focus:ring-cyan-500"
-                                placeholder="예: 15,000,000"
-                              />
-                            </div>
-                          </div>
-                          {formData.invoice_balance_date && formData.invoice_balance_amount && formData.invoice_balance_amount > 0 && (
-                            <div className="mt-2 p-2 bg-white rounded border border-cyan-200">
-                              <div className="flex justify-between text-[10px] sm:text-xs">
-                                <span className="text-gray-600">미수금:</span>
-                                <span className={`font-bold ${
-                                  ((formData.invoice_balance_amount || 0) - (formData.payment_balance_amount || 0)) === 0
-                                    ? 'text-green-600' : 'text-orange-600'
-                                }`}>
-                                  {((formData.invoice_balance_amount || 0) - (formData.payment_balance_amount || 0)).toLocaleString()}원
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 전체 미수금 요약 */}
-                        <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-100 to-gray-100 rounded-lg border-2 border-slate-300">
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 mb-2">전체 미수금 요약</h4>
-                          <div className="space-y-1 text-[10px] sm:text-xs">
-                            {formData.invoice_advance_date && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">선금 미수금:</span>
-                                <span className="font-medium">{((formData.invoice_advance_amount || 0) - (formData.payment_advance_amount || 0)).toLocaleString()}원</span>
-                              </div>
-                            )}
-                            {formData.invoice_balance_date && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">잔금 미수금:</span>
-                                <span className="font-medium">{((formData.invoice_balance_amount || 0) - (formData.payment_balance_amount || 0)).toLocaleString()}원</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between pt-2 mt-2 border-t-2 border-slate-300">
-                              <span className="font-bold text-gray-900">총 미수금:</span>
-                              <span className={`font-bold text-base ${
-                                (() => {
-                                  // 총액 방식: 전체 계산서 합계 - 전체 입금 합계
-                                  const totalInvoices = (formData.invoice_advance_amount || 0) +
-                                                       (formData.invoice_balance_amount || 0);
-                                  const totalPayments = (formData.payment_advance_amount || 0) +
-                                                       (formData.payment_balance_amount || 0);
-                                  return totalInvoices - totalPayments;
-                                })() === 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {(() => {
-                                  const totalInvoices = (formData.invoice_advance_amount || 0) +
-                                                       (formData.invoice_balance_amount || 0);
-                                  const totalPayments = (formData.payment_advance_amount || 0) +
-                                                       (formData.payment_balance_amount || 0);
-                                  return (totalInvoices - totalPayments).toLocaleString();
-                                })()}원
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      <InvoiceTabSection
+                        ref={invoiceTabRef}
+                        businessId={editingBusiness.id}
+                        progressStatus={formData.progress_status}
+                        userPermission={userPermission}
+                      />
                     </div>
                   );
                 })()}

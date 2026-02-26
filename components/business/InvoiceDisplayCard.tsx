@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { formatDate } from '@/utils/formatters';
+import type { InvoiceRecord } from '@/types/invoice';
 
 interface InvoiceDisplayCardProps {
   title: string;
@@ -9,6 +10,8 @@ interface InvoiceDisplayCardProps {
   invoiceAmount?: number;
   paymentDate?: string;
   paymentAmount?: number;
+  // 신규: invoice_records 데이터 (있을 경우 상세 표시)
+  invoiceRecord?: InvoiceRecord | null;
 }
 
 export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
@@ -17,23 +20,34 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
   invoiceAmount,
   paymentDate,
   paymentAmount,
+  invoiceRecord,
 }) => {
-  const receivable = (invoiceAmount || 0) - (paymentAmount || 0);
-  const hasInvoice = invoiceDate && invoiceAmount && invoiceAmount > 0;  // 발행일이 있어야 계산서로 인정
-  const hasPayment = paymentDate && paymentAmount && paymentAmount > 0;
-  const hasAnyData = hasInvoice || hasPayment;  // 계산서 또는 입금 중 하나라도 있으면 표시
+  const [showRevisions, setShowRevisions] = useState(false);
+
+  // invoice_records 데이터가 있으면 그것을 우선 사용
+  const displayDate = invoiceRecord?.issue_date || invoiceDate;
+  const displayAmount = invoiceRecord?.total_amount ?? invoiceAmount;
+  const displaySupply = invoiceRecord?.supply_amount;
+  const displayTax = invoiceRecord?.tax_amount;
+  const displayInvoiceNumber = invoiceRecord?.invoice_number;
+  const displayPaymentDate = invoiceRecord?.payment_date || paymentDate;
+  const displayPaymentAmount = invoiceRecord?.payment_amount ?? paymentAmount;
+  const displayPaymentMemo = invoiceRecord?.payment_memo;
+  const revisions = invoiceRecord?.revisions || [];
+
+  const receivable = (displayAmount || 0) - (displayPaymentAmount || 0);
+  const hasInvoice = displayDate && displayAmount && displayAmount > 0;
+  const hasPayment = displayPaymentDate && displayPaymentAmount && displayPaymentAmount > 0;
+  const hasAnyData = hasInvoice || hasPayment;
   const isFullyPaid = receivable === 0 && hasInvoice;
 
-  // 미수금 발생 이유 판단
   const getReceivableReason = () => {
     if (!hasInvoice) return null;
     if (isFullyPaid) return null;
     if (receivable <= 0) return null;
-
-    if (!hasPayment) {
-      return '계산서 발행 후 미입금';
-    } else if (paymentAmount && paymentAmount < (invoiceAmount || 0)) {
-      return `일부 입금 (${((paymentAmount / (invoiceAmount || 1)) * 100).toFixed(0)}%)`;
+    if (!hasPayment) return '계산서 발행 후 미입금';
+    if (displayPaymentAmount && displayPaymentAmount < (displayAmount || 0)) {
+      return `일부 입금 (${((displayPaymentAmount / (displayAmount || 1)) * 100).toFixed(0)}%)`;
     }
     return null;
   };
@@ -42,34 +56,58 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
 
   return (
     <div className="border border-gray-200 rounded-lg p-3 bg-white shadow-sm">
-      <h4 className="font-semibold text-gray-800 mb-2 text-xs border-b border-gray-200 pb-1.5">
-        {title}
-      </h4>
+      <div className="flex items-center justify-between mb-2 border-b border-gray-200 pb-1.5">
+        <h4 className="font-semibold text-gray-800 text-xs">{title}</h4>
+        {revisions.length > 0 && (
+          <button
+            onClick={() => setShowRevisions(!showRevisions)}
+            className="text-xs text-orange-600 hover:text-orange-700 flex items-center gap-1"
+          >
+            ⚠️ 수정이력 {revisions.length}건 {showRevisions ? '▴' : '▾'}
+          </button>
+        )}
+      </div>
 
       {hasAnyData ? (
         <div className="space-y-1.5 text-xs">
-          {/* 발행 정보 - 계산서가 있을 때만 표시 */}
+          {/* 발행 정보 */}
           {hasInvoice && (
             <div className="bg-blue-50 rounded p-2 space-y-1">
               <div className="flex justify-between">
                 <span className="text-gray-600">📄 발행일</span>
-                <span className="font-medium text-gray-900">{formatDate(invoiceDate || '')}</span>
+                <span className="font-medium text-gray-900">{formatDate(displayDate || '')}</span>
               </div>
+              {displayInvoiceNumber && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">🔢 계산서번호</span>
+                  <span className="font-medium text-gray-700 text-xs">{displayInvoiceNumber}</span>
+                </div>
+              )}
+              {displaySupply !== undefined && displaySupply > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">💵 공급가액</span>
+                  <span className="font-medium text-gray-700">{displaySupply.toLocaleString()}원</span>
+                </div>
+              )}
+              {displayTax !== undefined && displayTax > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">🧾 세액</span>
+                  <span className="font-medium text-gray-700">{displayTax.toLocaleString()}원</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-600">💵 발행금액</span>
                 <span className="font-semibold text-blue-700">
-                  {(invoiceAmount || 0).toLocaleString()}원
+                  {(displayAmount || 0).toLocaleString()}원
                 </span>
               </div>
             </div>
           )}
 
-          {/* 계산서 없이 입금만 있을 때 안내 메시지 */}
+          {/* 계산서 없이 입금만 있을 때 안내 */}
           {!hasInvoice && hasPayment && (
             <div className="bg-yellow-50 rounded p-2 border border-yellow-200">
-              <p className="text-xs text-yellow-800">
-                ℹ️ 계산서 미발행 (입금만 처리됨)
-              </p>
+              <p className="text-xs text-yellow-800">ℹ️ 계산서 미발행 (입금만 처리됨)</p>
             </div>
           )}
 
@@ -78,15 +116,21 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
             <div className="flex justify-between">
               <span className="text-gray-600">📅 입금일</span>
               <span className="font-medium text-gray-900">
-                {paymentDate ? formatDate(paymentDate) : <span className="text-gray-400">미입금</span>}
+                {displayPaymentDate ? formatDate(displayPaymentDate) : <span className="text-gray-400">미입금</span>}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">💰 입금금액</span>
               <span className="font-semibold text-green-700">
-                {(paymentAmount || 0).toLocaleString()}원
+                {(displayPaymentAmount || 0).toLocaleString()}원
               </span>
             </div>
+            {displayPaymentMemo && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">📝 메모</span>
+                <span className="text-gray-600 text-xs">{displayPaymentMemo}</span>
+              </div>
+            )}
           </div>
 
           {/* 미수금 */}
@@ -107,16 +151,35 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
                 {receivable > 0 && ' ⚠️'}
               </span>
             </div>
-
-            {/* 미수금 발생 이유 표시 */}
             {receivableReason && (
               <div className="mt-1.5 pt-1.5 border-t border-red-200">
-                <p className="text-xs text-red-600">
-                  📌 {receivableReason}
-                </p>
+                <p className="text-xs text-red-600">📌 {receivableReason}</p>
               </div>
             )}
           </div>
+
+          {/* 수정발행 이력 아코디언 */}
+          {revisions.length > 0 && showRevisions && (
+            <div className="border border-orange-200 rounded p-2 bg-orange-50 space-y-2">
+              <p className="text-xs font-semibold text-orange-700">수정발행 이력</p>
+              {revisions.map((rev, idx) => (
+                <div key={rev.id} className="bg-white rounded border border-orange-200 p-2 text-xs">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="font-semibold text-orange-700">수정 {idx + 1}회</span>
+                      {rev.issue_date && (
+                        <span className="text-gray-500 ml-2">{formatDate(rev.issue_date)}</span>
+                      )}
+                    </div>
+                    <span className="font-bold text-orange-800">{rev.total_amount.toLocaleString()}원</span>
+                  </div>
+                  {rev.revised_reason && (
+                    <p className="text-gray-600 mt-1">사유: {rev.revised_reason}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-center py-4 text-gray-400">

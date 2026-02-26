@@ -1,6 +1,7 @@
 // app/api/business-invoices/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
+import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -157,6 +158,63 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // ── 신규: invoice_records 조회 ──────────────────────────────
+    let invoiceRecordsByStage: InvoiceRecordsByStage = {
+      subsidy_1st: [],
+      subsidy_2nd: [],
+      subsidy_additional: [],
+      self_advance: [],
+      self_balance: [],
+      extra: [],
+    };
+    let extraReceivables = 0;
+
+    try {
+      const recordsResult = await pgQuery(
+        `SELECT * FROM invoice_records
+         WHERE business_id = $1 AND is_active = TRUE
+         ORDER BY invoice_stage, record_type, created_at ASC`,
+        [businessId]
+      );
+
+      if (recordsResult.rows && recordsResult.rows.length > 0) {
+        const allRecords: InvoiceRecord[] = recordsResult.rows;
+
+        // 단계별 그룹핑 및 수정이력 연결
+        const recordMap = new Map<string, InvoiceRecord>();
+        allRecords.forEach(r => recordMap.set(r.id, { ...r, revisions: [] }));
+
+        allRecords.forEach(r => {
+          if (r.parent_record_id && recordMap.has(r.parent_record_id)) {
+            const parent = recordMap.get(r.parent_record_id)!;
+            parent.revisions = parent.revisions || [];
+            parent.revisions.push(recordMap.get(r.id)!);
+          }
+        });
+
+        // 최상위(원본) 레코드만 단계별 분류
+        const topLevelRecords = allRecords.filter(r => !r.parent_record_id);
+        topLevelRecords.forEach(r => {
+          const withRevisions = recordMap.get(r.id)!;
+          const stage = r.invoice_stage as keyof InvoiceRecordsByStage;
+          if (invoiceRecordsByStage[stage] !== undefined) {
+            invoiceRecordsByStage[stage].push(withRevisions);
+          }
+        });
+
+        // 추가 계산서(extra) 미수금 계산
+        invoiceRecordsByStage.extra.forEach(record => {
+          // 취소된 계산서는 미수금 제외
+          if (record.record_type !== 'cancelled') {
+            extraReceivables += (record.total_amount || 0) - (record.payment_amount || 0);
+          }
+        });
+      }
+    } catch (recordsError) {
+      // invoice_records 테이블이 없는 경우(마이그레이션 전) 빈 값으로 처리
+      console.warn('⚠️ [BUSINESS-INVOICES] invoice_records 조회 실패 (테이블 없음?):', recordsError);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -166,6 +224,10 @@ export async function GET(request: NextRequest) {
         additional_cost: business.additional_cost,
         invoices: invoicesData,
         total_receivables: totalReceivables,
+        // 신규 필드
+        invoice_records: invoiceRecordsByStage,
+        extra_receivables: extraReceivables,
+        grand_total_receivables: totalReceivables + extraReceivables,
       },
     });
   } catch (error: any) {
@@ -178,7 +240,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT - 계산서/입금 정보 업데이트
+ * PUT - 계산서/입금 정보 업데이트 (기존 business_info 컬럼 직접 업데이트)
  * Body: { business_id, invoice_type, invoice_date?, invoice_amount?, payment_date?, payment_amount? }
  */
 export async function PUT(request: NextRequest) {
