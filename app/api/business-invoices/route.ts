@@ -1,7 +1,9 @@
 // app/api/business-invoices/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
+import { queryOne, query as pgQuery, queryAll } from '@/lib/supabase-direct';
 import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
+import { calculateBusinessRevenue } from '@/lib/revenue-calculator';
+import { calculateReceivables, sumAllPayments } from '@/lib/receivables-calculator';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -28,6 +30,17 @@ export async function GET(request: NextRequest) {
     const business = await queryOne(
       `SELECT
         id, business_name, business_category, progress_status, additional_cost,
+        installation_date,
+        manufacturer, sales_office, negotiation,
+        ph_meter, differential_pressure_meter, temperature_meter,
+        discharge_current_meter, fan_current_meter, pump_current_meter,
+        gateway, gateway_1_2, gateway_3_4, vpn_wired, vpn_wireless,
+        multiple_stack, expansion_device, relay_8ch, relay_16ch,
+        main_board_replacement,
+        explosion_proof_differential_pressure_meter_domestic,
+        explosion_proof_temperature_meter_domestic,
+        estimate_survey_date, pre_construction_survey_date, completion_survey_date,
+        installation_extra_cost,
         invoice_1st_date, invoice_1st_amount, payment_1st_date, payment_1st_amount,
         invoice_2nd_date, invoice_2nd_amount, payment_2nd_date, payment_2nd_amount,
         invoice_additional_date, payment_additional_date, payment_additional_amount,
@@ -44,6 +57,43 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // pricing 데이터 로드 (매출 계산용)
+    const [govPricing, mfgPricing, installCostData, salesOfficeData, surveyCostData] = await Promise.all([
+      queryAll('SELECT * FROM government_pricing WHERE is_active = true', []),
+      queryAll('SELECT * FROM manufacturer_pricing WHERE is_active = true', []),
+      queryAll('SELECT * FROM equipment_installation_cost WHERE is_active = true', []),
+      queryAll('SELECT * FROM sales_office_cost_settings WHERE is_active = true', []),
+      queryAll('SELECT * FROM survey_cost_settings WHERE is_active = true', []),
+    ]);
+
+    const officialPrices: Record<string, number> = {};
+    govPricing?.forEach((item: any) => { officialPrices[item.equipment_type] = Number(item.official_price) || 0; });
+
+    const manufacturerPrices: Record<string, Record<string, number>> = {};
+    mfgPricing?.forEach((item: any) => {
+      const key = item.manufacturer.toLowerCase().trim();
+      if (!manufacturerPrices[key]) manufacturerPrices[key] = {};
+      manufacturerPrices[key][item.equipment_type] = Number(item.cost_price) || 0;
+    });
+
+    const baseInstallationCosts: Record<string, number> = {};
+    installCostData?.forEach((item: any) => { baseInstallationCosts[item.equipment_type] = Number(item.base_installation_cost) || 0; });
+
+    const salesOfficeSettings: Record<string, any> = {};
+    salesOfficeData?.forEach((item: any) => { salesOfficeSettings[item.sales_office] = item; });
+
+    const surveyCostSettings: Record<string, number> = {};
+    surveyCostData?.forEach((item: any) => { surveyCostSettings[item.survey_type] = Number(item.cost) || 0; });
+
+    const pricingData = { officialPrices, manufacturerPrices, baseInstallationCosts, salesOfficeSettings, surveyCostSettings };
+
+    // 전체 매출 계산 (부가세 포함)
+    const revenueResult = calculateBusinessRevenue(business, pricingData);
+    const totalRevenueWithTax = Math.round(revenueResult.total_revenue * 1.1);
+
+    // 총 입금액
+    const allPayments = sumAllPayments(business);
 
     console.log('✅ [BUSINESS-INVOICES] GET - 조회 완료:', business.business_name);
 
@@ -80,80 +130,57 @@ export async function GET(request: NextRequest) {
       매핑된진행구분: category
     });
 
+    // 신규 미수금 계산: 전체 매출(부가세 포함) - 총 입금액
+    // 설치일 없으면 0, 계산서 발행 여부 무관
+    totalReceivables = calculateReceivables({
+      installationDate: business.installation_date,
+      totalRevenueWithTax,
+      totalPayments: allPayments,
+    });
+
     if (category === '보조금') {
-      // 추가공사비는 계산서가 발행된 경우에만 미수금 계산 (부가세 10% 포함)
-      const hasAdditionalInvoice = business.invoice_additional_date;
-      const additionalCostInvoice = hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0;
-
-      // 총액 방식: 전체 계산서 합계 - 전체 입금 합계
-      const totalInvoices = (business.invoice_1st_amount || 0) +
-                           (business.invoice_2nd_amount || 0) +
-                           additionalCostInvoice;
-
-      const totalPayments = (business.payment_1st_amount || 0) +
-                           (business.payment_2nd_amount || 0) +
-                           (business.payment_additional_amount || 0);
-
-      totalReceivables = totalInvoices - totalPayments;
-
-      // 각 차수별 미수금 (참고용)
-      const receivable1st = (business.invoice_1st_amount || 0) - (business.payment_1st_amount || 0);
-      const receivable2nd = (business.invoice_2nd_amount || 0) - (business.payment_2nd_amount || 0);
-      const receivableAdditional = hasAdditionalInvoice
-        ? Math.round((business.additional_cost || 0) * 1.1) - (business.payment_additional_amount || 0)
-        : 0;
-
+      // invoicesData: 차수별 계산서/입금 현황 (참고용 - 발행내역 표시에 사용)
       invoicesData = {
         first: {
           invoice_date: business.invoice_1st_date,
           invoice_amount: business.invoice_1st_amount,
           payment_date: business.payment_1st_date,
           payment_amount: business.payment_1st_amount,
-          receivable: receivable1st,
+          receivable: (business.invoice_1st_amount || 0) - (business.payment_1st_amount || 0),
         },
         second: {
           invoice_date: business.invoice_2nd_date,
           invoice_amount: business.invoice_2nd_amount,
           payment_date: business.payment_2nd_date,
           payment_amount: business.payment_2nd_amount,
-          receivable: receivable2nd,
+          receivable: (business.invoice_2nd_amount || 0) - (business.payment_2nd_amount || 0),
         },
         additional: {
           invoice_date: business.invoice_additional_date,
-          invoice_amount: Math.round((business.additional_cost || 0) * 1.1), // 추가공사비 + 부가세 10%
+          invoice_amount: Math.round((business.additional_cost || 0) * 1.1),
           payment_date: business.payment_additional_date,
           payment_amount: business.payment_additional_amount,
-          receivable: receivableAdditional,
+          receivable: business.invoice_additional_date
+            ? Math.round((business.additional_cost || 0) * 1.1) - (business.payment_additional_amount || 0)
+            : 0,
         },
       };
     } else if (category === '자비') {
-      // 총액 방식: 전체 계산서 합계 - 전체 입금 합계
-      const totalInvoices = (business.invoice_advance_amount || 0) +
-                           (business.invoice_balance_amount || 0);
-
-      const totalPayments = (business.payment_advance_amount || 0) +
-                           (business.payment_balance_amount || 0);
-
-      totalReceivables = totalInvoices - totalPayments;
-
-      // 각 차수별 미수금 (참고용)
-      const receivableAdvance = (business.invoice_advance_amount || 0) - (business.payment_advance_amount || 0);
-      const receivableBalance = (business.invoice_balance_amount || 0) - (business.payment_balance_amount || 0);
-
+      // invoicesData: 차수별 계산서/입금 현황 (참고용 - 발행내역 표시에 사용)
       invoicesData = {
         advance: {
           invoice_date: business.invoice_advance_date,
           invoice_amount: business.invoice_advance_amount,
           payment_date: business.payment_advance_date,
           payment_amount: business.payment_advance_amount,
-          receivable: receivableAdvance,
+          receivable: (business.invoice_advance_amount || 0) - (business.payment_advance_amount || 0),
         },
         balance: {
           invoice_date: business.invoice_balance_date,
           invoice_amount: business.invoice_balance_amount,
           payment_date: business.payment_balance_date,
           payment_amount: business.payment_balance_amount,
-          receivable: receivableBalance,
+          receivable: (business.invoice_balance_amount || 0) - (business.payment_balance_amount || 0),
         },
       };
     }
@@ -210,9 +237,8 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        // invoice_records 데이터가 있는 단계는 해당 값으로 totalReceivables 재계산
-        // (legacy business_info 컬럼에 반영 안 된 입금도 포함)
-        // issue_date IS NOT NULL 조건: 미발행 레코드(마이그레이션 오류 등) 제외
+        // invoice_records 우선값으로 invoicesData 업데이트 (발행내역 표시용)
+        // totalReceivables는 전체 매출 기준으로 이미 계산됨 - 재계산 불필요
         const getStageRecord = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
           invoiceRecordsByStage[stage].find(r => r.record_type === 'original' && r.issue_date) || null;
 
@@ -221,63 +247,45 @@ export async function GET(request: NextRequest) {
           const rec2nd = getStageRecord('subsidy_2nd');
           const recAdditional = getStageRecord('subsidy_additional');
 
-          const invoiceAmt1st   = rec1st ? rec1st.total_amount   : (business.invoice_1st_amount || 0);
-          const paymentAmt1st   = rec1st ? rec1st.payment_amount : (business.payment_1st_amount || 0);
-          const invoiceAmt2nd   = rec2nd ? rec2nd.total_amount   : (business.invoice_2nd_amount || 0);
-          const paymentAmt2nd   = rec2nd ? rec2nd.payment_amount : (business.payment_2nd_amount || 0);
-
-          // 추가공사비: 계산서 발행일이 있을 때만 미수금으로 계산
-          // 발행일이 없는 invoice_records 레코드(마이그레이션 오류 등)는 미발행으로 처리
-          const hasAdditionalInvoice = recAdditional ? recAdditional.issue_date : business.invoice_additional_date;
-          const invoiceAmtAdditional = hasAdditionalInvoice
-            ? (recAdditional ? recAdditional.total_amount : Math.round((business.additional_cost || 0) * 1.1))
-            : 0;
-          const paymentAmtAdditional = hasAdditionalInvoice
-            ? (recAdditional ? recAdditional.payment_amount : (business.payment_additional_amount || 0))
-            : 0;
-
-          totalReceivables = (invoiceAmt1st + invoiceAmt2nd + invoiceAmtAdditional)
-                           - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
-
-          // invoicesData도 invoice_records 우선값으로 업데이트
-          invoicesData.first.invoice_date    = rec1st?.issue_date ?? business.invoice_1st_date;
-          invoicesData.first.invoice_amount  = invoiceAmt1st;
-          invoicesData.first.payment_date    = rec1st?.payment_date ?? business.payment_1st_date;
-          invoicesData.first.payment_amount  = paymentAmt1st;
-          invoicesData.first.receivable      = invoiceAmt1st - paymentAmt1st;
-          invoicesData.second.invoice_date   = rec2nd?.issue_date ?? business.invoice_2nd_date;
-          invoicesData.second.invoice_amount = invoiceAmt2nd;
-          invoicesData.second.payment_date   = rec2nd?.payment_date ?? business.payment_2nd_date;
-          invoicesData.second.payment_amount = paymentAmt2nd;
-          invoicesData.second.receivable     = invoiceAmt2nd - paymentAmt2nd;
-          // 추가공사비: invoice_records에서 발행일/입금일 우선 사용
-          invoicesData.additional.invoice_date   = recAdditional?.issue_date ?? business.invoice_additional_date;
-          invoicesData.additional.invoice_amount = invoiceAmtAdditional;
-          invoicesData.additional.payment_date   = recAdditional?.payment_date ?? business.payment_additional_date;
-          invoicesData.additional.payment_amount = paymentAmtAdditional;
-          invoicesData.additional.receivable     = invoiceAmtAdditional - paymentAmtAdditional;
+          if (rec1st) {
+            invoicesData.first.invoice_date   = rec1st.issue_date;
+            invoicesData.first.invoice_amount = rec1st.total_amount;
+            invoicesData.first.payment_date   = rec1st.payment_date;
+            invoicesData.first.payment_amount = rec1st.payment_amount;
+            invoicesData.first.receivable     = rec1st.total_amount - rec1st.payment_amount;
+          }
+          if (rec2nd) {
+            invoicesData.second.invoice_date   = rec2nd.issue_date;
+            invoicesData.second.invoice_amount = rec2nd.total_amount;
+            invoicesData.second.payment_date   = rec2nd.payment_date;
+            invoicesData.second.payment_amount = rec2nd.payment_amount;
+            invoicesData.second.receivable     = rec2nd.total_amount - rec2nd.payment_amount;
+          }
+          if (recAdditional) {
+            invoicesData.additional.invoice_date   = recAdditional.issue_date;
+            invoicesData.additional.invoice_amount = recAdditional.total_amount;
+            invoicesData.additional.payment_date   = recAdditional.payment_date;
+            invoicesData.additional.payment_amount = recAdditional.payment_amount;
+            invoicesData.additional.receivable     = recAdditional.total_amount - recAdditional.payment_amount;
+          }
         } else if (category === '자비') {
           const recAdvance = getStageRecord('self_advance');
           const recBalance = getStageRecord('self_balance');
 
-          const invoiceAmtAdvance = recAdvance ? recAdvance.total_amount   : (business.invoice_advance_amount || 0);
-          const paymentAmtAdvance = recAdvance ? recAdvance.payment_amount : (business.payment_advance_amount || 0);
-          const invoiceAmtBalance = recBalance ? recBalance.total_amount   : (business.invoice_balance_amount || 0);
-          const paymentAmtBalance = recBalance ? recBalance.payment_amount : (business.payment_balance_amount || 0);
-
-          totalReceivables = (invoiceAmtAdvance + invoiceAmtBalance)
-                           - (paymentAmtAdvance + paymentAmtBalance);
-
-          invoicesData.advance.invoice_date   = recAdvance?.issue_date ?? business.invoice_advance_date;
-          invoicesData.advance.invoice_amount = invoiceAmtAdvance;
-          invoicesData.advance.payment_date   = recAdvance?.payment_date ?? business.payment_advance_date;
-          invoicesData.advance.payment_amount = paymentAmtAdvance;
-          invoicesData.advance.receivable     = invoiceAmtAdvance - paymentAmtAdvance;
-          invoicesData.balance.invoice_date   = recBalance?.issue_date ?? business.invoice_balance_date;
-          invoicesData.balance.invoice_amount = invoiceAmtBalance;
-          invoicesData.balance.payment_date   = recBalance?.payment_date ?? business.payment_balance_date;
-          invoicesData.balance.payment_amount = paymentAmtBalance;
-          invoicesData.balance.receivable     = invoiceAmtBalance - paymentAmtBalance;
+          if (recAdvance) {
+            invoicesData.advance.invoice_date   = recAdvance.issue_date;
+            invoicesData.advance.invoice_amount = recAdvance.total_amount;
+            invoicesData.advance.payment_date   = recAdvance.payment_date;
+            invoicesData.advance.payment_amount = recAdvance.payment_amount;
+            invoicesData.advance.receivable     = recAdvance.total_amount - recAdvance.payment_amount;
+          }
+          if (recBalance) {
+            invoicesData.balance.invoice_date   = recBalance.issue_date;
+            invoicesData.balance.invoice_amount = recBalance.total_amount;
+            invoicesData.balance.payment_date   = recBalance.payment_date;
+            invoicesData.balance.payment_amount = recBalance.payment_amount;
+            invoicesData.balance.receivable     = recBalance.total_amount - recBalance.payment_amount;
+          }
         }
       }
     } catch (recordsError) {
@@ -294,10 +302,13 @@ export async function GET(request: NextRequest) {
         additional_cost: business.additional_cost,
         invoices: invoicesData,
         total_receivables: totalReceivables,
-        // 신규 필드
+        // 미수금 계산 근거 (UI 표시용)
+        total_revenue: totalRevenueWithTax,
+        total_payment_amount: allPayments,
+        // 추가 계산서
         invoice_records: invoiceRecordsByStage,
         extra_receivables: extraReceivables,
-        grand_total_receivables: totalReceivables + extraReceivables,
+        grand_total_receivables: totalReceivables,
       },
     });
   } catch (error: any) {

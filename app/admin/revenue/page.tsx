@@ -14,6 +14,7 @@ import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import TwoStageDropdown from '@/components/ui/TwoStageDropdown';
 import { MANUFACTURER_NAMES } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
+import { calculateReceivables, sumAllPayments } from '@/lib/receivables-calculator';
 import { allSteps } from '@/lib/task-steps';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -1374,35 +1375,14 @@ function RevenueDashboard() {
       const installationExtraCost = calculatedData.installation_extra_cost;
       const netProfit = calculatedData.net_profit;
 
-    // 미수금 계산 (진행구분에 따라 다르게 계산)
-    let totalReceivables = 0;
-    const progressStatus = business.progress_status || '';
-    const normalizedCategory = progressStatus.trim();
-
-    if (normalizedCategory === '보조금' || normalizedCategory === '보조금 동시진행') {
-      // 보조금: 총액 방식 (계산서 합계 - 입금 합계)
-      // invoice_records 우선값이 COALESCE로 이미 반영된 상태
-      const hasAdditionalInvoice = (business as any).invoice_additional_date;
-      // 추가공사비: invoice_records에 실발행금액이 있으면 우선 사용, 없으면 additional_cost × 1.1 폴백
-      const irAdditionalAmount = (business as any).invoice_additional_amount;
-      const additionalInvoiceAmount = hasAdditionalInvoice
-        ? (irAdditionalAmount || Math.round((business.additional_cost || 0) * 1.1))
-        : 0;
-      const totalInvoices = ((business as any).invoice_1st_amount || 0)
-                          + ((business as any).invoice_2nd_amount || 0)
-                          + additionalInvoiceAmount;
-      const totalPayments = ((business as any).payment_1st_amount || 0)
-                          + ((business as any).payment_2nd_amount || 0)
-                          + ((business as any).payment_additional_amount || 0);
-      totalReceivables = totalInvoices - totalPayments;
-    } else if (normalizedCategory === '자비' || normalizedCategory === '대리점' || normalizedCategory === 'AS') {
-      // 자비: 총액 방식 (계산서 합계 - 입금 합계)
-      const totalInvoices = ((business as any).invoice_advance_amount || 0)
-                          + ((business as any).invoice_balance_amount || 0);
-      const totalPayments = ((business as any).payment_advance_amount || 0)
-                          + ((business as any).payment_balance_amount || 0);
-      totalReceivables = totalInvoices - totalPayments;
-    }
+    // 미수금 계산: 전체 매출(부가세 포함) - 총 입금액
+    // 설치일 없으면 0, 계산서 발행 여부 무관
+    const totalRevenueWithTax = Math.round(calculatedData.total_revenue * 1.1);
+    const totalReceivables = calculateReceivables({
+      installationDate: (business as any).installation_date,
+      totalRevenueWithTax,
+      totalPayments: sumAllPayments(business as any),
+    });
 
       return {
         ...business,

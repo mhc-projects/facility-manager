@@ -353,6 +353,55 @@ const mapCategoryToInvoiceType = (category: string | null | undefined): '보조�
   return '자비';
 };
 
+// 수정 모달용 미수금 현황 배너
+function ReceivablesBanner({ businessId, refreshTrigger }: { businessId: string; refreshTrigger: number }) {
+  const [data, setData] = useState<{ total_revenue: number; total_payment_amount: number; total_receivables: number } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/business-invoices?business_id=${businessId}&_t=${Date.now()}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(result => {
+        if (result.success && result.data) {
+          setData({
+            total_revenue: result.data.total_revenue ?? 0,
+            total_payment_amount: result.data.total_payment_amount ?? 0,
+            total_receivables: result.data.total_receivables ?? 0,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [businessId, refreshTrigger]);
+
+  if (!data) return null;
+
+  const { total_revenue, total_payment_amount, total_receivables } = data;
+
+  return (
+    <div className={`rounded-lg p-3 mb-3 border ${
+      total_receivables > 0 ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'
+    }`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold text-gray-700">📊 미수금 현황</span>
+        <span className={`text-sm font-bold ${total_receivables > 0 ? 'text-red-700' : 'text-green-700'}`}>
+          {total_receivables.toLocaleString()}원 {total_receivables > 0 ? '⚠️' : '✅'}
+        </span>
+      </div>
+      {total_revenue > 0 && (
+        <div className="text-xs text-gray-500 space-y-0.5">
+          <div className="flex justify-between">
+            <span>전체 매출 (부가세 포함)</span>
+            <span>{total_revenue.toLocaleString()}원</span>
+          </div>
+          <div className="flex justify-between">
+            <span>총 입금</span>
+            <span>- {total_payment_amount.toLocaleString()}원</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BusinessManagementPage() {
   // 권한 확인 훅
   const { canDeleteAutoMemos } = usePermission()
@@ -5976,6 +6025,8 @@ function BusinessManagementPage() {
                           계산서 및 입금 정보 ({formData.progress_status})
                         </h3>
                       </div>
+                      {/* 미수금 현황 배너 */}
+                      <ReceivablesBanner businessId={editingBusiness.id} refreshTrigger={invoiceRefreshTrigger} />
                       <InvoiceTabSection
                         ref={invoiceTabRef}
                         businessId={editingBusiness.id}

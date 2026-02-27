@@ -79,7 +79,8 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   }
 
   const grandTotalReceivables = invoiceData.grand_total_receivables ?? invoiceData.total_receivables ?? 0;
-  const totalReceivables = invoiceData.total_receivables || 0;
+  const totalRevenue = invoiceData.total_revenue ?? 0;
+  const totalPaymentAmount = invoiceData.total_payment_amount ?? 0;
   const extraReceivables = invoiceData.extra_receivables || 0;
 
   // 진행구분을 보조금/자비로 매핑
@@ -143,33 +144,26 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
           </span>
         </div>
 
-        {/* 기본 + 추가 분리 표시 */}
-        {extraReceivables > 0 && (
-          <div className="text-xs text-gray-500 space-y-0.5 mb-2">
+        {/* 미수금 계산 근거 */}
+        {totalRevenue > 0 && (
+          <div className="text-xs text-gray-500 space-y-0.5 mb-2 pt-1 border-t border-gray-200">
             <div className="flex justify-between">
-              <span>기본 계산서</span>
-              <span>{totalReceivables.toLocaleString()}원</span>
+              <span>전체 매출 (부가세 포함)</span>
+              <span>{totalRevenue.toLocaleString()}원</span>
             </div>
             <div className="flex justify-between">
-              <span>추가 계산서</span>
-              <span>{extraReceivables.toLocaleString()}원</span>
+              <span>총 입금</span>
+              <span>- {totalPaymentAmount.toLocaleString()}원</span>
             </div>
           </div>
         )}
 
-        {/* 미수금 발생 내역 */}
-        {receivableDetails.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-red-200">
-            <p className="text-xs text-gray-600 mb-1">📋 미수금 발생 내역:</p>
-            <div className="space-y-1">
-              {receivableDetails.map((detail, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <span className="text-xs text-red-600">• {detail.title}</span>
-                  <span className="text-xs font-semibold text-red-700">
-                    {detail.amount.toLocaleString()}원
-                  </span>
-                </div>
-              ))}
+        {/* 추가 계산서 미수금 */}
+        {extraReceivables > 0 && (
+          <div className="text-xs text-gray-500 space-y-0.5 mb-2">
+            <div className="flex justify-between">
+              <span>추가 계산서 미수금</span>
+              <span>{extraReceivables.toLocaleString()}원</span>
             </div>
           </div>
         )}
