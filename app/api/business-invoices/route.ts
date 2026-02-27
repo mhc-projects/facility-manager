@@ -235,6 +235,7 @@ export async function GET(request: NextRequest) {
                            - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
 
           // invoicesData도 invoice_records 우선값으로 업데이트
+          invoicesData.first.invoice_amount  = invoiceAmt1st;
           invoicesData.first.payment_amount  = paymentAmt1st;
           invoicesData.first.receivable      = invoiceAmt1st - paymentAmt1st;
           invoicesData.second.invoice_amount = invoiceAmt2nd;
