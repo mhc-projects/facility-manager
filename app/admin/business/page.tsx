@@ -2394,6 +2394,9 @@ function BusinessManagementPage() {
     if ((returnPath === 'revenue' || returnPath === '/admin/revenue') && selectedBusiness) {
       console.log('🔙 [Return] Revenue 페이지로 복귀:', selectedBusiness.사업장명 || selectedBusiness.business_name);
 
+      // Revenue 페이지 캐시 무효화 (수정 여부와 무관하게 항상 최신 데이터 표시)
+      CacheManager.invalidateBusinesses();
+
       // Revenue 페이지로 이동하면서 해당 사업장의 Revenue 모달 자동 열기
       router.push(`/admin/revenue?businessId=${selectedBusiness.id}&openRevenueModal=true`);
     } else {
@@ -3959,6 +3962,12 @@ function BusinessManagementPage() {
             // ✅ [REALTIME-UPDATE] 테이블 즉시 반영 (영업점 및 모든 필드 실시간 동기화)
             await refetchBusinesses();
             console.log('✅ [REALTIME-UPDATE] allBusinesses 새로고침 완료 - 테이블 즉시 업데이트');
+
+            // 📡 [REVENUE-CACHE-INVALIDATE] Revenue 페이지 businesses 캐시 무효화
+            // Revenue 페이지에서 수정모달로 이동 후 돌아왔을 때 최신 데이터 표시를 위해
+            CacheManager.invalidateBusinesses();
+            CacheManager.broadcastInvalidation();
+            console.log('📡 [REVENUE-CACHE-INVALIDATE] Revenue businesses 캐시 무효화 완료');
 
             // ✅ [SYNC-CHECK] 최종 동기화 완료 로깅
             console.log('✅ [SYNC-CHECK-FINAL] 서버 데이터로 최종 동기화 완료:', {
