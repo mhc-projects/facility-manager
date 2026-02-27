@@ -1,6 +1,7 @@
-// lib/hooks/useSimpleNotifications.ts - 안정적인 폴링 기반 알림 시스템
+// lib/hooks/useSimpleNotifications.ts - Supabase Realtime 기반 알림 시스템 + 권한 필터링
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export interface NotificationItem {
   id: string;
@@ -29,17 +30,38 @@ export interface UseSimpleNotificationsResult {
   reconnect: () => Promise<void>;
 }
 
-export function useSimpleNotifications(userId?: string): UseSimpleNotificationsResult {
+// user_created 등 관리자 전용 카테고리
+const ADMIN_ONLY_CATEGORIES = ['user_created', 'user_updated'];
+const ADMIN_PERMISSION_THRESHOLD = 3;
+
+export function useSimpleNotifications(
+  userId?: string,
+  userPermissionLevel?: number
+): UseSimpleNotificationsResult {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [readStateCache, setReadStateCache] = useState<Set<string>>(new Set());
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<
+    'connected' | 'disconnected' | 'error' | 'connecting'
+  >('connecting');
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
+  // 권한 기반 필터링
+  const filterByPermission = useCallback(
+    (items: NotificationItem[]): NotificationItem[] => {
+      return items.filter(notif => {
+        if (ADMIN_ONLY_CATEGORIES.includes(notif.category || '')) {
+          return (userPermissionLevel ?? 1) >= ADMIN_PERMISSION_THRESHOLD;
+        }
+        return true;
+      });
+    },
+    [userPermissionLevel]
+  );
 
   // 알림 로드
   const loadNotifications = useCallback(async () => {
     try {
-      console.log('📥 [SIMPLE-NOTIFICATIONS] 알림 로드 시작', { userId });
-
-      // 전역 알림 로드 (테스트 알림 제외)
+      // 전역 알림 로드
       const { data: globalNotifications, error: globalError } = await supabase
         .from('notifications')
         .select('*')
@@ -57,7 +79,7 @@ export function useSimpleNotifications(userId?: string): UseSimpleNotificationsR
 
       let taskNotifications: any[] = [];
 
-      // 사용자별 업무 알림 로드 (테스트 알림 제외)
+      // 사용자별 업무 알림 로드
       if (userId) {
         const { data: userTaskNotifications, error: taskError } = await supabase
           .from('task_notifications')
@@ -78,86 +100,159 @@ export function useSimpleNotifications(userId?: string): UseSimpleNotificationsR
         }
       }
 
-      // 알림 병합 및 표준화 (읽음 상태 캐시 적용)
-      const combinedNotifications: NotificationItem[] = [
-        ...(globalNotifications || []).map(notif => ({
-          id: notif.id,
-          title: notif.title,
-          message: notif.message,
-          category: notif.category,
-          priority: notif.priority as 'low' | 'medium' | 'high' | 'critical',
-          timestamp: notif.created_at,
-          read: readStateCache.has(notif.id), // 캐시된 읽음 상태 적용
-          related_url: notif.related_url,
-          metadata: notif.metadata,
-          type: 'global' as const
-        })),
-        ...taskNotifications.map(notif => ({
-          id: notif.id,
-          title: notif.notification_type === 'assignment' ? '새 업무 배정' :
-                notif.notification_type === 'status_change' ? '업무 상태 변경' :
-                notif.notification_type === 'unassignment' ? '업무 배정 해제' : '업무 알림',
-          message: notif.message,
-          category: notif.notification_type,
-          priority: notif.priority === 'urgent' ? 'critical' :
-                   notif.priority === 'high' ? 'high' : 'medium' as 'low' | 'medium' | 'high' | 'critical',
-          timestamp: notif.created_at,
-          read: readStateCache.has(notif.id) || notif.is_read, // 캐시 또는 DB 읽음 상태
-          related_url: `/admin/tasks?task=${notif.task_id}`,
-          metadata: {
-            ...notif.metadata,
-            task_id: notif.task_id,
-            business_name: notif.business_name,
-            notification_type: notif.notification_type
-          },
-          type: 'task' as const
-        }))
-      ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // 알림 병합 및 표준화
+      const globalItems: NotificationItem[] = (globalNotifications || []).map(notif => ({
+        id: notif.id,
+        title: notif.title,
+        message: notif.message,
+        category: notif.category,
+        priority: notif.priority as NotificationItem['priority'],
+        timestamp: notif.created_at,
+        read: readStateCache.has(notif.id),
+        related_url: notif.related_url,
+        metadata: notif.metadata,
+        type: 'global' as const
+      }));
 
-      setNotifications(combinedNotifications);
+      const taskItems: NotificationItem[] = taskNotifications.map(notif => ({
+        id: notif.id,
+        title:
+          notif.notification_type === 'assignment' ? '새 업무 배정' :
+          notif.notification_type === 'status_change' ? '업무 상태 변경' :
+          notif.notification_type === 'unassignment' ? '업무 배정 해제' : '업무 알림',
+        message: notif.message,
+        category: notif.notification_type,
+        priority: (
+          notif.priority === 'urgent' ? 'critical' :
+          notif.priority === 'high' ? 'high' : 'medium'
+        ) as NotificationItem['priority'],
+        timestamp: notif.created_at,
+        read: readStateCache.has(notif.id) || notif.is_read,
+        related_url: `/admin/tasks?task=${notif.task_id}`,
+        metadata: {
+          ...notif.metadata,
+          task_id: notif.task_id,
+          business_name: notif.business_name,
+          notification_type: notif.notification_type
+        },
+        type: 'task' as const
+      }));
 
-      const unreadCount = combinedNotifications.filter(n => !n.read).length;
-      console.log('✅ [SIMPLE-NOTIFICATIONS] 알림 로드 완료:', {
-        global: globalNotifications?.length || 0,
-        task: taskNotifications.length,
-        total: combinedNotifications.length,
-        unread: unreadCount
-      });
+      const combined = filterByPermission([...globalItems, ...taskItems])
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+      setNotifications(combined);
     } catch (error) {
       console.error('🔴 [SIMPLE-NOTIFICATIONS] 알림 로드 실패:', error);
     }
-  }, [userId, readStateCache]);
+  }, [userId, readStateCache, filterByPermission]);
 
-  // 폴링 시작
-  const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) return;
+  // Supabase Realtime 구독 설정
+  useEffect(() => {
+    let mounted = true;
 
-    console.log('🔄 [SIMPLE-NOTIFICATIONS] 폴링 시작');
-
-    // 즉시 로드
+    // 초기 로드
     loadNotifications();
 
-    // 30초마다 새로고침
-    pollingIntervalRef.current = setInterval(() => {
-      loadNotifications();
-    }, 30000);
-  }, [loadNotifications]);
+    // Realtime 채널 구독 (notifications 테이블 INSERT 감시)
+    const channel = supabase
+      .channel(`simple-notifications:${userId || 'anon'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications'
+        },
+        (payload) => {
+          if (!mounted) return;
 
-  // 폴링 중지
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-      console.log('⏹️ [SIMPLE-NOTIFICATIONS] 폴링 중지');
-    }
-  }, []);
+          const newNotif = payload.new as any;
 
-  // 초기화
-  useEffect(() => {
-    startPolling();
-    return () => stopPolling();
-  }, [startPolling, stopPolling]);
+          // 만료 확인
+          if (newNotif.expires_at && new Date(newNotif.expires_at) < new Date()) return;
+
+          // 테스트 알림 무시
+          if (
+            newNotif.title?.includes('테스트') ||
+            newNotif.title?.includes('🧪') ||
+            newNotif.message?.includes('테스트') ||
+            newNotif.created_by_name === 'System Test' ||
+            newNotif.created_by_name === '테스트 관리자'
+          ) return;
+
+          // 관리자 전용 알림 권한 확인
+          if (ADMIN_ONLY_CATEGORIES.includes(newNotif.category || '')) {
+            if ((userPermissionLevel ?? 1) < ADMIN_PERMISSION_THRESHOLD) {
+              console.log('⛔ [SIMPLE-NOTIFICATIONS] 권한 부족 - 알림 무시:', {
+                category: newNotif.category,
+                userLevel: userPermissionLevel,
+                required: ADMIN_PERMISSION_THRESHOLD
+              });
+              return;
+            }
+          }
+
+          console.log('🔔 [SIMPLE-NOTIFICATIONS] 실시간 알림 수신:', {
+            id: newNotif.id,
+            category: newNotif.category,
+            title: newNotif.title
+          });
+
+          const newItem: NotificationItem = {
+            id: newNotif.id,
+            title: newNotif.title,
+            message: newNotif.message,
+            category: newNotif.category,
+            priority: newNotif.priority as NotificationItem['priority'],
+            timestamp: newNotif.created_at,
+            read: false,
+            related_url: newNotif.related_url,
+            metadata: newNotif.metadata,
+            type: 'global'
+          };
+
+          setNotifications(prev => {
+            if (prev.some(n => n.id === newItem.id)) return prev;
+            return [newItem, ...prev].sort(
+              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+          });
+
+          // 브라우저 알림
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(newItem.title, {
+              body: newItem.message,
+              icon: '/favicon.ico',
+              tag: newItem.id,
+              requireInteraction: newItem.priority === 'critical'
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (!mounted) return;
+        console.log('📡 [SIMPLE-NOTIFICATIONS] Realtime 구독 상태:', status);
+
+        if (status === 'SUBSCRIBED') {
+          setConnectionStatus('connected');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setConnectionStatus('error');
+        } else if (status === 'TIMED_OUT') {
+          setConnectionStatus('disconnected');
+        }
+      });
+
+    channelRef.current = channel;
+
+    return () => {
+      mounted = false;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [userId, userPermissionLevel]); // 유저 또는 권한 변경 시 재구독
 
   // 알림 읽음 처리
   const markAsRead = useCallback(async (notificationId: string) => {
@@ -165,34 +260,18 @@ export function useSimpleNotifications(userId?: string): UseSimpleNotificationsR
       const notification = notifications.find(n => n.id === notificationId);
       if (!notification) return;
 
-      // 캐시에 읽음 상태 저장 (즉시 적용)
       setReadStateCache(prev => new Set([...prev, notificationId]));
 
       if (notification.type === 'task') {
-        // 업무 알림 읽음 처리 (백그라운드)
-        const { error } = await supabase
+        await supabase
           .from('task_notifications')
           .update({ is_read: true })
           .eq('id', notificationId);
-
-        if (error) {
-          console.error('🔴 [SIMPLE-NOTIFICATIONS] 업무 알림 읽음 처리 오류:', error);
-          // 실패 시 캐시에서 제거
-          setReadStateCache(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(notificationId);
-            return newSet;
-          });
-          return;
-        }
       }
 
-      // 로컬 상태 업데이트
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
-
-      console.log('✅ [SIMPLE-NOTIFICATIONS] 알림 읽음 처리:', notificationId);
     } catch (error) {
       console.error('🔴 [SIMPLE-NOTIFICATIONS] 읽음 처리 실패:', error);
     }
@@ -201,137 +280,66 @@ export function useSimpleNotifications(userId?: string): UseSimpleNotificationsR
   // 모든 알림 읽음 처리
   const markAllAsRead = useCallback(async () => {
     try {
-      if (!userId) return;
-
-      // 업무 알림 모두 읽음 처리
-      const { error } = await supabase
-        .from('task_notifications')
-        .update({ is_read: true })
-        .eq('user_id', userId)
-        .eq('is_read', false);
-
-      if (error) {
-        console.error('🔴 [SIMPLE-NOTIFICATIONS] 모든 알림 읽음 처리 오류:', error);
-        return;
+      if (userId) {
+        await supabase
+          .from('task_notifications')
+          .update({ is_read: true })
+          .eq('user_id', userId)
+          .eq('is_read', false);
       }
 
-      // 모든 알림을 읽음 캐시에 추가
-      const allNotificationIds = notifications.map(n => n.id);
-      setReadStateCache(prev => new Set([...prev, ...allNotificationIds]));
-
-      // 로컬 상태 업데이트
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
-      );
-
-      console.log('✅ [SIMPLE-NOTIFICATIONS] 모든 알림 읽음 처리 완료');
+      const allIds = notifications.map(n => n.id);
+      setReadStateCache(prev => new Set([...prev, ...allIds]));
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('🔴 [SIMPLE-NOTIFICATIONS] 모든 읽음 처리 실패:', error);
     }
   }, [userId, notifications]);
 
-  // 알림 제거 (데이터베이스에서 실제 삭제)
+  // 알림 제거
   const clearNotification = useCallback(async (notificationId: string) => {
     try {
       const notification = notifications.find(n => n.id === notificationId);
       if (!notification) return;
 
-      // 로컬에서 즉시 제거 (UI 반응성)
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
 
-      // 서버에서 삭제 또는 아카이브
       if (notification.type === 'task') {
-        // 업무 알림은 아카이브로 이동
-        const response = await fetch('/api/notifications/history', {
+        await fetch('/api/notifications/history', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
           },
-          body: JSON.stringify({
-            action: 'archive_specific',
-            notificationIds: [notificationId]
-          })
+          body: JSON.stringify({ action: 'archive_specific', notificationIds: [notificationId] })
         });
-
-        if (!response.ok) {
-          console.error('🔴 [SIMPLE-NOTIFICATIONS] 업무 알림 아카이브 실패');
-          // 실패 시 로컬 상태 복원
-          const originalNotification = notifications.find(n => n.id === notificationId);
-          if (originalNotification) {
-            setNotifications(prev => [...prev, originalNotification].sort((a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            ));
-          }
-        } else {
-          console.log('✅ [SIMPLE-NOTIFICATIONS] 업무 알림 아카이브 완료:', notificationId);
-        }
       } else {
-        // 전역 알림은 숨김 처리
-        const response = await fetch(`/api/notifications/${notificationId}`, {
+        await fetch(`/api/notifications/${notificationId}`, {
           method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
-          }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}` }
         });
-
-        if (!response.ok) {
-          console.error('🔴 [SIMPLE-NOTIFICATIONS] 전역 알림 삭제 실패');
-          // 실패 시 로컬 상태 복원
-          const originalNotification = notifications.find(n => n.id === notificationId);
-          if (originalNotification) {
-            setNotifications(prev => [...prev, originalNotification].sort((a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            ));
-          }
-        } else {
-          console.log('✅ [SIMPLE-NOTIFICATIONS] 전역 알림 삭제 완료:', notificationId);
-        }
       }
-
     } catch (error) {
       console.error('🔴 [SIMPLE-NOTIFICATIONS] 알림 제거 오류:', error);
-      // 오류 시 로컬 상태 복원
-      const originalNotification = notifications.find(n => n.id === notificationId);
-      if (originalNotification) {
-        setNotifications(prev => [...prev, originalNotification].sort((a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        ));
-      }
     }
   }, [notifications]);
 
-  // 모든 알림 제거 및 아카이브
+  // 모든 알림 제거
   const clearAllNotifications = useCallback(async () => {
     try {
-      if (!userId) {
-        setNotifications([]);
-        return;
+      if (userId) {
+        await fetch('/api/notifications/history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+          },
+          body: JSON.stringify({ action: 'archive_read', olderThanDays: 0 })
+        });
       }
 
-      // 서버에서 읽은 알림을 히스토리로 아카이브
-      const response = await fetch('/api/notifications/history', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
-        },
-        body: JSON.stringify({
-          action: 'archive_read',
-          olderThanDays: 0
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ [SIMPLE-NOTIFICATIONS] 알림 아카이브 완료:', result.archivedCount);
-      }
-
-      // 로컬 상태 즉시 정리
       setNotifications([]);
       setReadStateCache(new Set());
-
-      console.log('✅ [SIMPLE-NOTIFICATIONS] 모든 알림 정리 완료');
     } catch (error) {
       console.error('🔴 [SIMPLE-NOTIFICATIONS] 알림 정리 오류:', error);
       setNotifications([]);
@@ -340,30 +348,32 @@ export function useSimpleNotifications(userId?: string): UseSimpleNotificationsR
 
   // 새로고침
   const refreshNotifications = useCallback(async () => {
-    console.log('🔄 [SIMPLE-NOTIFICATIONS] 수동 새로고침');
     await loadNotifications();
   }, [loadNotifications]);
 
-  // 재연결 (폴링 재시작)
+  // 재연결
   const reconnect = useCallback(async () => {
-    console.log('🔄 [SIMPLE-NOTIFICATIONS] 재연결');
-    stopPolling();
-    setTimeout(() => startPolling(), 1000);
-  }, [stopPolling, startPolling]);
+    if (channelRef.current) {
+      await supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setConnectionStatus('connecting');
+    await loadNotifications();
+  }, [loadNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return {
     notifications,
     unreadCount,
-    isConnected: true, // 폴링 모드는 항상 연결됨
-    connectionStatus: 'connected',
+    isConnected: connectionStatus === 'connected',
+    connectionStatus,
     markAsRead,
     markAllAsRead,
     clearNotification,
     clearAllNotifications,
     refreshNotifications,
-    isPollingMode: true,
+    isPollingMode: false, // Realtime 모드
     reconnect
   };
 }

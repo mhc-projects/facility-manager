@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { TokenManager } from '@/lib/api-client';
 import {
@@ -8,7 +8,8 @@ import {
   unsubscribeFromRealtime as unsubscribeFromRealtimeManager,
   reconnectRealtime as reconnectRealtimeManager
 } from '@/lib/realtime-manager';
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import type { RealtimePostgresChangesPayload, RealtimeChannel } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { InAppNotificationContainer, type InAppToastNotification } from '@/components/ui/InAppNotificationToast';
 
@@ -113,6 +114,115 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     connectionError: null as string | null,
     lastEventTime: null as Date | null
   });
+
+  // 🔔 전역 알림(notifications 테이블) Realtime 구독 - 권한 3 이상인 유저에게 user_created 알림 즉시 전달
+  const globalNotifChannelRef = useRef<RealtimeChannel | null>(null);
+  useEffect(() => {
+    if (!user) return;
+
+    const userPermLevel = (user as any).permission_level ?? (user as any).role ?? 1;
+
+    const channel = supabase
+      .channel(`global-notifications:ctx:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const newNotif = payload.new as any;
+
+          // 만료 확인
+          if (newNotif.expires_at && new Date(newNotif.expires_at) < new Date()) return;
+
+          // 테스트 알림 무시
+          if (
+            newNotif.title?.includes('테스트') ||
+            newNotif.title?.includes('🧪') ||
+            newNotif.message?.includes('테스트') ||
+            newNotif.created_by_name === 'System Test' ||
+            newNotif.created_by_name === '테스트 관리자'
+          ) return;
+
+          // 관리자 전용 알림 권한 확인
+          const adminOnlyCategories = ['user_created', 'user_updated'];
+          if (adminOnlyCategories.includes(newNotif.category)) {
+            if (userPermLevel < 3) {
+              logger.debug('NOTIFICATIONS', '권한 부족 - 전역 알림 무시', {
+                category: newNotif.category,
+                userLevel: userPermLevel
+              });
+              return;
+            }
+          }
+
+          logger.info('NOTIFICATIONS', '전역 알림 실시간 수신', {
+            id: newNotif.id,
+            category: newNotif.category
+          });
+
+          const mapped: Notification = {
+            id: newNotif.id,
+            title: newNotif.title,
+            message: newNotif.message,
+            category: (newNotif.category || 'system_update') as NotificationCategory,
+            priority: (newNotif.priority || 'medium') as NotificationPriority,
+            relatedResourceType: newNotif.related_resource_type,
+            relatedResourceId: newNotif.related_resource_id,
+            relatedUrl: newNotif.related_url,
+            metadata: newNotif.metadata || {},
+            createdById: newNotif.created_by_id,
+            createdByName: newNotif.created_by_name,
+            createdAt: newNotif.created_at,
+            expiresAt: newNotif.expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            isSystemNotification: newNotif.is_system_notification ?? true,
+            isRead: false
+          };
+
+          setNotifications(prev => {
+            if (prev.some(n => n.id === mapped.id)) return prev;
+            return [mapped, ...prev.slice(0, 49)];
+          });
+
+          // 브라우저 알림
+          const pushEnabled = settings?.pushNotificationsEnabled ?? true;
+          if (pushEnabled && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification(mapped.title, {
+                body: mapped.message,
+                icon: '/icon.png',
+                tag: mapped.id,
+                requireInteraction: mapped.priority === 'critical' || mapped.priority === 'high'
+              });
+            } catch (err) {
+              logger.error('BROWSER-NOTIFICATION', '전역 알림 브라우저 알림 실패', err);
+            }
+          }
+
+          // 인앱 토스트
+          if (pushEnabled) {
+            const toastPriority = mapped.priority === 'medium' ? 'normal' : mapped.priority;
+            setInAppToasts(prev => [{
+              id: mapped.id,
+              title: mapped.title,
+              message: mapped.message,
+              priority: toastPriority as 'low' | 'normal' | 'high' | 'critical',
+              onClick: mapped.relatedUrl ? () => { window.open(mapped.relatedUrl, '_blank'); } : undefined
+            }, ...prev.slice(0, 4)]);
+          }
+        }
+      )
+      .subscribe((status) => {
+        logger.debug('REALTIME', `전역 알림 채널 상태: ${status}`);
+      });
+
+    globalNotifChannelRef.current = channel;
+
+    return () => {
+      if (globalNotifChannelRef.current) {
+        supabase.removeChannel(globalNotifChannelRef.current);
+        globalNotifChannelRef.current = null;
+      }
+    };
+  }, [user?.id, settings?.pushNotificationsEnabled]);
 
   // 🚀 Global Realtime Manager 사용 - 즉시 연결 경험 제공
   useEffect(() => {

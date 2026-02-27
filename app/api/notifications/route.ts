@@ -230,6 +230,11 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       queryParts.push(`AND (n.expires_at IS NULL OR n.expires_at > $${paramIndex++})`);
       params.push(new Date().toISOString());
 
+      // 관리자 전용 알림 (user_created, user_updated)은 permission_level >= 3 이상만 조회
+      if ((user.permission_level ?? 1) < 3) {
+        queryParts.push(`AND n.category NOT IN ('user_created', 'user_updated')`);
+      }
+
       // 읽지 않은 알림만 조회
       if (unreadOnly) {
         queryParts.push(`AND un.is_read = $${paramIndex++}`);

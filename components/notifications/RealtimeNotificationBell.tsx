@@ -5,15 +5,16 @@ import { Bell, Check, CheckCheck, Clock, User, FolderOpen, AlertCircle, X, Wifi,
 import { useSimpleNotifications } from '@/lib/hooks/useSimpleNotifications';
 
 interface RealtimeNotificationBellProps {
-  userId?: string; // 사용자 ID (로그인된 경우)
+  userId?: string;
+  userPermissionLevel?: number; // 권한 레벨 (3 이상이면 관리자 알림 수신)
 }
 
-export default function RealtimeNotificationBell({ userId }: RealtimeNotificationBellProps) {
+export default function RealtimeNotificationBell({ userId, userPermissionLevel }: RealtimeNotificationBellProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showConnectionStatus, setShowConnectionStatus] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 폴링 기반 알림 시스템 사용 (WebSocket 연결 문제 해결)
+  // Realtime 기반 알림 시스템 (권한 레벨 전달)
   const {
     notifications,
     unreadCount,
@@ -26,7 +27,7 @@ export default function RealtimeNotificationBell({ userId }: RealtimeNotificatio
     refreshNotifications,
     isPollingMode,
     reconnect
-  } = useSimpleNotifications(userId);
+  } = useSimpleNotifications(userId, userPermissionLevel);
 
   // 브라우저 알림 권한 요청
   useEffect(() => {
