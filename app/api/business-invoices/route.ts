@@ -225,11 +225,16 @@ export async function GET(request: NextRequest) {
           const invoiceAmt2nd   = rec2nd ? rec2nd.total_amount   : (business.invoice_2nd_amount || 0);
           const paymentAmt2nd   = rec2nd ? rec2nd.payment_amount : (business.payment_2nd_amount || 0);
 
-          // 추가공사비: 계산서 발행일이 있을 때만 미수금으로 계산 (invoice_records 또는 legacy 모두 동일 규칙)
+          // 추가공사비: 계산서 발행일이 있을 때만 미수금으로 계산
+          // invoice_records가 있으면 실제 발행금액(total_amount) 우선 사용
+          // invoice_records 없으면 additional_cost 기반 레거시 계산으로 폴백
           const hasAdditionalInvoice = recAdditional ? recAdditional.issue_date : business.invoice_additional_date;
-          const additionalCostInvoice = hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0;
-          const invoiceAmtAdditional  = hasAdditionalInvoice ? (recAdditional ? recAdditional.total_amount : additionalCostInvoice) : 0;
-          const paymentAmtAdditional  = hasAdditionalInvoice ? (recAdditional ? recAdditional.payment_amount : (business.payment_additional_amount || 0)) : 0;
+          const invoiceAmtAdditional = recAdditional
+            ? recAdditional.total_amount
+            : (hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0);
+          const paymentAmtAdditional = recAdditional
+            ? recAdditional.payment_amount
+            : (hasAdditionalInvoice ? (business.payment_additional_amount || 0) : 0);
 
           totalReceivables = (invoiceAmt1st + invoiceAmt2nd + invoiceAmtAdditional)
                            - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
@@ -241,6 +246,7 @@ export async function GET(request: NextRequest) {
           invoicesData.second.invoice_amount = invoiceAmt2nd;
           invoicesData.second.payment_amount = paymentAmt2nd;
           invoicesData.second.receivable     = invoiceAmt2nd - paymentAmt2nd;
+          invoicesData.additional.invoice_amount = invoiceAmtAdditional;
           invoicesData.additional.payment_amount = paymentAmtAdditional;
           invoicesData.additional.receivable     = invoiceAmtAdditional - paymentAmtAdditional;
         } else if (category === '자비') {
