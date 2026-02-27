@@ -240,7 +240,7 @@ export async function GET(request: NextRequest) {
         // invoice_records 우선값으로 invoicesData 업데이트 (발행내역 표시용)
         // totalReceivables는 전체 매출 기준으로 이미 계산됨 - 재계산 불필요
         const getStageRecord = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
-          invoiceRecordsByStage[stage].find(r => r.record_type === 'original' && r.issue_date) || null;
+          invoiceRecordsByStage[stage].find(r => r.record_type === 'original') || null;
 
         if (category === '보조금') {
           const rec1st = getStageRecord('subsidy_1st');
