@@ -119,7 +119,12 @@ export const CacheManager = {
       value,
       timestamp: Date.now()
     };
+    // 다른 탭에 전달 (storage event는 같은 탭에서는 발생하지 않음)
     localStorage.setItem('cache-field-update', JSON.stringify(update));
+    // 같은 탭에도 전달
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cache-field-update', { detail: update }));
+    }
     console.log(`📡 [CacheManager] Broadcast: ${field} update for ${businessId.slice(0, 8)}...`);
   },
 

@@ -241,26 +241,39 @@ function RevenueDashboard() {
 
   // 🔄 Cross-tab synchronization: Listen for cache updates from other tabs
   useEffect(() => {
+    const INVOICE_FIELDS = [
+      'invoice_1st_date', 'invoice_1st_amount', 'payment_1st_date', 'payment_1st_amount',
+      'invoice_2nd_date', 'invoice_2nd_amount', 'payment_2nd_date', 'payment_2nd_amount',
+      'invoice_additional_date', 'payment_additional_date', 'payment_additional_amount',
+      'invoice_advance_date', 'invoice_advance_amount', 'payment_advance_date', 'payment_advance_amount',
+      'invoice_balance_date', 'invoice_balance_amount', 'payment_balance_date', 'payment_balance_amount',
+    ];
+
+    const applyFieldUpdate = (businessId: string, field: string, value: any) => {
+      CacheManager.updateBusinessField(businessId, field, value);
+      if (field === 'risk') {
+        setRiskMap(prev => ({ ...prev, [businessId]: value }));
+      } else if (field === 'payment_scheduled_date' || INVOICE_FIELDS.includes(field)) {
+        setBusinesses(prev =>
+          prev.map(b => b.id === businessId ? { ...b, [field]: value } : b)
+        );
+      }
+    };
+
+    // 같은 탭에서 발생한 CustomEvent 처리
+    const handleCustomEvent = (e: Event) => {
+      const { businessId, field, value } = (e as CustomEvent).detail;
+      console.log(`📡 [Same-Tab Sync] Received update: ${field} for ${businessId.slice(0, 8)}...`);
+      applyFieldUpdate(businessId, field, value);
+    };
+
     const handleStorageChange = (e: StorageEvent) => {
       // Cache field update broadcast from another tab
       if (e.key === 'cache-field-update' && e.newValue) {
         try {
-          const update = JSON.parse(e.newValue);
-          const { businessId, field, value } = update;
-
+          const { businessId, field, value } = JSON.parse(e.newValue);
           console.log(`📡 [Cross-Tab Sync] Received update from another tab: ${field} for ${businessId.slice(0, 8)}...`);
-
-          // Update local cache immediately
-          CacheManager.updateBusinessField(businessId, field, value);
-
-          // Update UI state if needed
-          if (field === 'risk') {
-            setRiskMap(prev => ({ ...prev, [businessId]: value }));
-          } else if (field === 'payment_scheduled_date') {
-            setBusinesses(prev =>
-              prev.map(b => b.id === businessId ? { ...b, payment_scheduled_date: value } : b)
-            );
-          }
+          applyFieldUpdate(businessId, field, value);
         } catch (error) {
           console.error('[Cross-Tab Sync] Error processing field update:', error);
         }
@@ -277,8 +290,12 @@ function RevenueDashboard() {
       }
     };
 
+    window.addEventListener('cache-field-update', handleCustomEvent);
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('cache-field-update', handleCustomEvent);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [pricesLoaded]);
 
   const getAuthHeaders = () => {

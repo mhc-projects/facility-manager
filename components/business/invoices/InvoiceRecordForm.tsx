@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRe
 import { formatDate } from '@/utils/formatters';
 import type { InvoiceRecord, InvoiceStage, LegacyInvoiceStage } from '@/types/invoice';
 import { INVOICE_STAGE_LABELS as STAGE_LABELS } from '@/types/invoice';
+import { CacheManager } from '@/utils/cache-manager';
 import InvoiceRevisionForm from './InvoiceRevisionForm';
 
 export interface InvoiceRecordFormHandle {
@@ -169,6 +170,23 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
         });
         const result = await res.json();
         if (!result.success) throw new Error(result.message);
+      }
+
+      // 저장 성공 후 revenue 페이지 캐시 즉시 업데이트
+      const stageFieldMap: Record<string, Record<string, any>> = {
+        subsidy_1st:        { invoice_1st_date: payload.issue_date, invoice_1st_amount: payload.supply_amount + (parseInt(form.tax_amount.replace(/,/g, ''), 10) || 0), payment_1st_date: payload.payment_date, payment_1st_amount: payload.payment_amount },
+        subsidy_2nd:        { invoice_2nd_date: payload.issue_date, invoice_2nd_amount: payload.supply_amount + (parseInt(form.tax_amount.replace(/,/g, ''), 10) || 0), payment_2nd_date: payload.payment_date, payment_2nd_amount: payload.payment_amount },
+        subsidy_additional: { invoice_additional_date: payload.issue_date, payment_additional_date: payload.payment_date, payment_additional_amount: payload.payment_amount },
+        self_advance:       { invoice_advance_date: payload.issue_date, invoice_advance_amount: payload.supply_amount + (parseInt(form.tax_amount.replace(/,/g, ''), 10) || 0), payment_advance_date: payload.payment_date, payment_advance_amount: payload.payment_amount },
+        self_balance:       { invoice_balance_date: payload.issue_date, invoice_balance_amount: payload.supply_amount + (parseInt(form.tax_amount.replace(/,/g, ''), 10) || 0), payment_balance_date: payload.payment_date, payment_balance_amount: payload.payment_amount },
+      };
+      const fieldsToSync = stageFieldMap[stage];
+      if (fieldsToSync) {
+        CacheManager.updateBusinessFields(businessId, fieldsToSync);
+        // 같은 탭의 revenue 페이지도 반영되도록 broadcast
+        Object.entries(fieldsToSync).forEach(([field, value]) => {
+          CacheManager.broadcastFieldUpdate(businessId, field, value);
+        });
       }
 
       onSaved();
