@@ -7,6 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #2276 | 4:37 PM | ✅ | Business Upload Result Interface Updated | ~268 |
-| #2236 | 3:06 PM | 🔵 | Business Upload Modal Supports Three Merge Modes | ~452 |
+| #2245 | 3:19 PM | 🔵 | Order Management API Queries business_info Without Soft Delete Filters | ~455 |
 </claude-mem-context>

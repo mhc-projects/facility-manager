@@ -7,6 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #2276 | 4:37 PM | ✅ | Business Upload Result Interface Updated | ~268 |
-| #2236 | 3:06 PM | 🔵 | Business Upload Modal Supports Three Merge Modes | ~452 |
+| #2240 | 3:07 PM | 🔵 | Excel Template Defines 80+ Field Schema | ~431 |
 </claude-mem-context>
