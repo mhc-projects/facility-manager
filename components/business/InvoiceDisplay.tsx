@@ -96,7 +96,11 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
       ? Math.round((additionalCost || 0) * 1.1) - (invoiceData.invoices.additional?.payment_amount || 0)
       : 0;
 
-    if (receivable1st > 0) receivableDetails.push({ title: '1차', amount: receivable1st });
+    // 2차 입금이 1차 미수금을 상쇄한 경우 (2차 계산서 미발행 + 2차 입금으로 1차 미수금 처리)
+    // 1차와 2차 미수금의 합산이 0 이하면 1차 항목은 실질적으로 정리된 것으로 간주하여 숨김
+    const net1stAnd2nd = receivable1st + receivable2nd;
+    const effective1st = receivable2nd < 0 ? Math.max(0, net1stAnd2nd) : receivable1st;
+    if (effective1st > 0) receivableDetails.push({ title: '1차', amount: effective1st });
     if (receivable2nd > 0) receivableDetails.push({ title: '2차', amount: receivable2nd });
     if (receivableAdditional > 0) receivableDetails.push({ title: '추가공사비', amount: receivableAdditional });
   } else if (mappedCategory === '자비' && invoiceData.invoices) {
