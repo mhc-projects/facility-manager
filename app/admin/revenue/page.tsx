@@ -249,13 +249,21 @@ function RevenueDashboard() {
       'invoice_balance_date', 'invoice_balance_amount', 'payment_balance_date', 'payment_balance_amount',
     ];
 
+    const COST_FIELDS = [
+      'additional_cost', 'multiple_stack_cost', 'negotiation', 'multiple_stack',
+    ];
+
     const applyFieldUpdate = (businessId: string, field: string, value: any) => {
       CacheManager.updateBusinessField(businessId, field, value);
       if (field === 'risk') {
         setRiskMap(prev => ({ ...prev, [businessId]: value }));
-      } else if (field === 'payment_scheduled_date' || INVOICE_FIELDS.includes(field)) {
+      } else if (field === 'payment_scheduled_date' || INVOICE_FIELDS.includes(field) || COST_FIELDS.includes(field)) {
         setBusinesses(prev =>
           prev.map(b => b.id === businessId ? { ...b, [field]: value } : b)
+        );
+        // 현재 열린 상세모달도 즉시 반영
+        setSelectedEquipmentBusiness((prev: any) =>
+          prev?.id === businessId ? { ...prev, [field]: value } : prev
         );
       }
     };

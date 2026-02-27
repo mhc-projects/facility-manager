@@ -19,6 +19,7 @@ import DateInput from '@/components/ui/DateInput'
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown'
 import { formatMobilePhone, formatLandlinePhone } from '@/utils/phone-formatter'
 import { useToast } from '@/contexts/ToastContext'
+import { CacheManager } from '@/utils/cache-manager'
 // ⚡ 커스텀 훅 임포트 (Phase 2.1 성능 최적화)
 import { useBusinessData } from './hooks/useBusinessData'
 import { useFacilityStats } from './hooks/useFacilityStats'
@@ -3940,6 +3941,18 @@ function BusinessManagementPage() {
 
             // 🗑️ 캐시 무효화 (서버에서 최신 데이터를 받았으므로)
             invalidateBusinessCache(editingBusiness.id);
+
+            // 📡 [COST-FIELD-BROADCAST] 비용정보 필드 변경을 revenue 페이지/상세모달에 즉시 반영
+            const costFields = [
+              'additional_cost', 'multiple_stack_cost', 'negotiation', 'multiple_stack',
+            ] as const;
+            costFields.forEach(field => {
+              const value = (updatedBusiness as any)[field];
+              if (value !== undefined) {
+                CacheManager.broadcastFieldUpdate(editingBusiness.id, field, value);
+              }
+            });
+            console.log('📡 [COST-FIELD-BROADCAST] 비용정보 필드 브로드캐스트 완료');
 
             // ✅ [REALTIME-UPDATE] 테이블 즉시 반영 (영업점 및 모든 필드 실시간 동기화)
             await refetchBusinesses();
