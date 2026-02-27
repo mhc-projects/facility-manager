@@ -39,7 +39,7 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
     try {
       setLoading(true);
       console.log('📊 [InvoiceDisplay] 계산서 데이터 로딩 시작:', businessId);
-      const response = await fetch(`/api/business-invoices?business_id=${businessId}`);
+      const response = await fetch(`/api/business-invoices?business_id=${businessId}&_t=${Date.now()}`, { cache: 'no-store' });
       const result = await response.json();
 
       console.log('📊 [InvoiceDisplay] API 응답:', {

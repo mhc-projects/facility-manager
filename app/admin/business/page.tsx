@@ -3590,9 +3590,11 @@ function BusinessManagementPage() {
       console.log('📤 [FRONTEND] 전송할 데이터:', JSON.stringify(body, null, 2));
 
       // 0. 계산서 탭의 모든 변경된 폼 저장 (편집 모드에서만)
+      let invoiceSavedAt: string | null = null;
       if (editingBusiness && invoiceTabRef.current) {
         try {
           await invoiceTabRef.current.saveAllPendingTabs();
+          invoiceSavedAt = new Date().toISOString();
         } catch (invoiceErr) {
           console.error('계산서 저장 중 오류:', invoiceErr);
           // 계산서 저장 실패해도 사업장 정보 저장은 계속 진행
@@ -3673,8 +3675,8 @@ function BusinessManagementPage() {
 
             return acc;
           }, {} as any),
-          updated_at: new Date().toISOString(),
-          수정일: new Date().toISOString()
+          updated_at: invoiceSavedAt ?? new Date().toISOString(),
+          수정일: invoiceSavedAt ?? new Date().toISOString()
         };
 
         // Optimistic Update: selectedBusiness 즉시 업데이트 + 상세 모달 열기
@@ -3979,7 +3981,11 @@ function BusinessManagementPage() {
             });
 
             // 🔄 [AUTO-REFRESH] 서버 데이터로 selectedBusiness 항상 업데이트 후 상세 모달 열기
-            setSelectedBusiness(updatedBusiness as unknown as UnifiedBusinessInfo);
+            // 계산서 저장이 있었으면 updated_at을 그 시각으로 오버라이드 → InvoiceDisplay 강제 리마운트
+            const finalBusiness = invoiceSavedAt
+              ? { ...updatedBusiness, updated_at: invoiceSavedAt, 수정일: invoiceSavedAt }
+              : updatedBusiness;
+            setSelectedBusiness(finalBusiness as unknown as UnifiedBusinessInfo);
             setIsDetailModalOpen(true);
           } else {
             // 새 사업장 추가의 경우: 전체 목록 새로고침
