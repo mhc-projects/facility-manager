@@ -1372,9 +1372,14 @@ function RevenueDashboard() {
       // 보조금: 총액 방식 (계산서 합계 - 입금 합계)
       // invoice_records 우선값이 COALESCE로 이미 반영된 상태
       const hasAdditionalInvoice = (business as any).invoice_additional_date;
+      // 추가공사비: invoice_records에 실발행금액이 있으면 우선 사용, 없으면 additional_cost × 1.1 폴백
+      const irAdditionalAmount = (business as any).invoice_additional_amount;
+      const additionalInvoiceAmount = hasAdditionalInvoice
+        ? (irAdditionalAmount || Math.round((business.additional_cost || 0) * 1.1))
+        : 0;
       const totalInvoices = ((business as any).invoice_1st_amount || 0)
                           + ((business as any).invoice_2nd_amount || 0)
-                          + (hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0);
+                          + additionalInvoiceAmount;
       const totalPayments = ((business as any).payment_1st_amount || 0)
                           + ((business as any).payment_2nd_amount || 0)
                           + ((business as any).payment_additional_amount || 0);

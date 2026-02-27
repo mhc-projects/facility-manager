@@ -259,6 +259,7 @@ export async function GET(request: Request) {
         bi.payment_2nd_date::text AS payment_2nd_date,
         COALESCE(ir.ir_payment_2nd,        bi.payment_2nd_amount)        AS payment_2nd_amount,
         bi.invoice_additional_date::text AS invoice_additional_date,
+        ir.ir_invoice_additional AS invoice_additional_amount,
         bi.payment_additional_date::text AS payment_additional_date,
         COALESCE(ir.ir_payment_additional, bi.payment_additional_amount) AS payment_additional_amount,
         bi.invoice_advance_date::text AS invoice_advance_date,
