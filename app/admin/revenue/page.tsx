@@ -298,10 +298,21 @@ function RevenueDashboard() {
       }
     };
 
+    // 같은 탭에서 발생한 캐시 무효화 CustomEvent 처리 (business 페이지에서 저장 시)
+    const handleCacheInvalidate = () => {
+      console.log('📡 [Same-Tab Sync] Cache invalidation received');
+      CacheManager.invalidateAll();
+      if (pricesLoaded) {
+        loadBusinesses();
+      }
+    };
+
     window.addEventListener('cache-field-update', handleCustomEvent);
+    window.addEventListener('cache-invalidate', handleCacheInvalidate);
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('cache-field-update', handleCustomEvent);
+      window.removeEventListener('cache-invalidate', handleCacheInvalidate);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [pricesLoaded]);

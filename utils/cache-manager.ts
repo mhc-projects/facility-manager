@@ -99,10 +99,14 @@ export const CacheManager = {
   },
 
   /**
-   * Broadcast cache invalidation to other tabs
+   * Broadcast cache invalidation to other tabs and same tab
    */
   broadcastInvalidation() {
     localStorage.setItem('cache-invalidate-timestamp', Date.now().toString());
+    // 같은 탭에도 CustomEvent로 전달 (storage event는 같은 탭에서 발생하지 않음)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cache-invalidate'));
+    }
     console.log('📡 [CacheManager] Broadcast: cache invalidation');
   },
 
