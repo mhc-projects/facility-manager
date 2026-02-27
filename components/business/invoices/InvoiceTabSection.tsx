@@ -15,6 +15,7 @@ interface InvoiceTabSectionProps {
   businessId: string;
   progressStatus: string;  // 진행구분 (보조금/자비 판단용)
   userPermission?: number; // 권한 레벨 (삭제 등 제어용)
+  refreshTrigger?: number; // 외부에서 강제 리로드 요청 시 증가
 }
 
 type TabId = InvoiceStage | 'extra';
@@ -23,6 +24,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   businessId,
   progressStatus,
   userPermission = 0,
+  refreshTrigger = 0,
 }: InvoiceTabSectionProps, ref) {
   const [data, setData] = useState<BusinessInvoicesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,13 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/business-invoices?business_id=${businessId}`);
+      const timestamp = Date.now();
+      const res = await fetch(`/api/business-invoices?business_id=${businessId}&_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        }
+      });
       const result = await res.json();
       if (result.success) {
         setData(result.data);
@@ -58,7 +66,8 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
     } finally {
       setLoading(false);
     }
-  }, [businessId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, refreshTrigger]);
 
   useEffect(() => {
     loadData();

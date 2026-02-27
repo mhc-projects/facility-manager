@@ -371,6 +371,7 @@ function BusinessManagementPage() {
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
   const [formData, setFormData] = useState<Partial<UnifiedBusinessInfo>>({})
   const invoiceTabRef = useRef<InvoiceTabSectionHandle>(null)
+  const [invoiceRefreshTrigger, setInvoiceRefreshTrigger] = useState(0)
   const [localGovSuggestions, setLocalGovSuggestions] = useState<string[]>([])
   const [showLocalGovSuggestions, setShowLocalGovSuggestions] = useState(false)
   const [selectedBusiness, setSelectedBusiness] = useState<UnifiedBusinessInfo | null>(null)
@@ -2400,12 +2401,16 @@ function BusinessManagementPage() {
       // Revenue 페이지로 이동하면서 해당 사업장의 Revenue 모달 자동 열기
       router.push(`/admin/revenue?businessId=${selectedBusiness.id}&openRevenueModal=true`);
     } else {
-      // 일반 모달 닫기
+      // 일반 모달 닫기 - 수정 후 닫으면 상세 모달로 복귀
       console.log('❌ [Close] 모달 닫기 (복귀 경로 없음)');
       setIsModalOpen(false);
       setEditingBusiness(null);
+      setFormData({});
       setReturnPath(null);
       setShowLocalGovSuggestions(false);
+      if (selectedBusiness) {
+        setIsDetailModalOpen(true);
+      }
     }
   }, [returnPath, selectedBusiness, router]);
 
@@ -3035,6 +3040,7 @@ function BusinessManagementPage() {
 
       // Use setTimeout to ensure state updates complete before opening edit modal
       setTimeout(() => {
+        setInvoiceRefreshTrigger(prev => prev + 1)
         setIsModalOpen(true)
       }, 0)
 
@@ -3604,8 +3610,6 @@ function BusinessManagementPage() {
         }
       }
 
-      // 1. 즉시 모달 닫기 (사용자 경험 개선)
-      setIsModalOpen(false)
       setShowLocalGovSuggestions(false)
 
       // 2. Optimistic Update - 편집의 경우 즉시 로컬 상태 업데이트
@@ -3682,9 +3686,8 @@ function BusinessManagementPage() {
           수정일: invoiceSavedAt ?? new Date().toISOString()
         };
 
-        // Optimistic Update: selectedBusiness 즉시 업데이트 + 상세 모달 열기
+        // Optimistic Update: selectedBusiness 즉시 업데이트 (상세 모달은 닫기 버튼 후 열림)
         setSelectedBusiness(optimisticUpdate);
-        setIsDetailModalOpen(true);
         updateBusinessState(optimisticUpdate, editingBusiness.id);
 
         // ✅ [SYNC-CHECK] Optimistic Update 완료 로깅
@@ -3989,13 +3992,12 @@ function BusinessManagementPage() {
               }
             });
 
-            // 🔄 [AUTO-REFRESH] 서버 데이터로 selectedBusiness 항상 업데이트 후 상세 모달 열기
+            // 🔄 [AUTO-REFRESH] 서버 데이터로 selectedBusiness 업데이트 (상세 모달은 닫기 버튼 후 열림)
             // 계산서 저장이 있었으면 updated_at을 그 시각으로 오버라이드 → InvoiceDisplay 강제 리마운트
             const finalBusiness = invoiceSavedAt
               ? { ...updatedBusiness, updated_at: invoiceSavedAt, 수정일: invoiceSavedAt }
               : updatedBusiness;
             setSelectedBusiness(finalBusiness as unknown as UnifiedBusinessInfo);
-            setIsDetailModalOpen(true);
           } else {
             // 새 사업장 추가의 경우: 전체 목록 새로고침
             await loadAllBusinesses()
@@ -4022,9 +4024,7 @@ function BusinessManagementPage() {
           console.log('✅ 대기필증 데이터 동기화 완료')
         }
         
-        // 상태 초기화
-        setEditingBusiness(null)
-        setFormData({})
+        // 모달은 닫지 않음 - 닫기/취소 버튼으로만 닫힘 (저장 후 계속 수정 가능)
         
       } else {
         // 에러 발생 시 optimistic update 롤백
@@ -5981,6 +5981,7 @@ function BusinessManagementPage() {
                         businessId={editingBusiness.id}
                         progressStatus={formData.progress_status}
                         userPermission={userPermission}
+                        refreshTrigger={invoiceRefreshTrigger}
                       />
                     </div>
                   );
