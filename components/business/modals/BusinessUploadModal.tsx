@@ -18,6 +18,10 @@ interface MigrationResult {
   errors: number
 }
 
+interface ResetMultipleStackResult {
+  reset: number
+}
+
 interface BusinessUploadModalProps {
   isOpen: boolean
   onClose: () => void
@@ -32,6 +36,7 @@ interface BusinessUploadModalProps {
   setUploadMode: (mode: 'overwrite' | 'merge' | 'skip' | 'replaceAll') => void
   handleFileUpload: (file: File) => Promise<void>
   downloadExcelTemplate: () => Promise<void>
+  userPermission?: number
 }
 
 export default function BusinessUploadModal({
@@ -48,11 +53,18 @@ export default function BusinessUploadModal({
   setUploadMode,
   handleFileUpload,
   downloadExcelTemplate,
+  userPermission = 0,
 }: BusinessUploadModalProps) {
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'previewing' | 'running' | 'done' | 'error'>('idle')
   const [migrationPreview, setMigrationPreview] = useState<{ to_migrate: number; already_in_invoice_records: number; estimated_records_to_insert: number } | null>(null)
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null)
   const [migrationError, setMigrationError] = useState<string | null>(null)
+
+  // 자비 사업장 복수굴뚝 초기화
+  const [resetStackStatus, setResetStackStatus] = useState<'idle' | 'previewing' | 'running' | 'done' | 'error'>('idle')
+  const [resetStackPreview, setResetStackPreview] = useState<{ summary: { targets_to_reset: number; self_businesses_total: number }; targets: { name: string; current_multiple_stack: number }[] } | null>(null)
+  const [resetStackResult, setResetStackResult] = useState<ResetMultipleStackResult | null>(null)
+  const [resetStackError, setResetStackError] = useState<string | null>(null)
 
   const handleMigrationPreview = async () => {
     setMigrationStatus('previewing')
@@ -94,6 +106,49 @@ export default function BusinessUploadModal({
     } catch (e: any) {
       setMigrationError(e.message)
       setMigrationStatus('error')
+    }
+  }
+
+  const handleResetStackPreview = async () => {
+    setResetStackStatus('previewing')
+    setResetStackError(null)
+    try {
+      const res = await fetch('/api/migrations/reset-self-multiple-stack')
+      const data = await res.json()
+      if (data.success) {
+        setResetStackPreview(data)
+        setResetStackStatus('idle')
+      } else {
+        setResetStackError(data.error || '미리보기 실패')
+        setResetStackStatus('error')
+      }
+    } catch (e: any) {
+      setResetStackError(e.message)
+      setResetStackStatus('error')
+    }
+  }
+
+  const handleResetStackRun = async () => {
+    if (!confirm(`자비 사업장 ${resetStackPreview?.summary?.targets_to_reset || resetStackPreview?.targets?.length || ''}개의 복수굴뚝 수량을 0으로 초기화합니다. 계속하시겠습니까?`)) return
+    setResetStackStatus('running')
+    setResetStackError(null)
+    try {
+      const res = await fetch('/api/migrations/reset-self-multiple-stack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setResetStackResult(data.summary)
+        setResetStackStatus('done')
+      } else {
+        setResetStackError(data.error || '초기화 실패')
+        setResetStackStatus('error')
+      }
+    } catch (e: any) {
+      setResetStackError(e.message)
+      setResetStackStatus('error')
     }
   }
 
@@ -302,6 +357,63 @@ export default function BusinessUploadModal({
                   </button>
                 )}
               </div>
+
+              {/* 자비 사업장 복수굴뚝 초기화 (권한 4 전용) */}
+              {userPermission >= 4 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
+                    <Database className="w-4 h-4" />
+                    자비 사업장 복수굴뚝 초기화
+                  </h4>
+                  <p className="text-xs text-red-800 mb-3">
+                    진행구분이 자비인 사업장의 복수굴뚝 수량을 0으로 초기화합니다. 이 작업은 되돌릴 수 없습니다.
+                  </p>
+
+                  {resetStackStatus === 'done' && resetStackResult ? (
+                    <div className="bg-green-50 border border-green-200 rounded p-3 text-sm">
+                      <p className="font-semibold text-green-800 mb-1">초기화 완료</p>
+                      <p className="text-green-700">{resetStackResult.reset}개 사업장의 복수굴뚝 수량을 0으로 초기화했습니다</p>
+                    </div>
+                  ) : resetStackStatus === 'error' ? (
+                    <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                      오류: {resetStackError}
+                    </div>
+                  ) : resetStackPreview ? (
+                    <div className="space-y-2">
+                      <div className="bg-white border border-red-200 rounded p-3 text-sm">
+                        <p className="text-gray-700">초기화 대상: <span className="font-bold text-red-700">{resetStackPreview.summary.targets_to_reset}개</span> 사업장</p>
+                        <p className="text-gray-700">자비 사업장 전체: <span className="font-bold">{resetStackPreview.summary.self_businesses_total}개</span></p>
+                        {resetStackPreview.targets?.length > 0 && (
+                          <div className="mt-2 max-h-24 overflow-y-auto">
+                            <p className="text-xs text-gray-500 mb-1">대상 사업장 목록 (최대 표시):</p>
+                            {resetStackPreview.targets.slice(0, 5).map((t, i) => (
+                              <p key={i} className="text-xs text-gray-600">{t.name} (현재: {t.current_multiple_stack}개)</p>
+                            ))}
+                            {resetStackPreview.targets.length > 5 && (
+                              <p className="text-xs text-gray-500">... 외 {resetStackPreview.targets.length - 5}개</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleResetStackRun}
+                        disabled={resetStackStatus === 'running' || (resetStackPreview.summary.targets_to_reset) === 0}
+                        className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {resetStackStatus === 'running' ? '초기화 중...' : (resetStackPreview.summary.targets_to_reset) === 0 ? '초기화할 데이터 없음' : `${resetStackPreview.summary.targets_to_reset}개 사업장 복수굴뚝 초기화`}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleResetStackPreview}
+                      disabled={resetStackStatus === 'previewing'}
+                      className="w-full px-3 py-2 bg-red-100 text-red-800 text-sm rounded border border-red-300 hover:bg-red-200 disabled:opacity-50"
+                    >
+                      {resetStackStatus === 'previewing' ? '확인 중...' : '초기화 대상 확인'}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* 파일 형식 안내 */}
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">

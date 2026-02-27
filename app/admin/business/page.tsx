@@ -6106,6 +6106,7 @@ function BusinessManagementPage() {
             setUploadMode={setUploadMode}
             handleFileUpload={handleFileUpload}
             downloadExcelTemplate={downloadExcelTemplate}
+            userPermission={userPermission}
           />
         </Suspense>
       )}
