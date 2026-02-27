@@ -198,11 +198,12 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
 
           {additionalCost > 0 &&
            (invoiceData.invoices.additional?.invoice_date ||
-            invoiceData.invoices.additional?.payment_date) && (
+            invoiceData.invoices.additional?.payment_date ||
+            getStageRecord('subsidy_additional') !== null) && (
             <InvoiceDisplayCard
               title="추가공사비"
               invoiceDate={invoiceData.invoices.additional?.invoice_date}
-              invoiceAmount={Math.round(additionalCost * 1.1)}
+              invoiceAmount={invoiceData.invoices.additional?.invoice_amount || Math.round(additionalCost * 1.1)}
               paymentDate={invoiceData.invoices.additional?.payment_date}
               paymentAmount={invoiceData.invoices.additional?.payment_amount}
               invoiceRecord={getStageRecord('subsidy_additional')}

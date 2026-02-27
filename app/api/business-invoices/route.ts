@@ -240,13 +240,20 @@ export async function GET(request: NextRequest) {
                            - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
 
           // invoicesData도 invoice_records 우선값으로 업데이트
+          invoicesData.first.invoice_date    = rec1st?.issue_date ?? business.invoice_1st_date;
           invoicesData.first.invoice_amount  = invoiceAmt1st;
+          invoicesData.first.payment_date    = rec1st?.payment_date ?? business.payment_1st_date;
           invoicesData.first.payment_amount  = paymentAmt1st;
           invoicesData.first.receivable      = invoiceAmt1st - paymentAmt1st;
+          invoicesData.second.invoice_date   = rec2nd?.issue_date ?? business.invoice_2nd_date;
           invoicesData.second.invoice_amount = invoiceAmt2nd;
+          invoicesData.second.payment_date   = rec2nd?.payment_date ?? business.payment_2nd_date;
           invoicesData.second.payment_amount = paymentAmt2nd;
           invoicesData.second.receivable     = invoiceAmt2nd - paymentAmt2nd;
+          // 추가공사비: invoice_records에서 발행일/입금일 우선 사용
+          invoicesData.additional.invoice_date   = recAdditional?.issue_date ?? business.invoice_additional_date;
           invoicesData.additional.invoice_amount = invoiceAmtAdditional;
+          invoicesData.additional.payment_date   = recAdditional?.payment_date ?? business.payment_additional_date;
           invoicesData.additional.payment_amount = paymentAmtAdditional;
           invoicesData.additional.receivable     = invoiceAmtAdditional - paymentAmtAdditional;
         } else if (category === '자비') {
@@ -261,10 +268,14 @@ export async function GET(request: NextRequest) {
           totalReceivables = (invoiceAmtAdvance + invoiceAmtBalance)
                            - (paymentAmtAdvance + paymentAmtBalance);
 
+          invoicesData.advance.invoice_date   = recAdvance?.issue_date ?? business.invoice_advance_date;
           invoicesData.advance.invoice_amount = invoiceAmtAdvance;
+          invoicesData.advance.payment_date   = recAdvance?.payment_date ?? business.payment_advance_date;
           invoicesData.advance.payment_amount = paymentAmtAdvance;
           invoicesData.advance.receivable     = invoiceAmtAdvance - paymentAmtAdvance;
+          invoicesData.balance.invoice_date   = recBalance?.issue_date ?? business.invoice_balance_date;
           invoicesData.balance.invoice_amount = invoiceAmtBalance;
+          invoicesData.balance.payment_date   = recBalance?.payment_date ?? business.payment_balance_date;
           invoicesData.balance.payment_amount = paymentAmtBalance;
           invoicesData.balance.receivable     = invoiceAmtBalance - paymentAmtBalance;
         }
