@@ -414,7 +414,7 @@ function BusinessManagementPage() {
   const router = useRouter()
 
   // ⚡ 커스텀 훅 사용 (Phase 2.1 성능 최적화)
-  const { allBusinesses, isLoading, error: businessDataError, refetch: refetchBusinesses, deleteBusiness } = useBusinessData()
+  const { allBusinesses, isLoading, error: businessDataError, refetch: refetchBusinesses, addNormalizedBusiness, deleteBusiness } = useBusinessData()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
@@ -4048,11 +4048,13 @@ function BusinessManagementPage() {
               : updatedBusiness;
             setSelectedBusiness(finalBusiness as unknown as UnifiedBusinessInfo);
           } else {
-            // 새 사업장 추가의 경우: 전체 목록 새로고침
-            await loadAllBusinesses()
+            // 새 사업장 추가의 경우: 서버 응답을 정규화하여 즉시 UI 반영
+            // normalizeBusiness와 동일한 변환을 거쳐 전체 로딩과 완전히 동일한 형태 보장
+            // 별도 refetch 없이 단 한 번의 상태 업데이트로 완결 → 경쟁 조건 없음
+            addNormalizedBusiness(result.data)
           }
         } else {
-          // API 응답에 데이터가 없는 경우 전체 새로고침
+          // API 응답에 데이터가 없는 경우에만 전체 새로고침
           await loadAllBusinesses()
         }
         
