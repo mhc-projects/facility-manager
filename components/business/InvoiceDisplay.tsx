@@ -89,12 +89,11 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   const receivableDetails: { title: string; amount: number }[] = [];
 
   if (mappedCategory === '보조금' && invoiceData.invoices) {
-    const receivable1st = (invoiceData.invoices.first?.invoice_amount || 0) - (invoiceData.invoices.first?.payment_amount || 0);
-    const receivable2nd = (invoiceData.invoices.second?.invoice_amount || 0) - (invoiceData.invoices.second?.payment_amount || 0);
-    const hasAdditionalInvoice = invoiceData.invoices.additional?.invoice_date;
-    const receivableAdditional = hasAdditionalInvoice
-      ? Math.round((additionalCost || 0) * 1.1) - (invoiceData.invoices.additional?.payment_amount || 0)
-      : 0;
+    // API에서 이미 정확히 계산된 차수별 receivable 값을 직접 사용
+    // (프론트에서 재계산하면 2차 입금 상쇄 등이 반영되지 않아 총 미수금과 불일치)
+    const receivable1st = invoiceData.invoices.first?.receivable ?? 0;
+    const receivable2nd = invoiceData.invoices.second?.receivable ?? 0;
+    const receivableAdditional = invoiceData.invoices.additional?.receivable ?? 0;
 
     // 2차 입금이 1차 미수금을 상쇄한 경우 (2차 계산서 미발행 + 2차 입금으로 1차 미수금 처리)
     // 1차와 2차 미수금의 합산이 0 이하면 1차 항목은 실질적으로 정리된 것으로 간주하여 숨김
@@ -104,8 +103,8 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
     if (receivable2nd > 0) receivableDetails.push({ title: '2차', amount: receivable2nd });
     if (receivableAdditional > 0) receivableDetails.push({ title: '추가공사비', amount: receivableAdditional });
   } else if (mappedCategory === '자비' && invoiceData.invoices) {
-    const receivableAdvance = (invoiceData.invoices.advance?.invoice_amount || 0) - (invoiceData.invoices.advance?.payment_amount || 0);
-    const receivableBalance = (invoiceData.invoices.balance?.invoice_amount || 0) - (invoiceData.invoices.balance?.payment_amount || 0);
+    const receivableAdvance = invoiceData.invoices.advance?.receivable ?? 0;
+    const receivableBalance = invoiceData.invoices.balance?.receivable ?? 0;
 
     if (receivableAdvance > 0) receivableDetails.push({ title: '선금', amount: receivableAdvance });
     if (receivableBalance > 0) receivableDetails.push({ title: '잔금', amount: receivableBalance });
