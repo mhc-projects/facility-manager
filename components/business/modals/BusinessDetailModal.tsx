@@ -79,7 +79,7 @@ interface UnifiedBusinessInfo {
   other_equipment?: string | null
   additional_cost?: number | null
   installation_extra_cost?: number | null
-  negotiation?: string | null
+  negotiation?: number | string | null
   multiple_stack_cost?: number | null
   representative_birth_date?: string | null
   invoice_1st_date?: string | null

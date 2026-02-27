@@ -118,7 +118,7 @@ interface UnifiedBusinessInfo {
   additional_cost?: number | null;
   installation_extra_cost?: number | null;  // 추가설치비 (설치팀 요청 추가 비용)
   survey_fee_adjustment?: number | null;    // 실사비 조정 (기본 100,000원 기준 조정금액)
-  negotiation?: string | null;
+  negotiation?: number | string | null;
   multiple_stack_cost?: number | null;
   representative_birth_date?: string | null;
 
@@ -2868,7 +2868,7 @@ function BusinessManagementPage() {
       multiple_stack_cost: null,
       expansion_pack: null,
       other_equipment: '',
-      negotiation: '',
+      negotiation: null,
       is_active: true,
       // 실사 관리
       estimate_survey_manager: '',
@@ -3421,7 +3421,7 @@ function BusinessManagementPage() {
         survey_fee_adjustment: parseExcelAmount(row['실사비조정']),
         multiple_stack_cost: parseExcelAmount(row['복수굴뚝비용']),
         expansion_pack: row['확장팩'] || '',
-        negotiation: row['네고'] || '',
+        negotiation: parseExcelAmount(row['네고']),
         other_equipment: row['기타'] || '',
 
         // 제출일 관리 (착공신고서, 그린링크 전송확인서, 부착완료통보서)
@@ -5892,10 +5892,10 @@ function BusinessManagementPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">협의사항 (할인 금액, 원)</label>
                       <input
                         type="text"
-                        value={formData.negotiation ? parseInt(formData.negotiation).toLocaleString() : ''}
+                        value={formData.negotiation ? Number(formData.negotiation).toLocaleString() : ''}
                         onChange={(e) => {
                           const value = e.target.value.replace(/,/g, '');
-                          setFormData({...formData, negotiation: value});
+                          setFormData({...formData, negotiation: value ? parseInt(value) : null});
                         }}
                         className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
                         placeholder="매출에서 차감될 금액 (예: 100,000)"

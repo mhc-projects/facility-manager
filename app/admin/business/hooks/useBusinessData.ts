@@ -106,7 +106,7 @@ export function useBusinessData() {
                         business.manufacturer === '가이아씨앤에스' ? '가이아씨앤에스' :
                         business.manufacturer === '이브이에스' ? '이브이에스' :
                         business.manufacturer || '',
-          negotiation: business.negotiation || '',
+          negotiation: business.negotiation || null,
           // 한국어 센서/장비 필드명 매핑
           PH센서: business.ph_meter || 0,
           차압계: business.differential_pressure_meter || 0,

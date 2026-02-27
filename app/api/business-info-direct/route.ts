@@ -69,7 +69,7 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     greenlink_id: normalizeUTF8(business.greenlink_id || ''),
     greenlink_pw: normalizeUTF8(business.greenlink_pw || ''),
     additional_cost: business.additional_cost ? parseInt(business.additional_cost) : null,
-    negotiation: normalizeUTF8(business.negotiation || ''),
+    negotiation: business.negotiation ? parseInt(business.negotiation) || null : null,
     order_manager: normalizeUTF8(business.order_manager || ''),
     order_request_date: normalizeDateField(business.order_request_date),
     receipt_date: normalizeDateField(business.receipt_date),
@@ -627,7 +627,7 @@ export async function PUT(request: Request) {
     }
 
     if (updateData.negotiation !== undefined) {
-      updateObject.negotiation = normalizeUTF8(updateData.negotiation || '');
+      updateObject.negotiation = updateData.negotiation ? parseInt(updateData.negotiation) || null : null;
     }
     if (updateData.multiple_stack_cost !== undefined) {
       updateObject.multiple_stack_cost = parseInt(updateData.multiple_stack_cost) || null;
@@ -875,7 +875,7 @@ export async function POST(request: Request) {
       expansion_pack: businessData.expansion_pack ? parseInt(businessData.expansion_pack) : null,
       other_equipment: normalizeUTF8(businessData.other_equipment || ''),
       additional_cost: businessData.additional_cost ? parseInt(businessData.additional_cost) : null,
-      negotiation: normalizeUTF8(businessData.negotiation || ''),
+      negotiation: businessData.negotiation ? parseInt(businessData.negotiation) || null : null,
       multiple_stack_cost: businessData.multiple_stack_cost ? parseInt(businessData.multiple_stack_cost) : null,
       representative_birth_date: businessData.representative_birth_date || null,
 
@@ -1097,35 +1097,51 @@ async function executeSingleBatch(
     `;
   } else if (uploadMode === 'merge') {
     // 병합: 빈 값이 아닌 필드만 업데이트
-    const integerFields = [
+    // VARCHAR/TEXT 필드만 NULLIF(value, '') 사용 가능 - 나머지 타입은 COALESCE만 사용
+    const textFields = new Set([
+      'local_government', 'address', 'representative_name', 'business_registration_number',
+      'business_type', 'business_contact', 'manager_name', 'manager_contact',
+      'manager_position', 'fax_number', 'email', 'department', 'progress_status',
+      'installation_team', 'business_category', 'manufacturer', 'sales_office',
+      'greenlink_id', 'greenlink_pw', 'order_manager',
+      'estimate_survey_manager', 'pre_construction_survey_manager', 'completion_survey_manager',
+      'vpn', 'special_notes', 'additional_info'
+    ]);
+
+    // 숫자 필드: 0이 아닌 경우만 업데이트 (기존 값 유지)
+    const integerFields = new Set([
       'ph_meter', 'differential_pressure_meter', 'temperature_meter',
       'discharge_current_meter', 'fan_current_meter', 'pump_current_meter',
       'gateway', 'gateway_1_2', 'gateway_3_4', 'vpn_wired', 'vpn_wireless',
       'multiple_stack', 'explosion_proof_differential_pressure_meter_domestic',
       'explosion_proof_temperature_meter_domestic', 'expansion_device',
       'relay_8ch', 'relay_16ch', 'main_board_replacement', 'business_management_code',
-      'project_year', 'additional_cost', 'invoice_1st_amount', 'payment_1st_amount',
+      'project_year', 'additional_cost', 'negotiation',
+      'invoice_1st_amount', 'payment_1st_amount',
       'invoice_2nd_amount', 'payment_2nd_amount', 'payment_additional_amount',
       'invoice_advance_amount', 'payment_advance_amount', 'invoice_balance_amount',
       'payment_balance_amount'
-    ];
+    ]);
 
     const updateFields = fields
       .filter(f => f !== 'business_name' && f !== 'created_at')
       .map(field => {
-        if (integerFields.includes(field)) {
-          // 숫자 필드: 0이 아닌 경우만 업데이트 (명시적 타입 캐스팅)
+        if (field === 'updated_at') {
+          // updated_at는 항상 업데이트
+          return `${field} = EXCLUDED.${field}`;
+        } else if (integerFields.has(field)) {
+          // 숫자 필드: 0이 아닌 경우만 업데이트
           return `${field} = CASE
             WHEN EXCLUDED.${field} IS NOT NULL AND EXCLUDED.${field}::integer != 0
             THEN EXCLUDED.${field}
             ELSE business_info.${field}
           END`;
-        } else if (field === 'updated_at') {
-          // updated_at는 항상 업데이트
-          return `${field} = EXCLUDED.${field}`;
-        } else {
-          // 문자열 필드: 빈 값이 아닌 경우만 업데이트
+        } else if (textFields.has(field)) {
+          // VARCHAR/TEXT 필드: 빈 값이 아닌 경우만 업데이트
           return `${field} = COALESCE(NULLIF(EXCLUDED.${field}, ''), business_info.${field})`;
+        } else {
+          // DATE, BOOLEAN, TIMESTAMPTZ 등 나머지 타입: NULL이 아닌 경우만 업데이트
+          return `${field} = COALESCE(EXCLUDED.${field}, business_info.${field})`;
         }
       })
       .join(', ');

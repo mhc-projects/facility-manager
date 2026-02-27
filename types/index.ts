@@ -286,6 +286,7 @@ export interface BusinessInfo {
 
   // 비용 정보
   additional_cost?: number;              // 추가공사비 (계산서 발행 항목)
+  negotiation?: number | null;           // 협의사항 할인금액 (원)
   installation_extra_cost?: number;      // 추가설치비 (설치팀 요청 추가 비용)
   survey_fee_adjustment?: number;        // 실사비 조정 (기본 100,000원 기준 조정금액)
 
