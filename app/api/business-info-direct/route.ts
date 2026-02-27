@@ -1037,6 +1037,10 @@ async function executeBatchUpload(
   const elapsedTime = Date.now() - startTime;
   log(`🎉 [BATCH-UPLOAD] 완료 - ${elapsedTime}ms 소요 / 생성: ${totalCreated}, 업데이트: ${totalUpdated}, 오류: ${totalErrors}`);
 
+  // B안: 계산서 필드가 포함된 경우 invoice_records 동기화
+  const invoiceRecordsResult = await syncInvoiceRecordsFromBatch(businesses);
+  log(`📋 [BATCH-UPLOAD] invoice_records 동기화 - 삽입: ${invoiceRecordsResult.inserted}, 업데이트: ${invoiceRecordsResult.updated}`);
+
   return NextResponse.json({
     success: true,
     message: '배치 업로드가 완료되었습니다.',
@@ -1048,7 +1052,8 @@ async function executeBatchUpload(
         skipped: totalSkipped,
         errors: totalErrors,
         errorDetails: errorDetails.slice(0, 10),
-        elapsedTime
+        elapsedTime,
+        invoice_records_synced: invoiceRecordsResult,
       }
     }
   });
@@ -1527,4 +1532,119 @@ export async function DELETE(request: Request) {
       error: error instanceof Error ? error.message : '알 수 없는 오류'
     }, { status: 500 });
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// B안: 엑셀 배치업로드 후 invoice_records 동기화 헬퍼
+// 계산서 필드가 있는 사업장의 business_id를 조회하여 upsert
+// ──────────────────────────────────────────────────────────────
+function isSubsidyCategory(progressStatus: string | null | undefined): boolean {
+  const s = progressStatus?.trim() || '';
+  return s === '보조금' || s === '보조금 동시진행' || s === '보조금 추가승인';
+}
+
+async function syncInvoiceRecordsFromBatch(
+  businesses: any[]
+): Promise<{ inserted: number; updated: number; errors: number }> {
+  let inserted = 0;
+  let updated = 0;
+  let errors = 0;
+
+  // 계산서 필드가 있는 사업장만 필터링
+  const withInvoice = businesses.filter(b =>
+    b.invoice_1st_date || b.invoice_1st_amount ||
+    b.invoice_2nd_date || b.invoice_2nd_amount ||
+    b.invoice_additional_date ||
+    b.invoice_advance_date || b.invoice_advance_amount ||
+    b.invoice_balance_date || b.invoice_balance_amount
+  );
+
+  if (withInvoice.length === 0) return { inserted, updated, errors };
+
+  log(`📋 [SYNC-INVOICE] 계산서 데이터 있는 사업장: ${withInvoice.length}개`);
+
+  // 사업장명 → id 매핑 조회
+  const names = withInvoice.map(b => normalizeUTF8(b.business_name || '')).filter(Boolean);
+  if (names.length === 0) return { inserted, updated, errors };
+
+  const placeholders = names.map((_, i) => `$${i + 1}`).join(', ');
+  const bizRows = await queryAll(
+    `SELECT id, business_name, progress_status FROM business_info
+     WHERE business_name IN (${placeholders}) AND is_active = true AND is_deleted = false`,
+    names
+  );
+  const nameToRow: Record<string, { id: string; progress_status: string | null }> = {};
+  for (const row of bizRows) {
+    nameToRow[row.business_name] = { id: row.id, progress_status: row.progress_status };
+  }
+
+  const now = new Date().toISOString();
+
+  for (const biz of withInvoice) {
+    const normalizedName = normalizeUTF8(biz.business_name || '');
+    const bizRow = nameToRow[normalizedName];
+    if (!bizRow) continue;
+
+    const { id: businessId, progress_status } = bizRow;
+    // 엑셀 progress_status 우선, 없으면 DB 값 사용
+    const effectiveStatus = biz.progress_status || progress_status;
+
+    // stage별 데이터 정의
+    const stageData: Array<{
+      stage: string;
+      issueDate: string | null;
+      totalAmount: number | null;
+      paymentDate: string | null;
+      paymentAmount: number | null;
+    }> = isSubsidyCategory(effectiveStatus) ? [
+      { stage: 'subsidy_1st', issueDate: biz.invoice_1st_date || null, totalAmount: biz.invoice_1st_amount ? parseInt(biz.invoice_1st_amount) : null, paymentDate: biz.payment_1st_date || null, paymentAmount: biz.payment_1st_amount ? parseInt(biz.payment_1st_amount) : null },
+      { stage: 'subsidy_2nd', issueDate: biz.invoice_2nd_date || null, totalAmount: biz.invoice_2nd_amount ? parseInt(biz.invoice_2nd_amount) : null, paymentDate: biz.payment_2nd_date || null, paymentAmount: biz.payment_2nd_amount ? parseInt(biz.payment_2nd_amount) : null },
+      { stage: 'subsidy_additional', issueDate: biz.invoice_additional_date || null, totalAmount: biz.additional_cost ? Math.round(parseInt(biz.additional_cost) * 1.1) : null, paymentDate: biz.payment_additional_date || null, paymentAmount: biz.payment_additional_amount ? parseInt(biz.payment_additional_amount) : null },
+    ] : [
+      { stage: 'self_advance', issueDate: biz.invoice_advance_date || null, totalAmount: biz.invoice_advance_amount ? parseInt(biz.invoice_advance_amount) : null, paymentDate: biz.payment_advance_date || null, paymentAmount: biz.payment_advance_amount ? parseInt(biz.payment_advance_amount) : null },
+      { stage: 'self_balance', issueDate: biz.invoice_balance_date || null, totalAmount: biz.invoice_balance_amount ? parseInt(biz.invoice_balance_amount) : null, paymentDate: biz.payment_balance_date || null, paymentAmount: biz.payment_balance_amount ? parseInt(biz.payment_balance_amount) : null },
+    ];
+
+    for (const sd of stageData) {
+      if (!sd.totalAmount && !sd.issueDate) continue;
+      const total = sd.totalAmount || 0;
+      const tax = Math.round(total / 11);
+      const supply = total - tax;
+
+      try {
+        // 기존 original 레코드 존재 여부 확인
+        const existing = await queryOne(
+          `SELECT id FROM invoice_records WHERE business_id = $1 AND invoice_stage = $2 AND record_type = 'original' AND is_active = true`,
+          [businessId, sd.stage]
+        );
+
+        if (existing) {
+          // 업데이트
+          await pgQuery(
+            `UPDATE invoice_records SET
+               issue_date = $1, supply_amount = $2, tax_amount = $3, total_amount = $4,
+               payment_date = $5, payment_amount = $6, updated_at = $7
+             WHERE id = $8`,
+            [sd.issueDate, supply, tax, total, sd.paymentDate, sd.paymentAmount || 0, now, existing.id]
+          );
+          updated++;
+        } else {
+          // 신규 삽입
+          await pgQuery(
+            `INSERT INTO invoice_records
+               (business_id, invoice_stage, record_type, issue_date, supply_amount, tax_amount, total_amount,
+                payment_date, payment_amount, is_active, created_at, updated_at)
+             VALUES ($1, $2, 'original', $3, $4, $5, $6, $7, $8, true, $9, $9)`,
+            [businessId, sd.stage, sd.issueDate, supply, tax, total, sd.paymentDate, sd.paymentAmount || 0, now]
+          );
+          inserted++;
+        }
+      } catch (err: any) {
+        logError(`❌ [SYNC-INVOICE] ${normalizedName} ${sd.stage} 실패:`, err.message);
+        errors++;
+      }
+    }
+  }
+
+  return { inserted, updated, errors };
 }

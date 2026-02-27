@@ -1,6 +1,7 @@
 'use client'
 
-import { Upload, Download } from 'lucide-react'
+import { Upload, Download, Database } from 'lucide-react'
+import { useState } from 'react'
 
 interface UploadResults {
   total: number
@@ -8,6 +9,13 @@ interface UploadResults {
   updated: number
   failed: number
   errors: (string | { business: string; error: string })[]
+}
+
+interface MigrationResult {
+  businesses_migrated: number
+  businesses_skipped: number
+  records_inserted: number
+  errors: number
 }
 
 interface BusinessUploadModalProps {
@@ -41,6 +49,54 @@ export default function BusinessUploadModal({
   handleFileUpload,
   downloadExcelTemplate,
 }: BusinessUploadModalProps) {
+  const [migrationStatus, setMigrationStatus] = useState<'idle' | 'previewing' | 'running' | 'done' | 'error'>('idle')
+  const [migrationPreview, setMigrationPreview] = useState<{ to_migrate: number; already_in_invoice_records: number; estimated_records_to_insert: number } | null>(null)
+  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null)
+  const [migrationError, setMigrationError] = useState<string | null>(null)
+
+  const handleMigrationPreview = async () => {
+    setMigrationStatus('previewing')
+    setMigrationError(null)
+    try {
+      const res = await fetch('/api/migrations/legacy-invoice-to-records')
+      const data = await res.json()
+      if (data.success) {
+        setMigrationPreview(data.summary)
+        setMigrationStatus('idle')
+      } else {
+        setMigrationError(data.error || '미리보기 실패')
+        setMigrationStatus('error')
+      }
+    } catch (e: any) {
+      setMigrationError(e.message)
+      setMigrationStatus('error')
+    }
+  }
+
+  const handleMigrationRun = async () => {
+    if (!confirm(`레거시 계산서 데이터 ${migrationPreview?.to_migrate || ''}개 사업장을 invoice_records로 마이그레이션합니다. 계속하시겠습니까?`)) return
+    setMigrationStatus('running')
+    setMigrationError(null)
+    try {
+      const res = await fetch('/api/migrations/legacy-invoice-to-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setMigrationResult(data.summary)
+        setMigrationStatus('done')
+      } else {
+        setMigrationError(data.error || '마이그레이션 실패')
+        setMigrationStatus('error')
+      }
+    } catch (e: any) {
+      setMigrationError(e.message)
+      setMigrationStatus('error')
+    }
+  }
+
   if (!isOpen) return null
 
   const handleClose = () => {
@@ -198,6 +254,53 @@ export default function BusinessUploadModal({
                 <p className="text-xs text-gray-500 mt-1 text-center">
                   표준 형식의 엑셀 파일을 다운로드하여 작성 후 업로드하세요
                 </p>
+              </div>
+
+              {/* 레거시 → invoice_records 마이그레이션 섹션 */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h4 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  계산서 데이터 마이그레이션
+                </h4>
+                <p className="text-xs text-amber-800 mb-3">
+                  엑셀 업로드로 저장된 계산서 데이터가 UI에 표시되지 않을 경우, 레거시 데이터를 계산서 전용 테이블로 이전합니다.
+                </p>
+
+                {migrationStatus === 'done' && migrationResult ? (
+                  <div className="bg-green-50 border border-green-200 rounded p-3 text-sm">
+                    <p className="font-semibold text-green-800 mb-1">마이그레이션 완료</p>
+                    <p className="text-green-700">사업장: {migrationResult.businesses_migrated}개 이전 / {migrationResult.businesses_skipped}개 스킵</p>
+                    <p className="text-green-700">레코드: {migrationResult.records_inserted}개 삽입</p>
+                    {migrationResult.errors > 0 && <p className="text-red-600">오류: {migrationResult.errors}개</p>}
+                  </div>
+                ) : migrationStatus === 'error' ? (
+                  <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                    오류: {migrationError}
+                  </div>
+                ) : migrationPreview ? (
+                  <div className="space-y-2">
+                    <div className="bg-white border border-amber-200 rounded p-3 text-sm">
+                      <p className="text-gray-700">이전 대상: <span className="font-bold text-amber-700">{migrationPreview.to_migrate}개</span> 사업장</p>
+                      <p className="text-gray-700">이미 이전됨: <span className="font-bold text-green-700">{migrationPreview.already_in_invoice_records}개</span> 사업장</p>
+                      <p className="text-gray-700">예상 레코드: <span className="font-bold">{migrationPreview.estimated_records_to_insert}개</span></p>
+                    </div>
+                    <button
+                      onClick={handleMigrationRun}
+                      disabled={migrationStatus === 'running' || migrationPreview.to_migrate === 0}
+                      className="w-full px-3 py-2 bg-amber-600 text-white text-sm rounded hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {migrationStatus === 'running' ? '마이그레이션 중...' : migrationPreview.to_migrate === 0 ? '이전할 데이터 없음' : `${migrationPreview.to_migrate}개 사업장 마이그레이션 실행`}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleMigrationPreview}
+                    disabled={migrationStatus === 'previewing'}
+                    className="w-full px-3 py-2 bg-amber-100 text-amber-800 text-sm rounded border border-amber-300 hover:bg-amber-200 disabled:opacity-50"
+                  >
+                    {migrationStatus === 'previewing' ? '확인 중...' : '마이그레이션 대상 확인'}
+                  </button>
+                )}
               </div>
 
               {/* 파일 형식 안내 */}
