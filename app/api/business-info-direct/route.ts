@@ -202,20 +202,21 @@ export async function GET(request: Request) {
 
     // invoice_records의 계산서·입금 데이터를 우선 사용 (legacy business_info 컬럼 override)
     // total_amount: 계산서 발행금액, payment_amount: 입금금액
+    // issue_date IS NOT NULL 조건으로 미발행(마이그레이션 오류 등) 레코드 제외
     const queryText = `
       WITH ir AS (
         SELECT
           business_id,
-          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN total_amount   END) AS ir_invoice_1st,
-          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN payment_amount END) AS ir_payment_1st,
-          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' THEN total_amount   END) AS ir_invoice_2nd,
-          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' THEN payment_amount END) AS ir_payment_2nd,
-          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN total_amount   END) AS ir_invoice_additional,
-          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN payment_amount END) AS ir_payment_additional,
-          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN total_amount   END) AS ir_invoice_advance,
-          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN payment_amount END) AS ir_payment_advance,
-          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN total_amount   END) AS ir_invoice_balance,
-          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN payment_amount END) AS ir_payment_balance
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_1st,
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_1st,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_2nd,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_2nd,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_additional,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_additional,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_advance,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_advance,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_balance,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_balance
         FROM invoice_records
         WHERE is_active = TRUE
         GROUP BY business_id

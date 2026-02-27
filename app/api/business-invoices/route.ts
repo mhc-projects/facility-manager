@@ -212,8 +212,9 @@ export async function GET(request: NextRequest) {
 
         // invoice_records 데이터가 있는 단계는 해당 값으로 totalReceivables 재계산
         // (legacy business_info 컬럼에 반영 안 된 입금도 포함)
+        // issue_date IS NOT NULL 조건: 미발행 레코드(마이그레이션 오류 등) 제외
         const getStageRecord = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
-          invoiceRecordsByStage[stage].find(r => r.record_type === 'original') || null;
+          invoiceRecordsByStage[stage].find(r => r.record_type === 'original' && r.issue_date) || null;
 
         if (category === '보조금') {
           const rec1st = getStageRecord('subsidy_1st');
@@ -226,15 +227,14 @@ export async function GET(request: NextRequest) {
           const paymentAmt2nd   = rec2nd ? rec2nd.payment_amount : (business.payment_2nd_amount || 0);
 
           // 추가공사비: 계산서 발행일이 있을 때만 미수금으로 계산
-          // invoice_records가 있으면 실제 발행금액(total_amount) 우선 사용
-          // invoice_records 없으면 additional_cost 기반 레거시 계산으로 폴백
+          // 발행일이 없는 invoice_records 레코드(마이그레이션 오류 등)는 미발행으로 처리
           const hasAdditionalInvoice = recAdditional ? recAdditional.issue_date : business.invoice_additional_date;
-          const invoiceAmtAdditional = recAdditional
-            ? recAdditional.total_amount
-            : (hasAdditionalInvoice ? Math.round((business.additional_cost || 0) * 1.1) : 0);
-          const paymentAmtAdditional = recAdditional
-            ? recAdditional.payment_amount
-            : (hasAdditionalInvoice ? (business.payment_additional_amount || 0) : 0);
+          const invoiceAmtAdditional = hasAdditionalInvoice
+            ? (recAdditional ? recAdditional.total_amount : Math.round((business.additional_cost || 0) * 1.1))
+            : 0;
+          const paymentAmtAdditional = hasAdditionalInvoice
+            ? (recAdditional ? recAdditional.payment_amount : (business.payment_additional_amount || 0))
+            : 0;
 
           totalReceivables = (invoiceAmt1st + invoiceAmt2nd + invoiceAmtAdditional)
                            - (paymentAmt1st + paymentAmt2nd + paymentAmtAdditional);
