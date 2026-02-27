@@ -3589,10 +3589,10 @@ function BusinessManagementPage() {
 
       console.log('📤 [FRONTEND] 전송할 데이터:', JSON.stringify(body, null, 2));
 
-      // 0. 계산서 탭의 활성 폼 저장 (편집 모드에서만)
+      // 0. 계산서 탭의 모든 변경된 폼 저장 (편집 모드에서만)
       if (editingBusiness && invoiceTabRef.current) {
         try {
-          await invoiceTabRef.current.saveActiveTab();
+          await invoiceTabRef.current.saveAllPendingTabs();
         } catch (invoiceErr) {
           console.error('계산서 저장 중 오류:', invoiceErr);
           // 계산서 저장 실패해도 사업장 정보 저장은 계속 진행

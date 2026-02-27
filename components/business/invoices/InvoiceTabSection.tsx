@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, f
 import type { InvoiceCategory, InvoiceStage, InvoiceRecord, InvoiceRecordsByStage, BusinessInvoicesResponse, LegacyInvoiceStage } from '@/types/invoice';
 import { INVOICE_STAGE_LABELS, getStagesForCategory } from '@/types/invoice';
 import { formatDate } from '@/utils/formatters';
-import InvoiceRecordForm, { type InvoiceRecordFormHandle } from './InvoiceRecordForm';
+import InvoiceRecordForm, { type InvoiceRecordFormHandle, type FormState, emptyForm } from './InvoiceRecordForm';
 import ExtraInvoiceList from './ExtraInvoiceList';
 
 export interface InvoiceTabSectionHandle {
-  saveActiveTab: () => Promise<void>;
+  saveAllPendingTabs: () => Promise<void>;
 }
 
 interface InvoiceTabSectionProps {
@@ -27,6 +27,9 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   const [data, setData] = useState<BusinessInvoicesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>('subsidy_1st');
+
+  // 탭별 폼 상태 보존 — 탭을 이동해도 입력값 유지
+  const [pendingForms, setPendingForms] = useState<Partial<Record<InvoiceStage, FormState>>>({});
 
   // 진행구분 → 카테고리 매핑
   const category: InvoiceCategory = (['보조금', '보조금 동시진행', '보조금 추가승인'].includes(progressStatus?.trim()))
@@ -47,6 +50,8 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
       const result = await res.json();
       if (result.success) {
         setData(result.data);
+        // 새 데이터 로드 시 pendingForms 초기화 (저장 후 새로고침 시)
+        setPendingForms({});
       }
     } catch (e) {
       console.error('계산서 데이터 로딩 오류:', e);
@@ -59,18 +64,98 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
     loadData();
   }, [loadData]);
 
-  // 현재 활성 탭의 InvoiceRecordForm ref — hooks는 early return 전에 선언해야 함
+  // 현재 활성 탭의 InvoiceRecordForm ref
   const activeFormRef = useRef<InvoiceRecordFormHandle>(null);
 
-  // 부모(page.tsx)에서 호출 — 현재 활성 탭의 계산서 폼을 저장
+  // 부모(page.tsx)에서 호출 — 변경된 모든 탭의 계산서 폼을 저장
   useImperativeHandle(ref, () => ({
-    saveActiveTab: async () => {
-      if (activeTab !== 'extra' && activeFormRef.current) {
-        await activeFormRef.current.save();
+    saveAllPendingTabs: async () => {
+      const stagesWithPending = stages.filter(stage => {
+        const pending = pendingForms[stage];
+        if (!pending) return false;
+        // 빈 폼은 건너뜀 (기존 레코드 없고 아무것도 입력 안 한 탭)
+        const hasData = pending.issue_date || pending.supply_amount || pending.payment_date || pending.payment_amount;
+        if (!hasData) return false;
+        return true;
+      });
+
+      if (stagesWithPending.length === 0) {
+        // pending 없으면 현재 활성 탭만 시도 (기존 동작 호환)
+        if (activeTab !== 'extra' && activeFormRef.current) {
+          await activeFormRef.current.save();
+        }
+        return;
       }
-      // 'extra' 탭은 ExtraInvoiceList 내부에서 각자 저장하므로 별도 처리 불필요
+
+      // 현재 활성 탭이 pending에 포함되어 있으면 ref로 직접 저장 (최신 상태 반영)
+      // 비활성 탭은 pendingForms 상태를 이용해 InvoiceRecordForm을 임시 마운트 없이
+      // 직접 API 호출로 저장
+      const errors: string[] = [];
+
+      for (const stage of stagesWithPending) {
+        if (stage === activeTab && activeFormRef.current) {
+          // 현재 탭: ref로 저장
+          try {
+            await activeFormRef.current.save();
+          } catch (e: any) {
+            errors.push(`${INVOICE_STAGE_LABELS[stage]}: ${e.message || '저장 실패'}`);
+          }
+        } else {
+          // 비활성 탭: pendingForms에서 직접 API 저장
+          const formState = pendingForms[stage]!;
+          try {
+            await saveFormDirectly(stage, formState);
+          } catch (e: any) {
+            errors.push(`${INVOICE_STAGE_LABELS[stage]}: ${e.message || '저장 실패'}`);
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        throw new Error(`일부 계산서 저장 실패:\n${errors.join('\n')}`);
+      }
     },
-  }), [activeTab]);
+  }), [activeTab, pendingForms, stages]);
+
+  // 비활성 탭 폼을 직접 API로 저장
+  const saveFormDirectly = async (stage: InvoiceStage, formState: FormState) => {
+    const supply = parseInt(formState.supply_amount.replace(/,/g, ''), 10) || 0;
+    const tax = parseInt(formState.tax_amount.replace(/,/g, ''), 10) || 0;
+    const paymentAmount = parseInt(formState.payment_amount.replace(/,/g, ''), 10) || 0;
+
+    const existingRecord = getExistingRecord(stage);
+
+    const payload: Record<string, any> = {
+      business_id: businessId,
+      invoice_stage: stage,
+      record_type: 'original',
+      issue_date: formState.issue_date || null,
+      invoice_number: formState.invoice_number || null,
+      supply_amount: supply,
+      tax_amount: tax,
+      payment_date: formState.payment_date || null,
+      payment_amount: paymentAmount,
+      payment_memo: formState.payment_memo || null,
+    };
+
+    if (existingRecord) {
+      const res = await fetch('/api/invoice-records', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: existingRecord.id, ...payload }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.message);
+    } else {
+      const res = await fetch('/api/invoice-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.message);
+    }
+  };
 
   if (loading) {
     return (
@@ -85,7 +170,6 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   const getExistingRecord = (stage: InvoiceStage): InvoiceRecord | null => {
     if (!data?.invoice_records) return null;
     const stageRecords = data.invoice_records[stage as keyof InvoiceRecordsByStage] || [];
-    // 원본 발행 중 첫 번째 (is_active인 것)
     return stageRecords.find(r => r.record_type === 'original') || null;
   };
 
@@ -107,15 +191,24 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
     return data?.invoice_records?.extra || [];
   };
 
-  // 탭 라벨 (미수금 있으면 표시)
+  // 탭에 미저장 변경사항이 있는지 확인
+  const hasPendingChanges = (stage: InvoiceStage): boolean => {
+    const pending = pendingForms[stage];
+    if (!pending) return false;
+    return !!(pending.issue_date || pending.supply_amount || pending.payment_date || pending.payment_amount);
+  };
+
+  // 탭 라벨 (미수금 있으면 표시, 미저장 변경사항 있으면 표시)
   const getTabLabel = (stage: InvoiceStage): React.ReactNode => {
     const label = INVOICE_STAGE_LABELS[stage];
     const record = getExistingRecord(stage);
     const hasReceivable = record && (record.total_amount - record.payment_amount) > 0;
+    const isDirty = hasPendingChanges(stage);
     return (
       <span className="flex items-center gap-1">
         {label}
         {hasReceivable && <span className="text-red-400 text-xs">●</span>}
+        {isDirty && <span className="text-amber-500 text-xs" title="미저장 변경사항">✎</span>}
       </span>
     );
   };
@@ -164,6 +257,14 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
         </button>
       </div>
 
+      {/* 미저장 안내 배너 */}
+      {stages.some(hasPendingChanges) && (
+        <div className="mt-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 flex items-center gap-1.5">
+          <span>✎</span>
+          <span>입력된 내용이 있습니다. 상단 <strong>수정완료</strong> 버튼을 누르면 모든 탭의 계산서가 함께 저장됩니다.</span>
+        </div>
+      )}
+
       {/* 탭 컨텐츠 */}
       <div className="pt-4">
         {/* 기존 단계 탭 */}
@@ -176,7 +277,6 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
                 const legacy = getLegacyData(stage);
 
                 if (record && (record.issue_date || record.total_amount > 0)) {
-                  // invoice_records 테이블 데이터
                   const receivable = record.total_amount - record.payment_amount;
                   return (
                     <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -204,7 +304,6 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
                     </div>
                   );
                 } else if (legacy && (legacy.invoice_date || legacy.invoice_amount)) {
-                  // business_info 직접 컬럼 데이터 (레거시)
                   const receivable = legacy.receivable;
                   return (
                     <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -243,6 +342,12 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
                 existingRecord={getExistingRecord(stage)}
                 legacyData={!getExistingRecord(stage) ? getLegacyData(stage) : null}
                 onSaved={loadData}
+                // 탭 전환 시 보존된 상태 복원
+                initialForm={pendingForms[stage] ?? null}
+                // 폼 변경 시 pendingForms에 저장
+                onFormChange={(formState) => {
+                  setPendingForms(prev => ({ ...prev, [stage]: formState }));
+                }}
               />
             </div>
           )

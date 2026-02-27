@@ -11,16 +11,7 @@ export interface InvoiceRecordFormHandle {
   save: () => Promise<void>;
 }
 
-interface InvoiceRecordFormProps {
-  businessId: string;
-  stage: InvoiceStage;
-  stageLabel: string;
-  existingRecord?: InvoiceRecord | null;  // 기존 레코드 (없으면 신규 입력)
-  legacyData?: LegacyInvoiceStage | null; // business_info 기반 기존 데이터 (폴백)
-  onSaved: () => void;                    // 저장 후 부모 새로고침 콜백
-}
-
-interface FormState {
+export interface FormState {
   issue_date: string;
   invoice_number: string;
   supply_amount: string;
@@ -31,7 +22,19 @@ interface FormState {
   payment_memo: string;
 }
 
-const emptyForm = (): FormState => ({
+interface InvoiceRecordFormProps {
+  businessId: string;
+  stage: InvoiceStage;
+  stageLabel: string;
+  existingRecord?: InvoiceRecord | null;  // 기존 레코드 (없으면 신규 입력)
+  legacyData?: LegacyInvoiceStage | null; // business_info 기반 기존 데이터 (폴백)
+  onSaved: () => void;                    // 저장 후 부모 새로고침 콜백
+  // 탭 전환 시 폼 상태 보존을 위한 controlled 모드 props
+  initialForm?: FormState | null;         // 부모가 보관하던 폼 상태 (있으면 우선 적용)
+  onFormChange?: (form: FormState) => void; // 폼 변경 시 부모에 상태 전달
+}
+
+export const emptyForm = (): FormState => ({
   issue_date: '',
   invoice_number: '',
   supply_amount: '',
@@ -57,33 +60,51 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
   existingRecord,
   legacyData,
   onSaved,
+  initialForm,
+  onFormChange,
 }: InvoiceRecordFormProps, ref) {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showRevisionForm, setShowRevisionForm] = useState(false);
 
-  // 기존 레코드 또는 legacy 데이터로 폼 초기값 설정
+  // 폼 상태 변경 헬퍼 — 변경 시 부모에도 전달
+  const updateForm = useCallback((updater: (prev: FormState) => FormState) => {
+    setForm(prev => {
+      const next = updater(prev);
+      onFormChange?.(next);
+      return next;
+    });
+  }, [onFormChange]);
+
+  // 초기값 설정 우선순위:
+  // 1. initialForm (탭 전환 후 복원 — 사용자가 이미 입력한 값)
+  // 2. existingRecord (DB 저장된 레코드)
+  // 3. legacyData (business_info 컬럼 레거시)
+  // 4. 빈 폼
   useEffect(() => {
+    if (initialForm) {
+      // 부모가 보관하던 상태 복원 (탭 전환 시 입력값 유지)
+      setForm(initialForm);
+      return;
+    }
     if (existingRecord) {
-      // invoice_records 테이블 레코드 우선
-      setForm({
+      const restored: FormState = {
         issue_date: toDateString(existingRecord.issue_date),
         invoice_number: existingRecord.invoice_number || '',
         supply_amount: existingRecord.supply_amount > 0 ? existingRecord.supply_amount.toLocaleString() : '',
         tax_amount: existingRecord.tax_amount > 0 ? existingRecord.tax_amount.toLocaleString() : '',
-        auto_tax: false,  // 기존 레코드는 수동 세액 유지
+        auto_tax: false,
         payment_date: toDateString(existingRecord.payment_date),
         payment_amount: existingRecord.payment_amount > 0 ? existingRecord.payment_amount.toLocaleString() : '',
         payment_memo: existingRecord.payment_memo || '',
-      });
+      };
+      setForm(restored);
     } else if (legacyData && (legacyData.invoice_date || legacyData.invoice_amount || legacyData.payment_date || legacyData.payment_amount)) {
-      // business_info 직접 컬럼 데이터 폴백 (invoice_records에 레코드 없는 경우)
       const invoiceAmount = legacyData.invoice_amount || 0;
-      // 합계금액에서 공급가액 역산 (부가세 10% 가정: 합계 / 1.1)
       const supply = Math.round(invoiceAmount / 1.1);
       const tax = invoiceAmount - supply;
-      setForm({
+      const restored: FormState = {
         issue_date: toDateString(legacyData.invoice_date),
         invoice_number: '',
         supply_amount: supply > 0 ? supply.toLocaleString() : '',
@@ -92,25 +113,19 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
         payment_date: toDateString(legacyData.payment_date),
         payment_amount: legacyData.payment_amount && legacyData.payment_amount > 0 ? legacyData.payment_amount.toLocaleString() : '',
         payment_memo: '',
-      });
+      };
+      setForm(restored);
     } else {
       setForm(emptyForm());
     }
-  }, [existingRecord, legacyData]);
-
-  // 숫자 문자열에 콤마 포매팅
-  const formatAmount = (value: string): string => {
-    const num = parseInt(value.replace(/,/g, ''), 10);
-    if (isNaN(num) || num === 0) return value.replace(/,/g, '') === '' ? '' : '0';
-    return num.toLocaleString();
-  };
+  }, [existingRecord, legacyData, initialForm]);
 
   // 공급가액 변경 시 세액 자동계산
   const handleSupplyChange = (value: string) => {
     const raw = value.replace(/,/g, '');
     const num = parseInt(raw, 10) || 0;
     const formatted = raw === '' ? '' : (isNaN(parseInt(raw, 10)) ? value : num.toLocaleString());
-    setForm(prev => ({
+    updateForm(prev => ({
       ...prev,
       supply_amount: formatted,
       tax_amount: prev.auto_tax ? Math.round(num * 0.1).toLocaleString() : prev.tax_amount,
@@ -121,7 +136,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
     const raw = value.replace(/,/g, '');
     const num = parseInt(raw, 10);
     const formatted = raw === '' ? '' : (isNaN(num) ? value : num.toLocaleString());
-    setForm(prev => ({ ...prev, [field]: formatted }));
+    updateForm(prev => ({ ...prev, [field]: formatted }));
   };
 
   const calcTotal = () => {
@@ -153,7 +168,6 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
       setSaving(true);
 
       if (existingRecord) {
-        // 기존 레코드 수정
         const res = await fetch('/api/invoice-records', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -162,7 +176,10 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
         const result = await res.json();
         if (!result.success) throw new Error(result.message);
       } else {
-        // 신규 생성
+        // 빈 폼이면 저장 생략 (다른 탭의 미입력 탭 무시)
+        if (!payload.issue_date && supply === 0 && !payload.payment_date && payload.payment_amount === 0) {
+          return;
+        }
         const res = await fetch('/api/invoice-records', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -183,7 +200,6 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
       const fieldsToSync = stageFieldMap[stage];
       if (fieldsToSync) {
         CacheManager.updateBusinessFields(businessId, fieldsToSync);
-        // 같은 탭의 revenue 페이지도 반영되도록 broadcast
         Object.entries(fieldsToSync).forEach(([field, value]) => {
           CacheManager.broadcastFieldUpdate(businessId, field, value);
         });
@@ -192,6 +208,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
       onSaved();
     } catch (e: any) {
       setError(e.message || '저장 중 오류가 발생했습니다');
+      throw e; // 전체 저장 흐름에서 에러 감지용
     } finally {
       setSaving(false);
     }
@@ -220,7 +237,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
             <input
               type="date"
               value={form.issue_date}
-              onChange={e => setForm(prev => ({ ...prev, issue_date: e.target.value }))}
+              onChange={e => updateForm(prev => ({ ...prev, issue_date: e.target.value }))}
               className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
@@ -231,7 +248,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
             <input
               type="text"
               value={form.invoice_number}
-              onChange={e => setForm(prev => ({ ...prev, invoice_number: e.target.value }))}
+              onChange={e => updateForm(prev => ({ ...prev, invoice_number: e.target.value }))}
               placeholder="승인번호/문서번호"
               className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
@@ -262,7 +279,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
                   checked={form.auto_tax}
                   onChange={e => {
                     const checked = e.target.checked;
-                    setForm(prev => ({
+                    updateForm(prev => ({
                       ...prev,
                       auto_tax: checked,
                       tax_amount: checked
@@ -305,7 +322,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
             <input
               type="date"
               value={form.payment_date}
-              onChange={e => setForm(prev => ({ ...prev, payment_date: e.target.value }))}
+              onChange={e => updateForm(prev => ({ ...prev, payment_date: e.target.value }))}
               className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-400"
             />
           </div>
@@ -331,7 +348,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
             <input
               type="text"
               value={form.payment_memo}
-              onChange={e => setForm(prev => ({ ...prev, payment_memo: e.target.value }))}
+              onChange={e => updateForm(prev => ({ ...prev, payment_memo: e.target.value }))}
               placeholder="분납, 특이사항 등"
               className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-400"
             />
