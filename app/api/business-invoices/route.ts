@@ -92,12 +92,12 @@ export async function GET(request: NextRequest) {
     const revenueResult = calculateBusinessRevenue(business, pricingData);
     const totalRevenueWithTax = Math.round(revenueResult.total_revenue * 1.1);
 
-    // 총 입금액
-    const allPayments = sumAllPayments(business);
+    // 총 입금액 (business_info 기본값 - invoice_records 조회 후 재계산될 수 있음)
+    let allPayments = sumAllPayments(business);
 
     console.log('✅ [BUSINESS-INVOICES] GET - 조회 완료:', business.business_name);
 
-    // 미수금 계산
+    // 미수금 계산 (invoice_records 조회 후 재계산)
     let totalReceivables = 0;
     let invoicesData: any = {};
 
@@ -130,13 +130,7 @@ export async function GET(request: NextRequest) {
       매핑된진행구분: category
     });
 
-    // 신규 미수금 계산: 전체 매출(부가세 포함) - 총 입금액
-    // 설치일 없으면 0, 계산서 발행 여부 무관
-    totalReceivables = calculateReceivables({
-      installationDate: business.installation_date,
-      totalRevenueWithTax,
-      totalPayments: allPayments,
-    });
+    // 미수금은 invoice_records 조회 후 최종 계산 (아래 참고)
 
     if (category === '보조금') {
       // invoicesData: 차수별 계산서/입금 현황 (참고용 - 발행내역 표시에 사용)
@@ -292,6 +286,48 @@ export async function GET(request: NextRequest) {
       // invoice_records 테이블이 없는 경우(마이그레이션 전) 빈 값으로 처리
       console.warn('⚠️ [BUSINESS-INVOICES] invoice_records 조회 실패 (테이블 없음?):', recordsError);
     }
+
+    // invoice_records 입금액 반영 재계산
+    // invoice_records에만 입금이 기록되고 business_info 필드는 0인 경우를 처리
+    const getStageRecordFinal = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
+      invoiceRecordsByStage[stage].find(r => r.record_type === 'original') || null;
+
+    if (category === '보조금') {
+      const rec1st = getStageRecordFinal('subsidy_1st');
+      const rec2nd = getStageRecordFinal('subsidy_2nd');
+      const recAdditional = getStageRecordFinal('subsidy_additional');
+      // invoice_records 입금액이 business_info 필드보다 크면 (또는 business_info가 0) invoice_records 값 사용
+      const pay1st = rec1st ? Math.max(rec1st.payment_amount || 0, Number(business.payment_1st_amount) || 0) : (Number(business.payment_1st_amount) || 0);
+      const pay2nd = rec2nd ? Math.max(rec2nd.payment_amount || 0, Number(business.payment_2nd_amount) || 0) : (Number(business.payment_2nd_amount) || 0);
+      const payAdditional = recAdditional ? Math.max(recAdditional.payment_amount || 0, Number(business.payment_additional_amount) || 0) : (Number(business.payment_additional_amount) || 0);
+      allPayments = pay1st + pay2nd + payAdditional;
+    } else {
+      const recAdvance = getStageRecordFinal('self_advance');
+      const recBalance = getStageRecordFinal('self_balance');
+      const payAdvance = recAdvance ? Math.max(recAdvance.payment_amount || 0, Number(business.payment_advance_amount) || 0) : (Number(business.payment_advance_amount) || 0);
+      const payBalance = recBalance ? Math.max(recBalance.payment_amount || 0, Number(business.payment_balance_amount) || 0) : (Number(business.payment_balance_amount) || 0);
+      allPayments = payAdvance + payBalance;
+    }
+
+    // extra(추가 계산서) 입금도 반영
+    const extraPayments = invoiceRecordsByStage.extra
+      .filter(r => r.record_type !== 'cancelled')
+      .reduce((sum, r) => sum + (r.payment_amount || 0), 0);
+    allPayments += extraPayments;
+
+    // 최종 미수금 계산
+    totalReceivables = calculateReceivables({
+      installationDate: business.installation_date,
+      totalRevenueWithTax,
+      totalPayments: allPayments,
+    });
+
+    console.log('💰 [BUSINESS-INVOICES] 최종 미수금 계산:', {
+      사업장명: business.business_name,
+      totalRevenueWithTax,
+      allPayments,
+      totalReceivables,
+    });
 
     return NextResponse.json({
       success: true,
