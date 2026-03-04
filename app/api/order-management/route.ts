@@ -113,11 +113,12 @@ export const GET = withApiHandler(
 
       // 1. 상태에 따라 다른 쿼리 실행
       if (status === 'in_progress') {
-        // 발주 필요: facility_tasks에서 status='product_order'인 사업장 - Direct PostgreSQL
+        // 발주 필요: facility_tasks에서 제품 발주 단계인 사업장 - Direct PostgreSQL
+        // self_product_order (자비), subsidy_product_order (보조금), product_order (레거시)
         const tasks = await queryAll(
           `SELECT * FROM facility_tasks
-           WHERE status = $1 AND is_deleted = $2`,
-          ['product_order', false]
+           WHERE status IN ($1, $2, $3) AND is_deleted = $4 AND is_active = $5`,
+          ['self_product_order', 'subsidy_product_order', 'product_order', false, true]
         )
         const taskErr = null
 
@@ -552,11 +553,11 @@ export const GET = withApiHandler(
       const paginatedOrders = orderList.slice(startIndex, startIndex + limit)
 
       // 7. 통계 계산 (전체 데이터 기준) - Direct PostgreSQL
-      // 발주 필요: facility_tasks에서 status='product_order' 카운트
+      // 발주 필요: facility_tasks에서 제품 발주 단계 카운트 (self_product_order, subsidy_product_order, product_order 레거시)
       const inProgressResult = await queryOne(
         `SELECT COUNT(*) as count FROM facility_tasks
-         WHERE status = $1 AND is_deleted = $2`,
-        ['product_order', false]
+         WHERE status IN ($1, $2, $3) AND is_deleted = $4 AND is_active = $5`,
+        ['self_product_order', 'subsidy_product_order', 'product_order', false, true]
       )
       const inProgressCount = parseInt(inProgressResult?.count || '0')
 

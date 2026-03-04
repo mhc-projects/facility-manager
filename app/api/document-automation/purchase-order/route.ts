@@ -229,16 +229,17 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       userError
     })
 
-    // facility_tasks에서 assignee(담당자) 정보 조회
+    // facility_tasks에서 assignee(담당자) 정보 조회 (현재 status 포함 레거시 호환)
     const { data: taskData } = await supabaseAdmin
       .from('facility_tasks')
       .select('assignee')
       .eq('business_id', businessId)
-      .eq('status', 'product_order')
+      .in('status', ['self_product_order', 'subsidy_product_order', 'product_order'])
       .eq('is_deleted', false)
-      .single()
+      .limit(1)
+      .maybeSingle()
 
-    // 대기필증 정보 조회
+    // 대기필증 정보 조회 (is_active=true인 활성 대기필증만 조회)
     const { data: airPermitData, error: airPermitError } = await supabaseAdmin
       .from('air_permit_info')
       .select(`
@@ -246,7 +247,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         business:business_info!air_permit_info_business_id_fkey(business_name, local_government)
       `)
       .eq('business_id', businessId)
+      .eq('is_active', true)
       .eq('is_deleted', false)
+      .limit(1)
       .maybeSingle()
 
     let air_permit = undefined
