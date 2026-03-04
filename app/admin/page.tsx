@@ -13,6 +13,7 @@ import { DashboardFilters } from '@/types/dashboard'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { AuthGuard, AuthUser } from '@/lib/auth/AuthGuard'
 import { AuthLevel, AUTH_LEVEL_DESCRIPTIONS } from '@/lib/auth/AuthLevels'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 
 interface Widget {
   id: string;
@@ -100,6 +101,12 @@ export default function AdminDashboard() {
         name: userData.user.name,
         email: userData.user.email,
         permission_level: userData.user.permission_level || 1
+      }
+
+      // 특별 계정 접근 차단 (permission_level과 무관하게 적용)
+      if (isPathHiddenForAccount(user.email, '/admin')) {
+        router.replace('/admin/business')
+        return
       }
 
       // 권한 확인 (ADMIN = 레벨 3 이상 필요)

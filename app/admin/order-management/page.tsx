@@ -4,7 +4,10 @@
 // 발주 관리 메인 페이지
 
 import { useState, useEffect, lazy, Suspense } from 'react'
+import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
+import { useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import { Search, Filter, Calendar, TrendingUp, Package, AlertCircle } from 'lucide-react'
 import type {
   OrderListItem,
@@ -18,6 +21,15 @@ import { MANUFACTURERS } from '@/types/order-management'
 const OrderDetailModal = lazy(() => import('./components/OrderDetailModal'))
 
 export default function OrderManagementPage() {
+  const router = useRouter()
+  const { user, permissions } = useAuth()
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/order-management')) {
+      router.replace('/admin/business')
+    }
+  }, [user, permissions])
+
   // 상태 관리
   const [activeTab, setActiveTab] = useState<'in_progress' | 'not_started' | 'completed'>('in_progress')
   const [orders, setOrders] = useState<OrderListItem[]>([])

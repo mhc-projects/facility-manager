@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 
 // ============================================================
 // 통합 크롤링 모니터링 대시보드
@@ -106,6 +108,14 @@ interface UrlHealthData {
 
 export default function MonitoringDashboard() {
   const router = useRouter();
+  const { user, permissions } = useAuth();
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/subsidy/monitoring-dashboard')) {
+      router.replace('/admin/business');
+    }
+  }, [user, permissions]);
+
   const [activeTab, setActiveTab] = useState<TabType>('runs');
   const [loading, setLoading] = useState(false);
   const [crawling, setCrawling] = useState(false);

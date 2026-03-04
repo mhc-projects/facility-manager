@@ -37,6 +37,7 @@ interface AuthContextType {
     canAccessAdminPages: boolean;
     canViewSensitiveData: boolean;
     canDeleteAutoMemos: boolean; // 시스템 관리자만 자동 메모 삭제 가능
+    isSpecialAccount: boolean;   // 특별 접근 제어 계정 (permission_level 변경에 영향받지 않음)
   } | null;
   loading: boolean;
   socialLogin: (token: string, userData: any, isNewUser: boolean) => Promise<{ success: boolean; error?: string }>;

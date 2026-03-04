@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
+import { isSpecialAccount } from '@/lib/auth/special-accounts';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -88,10 +89,16 @@ export async function POST(request: NextRequest) {
       socialAccounts: socialAccounts?.length || 0
     });
 
+    // 특별 계정 여부 확인 (permission_level과 무관하게 고정)
+    const specialAccount = isSpecialAccount(employee.email);
+
     return NextResponse.json({
       success: true,
       data: {
-        user: employee,
+        user: {
+          ...employee,
+          isSpecialAccount: specialAccount,
+        },
         permissions: {
           // 게스트 관련 권한
           isGuest: employee.role === 0,
@@ -106,7 +113,9 @@ export async function POST(request: NextRequest) {
           canApproveReports: employee.role >= 1,
           canAccessAdminPages: employee.role >= 3,
           canViewSensitiveData: employee.role >= 3,
-          canDeleteAutoMemos: employee.role === 4 // 시스템 관리자만
+          canDeleteAutoMemos: employee.role === 4, // 시스템 관리자만
+          // 특별 계정 플래그 (permission_level 변경에 영향받지 않음)
+          isSpecialAccount: specialAccount,
         },
         socialAccounts: socialAccounts || []
       },

@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 
 // ============================================================
 // URL 건강도 모니터
@@ -42,13 +45,19 @@ interface UrlHealthData {
 }
 
 export default function UrlHealthMonitor() {
+  const router = useRouter();
+  const { user, permissions } = useAuth();
   const [data, setData] = useState<UrlHealthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [unhealthyOnly, setUnhealthyOnly] = useState(false);
 
   useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/subsidy/url-health')) {
+      router.replace('/admin/business');
+      return;
+    }
     loadUrlHealth();
-  }, [unhealthyOnly]);
+  }, [unhealthyOnly, user, permissions]);
 
   const loadUrlHealth = async () => {
     setLoading(true);

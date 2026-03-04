@@ -2,8 +2,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import AdminLayout from '@/components/ui/AdminLayout'
+import { useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import StatsCard from '@/components/ui/StatsCard'
 import DataTable, { commonActions } from '@/components/ui/DataTable'
 import { ConfirmModal } from '@/components/ui/Modal'
@@ -31,6 +34,15 @@ import {
 } from 'lucide-react'
 
 export default function DataHistoryPage() {
+  const router = useRouter()
+  const { user, permissions } = useAuth()
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/data-history')) {
+      router.replace('/admin/business')
+    }
+  }, [user, permissions])
+
   const [history, setHistory] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedTables, setSelectedTables] = useState<string[]>([])

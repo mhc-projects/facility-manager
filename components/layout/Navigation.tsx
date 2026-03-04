@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 
 interface NavigationItem {
   name: string;
@@ -98,14 +99,24 @@ export default function Navigation() {
     return user.permission_level >= requiredLevel;
   };
 
+  // 특별 계정 경로 숨김 체크 (permission_level과 무관하게 항상 적용)
+  const isHiddenForSpecialAccount = (href: string): boolean => {
+    if (!user?.email || !permissions?.isSpecialAccount) return false;
+    return isPathHiddenForAccount(user.email, href);
+  };
+
   // 자식 메뉴 필터링 함수
   const filterChildren = (children: NavigationItem[]): NavigationItem[] => {
-    return children.filter(child => hasPermission(child.requiredLevel));
+    return children.filter(child =>
+      !isHiddenForSpecialAccount(child.href) && hasPermission(child.requiredLevel)
+    );
   };
 
   // 상위 메뉴 필터링 함수 (권한 체크 포함)
   const filterNavigationItems = (items: NavigationItem[]): NavigationItem[] => {
-    return items.filter(item => hasPermission(item.requiredLevel));
+    return items.filter(item =>
+      !isHiddenForSpecialAccount(item.href) && hasPermission(item.requiredLevel)
+    );
   };
 
   const isActive = (href: string) => {

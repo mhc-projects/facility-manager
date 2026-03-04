@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 
 // ============================================================
 // 지자체별 크롤링 통계 페이지
@@ -40,13 +43,19 @@ interface RegionalStatsData {
 }
 
 export default function RegionalStatsPage() {
+  const router = useRouter();
+  const { user, permissions } = useAuth();
   const [data, setData] = useState<RegionalStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(30);
 
   useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/subsidy/regional-stats')) {
+      router.replace('/admin/business');
+      return;
+    }
     loadStats();
-  }, [period]);
+  }, [period, user, permissions]);
 
   const loadStats = async () => {
     setLoading(true);

@@ -9,7 +9,9 @@ import EcosensePurchaseOrderForm from '@/components/EcosensePurchaseOrderForm'
 import EstimateManagement from './components/EstimateManagement'
 import ContractManagement from './components/ContractManagement'
 import ConstructionReportManagement from './components/ConstructionReportManagement'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 
 // Code Splitting: 무거운 모달 및 템플릿 컴포넌트를 동적 로딩
 const PurchaseOrderModal = dynamic(() => import('./components/PurchaseOrderModal'), {
@@ -62,6 +64,15 @@ import {
 } from 'lucide-react'
 
 export default function DocumentAutomationPage() {
+  const router = useRouter()
+  const { user, permissions } = useAuth()
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/document-automation')) {
+      router.replace('/admin/business')
+    }
+  }, [user, permissions])
+
   const [activeTab, setActiveTab] = useState<'purchase_order' | 'estimate' | 'contract' | 'construction_report' | 'history'>('estimate')
 
   // 발주서 관련 상태
@@ -95,8 +106,6 @@ export default function DocumentAutomationPage() {
   const [previewDocument, setPreviewDocument] = useState<any | null>(null)
   const [loadingContractData, setLoadingContractData] = useState(false)
 
-  // AuthContext에서 사용자 정보 및 권한 가져오기
-  const { user } = useAuth()
   const userPermissionLevel = user?.permission_level || 0
 
   // 발주 필요 사업장 목록 로드

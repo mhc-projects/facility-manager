@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import { withAuth, useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import { TokenManager } from '@/lib/api-client'
 import {
   Calendar,
@@ -72,8 +73,15 @@ interface AdminSummary {
 }
 
 function AdminWeeklyReportsPageV2() {
-  const { user } = useAuth()
+  const { user, permissions } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/weekly-reports')) {
+      router.replace('/admin/business')
+    }
+  }, [user, permissions])
+
   const [reports, setReports] = useState<WeeklyReport[]>([])
   const [summary, setSummary] = useState<AdminSummary | null>(null)
   const [loading, setLoading] = useState(false)

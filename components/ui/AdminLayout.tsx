@@ -5,6 +5,7 @@ import { useState, useEffect, ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import {
   Home,
@@ -172,6 +173,8 @@ function NavigationItems({ pathname, onItemClick }: { pathname: string, onItemCl
   // 사용자 권한에 따라 네비게이션 아이템 필터링
   const filteredItems = navigationItems.filter(item => {
     if (!user) return false;
+    // 특별 계정 경로 숨김 (permission_level과 무관하게 항상 적용)
+    if (permissions?.isSpecialAccount && user.email && isPathHiddenForAccount(user.email, item.href)) return false;
     return user.permission_level >= (item.requiredLevel || 1);
   });
 

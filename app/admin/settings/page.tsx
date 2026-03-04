@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 import {
   Settings,
   Save,
@@ -39,6 +41,14 @@ const DEFAULT_CRITERIA: DelayCriteria = {
 
 export default function AdminSettingsPage() {
   const router = useRouter();
+  const { user, permissions } = useAuth();
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/settings')) {
+      router.replace('/admin/business');
+    }
+  }, [user, permissions]);
+
   const [activeTab, setActiveTab] = useState<SettingsTab>('delay-criteria');
 
   // 지연 기준 설정 상태

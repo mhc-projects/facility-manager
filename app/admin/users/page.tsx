@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, withAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 import { useSupabaseRealtime } from '@/hooks/useSupabaseRealtime';
 import AdminLayout from '@/components/ui/AdminLayout';
 import {
@@ -377,7 +378,7 @@ function ApprovalSettingsForm({ settings, onSave, onTest, isSaving }: {
 
 function UsersManagementPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
 
   // 관리자 권한 체크
   useEffect(() => {
@@ -385,7 +386,11 @@ function UsersManagementPage() {
       router.push('/admin');
       return;
     }
-  }, [user, router]);
+    // 특별 계정 접근 차단
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/users')) {
+      router.replace('/admin/business');
+    }
+  }, [user, permissions, router]);
 
   const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'settings'>('users');
   const [selectedUser, setSelectedUser] = useState<Employee | null>(null);

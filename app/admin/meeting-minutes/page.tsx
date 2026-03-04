@@ -6,6 +6,8 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
+import { useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import {
   Plus,
   Search,
@@ -36,7 +38,14 @@ function MeetingMinutesContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const refreshTrigger = searchParams.get('refresh')  // 업데이트 트리거 감지
+  const { user, permissions } = useAuth()
   const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/meeting-minutes')) {
+      router.replace('/admin/business')
+    }
+  }, [user, permissions])
   const [loading, setLoading] = useState(true)
   const [viewType, setViewType] = useState<'card' | 'table'>('card')
 

@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
-import { withAuth } from '@/contexts/AuthContext'
+import { withAuth, useAuth } from '@/contexts/AuthContext'
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import { TokenManager } from '@/lib/api-client'
 import {
   Calendar,
@@ -60,6 +61,13 @@ function UserWeeklyReportDetailPage() {
   const params = useParams()
   const router = useRouter()
   const userId = params?.userId as string
+  const { user, permissions } = useAuth()
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/weekly-reports')) {
+      router.replace('/admin/business')
+    }
+  }, [user, permissions])
 
   const [report, setReport] = useState<WeeklyTaskSummary | null>(null)
   const [loading, setLoading] = useState(false)

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { TokenManager } from '@/lib/api-client';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 import AdminLayout from '@/components/ui/AdminLayout';
 import { ProtectedPage } from '@/components/auth/ProtectedPage';
 import { AuthLevel, AUTH_LEVEL_DESCRIPTIONS } from '@/lib/auth/AuthLevels';
@@ -170,9 +171,15 @@ function RevenueDashboard() {
   const [selectedEquipmentBusiness, setSelectedEquipmentBusiness] = useState<any>(null);
   const [quickCalcBusiness, setQuickCalcBusiness] = useState<string>(''); // 빈 상태용 빠른 계산 선택
 
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
   const userPermission = user?.permission_level || 0;
 
+  // 특별 계정 접근 차단
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/revenue')) {
+      router.replace('/admin/business');
+    }
+  }, [user, permissions]);
 
   useEffect(() => {
     console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 마운트됨');

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 import AnnouncementsSection from './AnnouncementsSection';
 
 // ============================================================
@@ -71,6 +73,13 @@ export default function RunDetailPage() {
   const params = useParams();
   const router = useRouter();
   const runId = params.runId as string;
+  const { user, permissions } = useAuth();
+
+  useEffect(() => {
+    if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/subsidy/monitoring')) {
+      router.replace('/admin/business');
+    }
+  }, [user, permissions]);
 
   const [data, setData] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
