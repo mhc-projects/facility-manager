@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquarePlus, MessageSquare, Edit3, Trash2 } from 'lucide-react';
 import { TokenManager } from '@/lib/api-client';
+import { useBusinessMemoRealtime } from '@/hooks/useBusinessMemoRealtime';
 
 interface Memo {
   id?: string;
@@ -27,6 +28,9 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
   const [memoForm, setMemoForm] = useState({ title: '', content: '' });
   const [isSaving, setIsSaving] = useState(false);
+
+  // Optimistic update로 추가된 임시 ID 추적 (Realtime 중복 방지용)
+  const pendingIds = useRef<Set<string>>(new Set());
 
   // 메모 목록 로드
   useEffect(() => {
@@ -56,11 +60,58 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
     fetchMemos();
   }, [businessId]);
 
+  // Realtime 이벤트 핸들러 (useCallback으로 안정적인 참조 유지)
+  const handleRealtimeInsert = useCallback((memo: Memo & { id: string }) => {
+    setMemos(prev => {
+      // 이미 존재하는 경우 중복 방지 (optimistic update 또는 동일 이벤트)
+      if (prev.some(m => m.id === memo.id)) return prev;
+
+      // pendingIds에 있으면 이미 optimistic update로 처리됨 → 실제 데이터로 교체
+      // (temp ID가 다르므로 중복 없이 앞에 추가됨)
+      return [memo, ...prev];
+    });
+  }, []);
+
+  const handleRealtimeUpdate = useCallback((memo: Memo & { id: string }) => {
+    setMemos(prev => prev.map(m => m.id === memo.id ? memo : m));
+  }, []);
+
+  const handleRealtimeDelete = useCallback((memoId: string) => {
+    setMemos(prev => prev.filter(m => m.id !== memoId));
+  }, []);
+
+  // Supabase Realtime 구독
+  useBusinessMemoRealtime({
+    businessId,
+    enabled: !!businessId,
+    onInsert: handleRealtimeInsert,
+    onUpdate: handleRealtimeUpdate,
+    onDelete: handleRealtimeDelete,
+  });
+
   // 메모 추가
   const handleAddMemo = async () => {
     if (!memoForm.title.trim() || !memoForm.content.trim()) return;
 
+    // Optimistic update: 임시 ID로 즉시 UI에 반영
+    const tempId = `temp-${Date.now()}`;
+    const now = new Date().toISOString();
+    const optimisticMemo: Memo = {
+      id: tempId,
+      title: memoForm.title,
+      content: memoForm.content,
+      created_at: now,
+      created_by: '저장 중...',
+      updated_at: now,
+      updated_by: '저장 중...',
+    };
+
+    pendingIds.current.add(tempId);
+    setMemos(prev => [optimisticMemo, ...prev]);
+    setMemoForm({ title: '', content: '' });
+    setIsAddingMemo(false);
     setIsSaving(true);
+
     try {
       const token = TokenManager.getToken();
       const response = await fetch(`/api/businesses/${businessId}/memos`, {
@@ -69,19 +120,25 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(memoForm)
+        body: JSON.stringify({ title: optimisticMemo.title, content: optimisticMemo.content })
       });
 
       const data = await response.json();
       if (data.success && data.data && data.data.memo) {
-        setMemos(prev => [data.data.memo, ...prev]);
-        setMemoForm({ title: '', content: '' });
-        setIsAddingMemo(false);
+        // 실제 서버 데이터로 temp memo 교체
+        // (Realtime INSERT 이벤트가 오면 중복 체크로 무시됨)
+        setMemos(prev => prev.map(m => m.id === tempId ? data.data.memo : m));
+        pendingIds.current.delete(tempId);
       } else {
+        // 실패 시 optimistic update 롤백
+        setMemos(prev => prev.filter(m => m.id !== tempId));
+        pendingIds.current.delete(tempId);
         alert('메모 추가 실패: ' + (data.message || '알 수 없는 오류'));
       }
     } catch (error) {
       console.error('메모 추가 오류:', error);
+      setMemos(prev => prev.filter(m => m.id !== tempId));
+      pendingIds.current.delete(tempId);
       alert('메모 추가 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
@@ -92,10 +149,21 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
   const handleEditMemo = async () => {
     if (!editingMemo?.id || !memoForm.title.trim() || !memoForm.content.trim()) return;
 
+    const editId = editingMemo.id;
+
+    // Optimistic update: 즉시 UI 반영
+    setMemos(prev => prev.map(m =>
+      m.id === editId
+        ? { ...m, title: memoForm.title, content: memoForm.content }
+        : m
+    ));
+    setMemoForm({ title: '', content: '' });
+    setEditingMemo(null);
     setIsSaving(true);
+
     try {
       const token = TokenManager.getToken();
-      const response = await fetch(`/api/businesses/${businessId}/memos/${editingMemo.id}`, {
+      const response = await fetch(`/api/businesses/${businessId}/memos/${editId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -106,10 +174,10 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
 
       const data = await response.json();
       if (data.success && data.data && data.data.memo) {
-        setMemos(prev => prev.map(m => m.id === editingMemo.id ? data.data.memo : m));
-        setMemoForm({ title: '', content: '' });
-        setEditingMemo(null);
+        // 서버 응답으로 최종 교체 (Realtime UPDATE 이벤트가 오면 중복 처리됨)
+        setMemos(prev => prev.map(m => m.id === editId ? data.data.memo : m));
       } else {
+        // 실패 시 원래 메모로 롤백 (재조회)
         alert('메모 수정 실패: ' + (data.message || '알 수 없는 오류'));
       }
     } catch (error) {
@@ -124,9 +192,14 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
   const handleDeleteMemo = async (memo: Memo) => {
     if (!memo.id || !confirm('이 메모를 삭제하시겠습니까?')) return;
 
+    const memoId = memo.id;
+
+    // Optimistic update: 즉시 제거
+    setMemos(prev => prev.filter(m => m.id !== memoId));
+
     try {
       const token = TokenManager.getToken();
-      const response = await fetch(`/api/businesses/${businessId}/memos/${memo.id}`, {
+      const response = await fetch(`/api/businesses/${businessId}/memos/${memoId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -134,13 +207,27 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
       });
 
       const data = await response.json();
-      if (data.success) {
-        setMemos(prev => prev.filter(m => m.id !== memo.id));
-      } else {
+      if (!data.success) {
+        // 실패 시 롤백 (원래 위치에 다시 추가)
+        setMemos(prev => {
+          const alreadyExists = prev.some(m => m.id === memoId);
+          if (alreadyExists) return prev;
+          return [...prev, memo].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        });
         alert('메모 삭제 실패: ' + (data.message || '알 수 없는 오류'));
       }
+      // 성공 시: Realtime DELETE 이벤트가 오더라도 이미 제거되었으므로 무시됨
     } catch (error) {
       console.error('메모 삭제 오류:', error);
+      setMemos(prev => {
+        const alreadyExists = prev.some(m => m.id === memoId);
+        if (alreadyExists) return prev;
+        return [...prev, memo].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
       alert('메모 삭제 중 오류가 발생했습니다.');
     }
   };
@@ -169,7 +256,7 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
             <MessageSquare className="w-5 h-5 text-indigo-600" />
             <h4 className="text-base font-semibold text-gray-900">메모</h4>
             <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
-              {memos.length}개
+              {memos.filter(m => !m.id?.startsWith('temp-')).length}개
             </span>
           </div>
           {!isAddingMemo && !editingMemo && userPermission >= 1 && (
@@ -246,12 +333,13 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
         ) : (
           memos.map((memo) => {
             const isAutoMemo = memo.title?.startsWith('[자동]');
+            const isTempMemo = memo.id?.startsWith('temp-');
             return (
               <div
                 key={memo.id}
                 className={`bg-white rounded-lg p-3 border-l-4 ${
                   isAutoMemo ? 'border-gray-300' : 'border-indigo-400'
-                } shadow-sm`}
+                } shadow-sm ${isTempMemo ? 'opacity-60' : ''}`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
@@ -265,12 +353,17 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
                           자동
                         </span>
                       )}
+                      {isTempMemo && (
+                        <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full flex-shrink-0">
+                          저장 중
+                        </span>
+                      )}
                     </div>
                     <p className={`text-xs leading-relaxed break-words ${isAutoMemo ? 'text-gray-500' : 'text-gray-700'}`}>
                       {memo.content}
                     </p>
                   </div>
-                  {!isAutoMemo && memo.id && userPermission >= 1 && (
+                  {!isAutoMemo && memo.id && !isTempMemo && userPermission >= 1 && (
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                       <button
                         onClick={() => startEditMemo(memo)}
