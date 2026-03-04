@@ -3775,6 +3775,12 @@ function BusinessManagementPage() {
         // 성공 메시지 표시
         alert(editingBusiness ? '사업장 정보가 수정되었습니다.' : '새 사업장이 추가되었습니다.')
 
+        // 사업장 정보(측정기기 수량 등) 변경 시 매출 관리 페이지의 캐시 무효화
+        sessionStorage.removeItem('revenue_businesses_cache');
+        sessionStorage.removeItem('revenue_businesses_cache_time');
+        sessionStorage.removeItem('revenue_calculations_cache');
+        sessionStorage.removeItem('revenue_calculations_cache_time');
+
         // 2-1. 사업장 수정 시 자동으로 매출 재계산 (비동기 실행)
         if (editingBusiness && result.success && result.data) {
           const businessId = result.data.id;

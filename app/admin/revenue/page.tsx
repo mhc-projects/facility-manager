@@ -439,17 +439,19 @@ function RevenueDashboard() {
     PRICING: 'revenue_pricing_cache',
     BUSINESSES: 'revenue_businesses_cache',
     CALCULATIONS: 'revenue_calculations_cache',
-    CACHE_TIME: 'revenue_cache_time'
   };
   const CACHE_DURATION = 5 * 60 * 1000; // 5분
+
+  // 키별 개별 타임스탬프 (선택적 캐시 무효화 지원)
+  const getCacheTimeKey = (key: string) => `${key}_time`;
 
   const getCachedData = (key: string) => {
     try {
       console.log(`🔍 [CACHE-DEBUG] ${key} 조회 시작`);
 
-      const cacheTime = sessionStorage.getItem(CACHE_KEYS.CACHE_TIME);
+      const cacheTime = sessionStorage.getItem(getCacheTimeKey(key));
       if (!cacheTime) {
-        console.log(`❌ [CACHE-DEBUG] ${key} → CACHE_TIME 없음 (첫 로드)`);
+        console.log(`❌ [CACHE-DEBUG] ${key} → 타임스탬프 없음 (첫 로드)`);
         return null;
       }
 
@@ -457,8 +459,9 @@ function RevenueDashboard() {
       console.log(`⏱️ [CACHE-DEBUG] ${key} → 캐시 시간: ${(elapsed / 1000).toFixed(1)}초 전 (만료: ${CACHE_DURATION / 1000}초)`);
 
       if (elapsed > CACHE_DURATION) {
-        console.log(`⏰ [CACHE] 캐시 만료됨 (5분 초과) → 클리어`);
-        clearCache();
+        console.log(`⏰ [CACHE] ${key} 캐시 만료됨 (5분 초과) → 클리어`);
+        sessionStorage.removeItem(key);
+        sessionStorage.removeItem(getCacheTimeKey(key));
         return null;
       }
 
@@ -467,7 +470,7 @@ function RevenueDashboard() {
         console.log(`✅ [CACHE] ${key} 캐시 히트 (${(elapsed / 1000).toFixed(1)}초 전)`);
         return JSON.parse(cached);
       } else {
-        console.log(`❌ [CACHE-DEBUG] ${key} → 데이터 없음 (다른 키는 있지만 이 키는 없음)`);
+        console.log(`❌ [CACHE-DEBUG] ${key} → 데이터 없음`);
       }
     } catch (error) {
       console.warn('⚠️ [CACHE] 캐시 읽기 오류:', error);
@@ -487,13 +490,12 @@ function RevenueDashboard() {
       }
 
       sessionStorage.setItem(key, JSON.stringify(data));
-      sessionStorage.setItem(CACHE_KEYS.CACHE_TIME, Date.now().toString());
+      sessionStorage.setItem(getCacheTimeKey(key), Date.now().toString());
       console.log(`💾 [CACHE] ${key} 캐시 저장 완료 (크기: ${dataSizeKB} KB, 시간: ${new Date().toLocaleTimeString()})`);
     } catch (error) {
       // QuotaExceededError 처리
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
         console.warn(`⚠️ [CACHE] ${key} SessionStorage 용량 초과 → 캐싱 불가 (데이터가 너무 큼)`);
-        // 기존 캐시 클리어 후 재시도하지 않음 (다른 페이지 캐시 유지)
       } else {
         console.warn('⚠️ [CACHE] 캐시 저장 오류:', error);
       }
@@ -503,7 +505,10 @@ function RevenueDashboard() {
   const clearCache = () => {
     console.log('🗑️ [CACHE] 캐시 클리어 시작');
     console.trace('🔍 [CACHE-DEBUG] clearCache() 호출 스택:');
-    Object.values(CACHE_KEYS).forEach(key => sessionStorage.removeItem(key));
+    Object.values(CACHE_KEYS).forEach(key => {
+      sessionStorage.removeItem(key);
+      sessionStorage.removeItem(getCacheTimeKey(key));
+    });
     console.log('✅ [CACHE] 캐시 클리어 완료');
   };
 
@@ -876,15 +881,16 @@ function RevenueDashboard() {
 
   const loadCalculations = async () => {
     console.log('📊 [LOAD-CALCULATIONS] 계산 결과 로드 시작');
+    const calcCacheTimeKey = getCacheTimeKey(CACHE_KEYS.CALCULATIONS);
     console.log('🔍 [LOAD-CALCULATIONS-DEBUG] 현재 SessionStorage 상태:', {
       hasCalculationsCache: !!sessionStorage.getItem(CACHE_KEYS.CALCULATIONS),
-      hasCacheTime: !!sessionStorage.getItem(CACHE_KEYS.CACHE_TIME),
-      cacheTime: sessionStorage.getItem(CACHE_KEYS.CACHE_TIME),
-      elapsed: sessionStorage.getItem(CACHE_KEYS.CACHE_TIME)
-        ? `${((Date.now() - parseInt(sessionStorage.getItem(CACHE_KEYS.CACHE_TIME)!)) / 1000).toFixed(1)}초`
+      hasCacheTime: !!sessionStorage.getItem(calcCacheTimeKey),
+      cacheTime: sessionStorage.getItem(calcCacheTimeKey),
+      elapsed: sessionStorage.getItem(calcCacheTimeKey)
+        ? `${((Date.now() - parseInt(sessionStorage.getItem(calcCacheTimeKey)!)) / 1000).toFixed(1)}초`
         : 'N/A',
-      cacheExpired: sessionStorage.getItem(CACHE_KEYS.CACHE_TIME)
-        ? (Date.now() - parseInt(sessionStorage.getItem(CACHE_KEYS.CACHE_TIME)!)) > CACHE_DURATION
+      cacheExpired: sessionStorage.getItem(calcCacheTimeKey)
+        ? (Date.now() - parseInt(sessionStorage.getItem(calcCacheTimeKey)!)) > CACHE_DURATION
         : true
     });
 

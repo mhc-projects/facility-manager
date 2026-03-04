@@ -377,6 +377,9 @@ function PricingManagement() {
 
       const data = await response.json();
       if (data.success) {
+        // 원가 변경 시 매출 관리 페이지의 pricing 캐시 무효화
+        sessionStorage.removeItem('revenue_pricing_cache');
+        sessionStorage.removeItem('revenue_pricing_cache_time');
         alert('저장되었습니다.');
         setIsEditModalOpen(false);
         setEditingItem(null);
@@ -437,6 +440,9 @@ function PricingManagement() {
       console.log('📦 응답 데이터:', data);
 
       if (data.success) {
+        // 원가 변경 시 매출 관리 페이지의 pricing 캐시 무효화
+        sessionStorage.removeItem('revenue_pricing_cache');
+        sessionStorage.removeItem('revenue_pricing_cache_time');
         alert('삭제되었습니다.');
         setIsDeleteModalOpen(false);
         setDeleteItem(null);
