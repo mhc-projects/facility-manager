@@ -9,7 +9,11 @@
  *   - 계산서 발행 여부와 무관하게 전체 매출 기준으로 계산
  *   - 전체 매출 = calculateBusinessRevenue().total_revenue × 1.1 (부가세 포함)
  *   - 총 입금액 = 진행구분에 따라 다른 필드 합산
+ *   - 10원 이하 미수금은 부가세 반올림 오차로 간주하여 0 처리
  */
+
+// 부가세 반올림 오차 허용 범위 (원)
+const RECEIVABLES_TOLERANCE = 10;
 
 /**
  * 진행구분에 따른 총 입금액 집계
@@ -47,5 +51,8 @@ export function calculateReceivables(params: {
   // 설치일 없으면 미수금 0 (아직 매출 미발생)
   if (!installationDate) return 0;
 
-  return Math.max(0, totalRevenueWithTax - totalPayments);
+  const raw = totalRevenueWithTax - totalPayments;
+  // 10원 이하는 부가세 반올림 오차로 간주
+  if (raw <= RECEIVABLES_TOLERANCE) return 0;
+  return raw;
 }
