@@ -50,6 +50,16 @@ export default function BusinessAutocomplete({
     loadBusinesses();
   }, []);
 
+  // businesses 로드 완료 후, businessId 없이 value(사업장명)만 있으면 자동 매칭
+  useEffect(() => {
+    if (businesses.length > 0 && !businessId && value) {
+      const matched = businesses.find(b => b.business_name === value);
+      if (matched) {
+        onChange(matched.id, matched.business_name);
+      }
+    }
+  }, [businesses]);
+
   // value prop 변경 시 inputValue 동기화
   useEffect(() => {
     setInputValue(value || '');

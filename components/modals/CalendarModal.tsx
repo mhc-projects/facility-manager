@@ -130,6 +130,10 @@ export default function CalendarModal({
         setLabels(event.labels || []);
         setBusinessId(event.business_id || null);
         setBusinessName(event.business_name || null);
+        // business_name이 있으면 즉시 패널 표시 (business_id 자동매칭 전에도)
+        if (event.business_id || event.business_name) {
+          setShowBusinessInfo(true);
+        }
       } else if (mode === 'create') {
         setTitle('');
         setDescription('');

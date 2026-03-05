@@ -848,7 +848,7 @@ export default function CalendarBoard() {
       {/* 캘린더 그리드 */}
       <div className="p-2 sm:p-3 md:p-6">
         {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 gap-0.5 md:gap-1 mb-1 sm:mb-2">
+        <div className="grid grid-cols-7 gap-0 mb-1 sm:mb-2">
           {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
             <div
               key={day}
@@ -862,7 +862,7 @@ export default function CalendarBoard() {
         </div>
 
         {/* 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-0.5 md:gap-1">
+        <div className="grid grid-cols-7 gap-0 border-t border-l">
           {calendarDays.map((day, index) => {
             const dateString = formatLocalDate(day);
             const isCurrentMonth = day.getMonth() === currentDate.getMonth();
@@ -882,11 +882,11 @@ export default function CalendarBoard() {
                 key={index}
                 onClick={() => handleDayClick(day)}
                 className={`
-                  h-[65px] sm:h-[70px] md:h-[110px] p-0.5 sm:p-1 md:p-2 border rounded cursor-pointer flex flex-col touch-manipulation
+                  h-[65px] sm:h-[70px] md:h-[110px] p-0.5 sm:p-1 md:p-2 border-b border-r cursor-pointer flex flex-col touch-manipulation
                   ${isCurrentMonth
                     ? holiday ? 'bg-red-50 hover:bg-red-100' : 'bg-white hover:bg-gray-50'
                     : 'bg-gray-50 hover:bg-gray-100'}
-                  ${isToday ? 'ring-2 ring-purple-500' : ''}
+                  ${isToday ? 'ring-2 ring-purple-500 z-10 relative' : ''}
                   transition-colors
                 `}
               >
