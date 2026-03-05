@@ -1138,7 +1138,7 @@ export default function BusinessRevenueModal({
                           매출비용 조정 ({item.reason || '사유 없음'}):
                         </span>
                         <span className={`text-xs md:text-sm font-semibold ${item.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                          {item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(Math.round(item.amount * 1.1)))}
+                          {item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(item.amount))}
                         </span>
                       </div>
                     ))}
@@ -1156,14 +1156,7 @@ export default function BusinessRevenueModal({
                   <span className="font-mono">{formatCurrency(
                     Number(displayData.total_revenue) -
                     Number(business.additional_cost || 0) +
-                    Number(business.negotiation || 0) -
-                    (() => {
-                      const adj = (business as any).revenue_adjustments;
-                      if (!adj) return 0;
-                      const arr = typeof adj === 'string' ? (() => { try { return JSON.parse(adj); } catch { return []; } })() : adj;
-                      if (!Array.isArray(arr)) return 0;
-                      return Math.round(arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0) * 1.1);
-                    })()
+                    Number(business.negotiation || 0)
                   )}</span>
                 </div>
                 {Number(business.additional_cost || 0) > 0 ? (
@@ -1186,13 +1179,22 @@ export default function BusinessRevenueModal({
                   return arr.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between" style={{ color: item.amount >= 0 ? '#15803d' : '#b91c1c' }}>
                       <span>{item.amount >= 0 ? '+' : '-'} 매출비용 조정 ({item.reason || '사유 없음'})</span>
-                      <span className="font-mono">{item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(Math.round(item.amount * 1.1)))}</span>
+                      <span className="font-mono">{item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(item.amount))}</span>
                     </div>
                   ));
                 })()}
                 <div className="flex items-center justify-between border-t-2 border-blue-300 pt-2 font-bold text-blue-900">
                   <span>= 최종 매출금액</span>
-                  <span className="font-mono text-lg">{formatCurrency(Number(displayData.total_revenue))}</span>
+                  <span className="font-mono text-lg">{formatCurrency(
+                    Number(displayData.total_revenue) +
+                    (() => {
+                      const adj = (business as any).revenue_adjustments;
+                      if (!adj) return 0;
+                      const arr = typeof adj === 'string' ? (() => { try { return JSON.parse(adj); } catch { return []; } })() : adj;
+                      if (!Array.isArray(arr)) return 0;
+                      return arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
+                    })()
+                  )}</span>
                 </div>
               </div>
             </div>
