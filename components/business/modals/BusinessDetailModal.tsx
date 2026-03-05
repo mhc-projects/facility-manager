@@ -1435,9 +1435,25 @@ export default function BusinessDetailModal({
                             const calculatedData = data.data.calculation
                             console.log('✅ [REVENUE-MODAL] API 계산 완료:', calculatedData)
 
+                            // revenue_adjustments를 DB에서 직접 가져오기 (normalizeBusiness에 포함되어 있지 않을 수 있음)
+                            let revenueAdjustments = (business as any).revenue_adjustments ?? null;
+                            if (!revenueAdjustments) {
+                              try {
+                                const adjToken = localStorage.getItem('auth_token');
+                                const adjRes = await fetch(`/api/business-info-direct?id=${business.id}`, {
+                                  headers: { 'Authorization': `Bearer ${adjToken}` }
+                                });
+                                const adjData = await adjRes.json();
+                                if (adjData.success && adjData.data?.[0]) {
+                                  revenueAdjustments = adjData.data[0].revenue_adjustments ?? null;
+                                }
+                              } catch { /* 실패 시 null 유지 */ }
+                            }
+
                             const enrichedBusiness = {
                               ...business,
-                              ...calculatedData
+                              ...calculatedData,
+                              revenue_adjustments: revenueAdjustments,
                             }
 
                             console.log('📊 [REVENUE-MODAL] 병합된 사업장 데이터:', enrichedBusiness)
