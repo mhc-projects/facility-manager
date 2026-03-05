@@ -5177,7 +5177,7 @@ function BusinessManagementPage() {
                         }}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                         placeholder="010-1234-5678"
-                        maxLength={13}
+                        maxLength={14}
                       />
                     </div>
 
@@ -5192,7 +5192,7 @@ function BusinessManagementPage() {
                         }}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                         placeholder="02-000-0000"
-                        maxLength={13}
+                        maxLength={14}
                       />
                     </div>
 
@@ -5207,7 +5207,7 @@ function BusinessManagementPage() {
                         }}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                         placeholder="02-000-0000"
-                        maxLength={13}
+                        maxLength={14}
                       />
                     </div>
 
