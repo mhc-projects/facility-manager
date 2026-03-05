@@ -5424,6 +5424,18 @@ function BusinessManagementPage() {
                         onChange={(value) => setFormData({...formData, receipt_date: value || null})}
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">영업점</label>
+                      <AutocompleteInput
+                        value={formData.sales_office || ''}
+                        onChange={(value) => setFormData({...formData, sales_office: value})}
+                        options={salesOfficeList}
+                        placeholder="영업점 선택 또는 입력"
+                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                        disabled={salesOfficeLoading}
+                      />
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -5746,17 +5758,6 @@ function BusinessManagementPage() {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">영업점</label>
-                      <AutocompleteInput
-                        value={formData.sales_office || ''}
-                        onChange={(value) => setFormData({...formData, sales_office: value})}
-                        options={salesOfficeList}
-                        placeholder="영업점 선택 또는 입력"
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        disabled={salesOfficeLoading}
-                      />
-                    </div>
                     </div>
                   </div>
                 </div>

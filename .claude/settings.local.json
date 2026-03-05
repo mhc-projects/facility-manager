@@ -199,7 +199,9 @@
       "mcp__serena__think_about_whether_you_are_done",
       "Bash(git reset:*)",
       "Bash(du:*)",
-      "mcp__serena__check_onboarding_performed"
+      "mcp__serena__check_onboarding_performed",
+      "Bash(git stash pop)",
+      "Bash(git stash drop)"
     ],
     "deny": [],
     "ask": [],

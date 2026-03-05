@@ -76,3 +76,30 @@ export interface InstallationSummary {
   avgCompletionRate: number;        // 평균 완료율
   totalInstallations: number;       // 총 설치 건수
 }
+
+export interface LeadBusiness {
+  id: string;
+  business_name: string;
+  receipt_date: string;
+  progress_status: string | null;
+}
+
+export interface MonthlyLeadsData {
+  month: string;                                        // "2025-01" 형식
+  total: number;                                        // 월 전체 인입 건수
+  byOffice: Record<string, number>;                     // 영업점명 → 건수 (미지정 포함)
+  businessesByOffice: Record<string, LeadBusiness[]>;   // 영업점명 → 사업장 목록
+}
+
+export interface UnassignedBusiness {
+  id: string;
+  business_name: string;
+  receipt_date: string;
+}
+
+export interface MonthlyLeadsSummary {
+  totalLeads: number;                     // 전체 인입 건수
+  avgMonthly: number;                     // 월평균 인입 건수
+  offices: string[];                      // 영업점 목록 (차트 범례용, 미지정 포함)
+  unassigned: UnassignedBusiness[];       // 미지정 사업장 목록
+}

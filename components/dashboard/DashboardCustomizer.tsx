@@ -23,7 +23,8 @@ const WIDGET_LABELS: Record<string, string> = {
   organization: '조직 현황',
   revenue: '매출/매입/이익 현황',
   receivable: '미수금 현황',
-  installation: '설치 현황'
+  installation: '설치 현황',
+  'monthly-leads': '월별 영업 인입 건'
 };
 
 export default function DashboardCustomizer({

@@ -7,6 +7,7 @@ import OrganizationChart from '@/components/admin/OrganizationChart'
 import RevenueChart from '@/components/dashboard/charts/RevenueChart'
 import ReceivableChart from '@/components/dashboard/charts/ReceivableChart'
 import InstallationChart from '@/components/dashboard/charts/InstallationChart'
+import MonthlyLeadsChart from '@/components/dashboard/charts/MonthlyLeadsChart'
 import FilterPanel from '@/components/dashboard/FilterPanel'
 import DashboardCustomizer from '@/components/dashboard/DashboardCustomizer'
 import { DashboardFilters } from '@/types/dashboard'
@@ -30,7 +31,8 @@ const DEFAULT_LAYOUT: DashboardLayout = {
     { id: 'organization', visible: true, order: 1 },
     { id: 'revenue', visible: true, order: 2 },
     { id: 'receivable', visible: true, order: 3 },
-    { id: 'installation', visible: true, order: 4 }
+    { id: 'installation', visible: true, order: 4 },
+    { id: 'monthly-leads', visible: true, order: 5 }
   ]
 };
 
@@ -47,6 +49,7 @@ export default function AdminDashboard() {
   const [revenueData, setRevenueData] = useState<any>(null)
   const [receivableData, setReceivableData] = useState<any>(null)
   const [installationData, setInstallationData] = useState<any>(null)
+  const [monthlyLeadsData, setMonthlyLeadsData] = useState<any>(null)
   const [chartsLoading, setChartsLoading] = useState(true)
 
   // ✅ 권한 확인 (최우선)
@@ -173,18 +176,20 @@ export default function AdminDashboard() {
         ...(filters?.progressStatus && { progressStatus: filters.progressStatus })
       });
 
-      // ✅ Promise.all로 3개 API 동시 호출 (병렬 실행)
-      const [revenueRes, receivableRes, installationRes] = await Promise.all([
+      // ✅ Promise.all로 4개 API 동시 호출 (병렬 실행)
+      const [revenueRes, receivableRes, installationRes, monthlyLeadsRes] = await Promise.all([
         fetch(`/api/dashboard/revenue?${params}`),
         fetch(`/api/dashboard/receivables?${params}`),
-        fetch(`/api/dashboard/installations?${params}`)
+        fetch(`/api/dashboard/installations?${params}`),
+        fetch(`/api/dashboard/monthly-leads?${params}`)
       ]);
 
       // 응답 데이터 파싱 (병렬)
-      const [revenueResult, receivableResult, installationResult] = await Promise.all([
+      const [revenueResult, receivableResult, installationResult, monthlyLeadsResult] = await Promise.all([
         revenueRes.json(),
         receivableRes.json(),
-        installationRes.json()
+        installationRes.json(),
+        monthlyLeadsRes.json()
       ]);
 
       // 상태 업데이트
@@ -196,6 +201,9 @@ export default function AdminDashboard() {
       }
       if (installationResult.success) {
         setInstallationData(installationResult);
+      }
+      if (monthlyLeadsResult.success) {
+        setMonthlyLeadsData(monthlyLeadsResult);
       }
 
     } catch (error) {
@@ -280,6 +288,15 @@ export default function AdminDashboard() {
             loading={chartsLoading}
           />
         )
+      case 'monthly-leads':
+        return (
+          <MonthlyLeadsChart
+            key={widgetId}
+            filters={filters}
+            initialData={monthlyLeadsData}
+            loading={chartsLoading}
+          />
+        )
       default:
         return null
     }
@@ -317,6 +334,7 @@ export default function AdminDashboard() {
   const chartWidgets = visibleWidgets.filter(w => w.id !== 'organization')
   const revenueWidget = chartWidgets.find(w => w.id === 'revenue')
   const otherCharts = chartWidgets.filter(w => ['receivable', 'installation'].includes(w.id))
+  const monthlyLeadsWidget = chartWidgets.find(w => w.id === 'monthly-leads')
 
   return (
     <AdminLayout
@@ -346,6 +364,9 @@ export default function AdminDashboard() {
             {otherCharts.map(widget => renderWidget(widget.id))}
           </div>
         )}
+
+        {/* 월별 영업 인입 건 위젯 */}
+        {monthlyLeadsWidget && renderWidget(monthlyLeadsWidget.id)}
 
         {/* 차트 위젯이 모두 숨겨진 경우 */}
         {chartWidgets.length === 0 && !showOrganization && (
