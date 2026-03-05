@@ -58,7 +58,8 @@ export function calculateReceivables(params: {
   if (!installationDate) return 0;
 
   const raw = totalRevenueWithTax + revenueAdjustments - totalPayments;
-  // 10원 이하는 부가세 반올림 오차로 간주
-  if (raw <= RECEIVABLES_TOLERANCE) return 0;
+  // 10원 이하 양수는 부가세 반올림 오차로 간주하여 0 처리
+  // 음수(초과 입금)는 그대로 반환
+  if (raw > 0 && raw <= RECEIVABLES_TOLERANCE) return 0;
   return raw;
 }
