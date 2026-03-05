@@ -2568,13 +2568,11 @@ function VirtualizedTable({
 
   const columnWidths = (() => {
     if (showPaymentSchedule && showReceivablesOnly && showSurveyCostsColumn) {
-      // 자비+미수금+실사비용: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (12컬럼)
-      // 입금예정일 9%→11% (+2%), 매출/매입/이익 9%→8% (각 -1%)
-      return ['16%', '11%', '9%', '7%', '7%', '7%', '8%', '8%', '8%', '5%', '7%', '7%']; // 총합 100%
+      // 자비+미수금+실사비용: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (13컬럼)
+      return ['13%', '9%', '7%', '7%', '7%', '6%', '6%', '8%', '8%', '8%', '5%', '7%', '9%']; // 총합 100%
     } else if (showPaymentSchedule && showReceivablesOnly) {
-      // 자비+미수금: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 매출, 매입, 이익, 이익률, 미수금 (11컬럼)
-      // 사업장명 17%→16% (-1%), 입금예정일 8%→11% (+3%), 매출/매입/이익 10%→9% (각 -1%)
-      return ['16%', '11%', '7%', '7%', '8%', '8%', '9%', '9%', '9%', '6%', '9%']; // 총합 99%
+      // 자비+미수금: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 미수금 (12컬럼)
+      return ['14%', '9%', '7%', '7%', '7%', '7%', '7%', '9%', '9%', '9%', '5%', '10%']; // 총합 100%
     } else if (showPaymentSchedule) {
       // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
       // 사업장명 18%→17% (-1%), 입금예정일 10%→12% (+2%), 매출/매입/이익 11%→10% (각 -1%)
@@ -2642,14 +2640,12 @@ function VirtualizedTable({
           {!(showPaymentSchedule && showReceivablesOnly) && (
             <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold">카테고리</div>
           )}
-          {!(showPaymentSchedule && showReceivablesOnly) && (
-            <div
-              className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 text-xs font-semibold"
-              onClick={() => handleSort('sales_office')}
-            >
-              영업점 {sortField === 'sales_office' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </div>
-          )}
+          <div
+            className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+            onClick={() => handleSort('sales_office')}
+          >
+            영업점 {sortField === 'sales_office' && (sortOrder === 'asc' ? '↑' : '↓')}
+          </div>
           <div
             className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 text-xs font-semibold"
             onClick={() => handleSort('total_revenue')}
@@ -2802,13 +2798,11 @@ function VirtualizedTable({
                     </span>
                   </div>
                 )}
-                {!(showPaymentSchedule && showReceivablesOnly) && (
-                  <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {business.sales_office || '미배정'}
-                    </span>
-                  </div>
-                )}
+                <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {business.sales_office || '미배정'}
+                  </span>
+                </div>
                 <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right font-mono text-xs">
                   {formatCurrency(business.total_revenue)}
                 </div>
