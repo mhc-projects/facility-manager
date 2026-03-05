@@ -14,4 +14,20 @@
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
 | #2357 | 12:08 PM | 🔵 | Additional NOT NULL Foreign Key Constraints Found in Operating Cost Tables | ~372 |
+
+### Mar 5, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #3961 | 11:39 AM | 🔵 | Identified Seven SECURITY DEFINER Functions Supporting Crawler, Order, and History Operations | ~518 |
+| #3960 | " | 🔵 | All Flagged Tables Use Standard Trigger Functions Without SECURITY DEFINER | ~196 |
+| #3959 | " | 🔵 | Located Task Assignment Functions Without search_path Security Settings | ~531 |
+| #3940 | 11:33 AM | 🔵 | Found invoice_records Table for Tax Invoice Management Without RLS | ~422 |
+| #3939 | " | 🔵 | Found Two Financial Tables Without RLS: monthly_closings and miscellaneous_costs | ~453 |
+| #3938 | " | 🔵 | Found backup_snapshots Table Without RLS Configuration | ~378 |
+| #3937 | " | 🔵 | Examined problem_urls and crawl_stats_by_region View Implementations | ~470 |
+| #3936 | 11:32 AM | 🔵 | Located Final Two Flagged Views in Direct URL Sources File | ~423 |
+| #3935 | " | 🔵 | Subsidy Crawler Monitoring File Does Not Contain crawl_stats_by_region or problem_urls Views | ~421 |
+| #3934 | " | 🔵 | Retrieved Three Crawler Monitoring View Definitions from Subsidy Crawler File | ~502 |
+| #3933 | " | 🔵 | Found Comprehensive View Security Fix Script with Safety Mechanisms | ~580 |
 </claude-mem-context>

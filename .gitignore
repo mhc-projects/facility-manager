@@ -73,3 +73,10 @@ debug-*.js
 test-*.js
 !test-api.html
 !api-test-after-fix.js
+
+# MCP generated files
+.playwright-mcp/
+
+# Local tool config (not project-specific)
+.claude/settings.local.json
+.serena/project.yml

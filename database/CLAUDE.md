@@ -15,4 +15,11 @@
 |----|------|---|-------|------|
 | #2235 | 3:06 PM | 🔵 | Third Task System Schema Discovered | ~434 |
 | #2225 | 3:04 PM | 🔵 | Business Database Schema Structure Analyzed | ~491 |
+
+### Mar 5, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #3943 | 11:34 AM | 🔵 | meeting_departments Table Designed as Shared Reference Data Without RLS | ~408 |
+| #3942 | " | 🔵 | Found meeting_departments Table with Explicitly Disabled RLS | ~395 |
 </claude-mem-context>

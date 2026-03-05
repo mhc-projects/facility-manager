@@ -17,4 +17,10 @@
 | #2677 | 5:43 PM | 🔴 | Fixed infinite redirect loop in authentication error handling | ~431 |
 | #2676 | " | 🔴 | Enhanced error handling in checkAuth and prevented 401 redirect loop in api-client | ~460 |
 | #2651 | 5:18 PM | 🔵 | TokenManager stores JWT in localStorage with auth_token key | ~441 |
+
+### Mar 5, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #3954 | 11:36 AM | 🔵 | Supabase Client Configuration Distinguishes Between Anonymous and Admin Access | ~497 |
 </claude-mem-context>
