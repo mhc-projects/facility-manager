@@ -459,7 +459,7 @@ export default function AdminLayout({ children, title, description, actions }: A
             </header>
 
             {/* Page content */}
-            <main className="p-1 sm:p-2 md:p-4 lg:p-6 lg:flex-1 lg:overflow-y-auto bg-gray-50 lg:bg-transparent">
+            <main className="p-1 sm:p-2 md:p-4 lg:p-6 md:flex-1 md:overflow-y-auto bg-gray-50 lg:bg-transparent">
               <div className="lg:h-full">
                 {children}
               </div>
