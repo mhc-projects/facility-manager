@@ -102,13 +102,10 @@ function calcAutoRisk(installationDate: string | null | undefined): '상' | '중
   const install = new Date(installationDate);
   if (isNaN(install.getTime())) return null;
   const today = new Date();
-  const monthsElapsed =
-    (today.getFullYear() - install.getFullYear()) * 12 +
-    (today.getMonth() - install.getMonth()) +
-    (today.getDate() >= install.getDate() ? 0 : -1);
-  if (monthsElapsed >= 3) return '상';
-  if (monthsElapsed >= 2) return '중';
-  if (monthsElapsed >= 1) return '하';
+  const daysElapsed = Math.floor((today.getTime() - install.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysElapsed >= 90) return '상';
+  if (daysElapsed >= 60) return '중';
+  if (daysElapsed >= 30) return '하';
   return null;
 }
 
@@ -394,6 +391,12 @@ function RevenueDashboard() {
       CacheManager.updateBusinessField(businessId, 'risk', previousRisk);
       CacheManager.broadcastFieldUpdate(businessId, 'risk', previousRisk);
     });
+  };
+
+  // 위험도 카드 클릭 필터 토글 (단일 선택)
+  const handleRiskCardClick = (level: string) => {
+    setSelectedRiskLevels(prev => prev.includes(level) ? [] : [level]);
+    setCurrentPage(1);
   };
 
   // 입금예정일 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
@@ -1276,8 +1279,8 @@ function RevenueDashboard() {
     baseInstallationCosts
   ]);
 
-  // ✅ 실시간 매출 계산 (useMemo로 성능 최적화)
-  const filteredBusinesses = useMemo(() => {
+  // ✅ 실시간 매출 계산 (useMemo로 성능 최적화) — 위험도 필터 적용 전
+  const preRiskFilteredBusinesses = useMemo(() => {
     // 🔄 State Machine: 데이터가 준비되지 않았으면 빈 배열 반환
     if (dataLoadingState !== 'ready') {
       return [];
@@ -1445,13 +1448,7 @@ function RevenueDashboard() {
         .map(s => s.status);
       const taskList = taskStatusMap[business.business_name] ?? [];
       return taskList.some(ts => matchingStatuses.includes(ts.status as any));
-    }).filter(business => {
-      // 위험도 필터 (미수금 필터 활성화 시에만 적용)
-      if (!showReceivablesOnly) return true;
-      if (selectedRiskLevels.length === 0) return true;
-      const risk = riskMap[business.id] ?? null;
-      return risk !== null && selectedRiskLevels.includes(risk);
-    });
+    }); // ← 위험도 필터 전 목록 (preRiskFilteredBusinesses로 별도 파생)
   }, [
     businesses,
     dataLoadingState, // 🔧 State Machine dependency 추가
@@ -1470,9 +1467,18 @@ function RevenueDashboard() {
     showUninstalledOnly,
     taskStatusMap,
     selectedTaskTypes,
-    selectedRiskLevels,
     riskMap,
   ]);
+
+  // 위험도 필터 적용 (preRiskFilteredBusinesses → filteredBusinesses)
+  const filteredBusinesses = useMemo(() => {
+    if (!showReceivablesOnly || selectedRiskLevels.length === 0) return preRiskFilteredBusinesses;
+    return preRiskFilteredBusinesses.filter(business => {
+      const risk = riskMap[business.id] ?? null;
+      const riskKey = risk === '상' || risk === '중' || risk === '하' ? risk : '없음';
+      return selectedRiskLevels.includes(riskKey);
+    });
+  }, [preRiskFilteredBusinesses, showReceivablesOnly, selectedRiskLevels, riskMap]);
 
   // ✅ 실시간 계산 결과로 통계 계산 (filteredBusinesses에서 직접 계산)
   const stats = useMemo(() => {
@@ -1509,6 +1515,25 @@ function RevenueDashboard() {
       top_performing_office: topOffice
     };
   }, [filteredBusinesses]);
+
+  // 위험도별 통계 집계 (위험도 필터 제외한 목록 기준 — 카드 활성 시에도 전체 수치 유지)
+  const riskStats = useMemo(() => {
+    if (!showReceivablesOnly) return null;
+    const result: Record<string, { count: number; amount: number }> = {
+      상: { count: 0, amount: 0 },
+      중: { count: 0, amount: 0 },
+      하: { count: 0, amount: 0 },
+      없음: { count: 0, amount: 0 },
+    };
+    // preRiskFilteredBusinesses: 위험도 필터 직전 목록 (다른 필터는 모두 반영)
+    preRiskFilteredBusinesses.forEach((biz) => {
+      const risk = riskMap[biz.id] ?? null;
+      const key = risk === '상' || risk === '중' || risk === '하' ? risk : '없음';
+      result[key].count += 1;
+      result[key].amount += (biz as any).total_receivables ?? 0;
+    });
+    return result;
+  }, [showReceivablesOnly, preRiskFilteredBusinesses, riskMap]);
 
   const salesOffices = [...new Set(businesses.map(b => b.sales_office).filter(Boolean))];
   const regions = [...new Set(businesses.map(b => b.address ? b.address.split(' ').slice(0, 2).join(' ') : '').filter(Boolean))];
@@ -2061,9 +2086,10 @@ function RevenueDashboard() {
               />
             </div>
 
-            {/* 두 번째 행: 검색, 매출금액, 필터 (미수금 ON 시 업무관리 필터 추가) */}
-            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 items-center ${showReceivablesOnly ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
-              <div className={`flex items-center gap-1.5 ${showReceivablesOnly ? 'md:col-span-1' : 'md:col-span-2'}`}>
+            {/* 두 번째 행: 검색, 매출금액, 업무단계(미수금 ON시), 체크박스 */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* 검색: 미수금 ON 시 더 넓게 */}
+              <div className={`flex items-center gap-1.5 ${showReceivablesOnly ? 'flex-[2_2_0%]' : 'flex-[1_1_0%]'} min-w-[140px]`}>
                 <label className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">검색</label>
                 <div className="relative flex-1">
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -2077,27 +2103,27 @@ function RevenueDashboard() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <label className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">최소</label>
                 <input
                   type="number"
                   placeholder="0"
                   value={revenueFilter.min}
                   onChange={(e) => { setRevenueFilter(prev => ({ ...prev, min: e.target.value })); setCurrentPage(1); }}
-                  className="flex-1 px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent w-20"
+                  className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent w-40"
                   min="0"
                   step="100000"
                 />
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <label className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">최대</label>
                 <input
                   type="number"
                   placeholder="제한없음"
                   value={revenueFilter.max}
                   onChange={(e) => { setRevenueFilter(prev => ({ ...prev, max: e.target.value })); setCurrentPage(1); }}
-                  className="flex-1 px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent w-20"
+                  className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent w-40"
                   min="0"
                   step="100000"
                 />
@@ -2105,29 +2131,20 @@ function RevenueDashboard() {
 
               {/* 업무단계 필터 (미수금 ON 시에만 표시) */}
               {showReceivablesOnly && (
-                <MultiSelectDropdown
-                  label="업무단계"
-                  options={uniqueTaskStepLabels.map(s => s.label)}
-                  selectedValues={selectedTaskTypes}
-                  onChange={(vals) => { setSelectedTaskTypes(vals); setCurrentPage(1); }}
-                  placeholder="전체 단계"
-                  inline={true}
-                />
+                <div className="shrink-0 min-w-[320px]">
+                  <MultiSelectDropdown
+                    label="업무단계"
+                    options={uniqueTaskStepLabels.map(s => s.label)}
+                    selectedValues={selectedTaskTypes}
+                    onChange={(vals) => { setSelectedTaskTypes(vals); setCurrentPage(1); }}
+                    placeholder="전체 단계"
+                    inline={true}
+                  />
+                </div>
               )}
 
-              {/* 위험도 필터 (미수금 ON 시에만 표시) */}
-              {showReceivablesOnly && (
-                <MultiSelectDropdown
-                  label="위험도"
-                  options={['상', '중', '하']}
-                  selectedValues={selectedRiskLevels}
-                  onChange={(vals) => { setSelectedRiskLevels(vals); setCurrentPage(1); }}
-                  placeholder="전체"
-                  inline={true}
-                />
-              )}
-
-              <div className="flex items-center justify-end gap-3">
+              {/* 체크박스: 항상 우측 끝 고정 */}
+              <div className="flex items-center gap-3 ml-auto shrink-0">
                 <div className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
@@ -2162,6 +2179,41 @@ function RevenueDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* 3행: 위험도 통계 칩 (미수금 ON 시만) */}
+            {showReceivablesOnly && riskStats && (() => {
+              const chips = [
+                { level: '상',  icon: '🔴', border: 'border-red-200',   activeBorder: 'border-red-400',   bg: 'bg-red-50',   activeBg: 'bg-red-100',   text: 'text-red-700'   },
+                { level: '중',  icon: '🟡', border: 'border-amber-200', activeBorder: 'border-amber-400', bg: 'bg-amber-50', activeBg: 'bg-amber-100', text: 'text-amber-700' },
+                { level: '하',  icon: '🟢', border: 'border-green-200', activeBorder: 'border-green-400', bg: 'bg-green-50', activeBg: 'bg-green-100', text: 'text-green-700' },
+                { level: '없음', icon: '⬜', border: 'border-gray-200',  activeBorder: 'border-gray-400',  bg: 'bg-gray-50',  activeBg: 'bg-gray-100',  text: 'text-gray-600'  },
+              ] as const;
+              return (
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <span className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap shrink-0">위험도</span>
+                  {chips.map(({ level, icon, border, activeBorder, bg, activeBg, text }) => {
+                    const { count, amount } = riskStats[level];
+                    const isActive = selectedRiskLevels.includes(level);
+                    return (
+                      <button
+                        key={level}
+                        onClick={() => handleRiskCardClick(level)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs sm:text-sm whitespace-nowrap transition-all ${
+                          isActive
+                            ? `border-2 ${activeBorder} ${activeBg} font-semibold`
+                            : `border ${border} ${bg} ${selectedRiskLevels.length > 0 ? 'opacity-40 hover:opacity-70' : 'hover:opacity-90'}`
+                        }`}
+                      >
+                        <span>{icon}</span>
+                        <span className={text}>{level}</span>
+                        <span className={`${text} font-bold`}>{count}건</span>
+                        <span className={`${text} opacity-80`}>{amount.toLocaleString()}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
