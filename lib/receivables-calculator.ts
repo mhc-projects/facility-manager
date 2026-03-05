@@ -22,16 +22,20 @@ const RECEIVABLES_TOLERANCE = 10;
  */
 export function sumAllPayments(business: Record<string, any>): number {
   const status = (business.progress_status || '').trim();
+  // 추가 계산서(extra) 입금 합계 - API에서 집계된 값
+  const extraPayment = Number(business.ir_extra_payment_total) || 0;
 
   if (status.includes('보조금')) {
     return (Number(business.payment_1st_amount) || 0)
          + (Number(business.payment_2nd_amount) || 0)
-         + (Number(business.payment_additional_amount) || 0);
+         + (Number(business.payment_additional_amount) || 0)
+         + extraPayment;
   }
 
   // 자비, 대리점, AS, 외주설치 등
   return (Number(business.payment_advance_amount) || 0)
-       + (Number(business.payment_balance_amount) || 0);
+       + (Number(business.payment_balance_amount) || 0)
+       + extraPayment;
 }
 
 /**
@@ -40,18 +44,20 @@ export function sumAllPayments(business: Record<string, any>): number {
  * @param installationDate - 설치일 (없으면 0 반환)
  * @param totalRevenueWithTax - 전체 매출 (부가세 포함)
  * @param totalPayments - 총 입금액 합계
+ * @param revenueAdjustments - 매출비용 조정 합계 (부가세 포함, 양수/음수 가능)
  */
 export function calculateReceivables(params: {
   installationDate: string | null | undefined;
   totalRevenueWithTax: number;
   totalPayments: number;
+  revenueAdjustments?: number;
 }): number {
-  const { installationDate, totalRevenueWithTax, totalPayments } = params;
+  const { installationDate, totalRevenueWithTax, totalPayments, revenueAdjustments = 0 } = params;
 
   // 설치일 없으면 미수금 0 (아직 매출 미발생)
   if (!installationDate) return 0;
 
-  const raw = totalRevenueWithTax - totalPayments;
+  const raw = totalRevenueWithTax + revenueAdjustments - totalPayments;
   // 10원 이하는 부가세 반올림 오차로 간주
   if (raw <= RECEIVABLES_TOLERANCE) return 0;
   return raw;

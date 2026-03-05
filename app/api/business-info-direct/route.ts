@@ -197,7 +197,15 @@ export async function GET(request: Request) {
       pre_construction_survey_date::text as pre_construction_survey_date,
       pre_construction_survey_manager,
       completion_survey_date::text as completion_survey_date,
-      completion_survey_manager
+      completion_survey_manager,
+      survey_fee_adjustment,
+      as_cost,
+      custom_additional_costs,
+      revenue_adjustments,
+      fax_number,
+      email,
+      business_type,
+      representative_birth_date
     `;
 
     // invoice_records의 계산서·입금 데이터를 우선 사용 (legacy business_info 컬럼 override)
@@ -207,16 +215,20 @@ export async function GET(request: Request) {
       WITH ir AS (
         SELECT
           business_id,
+          -- 계산서 발행금액: issue_date가 있는 경우만 (미발행 계산서 금액 제외)
           MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_1st,
-          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_1st,
+          -- 입금금액: 미발행 계산서에도 입금이 존재할 수 있으므로 issue_date 조건 없이 집계
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN payment_amount END) AS ir_payment_1st,
           MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_2nd,
-          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_2nd,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' THEN payment_amount END) AS ir_payment_2nd,
           MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_additional,
-          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_additional,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN payment_amount END) AS ir_payment_additional,
           MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_advance,
-          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_advance,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN payment_amount END) AS ir_payment_advance,
           MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN total_amount   END) AS ir_invoice_balance,
-          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN payment_amount END) AS ir_payment_balance
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN payment_amount END) AS ir_payment_balance,
+          -- 추가 계산서(extra) 입금 합계 (취소 제외)
+          COALESCE(SUM(CASE WHEN invoice_stage = 'extra' AND record_type != 'cancelled' THEN payment_amount ELSE 0 END), 0) AS ir_extra_payment_total
         FROM invoice_records
         WHERE is_active = TRUE
         GROUP BY business_id
@@ -276,7 +288,16 @@ export async function GET(request: Request) {
         bi.pre_construction_survey_date::text AS pre_construction_survey_date,
         bi.pre_construction_survey_manager,
         bi.completion_survey_date::text AS completion_survey_date,
-        bi.completion_survey_manager
+        bi.completion_survey_manager,
+        bi.survey_fee_adjustment,
+        bi.as_cost,
+        bi.custom_additional_costs,
+        bi.revenue_adjustments,
+        bi.fax_number,
+        bi.email,
+        bi.business_type,
+        bi.representative_birth_date,
+        COALESCE(ir.ir_extra_payment_total, 0) AS ir_extra_payment_total
       FROM (
         SELECT ${selectFields}
         FROM business_info
@@ -625,6 +646,28 @@ export async function PUT(request: Request) {
         updateObject.custom_additional_costs = JSON.stringify(validatedCosts);
       } else {
         updateObject.custom_additional_costs = '[]';
+      }
+    }
+
+    // 매출비용 조정 처리 (JSONB 배열, amount는 공급가액 기준)
+    if (updateData.revenue_adjustments !== undefined) {
+      if (Array.isArray(updateData.revenue_adjustments)) {
+        const validatedAdjustments = updateData.revenue_adjustments
+          .filter((item: any) =>
+            item &&
+            typeof item === 'object' &&
+            typeof item.reason === 'string' &&
+            item.reason.trim() !== '' &&
+            typeof item.amount === 'number' &&
+            item.amount !== 0
+          )
+          .map((item: any) => ({
+            reason: String(item.reason).trim().slice(0, 100),
+            amount: Number(item.amount) || 0,
+          }));
+        updateObject.revenue_adjustments = JSON.stringify(validatedAdjustments);
+      } else {
+        updateObject.revenue_adjustments = '[]';
       }
     }
 

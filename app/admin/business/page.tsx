@@ -122,6 +122,7 @@ interface UnifiedBusinessInfo {
   negotiation?: number | string | null;
   multiple_stack_cost?: number | null;
   representative_birth_date?: string | null;
+  revenue_adjustments?: Array<{ reason: string; amount: number }> | string | null; // 매출비용 조정
 
   // 계산서 및 입금 정보 - 보조금 사업장 (3개)
   invoice_1st_date?: string | null;
@@ -354,7 +355,15 @@ const mapCategoryToInvoiceType = (category: string | null | undefined): '보조�
 };
 
 // 수정 모달용 미수금 현황 배너
-function ReceivablesBanner({ businessId, refreshTrigger }: { businessId: string; refreshTrigger: number }) {
+function ReceivablesBanner({
+  businessId,
+  refreshTrigger,
+  revenueAdjustments,
+}: {
+  businessId: string;
+  refreshTrigger: number;
+  revenueAdjustments?: Array<{ reason: string; amount: number }>;
+}) {
   const [data, setData] = useState<{ total_revenue: number; total_payment_amount: number; total_receivables: number } | null>(null);
 
   useEffect(() => {
@@ -374,7 +383,13 @@ function ReceivablesBanner({ businessId, refreshTrigger }: { businessId: string;
 
   if (!data) return null;
 
-  const { total_revenue, total_payment_amount, total_receivables } = data;
+  // API total_revenue/total_receivables는 저장된 조정 항목까지 이미 반영됨
+  // revenueAdjustments prop: 현재 폼에서 편집 중인 실시간 값 (저장 전)
+  // 실시간 미리보기: API 값 그대로 사용 (저장 후 refreshTrigger로 갱신됨)
+  const total_revenue = data.total_revenue;
+  const total_payment_amount = data.total_payment_amount;
+  const raw_receivables = data.total_receivables;
+  const total_receivables = raw_receivables <= 10 ? 0 : raw_receivables;
 
   return (
     <div className={`rounded-lg p-3 mb-3 border ${
@@ -419,6 +434,7 @@ function BusinessManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
   const [formData, setFormData] = useState<Partial<UnifiedBusinessInfo>>({})
+  const [adjAmountInputs, setAdjAmountInputs] = useState<string[]>([])
   const invoiceTabRef = useRef<InvoiceTabSectionHandle>(null)
   const [invoiceRefreshTrigger, setInvoiceRefreshTrigger] = useState(0)
   const [localGovSuggestions, setLocalGovSuggestions] = useState<string[]>([])
@@ -3025,6 +3041,12 @@ function BusinessManagementPage() {
         expansion_pack: freshData.expansion_pack,
         other_equipment: freshData.other_equipment,
         negotiation: freshData.negotiation,
+        revenue_adjustments: (() => {
+          const raw = freshData.revenue_adjustments;
+          if (!raw) return [];
+          if (Array.isArray(raw)) return raw;
+          try { return JSON.parse(raw); } catch { return []; }
+        })() as Array<{ reason: string; amount: number }>,
 
         contacts: freshData.contacts || [],
         manufacturer: freshData.manufacturer || '',
@@ -3082,6 +3104,15 @@ function BusinessManagementPage() {
         greenlink_confirmation_submitted_at: freshData.greenlink_confirmation_submitted_at || '',
         attachment_completion_submitted_at: freshData.attachment_completion_submitted_at || ''
       })
+
+      // Initialize adjAmountInputs display strings from revenue_adjustments
+      const initAdj = (() => {
+        const raw = freshData.revenue_adjustments;
+        if (!raw) return [];
+        const arr = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw as string); } catch { return []; } })();
+        return (arr as Array<{ reason: string; amount: number }>).map(a => a.amount !== 0 ? String(a.amount) : '');
+      })();
+      setAdjAmountInputs(initAdj);
 
       // Close detail modal BEFORE opening edit modal
       // IMPORTANT: Keep returnPath intact so edit modal can return to origin after save
@@ -6019,6 +6050,103 @@ function BusinessManagementPage() {
                     </div>
                     </div>
                   </div>
+
+                  {/* 매출비용 조정 */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">매출비용 조정</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const adj = (() => {
+                            const raw = formData.revenue_adjustments;
+                            if (!raw) return [];
+                            if (Array.isArray(raw)) return raw;
+                            try { return JSON.parse(raw as string); } catch { return []; }
+                          })();
+                          setFormData({ ...formData, revenue_adjustments: [...adj, { reason: '', amount: 0 }] });
+                          setAdjAmountInputs([...adjAmountInputs, '']);
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        + 항목 추가
+                      </button>
+                    </div>
+                    {(() => {
+                      const adj: Array<{ reason: string; amount: number }> = (() => {
+                        const raw = formData.revenue_adjustments;
+                        if (!raw) return [];
+                        if (Array.isArray(raw)) return raw as Array<{ reason: string; amount: number }>;
+                        try { return JSON.parse(raw as string); } catch { return []; }
+                      })();
+                      const total = adj.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+                      return (
+                        <>
+                          {adj.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 mb-1.5">
+                              <input
+                                type="text"
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
+                                placeholder="조정 사유"
+                                value={item.reason}
+                                onChange={(e) => {
+                                  const next = [...adj];
+                                  next[idx] = { ...next[idx], reason: e.target.value };
+                                  setFormData({ ...formData, revenue_adjustments: next });
+                                }}
+                              />
+                              <input
+                                type="text"
+                                className="w-28 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-1 focus:ring-blue-500"
+                                placeholder="금액 (부가세별도)"
+                                value={adjAmountInputs[idx] ?? (item.amount !== 0 ? Number(item.amount).toLocaleString() : '')}
+                                onChange={(e) => {
+                                  const stripped = e.target.value.replace(/,/g, '');
+                                  const isNeg = stripped.startsWith('-');
+                                  const digits = stripped.replace(/^-/, '');
+                                  // Format with commas, preserve '-' prefix
+                                  const formatted = digits === ''
+                                    ? (isNeg ? '-' : '')
+                                    : (isNeg ? '-' : '') + parseInt(digits).toLocaleString();
+                                  const newInputs = [...adjAmountInputs];
+                                  while (newInputs.length <= idx) newInputs.push('');
+                                  newInputs[idx] = isNaN(parseInt(digits)) && digits !== '' ? adjAmountInputs[idx] ?? '' : formatted;
+                                  setAdjAmountInputs(newInputs);
+                                  const num = stripped === '' || stripped === '-' ? 0 : (parseInt(stripped) || 0);
+                                  const next = [...adj];
+                                  next[idx] = { ...next[idx], amount: num };
+                                  setFormData({ ...formData, revenue_adjustments: next });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = adj.filter((_, i) => i !== idx);
+                                  setFormData({ ...formData, revenue_adjustments: next });
+                                  setAdjAmountInputs(adjAmountInputs.filter((_, i) => i !== idx));
+                                }}
+                                className="text-gray-400 hover:text-red-500 shrink-0"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          {adj.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              공급가액 합계:{' '}
+                              <span className={total >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                                {total.toLocaleString()}원
+                              </span>
+                              {' '}→ 부가세포함:{' '}
+                              <span className={total >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                                {Math.round(total * 1.1).toLocaleString()}원
+                              </span>
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
 
                 {/* 계산서 및 입금 정보 - InvoiceTabSection */}
@@ -6034,7 +6162,16 @@ function BusinessManagementPage() {
                         </h3>
                       </div>
                       {/* 미수금 현황 배너 */}
-                      <ReceivablesBanner businessId={editingBusiness.id} refreshTrigger={invoiceRefreshTrigger} />
+                      <ReceivablesBanner
+                        businessId={editingBusiness.id}
+                        refreshTrigger={invoiceRefreshTrigger}
+                        revenueAdjustments={(() => {
+                          const raw = formData.revenue_adjustments;
+                          if (!raw) return [];
+                          if (Array.isArray(raw)) return raw as Array<{ reason: string; amount: number }>;
+                          try { return JSON.parse(raw as string); } catch { return []; }
+                        })()}
+                      />
                       <InvoiceTabSection
                         ref={invoiceTabRef}
                         businessId={editingBusiness.id}

@@ -1153,6 +1153,18 @@ export default function BusinessRevenueModal({
                     <span className="font-mono">-{formatCurrency(Number(business.negotiation))}</span>
                   </div>
                 ) : null}
+                {(() => {
+                  const adj = (business as any).revenue_adjustments;
+                  if (!adj) return null;
+                  const arr: Array<{ reason: string; amount: number }> = typeof adj === 'string' ? JSON.parse(adj) : adj;
+                  if (!Array.isArray(arr) || arr.length === 0) return null;
+                  return arr.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between" style={{ color: item.amount >= 0 ? '#15803d' : '#b91c1c' }}>
+                      <span>{item.amount >= 0 ? '+' : '-'} 매출비용 조정 ({item.reason || '사유 없음'})</span>
+                      <span className="font-mono">{item.amount >= 0 ? '+' : ''}{formatCurrency(Math.round(item.amount * 1.1))}</span>
+                    </div>
+                  ));
+                })()}
                 <div className="flex items-center justify-between border-t-2 border-blue-300 pt-2 font-bold text-blue-900">
                   <span>= 최종 매출금액</span>
                   <span className="font-mono text-lg">{formatCurrency(Number(displayData.total_revenue))}</span>

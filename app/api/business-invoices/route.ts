@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
         invoice_2nd_date, invoice_2nd_amount, payment_2nd_date, payment_2nd_amount,
         invoice_additional_date, payment_additional_date, payment_additional_amount,
         invoice_advance_date, invoice_advance_amount, payment_advance_date, payment_advance_amount,
-        invoice_balance_date, invoice_balance_amount, payment_balance_date, payment_balance_amount
+        invoice_balance_date, invoice_balance_amount, payment_balance_date, payment_balance_amount,
+        revenue_adjustments
        FROM business_info
        WHERE id = $1`,
       [businessId]
@@ -315,11 +316,22 @@ export async function GET(request: NextRequest) {
       .reduce((sum, r) => sum + (r.payment_amount || 0), 0);
     allPayments += extraPayments;
 
+    // 매출비용 조정 합계 (공급가액 → 부가세 포함 변환)
+    const revenueAdjustmentTotal = (() => {
+      const adj = (business as any).revenue_adjustments;
+      if (!adj) return 0;
+      const arr = typeof adj === 'string' ? JSON.parse(adj) : adj;
+      if (!Array.isArray(arr)) return 0;
+      const sum = arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
+      return Math.round(sum * 1.1);
+    })();
+
     // 최종 미수금 계산
     totalReceivables = calculateReceivables({
       installationDate: business.installation_date,
       totalRevenueWithTax,
       totalPayments: allPayments,
+      revenueAdjustments: revenueAdjustmentTotal,
     });
 
     console.log('💰 [BUSINESS-INVOICES] 최종 미수금 계산:', {
@@ -339,7 +351,7 @@ export async function GET(request: NextRequest) {
         invoices: invoicesData,
         total_receivables: totalReceivables,
         // 미수금 계산 근거 (UI 표시용)
-        total_revenue: totalRevenueWithTax,
+        total_revenue: totalRevenueWithTax + revenueAdjustmentTotal,
         total_payment_amount: allPayments,
         // 추가 계산서
         invoice_records: invoiceRecordsByStage,

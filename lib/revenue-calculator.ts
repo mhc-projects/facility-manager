@@ -98,16 +98,28 @@ export function calculateBusinessRevenue(
   } = pricingData;
 
   // 사업장의 제조사 정보 (기본값: ecosense)
-  // ✅ 제조사 이름 정규화: 소문자 변환 + 공백 제거로 매칭 성공률 향상
   const rawManufacturer = business.manufacturer || 'ecosense';
-  const normalizedManufacturer = rawManufacturer.toLowerCase().trim();
 
-  // 제조사 원가 맵에서 정규화된 이름으로 검색
-  let manufacturerCosts = manufacturerPrices[normalizedManufacturer];
-
-  // 정규화된 이름으로도 못 찾으면 원본 이름으로 시도
-  if (!manufacturerCosts) {
-    manufacturerCosts = manufacturerPrices[rawManufacturer] || {};
+  // 제조사 원가 맵 키 탐색 우선순위:
+  // 1) 소문자 정규화 (영문 코드: ecosense)
+  // 2) 원본 그대로 (한글: 에코센스)
+  // 3) 영문→한글 변환 (ecosense → 에코센스)
+  // 4) 한글→영문 변환 (에코센스 → ecosense)
+  // DB manufacturer_pricing 테이블 키가 한글/영문 어느 쪽이든 매칭되도록 처리
+  const NAMES: Record<string, string> = { ecosense: '에코센스', cleanearth: '크린어스', gaia_cns: '가이아씨앤에스', evs: '이브이에스' };
+  const NAMES_REV: Record<string, string> = { '에코센스': 'ecosense', '크린어스': 'cleanearth', '가이아씨앤에스': 'gaia_cns', '이브이에스': 'evs' };
+  const candidates = [
+    rawManufacturer.toLowerCase().trim(),
+    rawManufacturer,
+    NAMES[rawManufacturer.toLowerCase().trim()] || '',
+    NAMES_REV[rawManufacturer] || '',
+  ];
+  let manufacturerCosts: Record<string, number> = {};
+  for (const key of candidates) {
+    if (key && manufacturerPrices[key]) {
+      manufacturerCosts = manufacturerPrices[key];
+      break;
+    }
   }
 
   // 매출/제조사 매입 계산
