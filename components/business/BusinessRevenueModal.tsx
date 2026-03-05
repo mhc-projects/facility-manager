@@ -1104,30 +1104,48 @@ export default function BusinessRevenueModal({
               </div>
             </div>
 
-            {/* 추가공사비 및 협의사항 */}
-            {(business.additional_cost || business.negotiation) ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
-                <h5 className="text-xs md:text-xs md:text-sm font-semibold text-gray-800 mb-2 md:mb-3">매출 조정 내역</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Number(business.additional_cost || 0) > 0 ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs md:text-sm text-gray-600">추가공사비 (+):</span>
-                      <span className="text-xs md:text-sm font-semibold text-green-700">
-                        +{formatCurrency(business.additional_cost)}
-                      </span>
-                    </div>
-                  ) : null}
-                  {Number(business.negotiation || 0) > 0 ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs md:text-sm text-gray-600">협의사항/네고 (-):</span>
-                      <span className="text-xs md:text-sm font-semibold text-red-700">
-                        -{formatCurrency(business.negotiation)}
-                      </span>
-                    </div>
-                  ) : null}
+            {/* 추가공사비, 협의사항, 매출비용 조정 */}
+            {(() => {
+              const adjRaw = (business as any).revenue_adjustments;
+              const adjArr: Array<{ reason: string; amount: number }> = adjRaw
+                ? (typeof adjRaw === 'string' ? (() => { try { return JSON.parse(adjRaw); } catch { return []; } })() : adjRaw)
+                : [];
+              const hasAdj = Array.isArray(adjArr) && adjArr.length > 0;
+              if (!business.additional_cost && !business.negotiation && !hasAdj) return null;
+              return (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
+                  <h5 className="text-xs md:text-xs md:text-sm font-semibold text-gray-800 mb-2 md:mb-3">매출 조정 내역</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Number(business.additional_cost || 0) > 0 ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs md:text-sm text-gray-600">추가공사비 (+):</span>
+                        <span className="text-xs md:text-sm font-semibold text-green-700">
+                          +{formatCurrency(business.additional_cost)}
+                        </span>
+                      </div>
+                    ) : null}
+                    {Number(business.negotiation || 0) > 0 ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs md:text-sm text-gray-600">협의사항/네고 (-):</span>
+                        <span className="text-xs md:text-sm font-semibold text-red-700">
+                          -{formatCurrency(business.negotiation)}
+                        </span>
+                      </div>
+                    ) : null}
+                    {hasAdj && adjArr.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between">
+                        <span className="text-xs md:text-sm text-gray-600">
+                          매출비용 조정 ({item.reason || '사유 없음'}):
+                        </span>
+                        <span className={`text-xs md:text-sm font-semibold ${item.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(Math.round(item.amount * 1.1)))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              );
+            })()}
 
             {/* 매출 계산식 */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4">
@@ -1138,7 +1156,14 @@ export default function BusinessRevenueModal({
                   <span className="font-mono">{formatCurrency(
                     Number(displayData.total_revenue) -
                     Number(business.additional_cost || 0) +
-                    Number(business.negotiation || 0)
+                    Number(business.negotiation || 0) -
+                    (() => {
+                      const adj = (business as any).revenue_adjustments;
+                      if (!adj) return 0;
+                      const arr = typeof adj === 'string' ? (() => { try { return JSON.parse(adj); } catch { return []; } })() : adj;
+                      if (!Array.isArray(arr)) return 0;
+                      return Math.round(arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0) * 1.1);
+                    })()
                   )}</span>
                 </div>
                 {Number(business.additional_cost || 0) > 0 ? (
