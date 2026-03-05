@@ -827,7 +827,8 @@ export default function BusinessRevenueModal({
     installation_costs: Math.round(Number(calculatedData.installation_costs) || 0),
     net_profit: Math.round(Number(calculatedData.net_profit) || 0),
     additional_installation_revenue: Math.round(Number(calculatedData.installation_extra_cost) || 0),
-    survey_fee_adjustment: calculatedData.survey_fee_adjustment ?? business.survey_fee_adjustment
+    survey_fee_adjustment: calculatedData.survey_fee_adjustment ?? business.survey_fee_adjustment,
+    base_revenue: Math.round(Number(calculatedData.base_revenue) || 0),
   } : {
     total_revenue: Math.round(Number(business.total_revenue) || 0),
     total_cost: Math.round(Number(business.total_cost) || 0),
@@ -1156,9 +1157,11 @@ export default function BusinessRevenueModal({
                 <div className="flex items-center justify-between border-b border-blue-200 pb-2">
                   <span>기본 매출 (기기 합계)</span>
                   <span className="font-mono">{formatCurrency(
-                    Number(displayData.total_revenue) -
-                    Number(business.additional_cost || 0) +
-                    Number(business.negotiation || 0)
+                    calculatedData?.base_revenue != null
+                      ? Number(calculatedData.base_revenue)
+                      : Number(displayData.total_revenue) -
+                        Number(business.additional_cost || 0) +
+                        Number(business.negotiation || 0)
                   )}</span>
                 </div>
                 {Number(business.additional_cost || 0) > 0 ? (
@@ -1187,16 +1190,7 @@ export default function BusinessRevenueModal({
                 })()}
                 <div className="flex items-center justify-between border-t-2 border-blue-300 pt-2 font-bold text-blue-900">
                   <span>= 최종 매출금액</span>
-                  <span className="font-mono text-lg">{formatCurrency(
-                    Number(displayData.total_revenue) +
-                    (() => {
-                      const adj = (business as any).revenue_adjustments;
-                      if (!adj) return 0;
-                      const arr = typeof adj === 'string' ? (() => { try { return JSON.parse(adj); } catch { return []; } })() : adj;
-                      if (!Array.isArray(arr)) return 0;
-                      return arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
-                    })()
-                  )}</span>
+                  <span className="font-mono text-lg">{formatCurrency(Number(displayData.total_revenue))}</span>
                 </div>
               </div>
             </div>

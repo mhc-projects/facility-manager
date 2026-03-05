@@ -592,6 +592,18 @@ export interface CalculatedData {
   has_calculation: boolean;
   equipment_breakdown?: EquipmentBreakdownItem[];
 
+  // 기본 매출 (기기 합계만, 추가공사비/협의사항/매출비용조정 제외)
+  base_revenue?: number;
+
+  // 추가설치비
+  installation_extra_cost?: number;
+
+  // AS 비용
+  as_cost?: number;
+
+  // 커스텀 추가비용
+  custom_additional_costs?: any;
+
   // 영업비용 조정 관련 (신규)
   operating_cost_adjustment?: OperatingCostAdjustment | null;
   adjusted_sales_commission?: number;

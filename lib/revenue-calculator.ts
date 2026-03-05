@@ -161,6 +161,23 @@ export function calculateBusinessRevenue(
     : 0;
   businessRevenue += additionalCost - negotiationDiscount;
 
+  // 영업비용 계산 기준: 기기합계 - 협의사항 (추가공사비, 매출비용조정 제외) — API와 동일
+  const commissionBaseRevenue = businessRevenue - additionalCost;
+
+  // 매출비용 조정 반영 (revenue_adjustments JSONB 배열)
+  const revenueAdjustmentTotal = (() => {
+    const raw = (business as any).revenue_adjustments;
+    if (!raw) return 0;
+    try {
+      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!Array.isArray(arr)) return 0;
+      return arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
+    } catch {
+      return 0;
+    }
+  })();
+  businessRevenue += revenueAdjustmentTotal;
+
   // 영업비용 계산
   const salesOffice = business.sales_office || '기본';
   const commissionSettings = salesOfficeSettings[salesOffice] || {
@@ -171,7 +188,7 @@ export function calculateBusinessRevenue(
 
   let salesCommission = 0;
   if (commissionSettings.commission_type === 'percentage') {
-    salesCommission = businessRevenue * (commissionSettings.commission_percentage / 100);
+    salesCommission = commissionBaseRevenue * (commissionSettings.commission_percentage / 100);
   } else {
     salesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
   }
