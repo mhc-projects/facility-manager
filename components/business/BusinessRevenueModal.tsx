@@ -1161,7 +1161,7 @@ export default function BusinessRevenueModal({
                   return arr.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between" style={{ color: item.amount >= 0 ? '#15803d' : '#b91c1c' }}>
                       <span>{item.amount >= 0 ? '+' : '-'} 매출비용 조정 ({item.reason || '사유 없음'})</span>
-                      <span className="font-mono">{item.amount >= 0 ? '+' : ''}{formatCurrency(Math.round(item.amount * 1.1))}</span>
+                      <span className="font-mono">{item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(Math.round(item.amount * 1.1)))}</span>
                     </div>
                   ));
                 })()}

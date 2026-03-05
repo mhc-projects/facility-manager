@@ -148,6 +148,8 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     payment_scheduled_date: business.payment_scheduled_date || null,
     // 추가공사비
     additional_cost: business.additional_cost || null,
+    // 매출비용 조정
+    revenue_adjustments: business.revenue_adjustments ?? null,
   };
 }
 

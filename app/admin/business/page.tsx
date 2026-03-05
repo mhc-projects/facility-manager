@@ -3110,7 +3110,7 @@ function BusinessManagementPage() {
         const raw = freshData.revenue_adjustments;
         if (!raw) return [];
         const arr = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw as string); } catch { return []; } })();
-        return (arr as Array<{ reason: string; amount: number }>).map(a => a.amount !== 0 ? String(a.amount) : '');
+        return (arr as Array<{ reason: string; amount: number }>).map(a => a.amount !== 0 ? Number(a.amount).toLocaleString() : '');
       })();
       setAdjAmountInputs(initAdj);
 
