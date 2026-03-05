@@ -112,6 +112,7 @@ export default function CalendarModal({
     return `${year}-${month}-${day}`;
   };
 
+
   // 모달이 열릴 때 기존 데이터 로드
   useEffect(() => {
     if (isOpen) {
@@ -656,10 +657,10 @@ export default function CalendarModal({
                   <span className="flex items-center gap-1.5 px-3 py-1.5 bg-white/80 rounded-lg border border-purple-100">
                     <CalendarIcon className="w-4 h-4 text-purple-600" />
                     <span className="font-medium text-gray-700">
-                      {new Date(event.event_date).toLocaleDateString('ko-KR')}
+                      {event.event_date.substring(0, 10).replace(/-/g, '').replace(/(\d{4})(\d{2})(\d{2})/, '$1년 $2월 $3일')}
                       {event.start_time && <> {event.start_time}</>}
                       {event.end_date && event.end_date !== event.event_date && (
-                        <> ~ {new Date(event.end_date).toLocaleDateString('ko-KR')}</>
+                        <> ~ {event.end_date.substring(0, 10).replace(/-/g, '').replace(/(\d{4})(\d{2})(\d{2})/, '$1년 $2월 $3일')}</>
                       )}
                       {event.end_time && <> {event.end_time}</>}
                     </span>

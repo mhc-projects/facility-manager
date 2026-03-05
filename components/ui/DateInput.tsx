@@ -19,8 +19,15 @@ export default function DateInput({ value, onChange, className = '', placeholder
   const monthRef = useRef<HTMLInputElement>(null)
   const dayRef = useRef<HTMLInputElement>(null)
 
-  // value prop이 변경되면 내부 상태 업데이트
+  // 내부 편집 중 외부 value 변경으로 인한 리셋 방지
+  const isInternalChange = useRef(false)
+
+  // value prop이 변경되면 내부 상태 업데이트 (외부 변경일 때만)
   useEffect(() => {
+    if (isInternalChange.current) {
+      isInternalChange.current = false
+      return
+    }
     if (value) {
       // ISO 8601 datetime 형식(YYYY-MM-DDTHH:mm:ss.sssZ)에서 날짜 부분만 추출
       const dateOnly = value.includes('T') ? value.split('T')[0] : value
@@ -37,81 +44,58 @@ export default function DateInput({ value, onChange, className = '', placeholder
     }
   }, [value])
 
-  // 날짜 조합하여 onChange 호출
+  // 날짜 조합하여 onChange 호출 (모든 필드가 완전할 때만)
   const updateDate = (newYear: string, newMonth: string, newDay: string) => {
-    // ✅ 모든 필드가 완전히 입력된 경우에만 포맷팅 적용
     if (newYear.length === 4 && newMonth.length === 2 && newDay.length === 2) {
-      const formattedMonth = newMonth.padStart(2, '0')
-      const formattedDay = newDay.padStart(2, '0')
-      onChange(`${newYear}-${formattedMonth}-${formattedDay}`)
+      isInternalChange.current = true
+      onChange(`${newYear}-${newMonth}-${newDay}`)
     } else if (!newYear && !newMonth && !newDay) {
-      onChange('')
-    } else {
-      // ✅ 입력 중에는 빈 값으로 유지하여 부분 입력 허용
+      isInternalChange.current = true
       onChange('')
     }
+    // 편집 중(부분 입력)에는 onChange 호출하지 않음 → 기존 value 유지
   }
 
   const handleYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-    setYear(value)
-
-    // 4자리 입력되면 월로 자동 이동 (지연 시간 추가)
-    if (value.length === 4) {
+    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+    setYear(val)
+    if (val.length === 4) {
       setTimeout(() => monthRef.current?.focus(), 10)
     }
-
-    updateDate(value, month, day)
+    updateDate(val, month, day)
   }
 
   const handleMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
-    setMonth(rawValue)
-
-    // 유효한 2자리 월이 입력되면 일로 자동 이동 (01-12만 허용)
-    if (rawValue.length === 2) {
-      const monthNum = parseInt(rawValue, 10)
+    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
+    setMonth(val)
+    if (val.length === 2) {
+      const monthNum = parseInt(val, 10)
       if (monthNum >= 1 && monthNum <= 12) {
-        // 입력이 완전히 처리된 후 포커스 이동 (지연 시간 증가)
         setTimeout(() => dayRef.current?.focus(), 10)
       }
     }
-
-    updateDate(year, rawValue, day)
+    updateDate(year, val, day)
   }
 
   const handleDayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
-    setDay(rawValue)
-
-    // 유효한 2자리 일 검증 (01-31 허용)
-    // 일 필드는 마지막 필드이므로 auto-focus는 없지만, 검증은 수행
-    if (rawValue.length === 2) {
-      const dayNum = parseInt(rawValue, 10)
-      if (dayNum < 1 || dayNum > 31) {
-        // 유효하지 않은 일자는 무시 (선택적 - 필요시 추가)
-        console.warn(`Invalid day value: ${rawValue}`)
-      }
-    }
-
-    updateDate(year, month, rawValue)
+    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
+    setDay(val)
+    updateDate(year, month, val)
   }
 
   const handleYearKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && year.length === 0 && monthRef.current) {
-      // 연도 필드가 비어있으면 이전 동작 없음
-    }
+    // 연도 필드가 비어있을 때 Backspace → 아무 동작 없음
   }
 
   const handleMonthKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && month.length === 0 && yearRef.current) {
-      yearRef.current.focus()
+    if (e.key === 'Backspace' && month.length === 0) {
+      yearRef.current?.focus()
     }
   }
 
   const handleDayKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && day.length === 0 && monthRef.current) {
-      monthRef.current.focus()
+    if (e.key === 'Backspace' && day.length === 0) {
+      monthRef.current?.focus()
     }
   }
 

@@ -52,10 +52,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: routeParams }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = routeParams;
     const body = await request.json();
 
     const { title, description, event_date, end_date, start_time, end_time, event_type, is_completed, attached_files, labels, business_id, business_name } = body;
@@ -125,8 +125,8 @@ export async function PUT(
       paramIndex++;
     }
     if (attached_files !== undefined) {
-      updateFields.push(`attached_files = $${paramIndex}`);
-      params.push(attached_files);  // JavaScript 배열 그대로 전달
+      updateFields.push(`attached_files = $${paramIndex}::jsonb`);
+      params.push(JSON.stringify(attached_files));
       paramIndex++;
     }
     if (labels !== undefined) {
