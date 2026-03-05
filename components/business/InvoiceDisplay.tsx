@@ -9,6 +9,7 @@ interface InvoiceDisplayProps {
   businessId: string;
   businessCategory: string;  // 모든 진행구분 허용
   additionalCost?: number;
+  onReceivablesLoaded?: (receivables: number) => void;
 }
 
 // 진행구분을 보조금/자비로 매핑하는 헬퍼 함수
@@ -27,6 +28,7 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   businessId,
   businessCategory,
   additionalCost = 0,
+  onReceivablesLoaded,
 }) => {
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,8 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
 
       if (result.success) {
         setInvoiceData(result.data);
+        const receivables = result.data?.grand_total_receivables ?? result.data?.total_receivables ?? 0;
+        onReceivablesLoaded?.(receivables);
       }
     } catch (error) {
       console.error('❌ [InvoiceDisplay] Error loading invoice data:', error);

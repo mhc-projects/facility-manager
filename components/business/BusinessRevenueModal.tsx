@@ -15,13 +15,15 @@ interface BusinessRevenueModalProps {
   isOpen: boolean;
   onClose: (dataChanged?: boolean) => void;
   userPermission: number;
+  onReceivablesUpdate?: (businessId: string, receivables: number) => void;
 }
 
 export default function BusinessRevenueModal({
   business,
   isOpen,
   onClose,
-  userPermission
+  userPermission,
+  onReceivablesUpdate,
 }: BusinessRevenueModalProps) {
   const router = useRouter();
   const { createCostChangeLog } = useCostChangeLogger(business?.id || '');
@@ -1819,6 +1821,7 @@ export default function BusinessRevenueModal({
                 businessId={business.id}
                 businessCategory={business.progress_status || business.category}
                 additionalCost={business.additional_cost}
+                onReceivablesLoaded={(receivables) => onReceivablesUpdate?.(business.id, receivables)}
               />
             </div>
           )}

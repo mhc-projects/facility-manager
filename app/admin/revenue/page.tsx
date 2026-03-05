@@ -438,10 +438,12 @@ function RevenueDashboard() {
   };
 
   // 🚀 SessionStorage 캐싱 유틸리티
+  // 캐시 버전: revenue_adjustments 포함된 데이터 구조 (변경 시 자동 무효화)
+  const CACHE_VERSION = 'v3_adj';
   const CACHE_KEYS = {
-    PRICING: 'revenue_pricing_cache',
-    BUSINESSES: 'revenue_businesses_cache',
-    CALCULATIONS: 'revenue_calculations_cache',
+    PRICING: `revenue_pricing_cache_${CACHE_VERSION}`,
+    BUSINESSES: `revenue_businesses_cache_${CACHE_VERSION}`,
+    CALCULATIONS: `revenue_calculations_cache_${CACHE_VERSION}`,
   };
   const CACHE_DURATION = 5 * 60 * 1000; // 5분
 
@@ -1403,12 +1405,15 @@ function RevenueDashboard() {
       const sum = arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
       return Math.round(sum * 1.1);
     })();
-    const totalReceivables = calculateReceivables({
-      installationDate: (business as any).installation_date,
-      totalRevenueWithTax,
-      totalPayments: sumAllPayments(business as any),
-      revenueAdjustments: revenueAdjustmentTotal,
-    });
+    // API에서 이미 계산된 미수금이 있으면 우선 사용 (revenue_adjustments 포함한 정확한 값)
+    const totalReceivables = (business as any)._api_receivables !== undefined
+      ? (business as any)._api_receivables
+      : calculateReceivables({
+          installationDate: (business as any).installation_date,
+          totalRevenueWithTax,
+          totalPayments: sumAllPayments(business as any),
+          revenueAdjustments: revenueAdjustmentTotal,
+        });
 
       return {
         ...business,
@@ -2515,7 +2520,8 @@ function RevenueDashboard() {
 
             // ✅ 데이터가 실제로 변경된 경우에만 재조회
             if (dataChanged) {
-              console.log('🔄 [MODAL-CLOSE] 데이터 변경 감지 → 재조회 시작...');
+              console.log('🔄 [MODAL-CLOSE] 데이터 변경 감지 → 캐시 무효화 후 재조회 시작...');
+              clearCache();
               await Promise.all([
                 loadBusinesses(),
                 loadCalculations()
@@ -2524,6 +2530,14 @@ function RevenueDashboard() {
             } else {
               console.log('✅ [MODAL-CLOSE] 데이터 변경 없음 → 재조회 생략');
             }
+          }}
+          onReceivablesUpdate={(businessId, receivables) => {
+            // 모달의 business-invoices API로 계산된 정확한 미수금을 테이블에 즉시 반영
+            // _api_receivables를 설정해 useMemo 재계산 시 이 값이 우선 사용되도록 함
+            setBusinesses(prev =>
+              prev.map(b => b.id === businessId ? { ...b, _api_receivables: receivables } : b)
+            );
+            CacheManager.updateBusinessField(businessId, '_api_receivables', receivables);
           }}
           userPermission={userPermission}
         />
