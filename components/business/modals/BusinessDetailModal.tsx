@@ -664,6 +664,26 @@ export default function BusinessDetailModal({
                       </div>
                     </div>
 
+                    {/* 메모 추가 폼 - 메모/업무 유무와 관계없이 isAddingMemo 시 항상 표시 */}
+                    {isAddingMemo && !editingMemo && (
+                      <div ref={memoFormRef} className="bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+                        <div className="flex items-center text-xs sm:text-sm text-indigo-600 mb-2">
+                          <MessageSquarePlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                          새 메모 추가
+                        </div>
+                        <MemoEditForm
+                          mode="create"
+                          memoForm={memoForm}
+                          setMemoForm={setMemoForm}
+                          onSave={handleAddMemo}
+                          onCancel={() => {
+                            setIsAddingMemo(false)
+                            setMemoForm({ title: '', content: '' })
+                          }}
+                        />
+                      </div>
+                    )}
+
                     {/* 메모 및 업무 통합 섹션 (최신순 정렬) */}
                     {(businessMemos.length > 0 || businessTasks.length > 0) && (
                       <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm">
@@ -671,26 +691,6 @@ export default function BusinessDetailModal({
                           <MessageSquare className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-indigo-500" />
                           메모 및 업무 ({getIntegratedItems().length}개)
                         </div>
-
-                        {/* 메모 추가 폼 - 최상단 배치 */}
-                        {isAddingMemo && !editingMemo && (
-                          <div ref={memoFormRef} className="mb-3 sm:mb-4">
-                            <div className="flex items-center text-xs sm:text-sm text-indigo-600 mb-2">
-                              <MessageSquarePlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                              새 메모 추가
-                            </div>
-                            <MemoEditForm
-                              mode="create"
-                              memoForm={memoForm}
-                              setMemoForm={setMemoForm}
-                              onSave={handleAddMemo}
-                              onCancel={() => {
-                                setIsAddingMemo(false)
-                                setMemoForm({ title: '', content: '' })
-                              }}
-                            />
-                          </div>
-                        )}
 
                         {/* 스크롤 가능한 컨테이너 추가 - 최대 높이 제한으로 내용이 많아져도 스크롤 가능 */}
                         <div className="space-y-2 sm:space-y-3 max-h-[640px] sm:max-h-[768px] md:max-h-[800px] overflow-y-auto pr-1 sm:pr-2" style={{scrollbarWidth: 'thin'}}>

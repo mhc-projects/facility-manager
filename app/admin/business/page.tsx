@@ -2845,7 +2845,11 @@ function BusinessManagementPage() {
       // 기본 데이터로 먼저 모달 열기
       setSelectedBusiness(business)
       setIsDetailModalOpen(true)
-      
+      // 메모 추가 상태 초기화 (이전 사업장에서 열려있을 수 있음)
+      setIsAddingMemo(false)
+      setEditingMemo(null)
+      setMemoForm({ title: '', content: '' })
+
       // 대기필증 데이터 로딩
       if (business.id) {
         loadAirPermitData(business.id)
@@ -2900,7 +2904,10 @@ function BusinessManagementPage() {
       // 기본 데이터라도 표시
       setSelectedBusiness(business)
       setIsDetailModalOpen(true)
-      
+      setIsAddingMemo(false)
+      setEditingMemo(null)
+      setMemoForm({ title: '', content: '' })
+
       // 대기필증 데이터 로딩
       if (business.id) {
         loadAirPermitData(business.id)
@@ -5508,7 +5515,7 @@ function BusinessManagementPage() {
                       <AutocompleteInput
                         value={formData.sales_office || ''}
                         onChange={(value) => setFormData({...formData, sales_office: value})}
-                        options={salesOfficeList}
+                        options={[...new Set([...salesOfficeList, ...filterOptions.offices])].sort()}
                         placeholder="영업점 선택 또는 입력"
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                         disabled={salesOfficeLoading}
