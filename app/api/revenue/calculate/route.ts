@@ -39,7 +39,7 @@ interface RevenueCalculationResult {
   sales_office: string;
   calculation_date: string;
   base_revenue: number;  // 기본 매출 (기기 합계, 조정 전)
-  total_revenue: number;  // 최종 매출 (기본 매출 + 추가공사비 - 협의사항)
+  total_revenue: number;  // 최종 매출 (기본 매출 + 추가공사비 - 협의사항 + 매출비용 조정)
   total_cost: number;
   installation_extra_cost: number;  // 추가설치비 (설치팀 요청 추가 비용)
   gross_profit: number;
@@ -505,11 +505,24 @@ export async function POST(request: NextRequest) {
     const additionalCost = Math.round(Number(businessInfo.additional_cost) || 0); // 추가공사비 (매출에 더하기)
     const negotiationDiscount = Math.round(businessInfo.negotiation ? parseFloat(businessInfo.negotiation) || 0 : 0); // 협의사항 (매출에서 빼기)
 
+    // 8-1. 매출비용 조정 합계 계산 (revenue_adjustments JSONB 배열)
+    const revenueAdjustmentTotal = (() => {
+      const raw = businessInfo.revenue_adjustments;
+      if (!raw) return 0;
+      try {
+        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!Array.isArray(arr)) return 0;
+        return Math.round(arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0));
+      } catch {
+        return 0;
+      }
+    })();
+
     // 영업비용 계산 기준: 기본 매출 - 협의사항 (추가공사비 제외)
     const commissionBaseRevenue = totalRevenue - negotiationDiscount;
 
-    // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항
-    const adjustedRevenue = totalRevenue + additionalCost - negotiationDiscount;
+    // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항 + 매출비용 조정
+    const adjustedRevenue = totalRevenue + additionalCost - negotiationDiscount + revenueAdjustmentTotal;
 
     const installationExtraCost = Number(businessInfo.installation_extra_cost) || 0;
 
@@ -577,6 +590,10 @@ export async function POST(request: NextRequest) {
 
     console.log('📊 [REVENUE-API] 순이익 계산:', {
       business_id,
+      baseRevenue: equipmentBreakdown.reduce((s, i) => s + i.total_revenue, 0),
+      additionalCost,
+      negotiationDiscount,
+      revenueAdjustmentTotal,
       adjustedRevenue,
       totalCost,
       grossProfit,
@@ -598,7 +615,7 @@ export async function POST(request: NextRequest) {
       sales_office: salesOffice,
       calculation_date: calcDate,
       base_revenue: baseRevenue, // 기본 매출 (기기 합계만, 조정 전)
-      total_revenue: adjustedRevenue, // 최종 매출 (기본 + 추가공사비 - 협의사항)
+      total_revenue: adjustedRevenue, // 최종 매출 (기본 + 추가공사비 - 협의사항 + 매출비용 조정)
       total_cost: totalCost,
       installation_extra_cost: installationExtraCost,  // 추가설치비
       gross_profit: grossProfit,
