@@ -149,6 +149,8 @@ interface UnifiedBusinessInfo {
     }
     last_updated?: string
   } | null
+  representatives?: Array<{ name: string; birth_date: string | null }> | null
+  contacts_list?: Array<{ name: string; position: string; phone: string; email: string }> | null
   additional_info?: Record<string, any>
   is_active: boolean
   is_deleted: boolean
@@ -508,39 +510,71 @@ export default function BusinessDetailModal({
                     <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">담당자 정보</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
-                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
-                      <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
-                        <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-green-500 flex-shrink-0" />
-                        담당자명
+                  {/* 대표자 목록 */}
+                  {(() => {
+                    const reps = business.representatives?.length
+                      ? business.representatives
+                      : business.representative_name
+                        ? [{ name: business.representative_name, birth_date: business.representative_birth_date || null }]
+                        : [];
+                    if (reps.length === 0) return null;
+                    return (
+                      <div className="mb-3">
+                        <div className="text-[10px] sm:text-xs text-gray-500 font-medium mb-1.5">대표자</div>
+                        <div className="flex flex-wrap gap-2">
+                          {reps.map((rep, i) => (
+                            <div key={i} className="bg-white rounded-md p-2 sm:p-3 shadow-sm flex items-center gap-2">
+                              <User className="w-3 h-3 text-green-500 shrink-0" />
+                              <span className="text-xs sm:text-sm font-medium text-gray-900">{rep.name}</span>
+                              {rep.birth_date && <span className="text-[10px] text-gray-500">{rep.birth_date}</span>}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">
-                        {business.담당자명 || '-'}
-                      </div>
-                    </div>
+                    );
+                  })()}
 
-                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
-                      <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
-                        <Briefcase className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-blue-500 flex-shrink-0" />
-                        직급
+                  {/* 담당자 목록 */}
+                  {(() => {
+                    const contacts = business.contacts_list?.length
+                      ? business.contacts_list
+                      : business.담당자명
+                        ? [{ name: business.담당자명, position: business.담당자직급 || '', phone: business.담당자연락처 || '', email: business.email || '' }]
+                        : [];
+                    return (
+                      <div className="mb-3">
+                        {contacts.length > 0 && (
+                          <>
+                            <div className="text-[10px] sm:text-xs text-gray-500 font-medium mb-1.5">담당자</div>
+                            <div className="space-y-1.5">
+                              {contacts.map((c, i) => (
+                                <div key={i} className="bg-white rounded-md p-2 sm:p-3 shadow-sm">
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <span className="text-xs sm:text-sm font-medium text-gray-900">{c.name}</span>
+                                    {c.position && <span className="text-[10px] text-gray-500">({c.position})</span>}
+                                    {c.phone && (
+                                      <span className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-600">
+                                        <Phone className="w-3 h-3 text-green-500" />{c.phone}
+                                      </span>
+                                    )}
+                                    {c.email && (
+                                      <span className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-600">
+                                        <Mail className="w-3 h-3 text-red-400" />{c.email}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">
-                        {business.담당자직급 || '-'}
-                      </div>
-                    </div>
+                    );
+                  })()}
 
-                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
-                      <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
-                        <Phone className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-green-500 flex-shrink-0" />
-                        <span className="hidden sm:inline">담당자 연락처</span>
-                        <span className="sm:hidden">담당자전화</span>
-                      </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">
-                        {business.담당자연락처 || '-'}
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                  {/* 사업장 연락처 / 팩스 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 pt-2 border-t border-green-100">
+                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 shadow-sm">
                       <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
                         <Phone className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-blue-500 flex-shrink-0" />
                         <span className="hidden sm:inline">사업장 연락처</span>
@@ -549,32 +583,13 @@ export default function BusinessDetailModal({
                       <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{business.사업장연락처 || '-'}</div>
                     </div>
 
-                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 shadow-sm">
                       <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
                         <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-gray-500 flex-shrink-0" />
                         팩스번호
                       </div>
                       <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{business.fax_number || '-'}</div>
                     </div>
-
-                    <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
-                      <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
-                        <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-red-500 flex-shrink-0" />
-                        이메일
-                      </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-all">{business.email || '-'}</div>
-                    </div>
-
-                    {business.representative_birth_date && (
-                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
-                        <div className="flex items-center text-[10px] sm:text-xs md:text-sm text-gray-600 mb-1">
-                          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-purple-500 flex-shrink-0" />
-                          <span className="hidden sm:inline">대표자생년월일</span>
-                          <span className="sm:hidden">대표자생일</span>
-                        </div>
-                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{business.representative_birth_date}</div>
-                      </div>
-                    )}
                   </div>
                 </div>
 

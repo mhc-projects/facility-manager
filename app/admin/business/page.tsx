@@ -37,6 +37,18 @@ interface Contact {
   role: string;
 }
 
+interface Representative {
+  name: string;
+  birth_date: string | null;
+}
+
+interface ContactPerson {
+  name: string;
+  position: string;
+  phone: string;
+  email: string;
+}
+
 interface FacilitySummary {
   discharge_count: number;
   prevention_count: number;
@@ -216,6 +228,8 @@ interface UnifiedBusinessInfo {
     last_updated?: string;
   } | null;
   
+  representatives?: Representative[] | null;
+  contacts_list?: ContactPerson[] | null;
   additional_info?: Record<string, any>;
   is_active: boolean;
   is_deleted: boolean;
@@ -2907,6 +2921,8 @@ function BusinessManagementPage() {
       address: '',
       representative_name: '',
       business_registration_number: '',
+      representatives: [{ name: '', birth_date: null }],
+      contacts_list: [],
       manager_name: '',
       manager_position: '',
       manager_contact: '',
@@ -3049,6 +3065,23 @@ function BusinessManagementPage() {
         })() as Array<{ reason: string; amount: number }>,
 
         contacts: freshData.contacts || [],
+
+        // 다중 대표자/담당자 (JSONB 배열, 단일 필드에서 폴백)
+        representatives: (() => {
+          const list = freshData.representatives;
+          if (Array.isArray(list) && list.length > 0) return list;
+          return freshData.representative_name
+            ? [{ name: freshData.representative_name, birth_date: freshData.representative_birth_date || null }]
+            : [{ name: '', birth_date: null }];
+        })(),
+        contacts_list: (() => {
+          const list = freshData.contacts_list;
+          if (Array.isArray(list) && list.length > 0) return list;
+          return freshData.manager_name
+            ? [{ name: freshData.manager_name, position: freshData.manager_position || '', phone: freshData.manager_contact || '', email: freshData.email || '' }]
+            : [];
+        })(),
+
         manufacturer: freshData.manufacturer || '',
         vpn: freshData.vpn || '',
         is_active: freshData.is_active,
@@ -3650,6 +3683,24 @@ function BusinessManagementPage() {
       
       // 담당자 정보는 개별 필드로 직접 사용
       let processedFormData = { ...finalFormData };
+
+      // 다중 대표자/담당자 — 빈 항목 제거
+      const representatives = (processedFormData.representatives || []).filter((r: Representative) => r.name.trim());
+      const contacts_list = (processedFormData.contacts_list || []).filter((c: ContactPerson) => c.name.trim());
+      processedFormData.representatives = representatives;
+      processedFormData.contacts_list = contacts_list;
+
+      // 하위 호환: 첫 번째 항목으로 단일 필드 동기화
+      if (representatives.length > 0) {
+        processedFormData.representative_name = representatives[0].name;
+        processedFormData.representative_birth_date = representatives[0].birth_date || null;
+      }
+      if (contacts_list.length > 0) {
+        processedFormData.manager_name = contacts_list[0].name;
+        processedFormData.manager_position = contacts_list[0].position || '';
+        processedFormData.manager_contact = contacts_list[0].phone || '';
+        processedFormData.email = contacts_list[0].email || '';
+      }
 
       // 날짜 필드에서 시간 정보 제거 (YYYY-MM-DDTHH:mm:ss.sssZ → YYYY-MM-DD)
       const dateFields = [
@@ -5094,16 +5145,30 @@ function BusinessManagementPage() {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">대표자명</label>
-                      <input
-                        type="text"
-                        lang="ko"
-                        inputMode="text"
-                        value={formData.representative_name || ''}
-                        onChange={(e) => setFormData({...formData, representative_name: e.target.value})}
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                      />
+                    <div className="md:col-span-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm font-medium text-gray-700">대표자</label>
+                        <button type="button"
+                          onClick={() => setFormData({...formData, representatives: [...(formData.representatives || []), {name:'', birth_date:null}]})}
+                          className="text-xs text-blue-600 hover:text-blue-800">+ 추가</button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {(formData.representatives || [{ name: '', birth_date: null }]).map((rep: Representative, i: number) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <input type="text" lang="ko" inputMode="text" placeholder="대표자명"
+                              value={rep.name}
+                              onChange={e => { const next=[...(formData.representatives||[])]; next[i]={...next[i],name:e.target.value}; setFormData({...formData,representatives:next}) }}
+                              className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
+                            <DateInput value={rep.birth_date||''} className="w-32"
+                              onChange={v => { const next=[...(formData.representatives||[])]; next[i]={...next[i],birth_date:v||null}; setFormData({...formData,representatives:next}) }} />
+                            {(formData.representatives||[]).length > 1 && (
+                              <button type="button"
+                                onClick={() => setFormData({...formData, representatives: (formData.representatives||[]).filter((_:Representative, idx:number)=>idx!==i)})}
+                                className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5"/></button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     <div>
@@ -5139,48 +5204,46 @@ function BusinessManagementPage() {
                     <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">담당자 정보</h3>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3 sm:p-3 md:p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">담당자명</label>
-                      <input
-                        type="text"
-                        lang="ko"
-                        inputMode="text"
-                        value={formData.manager_name || ''}
-                        onChange={(e) => setFormData({...formData, manager_name: e.target.value})}
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="김태훈"
-                      />
+                    {/* 담당자 다중 입력 */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm font-medium text-gray-700">담당자</label>
+                        <button type="button"
+                          onClick={() => setFormData({...formData, contacts_list: [...(formData.contacts_list || []), {name:'',position:'',phone:'',email:''}]})}
+                          className="text-xs text-blue-600 hover:text-blue-800">+ 추가</button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {(formData.contacts_list || []).map((c: ContactPerson, i: number) => (
+                          <div key={i} className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                            <input type="text" lang="ko" inputMode="text" placeholder="이름"
+                              value={c.name}
+                              onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],name:e.target.value}; setFormData({...formData,contacts_list:next}) }}
+                              className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
+                            <input type="text" lang="ko" inputMode="text" placeholder="직급"
+                              value={c.position}
+                              onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],position:e.target.value}; setFormData({...formData,contacts_list:next}) }}
+                              className="w-16 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
+                            <input type="tel" placeholder="전화번호"
+                              value={c.phone}
+                              onChange={e => { const formatted=formatMobilePhone(e.target.value); const next=[...(formData.contacts_list||[])]; next[i]={...next[i],phone:formatted}; setFormData({...formData,contacts_list:next}) }}
+                              maxLength={14}
+                              className="w-32 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
+                            <input type="email" placeholder="이메일"
+                              value={c.email}
+                              onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],email:e.target.value}; setFormData({...formData,contacts_list:next}) }}
+                              className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
+                            <button type="button"
+                              onClick={() => setFormData({...formData, contacts_list: (formData.contacts_list||[]).filter((_:ContactPerson, idx:number)=>idx!==i)})}
+                              className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5"/></button>
+                          </div>
+                        ))}
+                        {(formData.contacts_list || []).length === 0 && (
+                          <p className="text-xs text-gray-400">담당자를 추가하세요</p>
+                        )}
+                      </div>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">직급</label>
-                      <input
-                        type="text"
-                        lang="ko"
-                        inputMode="text"
-                        value={formData.manager_position || ''}
-                        onChange={(e) => setFormData({...formData, manager_position: e.target.value})}
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="팀장"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">담당자 연락처</label>
-                      <input
-                        type="tel"
-                        value={formData.manager_contact || ''}
-                        onChange={(e) => {
-                          const formatted = formatMobilePhone(e.target.value)
-                          setFormData({...formData, manager_contact: formatted})
-                        }}
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="010-1234-5678"
-                        maxLength={14}
-                      />
-                    </div>
-
+                    {/* 사업장 연락처 / 팩스 (사업장 공통 정보) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 pt-3 border-t border-gray-200">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">사업장 연락처</label>
                       <input
@@ -5208,26 +5271,6 @@ function BusinessManagementPage() {
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                         placeholder="02-000-0000"
                         maxLength={14}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                      <input
-                        type="email"
-                        value={formData.email || ''}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="example@company.com"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">대표자생년월일</label>
-                      <DateInput
-                        value={formData.representative_birth_date || ''}
-                        onChange={(value) => setFormData({...formData, representative_birth_date: value})}
-                        className="w-full"
                       />
                     </div>
                     </div>

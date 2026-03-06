@@ -190,6 +190,12 @@ export async function PUT(request: NextRequest) {
     if (updateData.other_equipment || updateData.기타) {
       updateObject.other_equipment = updateData.other_equipment || updateData.기타;
     }
+    if (updateData.representatives !== undefined) {
+      updateObject.representatives = updateData.representatives;
+    }
+    if (updateData.contacts_list !== undefined) {
+      updateObject.contacts_list = updateData.contacts_list;
+    }
 
     console.log('🔄 [BUSINESS-INFO-EDIT] 업데이트할 필드들:', Object.keys(updateObject));
 

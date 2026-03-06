@@ -205,7 +205,9 @@ export async function GET(request: Request) {
       fax_number,
       email,
       business_type,
-      representative_birth_date
+      representative_birth_date,
+      representatives,
+      contacts_list
     `;
 
     // invoice_records의 계산서·입금 데이터를 우선 사용 (legacy business_info 컬럼 override)
@@ -297,6 +299,8 @@ export async function GET(request: Request) {
         bi.email,
         bi.business_type,
         bi.representative_birth_date,
+        bi.representatives,
+        bi.contacts_list,
         COALESCE(ir.ir_extra_payment_total, 0) AS ir_extra_payment_total
       FROM (
         SELECT ${selectFields}
@@ -805,8 +809,8 @@ export async function PUT(request: Request) {
 
     log('✅ [BUSINESS-INFO-DIRECT] PUT 성공:', `사업장 ${updatedBusiness.business_name} 업데이트 완료`);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: '사업장 정보가 성공적으로 수정되었습니다.',
       data: updatedBusiness
     });
