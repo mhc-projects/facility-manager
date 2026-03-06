@@ -787,12 +787,18 @@ function RevenueDashboard() {
       if (cachedBusinesses) {
         setBusinesses(cachedBusinesses);
         const cachedRiskMap: Record<string, string | null> = {};
+        const cachedManualMap: Record<string, boolean> = {};
         for (const b of cachedBusinesses) {
-          if (b.receivable_risk !== undefined) {
+          const isManual = Boolean(b.risk_is_manual);
+          cachedManualMap[b.id] = isManual;
+          if (isManual) {
             cachedRiskMap[b.id] = b.receivable_risk ?? null;
+          } else {
+            cachedRiskMap[b.id] = calcAutoRisk(b.installation_date);
           }
         }
         setRiskMap(cachedRiskMap);
+        setRiskIsManualMap(cachedManualMap);
         const endTime = performance.now();
         console.log(`⚡ [LOAD-BUSINESSES] 캐시에서 ${cachedBusinesses.length}개 로드 완료 (${(endTime - startTime).toFixed(0)}ms)`);
         return;
