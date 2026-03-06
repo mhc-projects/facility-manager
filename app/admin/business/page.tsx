@@ -5151,51 +5151,50 @@ function BusinessManagementPage() {
                       />
                     </div>
 
-                    <div className="md:col-span-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-sm font-medium text-gray-700">대표자</label>
-                        <button type="button"
-                          onClick={() => setFormData({...formData, representatives: [...(formData.representatives || []), {name:'', birth_date:null}]})}
-                          className="text-xs text-blue-600 hover:text-blue-800">+ 추가</button>
+                    <div className="md:col-span-3 flex items-start gap-4">
+                      <div className="shrink-0">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">대표자</label>
+                        <div className="space-y-1.5">
+                          {(formData.representatives || [{ name: '', birth_date: null }]).map((rep: Representative, i: number) => (
+                            <div key={i} className="flex items-center gap-1.5">
+                              <input type="text" lang="ko" inputMode="text" placeholder="대표자명"
+                                value={rep.name}
+                                onChange={e => { const next=[...(formData.representatives||[])]; next[i]={...next[i],name:e.target.value}; setFormData({...formData,representatives:next}) }}
+                                className="w-36 shrink-0 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
+                              <DateInput value={rep.birth_date||''} className="shrink-0"
+                                onChange={v => { const next=[...(formData.representatives||[])]; next[i]={...next[i],birth_date:v||null}; setFormData({...formData,representatives:next}) }} />
+                              {(formData.representatives||[]).length > 1 && (
+                                <button type="button"
+                                  onClick={() => setFormData({...formData, representatives: (formData.representatives||[]).filter((_:Representative, idx:number)=>idx!==i)})}
+                                  className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5"/></button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button"
+                            onClick={() => setFormData({...formData, representatives: [...(formData.representatives || []), {name:'', birth_date:null}]})}
+                            className="text-xs text-blue-600 hover:text-blue-800 mt-0.5">+ 추가</button>
+                        </div>
                       </div>
-                      <div className="space-y-1.5">
-                        {(formData.representatives || [{ name: '', birth_date: null }]).map((rep: Representative, i: number) => (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <input type="text" lang="ko" inputMode="text" placeholder="대표자명"
-                              value={rep.name}
-                              onChange={e => { const next=[...(formData.representatives||[])]; next[i]={...next[i],name:e.target.value}; setFormData({...formData,representatives:next}) }}
-                              className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
-                            <DateInput value={rep.birth_date||''} className="w-32"
-                              onChange={v => { const next=[...(formData.representatives||[])]; next[i]={...next[i],birth_date:v||null}; setFormData({...formData,representatives:next}) }} />
-                            {(formData.representatives||[]).length > 1 && (
-                              <button type="button"
-                                onClick={() => setFormData({...formData, representatives: (formData.representatives||[]).filter((_:Representative, idx:number)=>idx!==i)})}
-                                className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5"/></button>
-                            )}
-                          </div>
-                        ))}
+                      <div className="w-40 shrink-0">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">사업자등록번호</label>
+                        <input
+                          type="text"
+                          value={formData.business_registration_number || ''}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9]/g, '')
+                            let formatted = value
+                            if (value.length >= 3 && value.length <= 5) {
+                              formatted = `${value.slice(0, 3)}-${value.slice(3)}`
+                            } else if (value.length > 5) {
+                              formatted = `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5, 10)}`
+                            }
+                            setFormData({...formData, business_registration_number: formatted})
+                          }}
+                          className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="000-00-00000"
+                          maxLength={12}
+                        />
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">사업자등록번호</label>
-                      <input
-                        type="text"
-                        value={formData.business_registration_number || ''}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9]/g, '')
-                          let formatted = value
-                          if (value.length >= 3 && value.length <= 5) {
-                            formatted = `${value.slice(0, 3)}-${value.slice(3)}`
-                          } else if (value.length > 5) {
-                            formatted = `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5, 10)}`
-                          }
-                          setFormData({...formData, business_registration_number: formatted})
-                        }}
-                        className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="000-00-00000"
-                        maxLength={12}
-                      />
                     </div>
                     </div>
                   </div>
@@ -5220,7 +5219,7 @@ function BusinessManagementPage() {
                       </div>
                       <div className="space-y-1.5">
                         {(formData.contacts_list || []).map((c: ContactPerson, i: number) => (
-                          <div key={i} className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                          <div key={i} className="flex items-center gap-1.5">
                             <input type="text" lang="ko" inputMode="text" placeholder="이름"
                               value={c.name}
                               onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],name:e.target.value}; setFormData({...formData,contacts_list:next}) }}
