@@ -1478,6 +1478,15 @@ export default function BusinessDetailModal({
                   {(() => {
                     // progress_status(진행구분)을 우선 사용. business_category는 대기필증 종별이므로 사용하지 않음
                     const category = (business as any).progress_status || business.진행구분;
+
+                    if (!category) {
+                      return (
+                        <div className="text-center py-8 text-gray-400">
+                          <p className="text-sm">진행구분을 설정하면 계산서 및 입금 현황이 표시됩니다.</p>
+                        </div>
+                      );
+                    }
+
                     const mappedCategory = mapCategoryToInvoiceType(category);
 
                     return (
