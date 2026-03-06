@@ -201,7 +201,8 @@
       "Bash(du:*)",
       "mcp__serena__check_onboarding_performed",
       "Bash(git stash pop)",
-      "Bash(git stash drop)"
+      "Bash(git stash drop)",
+      "Bash(git stash)"
     ],
     "deny": [],
     "ask": [],
