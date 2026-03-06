@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 const BusinessRevenueModal = lazy(() => import('@/components/business/BusinessRevenueModal'))
 const BusinessUploadModal = lazy(() => import('@/components/business/modals/BusinessUploadModal'))
 const BusinessDetailModal = lazy(() => import('@/components/business/modals/BusinessDetailModal'))
+const BusinessExcelDownloadModal = lazy(() => import('@/components/business/modals/BusinessExcelDownloadModal'))
 import { useAuth } from '@/contexts/AuthContext'
 import { TokenManager } from '@/lib/api-client'
 import { getManufacturerName } from '@/constants/manufacturers'
@@ -540,6 +541,9 @@ function BusinessManagementPage() {
   // Revenue 모달 state
   const [showRevenueModal, setShowRevenueModal] = useState(false)
   const [selectedRevenueBusiness, setSelectedRevenueBusiness] = useState<UnifiedBusinessInfo | null>(null)
+
+  // 엑셀 다운로드 모달 state
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false)
 
   // 복귀 경로 상태 (Revenue → Business, Tasks → Business 네비게이션 추적)
   const [returnPath, setReturnPath] = useState<string | null>(null)
@@ -4554,7 +4558,7 @@ function BusinessManagementPage() {
             <button
               onClick={handleRestorePhotos}
               disabled={isRestoringPhotos}
-              className="hidden md:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 md:px-4 md:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm lg:text-sm disabled:opacity-50"
+              className="hidden md:flex items-center gap-1 px-2.5 py-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors font-medium text-xs disabled:opacity-50"
             >
               {isRestoringPhotos ? '복원 중...' : '사진 복원'}
             </button>
@@ -4563,18 +4567,27 @@ function BusinessManagementPage() {
           {/* 데스크탑에서는 모든 버튼 표시 */}
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="hidden md:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm lg:text-sm"
+            className="hidden md:flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-xs"
           >
-            <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+            <Upload className="w-3 h-3" />
             엑셀 업로드
+          </button>
+
+          {/* 엑셀 다운로드 */}
+          <button
+            onClick={() => setIsExcelModalOpen(true)}
+            className="hidden md:flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors font-medium text-xs"
+          >
+            <Download className="w-3 h-3" />
+            엑셀 다운로드
           </button>
 
           {/* 모바일과 데스크탑 모두에서 표시 - 핵심 액션 */}
           <button
             onClick={openAddModal}
-            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 md:px-4 md:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm lg:text-sm"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
           >
-            <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+            <Plus className="w-3 h-3" />
             <span className="sm:hidden">추가</span>
             <span className="hidden sm:inline">새 사업장 추가</span>
           </button>
@@ -6426,6 +6439,18 @@ function BusinessManagementPage() {
               setSelectedRevenueBusiness(null)
             }}
             userPermission={userPermission}
+          />
+        </Suspense>
+      )}
+
+      {/* 엑셀 다운로드 모달 */}
+      {isExcelModalOpen && (
+        <Suspense fallback={null}>
+          <BusinessExcelDownloadModal
+            isOpen={isExcelModalOpen}
+            onClose={() => setIsExcelModalOpen(false)}
+            businesses={filteredBusinesses}
+            totalCount={allBusinesses.length}
           />
         </Suspense>
       )}
