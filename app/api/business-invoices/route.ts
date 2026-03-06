@@ -316,22 +316,12 @@ export async function GET(request: NextRequest) {
       .reduce((sum, r) => sum + (r.payment_amount || 0), 0);
     allPayments += extraPayments;
 
-    // 매출비용 조정 합계 (공급가액 → 부가세 포함 변환)
-    const revenueAdjustmentTotal = (() => {
-      const adj = (business as any).revenue_adjustments;
-      if (!adj) return 0;
-      const arr = typeof adj === 'string' ? JSON.parse(adj) : adj;
-      if (!Array.isArray(arr)) return 0;
-      const sum = arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
-      return Math.round(sum * 1.1);
-    })();
 
-    // 최종 미수금 계산
+    // 최종 미수금 계산 — totalRevenueWithTax는 calculateBusinessRevenue를 통해 revenue_adjustments 포함됨
     totalReceivables = calculateReceivables({
       installationDate: business.installation_date,
       totalRevenueWithTax,
       totalPayments: allPayments,
-      revenueAdjustments: revenueAdjustmentTotal,
     });
 
     console.log('💰 [BUSINESS-INVOICES] 최종 미수금 계산:', {
@@ -350,8 +340,8 @@ export async function GET(request: NextRequest) {
         additional_cost: business.additional_cost,
         invoices: invoicesData,
         total_receivables: totalReceivables,
-        // 미수금 계산 근거 (UI 표시용)
-        total_revenue: totalRevenueWithTax + revenueAdjustmentTotal,
+        // 미수금 계산 근거 (UI 표시용) — revenue_adjustments는 calculateBusinessRevenue에 이미 포함됨
+        total_revenue: totalRevenueWithTax,
         total_payment_amount: allPayments,
         // 추가 계산서
         invoice_records: invoiceRecordsByStage,

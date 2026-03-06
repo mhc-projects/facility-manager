@@ -1395,16 +1395,8 @@ function RevenueDashboard() {
 
     // 미수금 계산: 전체 매출(부가세 포함) - 총 입금액
     // 설치일 없으면 0, 계산서 발행 여부 무관
+    // totalRevenueWithTax는 calculateBusinessRevenue를 통해 revenue_adjustments 이미 포함됨
     const totalRevenueWithTax = Math.round(calculatedData.total_revenue * 1.1);
-    // 매출비용 조정 합계 (공급가액 → 부가세 포함 변환)
-    const revenueAdjustmentTotal = (() => {
-      const adj = (business as any).revenue_adjustments;
-      if (!adj) return 0;
-      const arr = typeof adj === 'string' ? JSON.parse(adj) : adj;
-      if (!Array.isArray(arr)) return 0;
-      const sum = arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
-      return Math.round(sum * 1.1);
-    })();
     // API에서 이미 계산된 미수금이 있으면 우선 사용 (revenue_adjustments 포함한 정확한 값)
     const totalReceivables = (business as any)._api_receivables !== undefined
       ? (business as any)._api_receivables
@@ -1412,7 +1404,6 @@ function RevenueDashboard() {
           installationDate: (business as any).installation_date,
           totalRevenueWithTax,
           totalPayments: sumAllPayments(business as any),
-          revenueAdjustments: revenueAdjustmentTotal,
         });
 
       return {
