@@ -63,9 +63,14 @@ async function getUserFromToken(request: NextRequest) {
   }
 }
 
+// 전체 회의록 접근 권한을 가진 특별 허용 이메일 목록
+const FULL_ACCESS_EMAILS = ['dpf@kakao.com']
+
 /**
  * GET /api/meeting-minutes
- * 회의록 목록 조회 (필터링, 페이지네이션)
+ * 회의록 목록 조회 (참석자 기반 접근 제어 + 필터링, 페이지네이션)
+ * - permission_level >= 4 또는 FULL_ACCESS_EMAILS: 전체 조회
+ * - 그 외: 본인이 organizer, created_by, 또는 participants 인 회의록만 조회
  */
 export async function GET(request: NextRequest) {
   try {
@@ -89,86 +94,67 @@ export async function GET(request: NextRequest) {
     const organizer = searchParams.get('organizer')
     const search = searchParams.get('search')
 
-    // 기본 쿼리 시작
-    let query = supabase
-      .from('meeting_minutes')
-      .select('*', { count: 'exact' })
+    // 접근 권한 판별
+    const isFullAccess =
+      user.permission_level >= 4 ||
+      FULL_ACCESS_EMAILS.includes(user.email)
 
-    // 상태 필터 (all이 아닌 경우)
-    if (status !== 'all') {
-      query = query.eq('status', status)
-    }
-
-    // 회의 유형 필터
-    if (meeting_type) {
-      query = query.eq('meeting_type', meeting_type)
-    }
-
-    // 날짜 범위 필터
-    if (date_from) {
-      query = query.gte('meeting_date', date_from)
-    }
-    if (date_to) {
-      query = query.lte('meeting_date', date_to)
-    }
-
-    // 주관자 필터
-    if (organizer) {
-      query = query.eq('organizer_id', organizer)
-    }
-
-    // 검색 (제목 또는 내용)
-    if (search) {
-      query = query.or(`title.ilike.%${search}%,content->>summary.ilike.%${search}%`)
-    }
-
-    // 정렬 (최신순)
-    query = query.order('meeting_date', { ascending: false })
-
-    // 페이지네이션
     const offset = (page - 1) * limit
-    query = query.range(offset, offset + limit - 1)
 
-    // 실행
-    const { data: minutes, error, count } = await query
+    // RPC 함수로 참석자 기반 필터링 + 페이지네이션 실행
+    const { data: rows, error } = await supabase.rpc('get_accessible_meeting_minutes', {
+      p_user_id:        user.id,
+      p_is_full_access: isFullAccess,
+      p_status:         status !== 'all' ? status : null,
+      p_meeting_type:   meeting_type || null,
+      p_date_from:      date_from || null,
+      p_date_to:        date_to || null,
+      p_organizer:      organizer || null,
+      p_search:         search || null,
+      p_limit:          limit,
+      p_offset:         offset,
+    })
 
     if (error) {
-      console.error('[MEETING-MINUTES] Query error:', error)
+      console.error('[MEETING-MINUTES] RPC error:', error)
       return NextResponse.json(
         { success: false, error: '회의록 조회에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    // 통계 조회 (병렬 처리)
-    const [draftCount, completedCount, archivedCount, thisMonthCount] = await Promise.all([
-      supabase.from('meeting_minutes').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
-      supabase.from('meeting_minutes').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
-      supabase.from('meeting_minutes').select('*', { count: 'exact', head: true }).eq('status', 'archived'),
-      supabase
-        .from('meeting_minutes')
-        .select('*', { count: 'exact', head: true })
-        .gte('meeting_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
-    ])
+    const count = rows?.[0]?.total_count ?? 0
+    const minutes = (rows || []).map(({ total_count, ...rest }: any) => rest)
 
-    const totalPages = Math.ceil((count || 0) / limit)
+    // 통계 조회 (참석자 기반 접근 제어 적용)
+    const { data: statsRow, error: statsError } = await supabase.rpc('get_accessible_meeting_statistics', {
+      p_user_id:        user.id,
+      p_is_full_access: isFullAccess,
+    })
+
+    if (statsError) {
+      console.error('[MEETING-MINUTES] Stats RPC error:', statsError)
+    }
+
+    const stats = statsRow?.[0] ?? { total: 0, draft: 0, completed: 0, archived: 0, this_month: 0 }
+    const totalPages = Math.ceil((count as number) / limit)
 
     const response: MeetingMinutesListResponse = {
       success: true,
       data: {
-        items: minutes || [],
+        items: minutes,
         pagination: {
-          total: count || 0,
+          total: count as number,
           page,
           limit,
           totalPages
         },
         statistics: {
-          total: count || 0,
-          draft: draftCount.count || 0,
-          completed: completedCount.count || 0,
-          archived: archivedCount.count || 0,
-          thisMonth: thisMonthCount.count || 0
+          total:     stats.total     || 0,
+          draft:     stats.draft     || 0,
+          completed: stats.completed || 0,
+          archived:  stats.archived  || 0,
+          thisMonth: stats.this_month || 0
         }
       }
     }
