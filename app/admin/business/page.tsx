@@ -3857,12 +3857,17 @@ function BusinessManagementPage() {
         // 성공 메시지 표시
         alert(editingBusiness ? '사업장 정보가 수정되었습니다.' : '새 사업장이 추가되었습니다.')
 
-        // 사업장 정보(측정기기 수량 등) 변경 시 매출 관리 페이지의 캐시 무효화
+        // 사업장 정보 변경 시 매출 관리 페이지의 캐시 무효화
         // revenue 페이지는 버전 접미사 포함 키 사용 (e.g. revenue_businesses_cache_v3_adj)
         // 버전이 바뀌어도 대응하도록 패턴 매칭으로 모두 제거
         Object.keys(sessionStorage)
           .filter(k => k.startsWith('revenue_businesses_cache') || k.startsWith('revenue_calculations_cache') || k.startsWith('revenue_pricing_cache'))
           .forEach(k => sessionStorage.removeItem(k));
+
+        // 같은 탭의 매출관리 페이지에 캐시 무효화 신호 전송 (revenue_adjustments 등 모든 필드 반영)
+        window.dispatchEvent(new CustomEvent('cache-invalidate'));
+        // 다른 탭의 매출관리 페이지에도 캐시 무효화 신호 전송
+        localStorage.setItem('cache-invalidate-timestamp', Date.now().toString());
 
         // 2-1. 사업장 수정 시 자동으로 매출 재계산 (비동기 실행)
         if (editingBusiness && result.success && result.data) {

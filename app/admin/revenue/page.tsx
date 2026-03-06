@@ -256,6 +256,7 @@ function RevenueDashboard() {
 
     const COST_FIELDS = [
       'additional_cost', 'multiple_stack_cost', 'negotiation', 'multiple_stack',
+      'revenue_adjustments',
     ];
 
     const applyFieldUpdate = (businessId: string, field: string, value: any) => {
