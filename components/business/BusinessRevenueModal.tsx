@@ -15,6 +15,7 @@ interface BusinessRevenueModalProps {
   isOpen: boolean;
   onClose: (dataChanged?: boolean) => void;
   userPermission: number;
+  canDeleteAutoMemos?: boolean;
   onReceivablesUpdate?: (businessId: string, receivables: number) => void;
 }
 
@@ -23,6 +24,7 @@ export default function BusinessRevenueModal({
   isOpen,
   onClose,
   userPermission,
+  canDeleteAutoMemos = false,
   onReceivablesUpdate,
 }: BusinessRevenueModalProps) {
   const router = useRouter();
@@ -1117,30 +1119,56 @@ export default function BusinessRevenueModal({
               if (!business.additional_cost && !business.negotiation && !hasAdj) return null;
               return (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
-                  <h5 className="text-xs md:text-xs md:text-sm font-semibold text-gray-800 mb-2 md:mb-3">매출 조정 내역</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <h5 className="text-sm font-semibold text-gray-800 mb-2 md:mb-3">매출 조정 내역</h5>
+                  <div className="space-y-2">
                     {Number(business.additional_cost || 0) > 0 ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs md:text-sm text-gray-600">추가공사비 (+):</span>
-                        <span className="text-xs md:text-sm font-semibold text-green-700">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-gray-600 flex-1 min-w-0">추가공사비 (+):</span>
+                        <span className="text-sm font-semibold text-green-700 shrink-0">
                           +{formatCurrency(business.additional_cost)}
                         </span>
                       </div>
                     ) : null}
                     {Number(business.negotiation || 0) > 0 ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs md:text-sm text-gray-600">협의사항/네고 (-):</span>
-                        <span className="text-xs md:text-sm font-semibold text-red-700">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-gray-600 flex-1 min-w-0">협의사항/네고 (-):</span>
+                        <span className="text-sm font-semibold text-red-700 shrink-0">
                           -{formatCurrency(business.negotiation)}
                         </span>
                       </div>
                     ) : null}
                     {hasAdj && adjArr.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between">
-                        <span className="text-xs md:text-sm text-gray-600">
+                      <div key={idx} className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-gray-600 flex-1 min-w-0">
                           매출비용 조정 ({item.reason || '사유 없음'}):
                         </span>
-                        <span className={`text-xs md:text-sm font-semibold ${item.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        <span className={`text-sm font-semibold shrink-0 ${item.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(item.amount))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 매입비용 조정 내역 */}
+            {(() => {
+              const purchRaw = (business as any).purchase_adjustments;
+              const purchArr: Array<{ reason: string; amount: number }> = purchRaw
+                ? (typeof purchRaw === 'string' ? (() => { try { return JSON.parse(purchRaw); } catch { return []; } })() : purchRaw)
+                : [];
+              if (!Array.isArray(purchArr) || purchArr.length === 0) return null;
+              return (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 md:p-4">
+                  <h5 className="text-sm font-semibold text-gray-800 mb-2 md:mb-3">매입 조정 내역</h5>
+                  <div className="space-y-2">
+                    {purchArr.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-gray-600 flex-1 min-w-0">
+                          매입비용 조정 ({item.reason || '사유 없음'}):
+                        </span>
+                        <span className={`text-sm font-semibold shrink-0 ${item.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                           {item.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(item.amount))}
                         </span>
                       </div>
@@ -1838,6 +1866,7 @@ export default function BusinessRevenueModal({
               businessId={business.id}
               businessName={business.business_name || business.사업장명 || ''}
               userPermission={userPermission}
+              canDeleteAutoMemos={canDeleteAutoMemos}
               onRefreshReady={(refreshFn) => {
                 memoRefreshRef.current = refreshFn;
               }}

@@ -518,11 +518,27 @@ export async function POST(request: NextRequest) {
       }
     })();
 
+    // 8-2. 매입비용 조정 합계 계산 (purchase_adjustments JSONB 배열)
+    const purchaseAdjustmentTotal = (() => {
+      const raw = businessInfo.purchase_adjustments;
+      if (!raw) return 0;
+      try {
+        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!Array.isArray(arr)) return 0;
+        return Math.round(arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0));
+      } catch {
+        return 0;
+      }
+    })();
+
     // 영업비용 계산 기준: 기본 매출 - 협의사항 (추가공사비 제외)
     const commissionBaseRevenue = totalRevenue - negotiationDiscount;
 
     // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항 + 매출비용 조정
     const adjustedRevenue = totalRevenue + additionalCost - negotiationDiscount + revenueAdjustmentTotal;
+
+    // 최종 매입 = 기기별 매입 합계 + 매입비용 조정
+    totalCost = Math.round(totalCost + purchaseAdjustmentTotal);
 
     const installationExtraCost = Number(businessInfo.installation_extra_cost) || 0;
 
@@ -594,6 +610,7 @@ export async function POST(request: NextRequest) {
       additionalCost,
       negotiationDiscount,
       revenueAdjustmentTotal,
+      purchaseAdjustmentTotal,
       adjustedRevenue,
       totalCost,
       grossProfit,

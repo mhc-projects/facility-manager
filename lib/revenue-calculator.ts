@@ -217,11 +217,24 @@ export function calculateBusinessRevenue(
   // 추가설치비 (설치팀 요청 추가 비용)
   const installationExtraCost = Number(business.installation_extra_cost) || 0;
 
-  // 매출 관리와 동일한 계산 방식
-  // total_cost = 제조사 매입만 (매입금액)
-  const totalCost = Number(manufacturerCost) || 0;
+  // 매입비용 조정 반영 (purchase_adjustments JSONB 배열)
+  const purchaseAdjustmentTotal = (() => {
+    const raw = (business as any).purchase_adjustments;
+    if (!raw) return 0;
+    try {
+      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!Array.isArray(arr)) return 0;
+      return arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
+    } catch {
+      return 0;
+    }
+  })();
 
-  // 총이익 = 매출 - 제조사 매입
+  // 매출 관리와 동일한 계산 방식
+  // total_cost = 제조사 매입 + 매입비용 조정
+  const totalCost = (Number(manufacturerCost) || 0) + purchaseAdjustmentTotal;
+
+  // 총이익 = 매출 - 매입(조정 포함)
   const grossProfit = (Number(businessRevenue) || 0) - totalCost;
 
   // AS비용

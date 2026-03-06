@@ -202,6 +202,7 @@ export async function GET(request: Request) {
       as_cost,
       custom_additional_costs,
       revenue_adjustments,
+      purchase_adjustments,
       fax_number,
       email,
       business_type,
@@ -295,6 +296,7 @@ export async function GET(request: Request) {
         bi.as_cost,
         bi.custom_additional_costs,
         bi.revenue_adjustments,
+        bi.purchase_adjustments,
         bi.fax_number,
         bi.email,
         bi.business_type,
@@ -672,6 +674,28 @@ export async function PUT(request: Request) {
         updateObject.revenue_adjustments = JSON.stringify(validatedAdjustments);
       } else {
         updateObject.revenue_adjustments = '[]';
+      }
+    }
+
+    // 매입비용 조정 처리 (JSONB 배열, amount는 공급가액 기준)
+    if (updateData.purchase_adjustments !== undefined) {
+      if (Array.isArray(updateData.purchase_adjustments)) {
+        const validatedPurchaseAdjustments = updateData.purchase_adjustments
+          .filter((item: any) =>
+            item &&
+            typeof item === 'object' &&
+            typeof item.reason === 'string' &&
+            item.reason.trim() !== '' &&
+            typeof item.amount === 'number' &&
+            item.amount !== 0
+          )
+          .map((item: any) => ({
+            reason: String(item.reason).trim().slice(0, 100),
+            amount: Number(item.amount) || 0,
+          }));
+        updateObject.purchase_adjustments = JSON.stringify(validatedPurchaseAdjustments);
+      } else {
+        updateObject.purchase_adjustments = '[]';
       }
     }
 

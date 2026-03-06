@@ -135,6 +135,7 @@ interface UnifiedBusinessInfo {
   multiple_stack_cost?: number | null;
   representative_birth_date?: string | null;
   revenue_adjustments?: Array<{ reason: string; amount: number }> | string | null; // 매출비용 조정
+  purchase_adjustments?: Array<{ reason: string; amount: number }> | string | null; // 매입비용 조정
 
   // 계산서 및 입금 정보 - 보조금 사업장 (3개)
   invoice_1st_date?: string | null;
@@ -449,6 +450,7 @@ function BusinessManagementPage() {
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
   const [formData, setFormData] = useState<Partial<UnifiedBusinessInfo>>({})
   const [adjAmountInputs, setAdjAmountInputs] = useState<string[]>([])
+  const [adjPurchaseAmountInputs, setAdjPurchaseAmountInputs] = useState<string[]>([])
   const invoiceTabRef = useRef<InvoiceTabSectionHandle>(null)
   const [invoiceRefreshTrigger, setInvoiceRefreshTrigger] = useState(0)
   const [localGovSuggestions, setLocalGovSuggestions] = useState<string[]>([])
@@ -3063,6 +3065,12 @@ function BusinessManagementPage() {
           if (Array.isArray(raw)) return raw;
           try { return JSON.parse(raw); } catch { return []; }
         })() as Array<{ reason: string; amount: number }>,
+        purchase_adjustments: (() => {
+          const raw = (freshData as any).purchase_adjustments;
+          if (!raw) return [];
+          if (Array.isArray(raw)) return raw;
+          try { return JSON.parse(raw); } catch { return []; }
+        })() as Array<{ reason: string; amount: number }>,
 
         contacts: freshData.contacts || [],
 
@@ -3146,6 +3154,15 @@ function BusinessManagementPage() {
         return (arr as Array<{ reason: string; amount: number }>).map(a => a.amount !== 0 ? Number(a.amount).toLocaleString() : '');
       })();
       setAdjAmountInputs(initAdj);
+
+      // Initialize adjPurchaseAmountInputs display strings from purchase_adjustments
+      const initPurchaseAdj = (() => {
+        const raw = (freshData as any).purchase_adjustments;
+        if (!raw) return [];
+        const arr = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw as string); } catch { return []; } })();
+        return (arr as Array<{ reason: string; amount: number }>).map(a => a.amount !== 0 ? Number(a.amount).toLocaleString() : '');
+      })();
+      setAdjPurchaseAmountInputs(initPurchaseAdj);
 
       // Close detail modal BEFORE opening edit modal
       // IMPORTANT: Keep returnPath intact so edit modal can return to origin after save
@@ -6153,7 +6170,6 @@ function BusinessManagementPage() {
                                   const stripped = e.target.value.replace(/,/g, '');
                                   const isNeg = stripped.startsWith('-');
                                   const digits = stripped.replace(/^-/, '');
-                                  // Format with commas, preserve '-' prefix
                                   const formatted = digits === ''
                                     ? (isNeg ? '-' : '')
                                     : (isNeg ? '-' : '') + parseInt(digits).toLocaleString();
@@ -6173,6 +6189,102 @@ function BusinessManagementPage() {
                                   const next = adj.filter((_, i) => i !== idx);
                                   setFormData({ ...formData, revenue_adjustments: next });
                                   setAdjAmountInputs(adjAmountInputs.filter((_, i) => i !== idx));
+                                }}
+                                className="text-gray-400 hover:text-red-500 shrink-0"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          {adj.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              공급가액 합계:{' '}
+                              <span className={total >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                                {total.toLocaleString()}원
+                              </span>
+                              {' '}→ 부가세포함:{' '}
+                              <span className={total >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                                {Math.round(total * 1.1).toLocaleString()}원
+                              </span>
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* 매입비용 조정 */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">매입비용 조정</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const adj = (() => {
+                            const raw = (formData as any).purchase_adjustments;
+                            if (!raw) return [];
+                            if (Array.isArray(raw)) return raw;
+                            try { return JSON.parse(raw as string); } catch { return []; }
+                          })();
+                          setFormData({ ...formData, purchase_adjustments: [...adj, { reason: '', amount: 0 }] } as any);
+                          setAdjPurchaseAmountInputs([...adjPurchaseAmountInputs, '']);
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        + 항목 추가
+                      </button>
+                    </div>
+                    {(() => {
+                      const adj: Array<{ reason: string; amount: number }> = (() => {
+                        const raw = (formData as any).purchase_adjustments;
+                        if (!raw) return [];
+                        if (Array.isArray(raw)) return raw as Array<{ reason: string; amount: number }>;
+                        try { return JSON.parse(raw as string); } catch { return []; }
+                      })();
+                      const total = adj.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+                      return (
+                        <>
+                          {adj.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 mb-1.5">
+                              <input
+                                type="text"
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
+                                placeholder="조정 사유"
+                                value={item.reason}
+                                onChange={(e) => {
+                                  const next = [...adj];
+                                  next[idx] = { ...next[idx], reason: e.target.value };
+                                  setFormData({ ...formData, purchase_adjustments: next } as any);
+                                }}
+                              />
+                              <input
+                                type="text"
+                                className="w-28 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-1 focus:ring-blue-500"
+                                placeholder="금액 (부가세별도)"
+                                value={adjPurchaseAmountInputs[idx] ?? (item.amount !== 0 ? Number(item.amount).toLocaleString() : '')}
+                                onChange={(e) => {
+                                  const stripped = e.target.value.replace(/,/g, '');
+                                  const isNeg = stripped.startsWith('-');
+                                  const digits = stripped.replace(/^-/, '');
+                                  const formatted = digits === ''
+                                    ? (isNeg ? '-' : '')
+                                    : (isNeg ? '-' : '') + parseInt(digits).toLocaleString();
+                                  const newInputs = [...adjPurchaseAmountInputs];
+                                  while (newInputs.length <= idx) newInputs.push('');
+                                  newInputs[idx] = isNaN(parseInt(digits)) && digits !== '' ? adjPurchaseAmountInputs[idx] ?? '' : formatted;
+                                  setAdjPurchaseAmountInputs(newInputs);
+                                  const num = stripped === '' || stripped === '-' ? 0 : (parseInt(stripped) || 0);
+                                  const next = [...adj];
+                                  next[idx] = { ...next[idx], amount: num };
+                                  setFormData({ ...formData, purchase_adjustments: next } as any);
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = adj.filter((_, i) => i !== idx);
+                                  setFormData({ ...formData, purchase_adjustments: next } as any);
+                                  setAdjPurchaseAmountInputs(adjPurchaseAmountInputs.filter((_, i) => i !== idx));
                                 }}
                                 className="text-gray-400 hover:text-red-500 shrink-0"
                               >

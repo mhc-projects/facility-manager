@@ -19,9 +19,11 @@ interface MemoSectionProps {
   businessId: string;
   businessName: string;
   userPermission: number;
+  canDeleteAutoMemos?: boolean;
+  onRefreshReady?: (refreshFn: () => Promise<void>) => void;
 }
 
-export function MemoSection({ businessId, businessName, userPermission }: MemoSectionProps) {
+export function MemoSection({ businessId, businessName, userPermission, canDeleteAutoMemos = false, onRefreshReady }: MemoSectionProps) {
   const [memos, setMemos] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddingMemo, setIsAddingMemo] = useState(false);
@@ -33,32 +35,38 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
   const pendingIds = useRef<Set<string>>(new Set());
 
   // 메모 목록 로드
-  useEffect(() => {
+  const fetchMemos = useCallback(async () => {
     if (!businessId) return;
-
-    const fetchMemos = async () => {
-      try {
-        setLoading(true);
-        const token = TokenManager.getToken();
-        const response = await fetch(`/api/businesses/${businessId}/memos`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        const data = await response.json();
-        if (data.success && data.data && data.data.memos) {
-          setMemos(data.data.memos);
+    try {
+      setLoading(true);
+      const token = TokenManager.getToken();
+      const response = await fetch(`/api/businesses/${businessId}/memos`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } catch (error) {
-        console.error('메모 로드 오류:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      });
 
-    fetchMemos();
+      const data = await response.json();
+      if (data.success && data.data && data.data.memos) {
+        setMemos(data.data.memos);
+      }
+    } catch (error) {
+      console.error('메모 로드 오류:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [businessId]);
+
+  useEffect(() => {
+    fetchMemos();
+  }, [fetchMemos]);
+
+  // onRefreshReady 콜백으로 refresh 함수 노출
+  useEffect(() => {
+    if (onRefreshReady) {
+      onRefreshReady(fetchMemos);
+    }
+  }, [onRefreshReady, fetchMemos]);
 
   // Realtime 이벤트 핸들러 (useCallback으로 안정적인 참조 유지)
   const handleRealtimeInsert = useCallback((memo: Memo & { id: string }) => {
@@ -363,19 +371,21 @@ export function MemoSection({ businessId, businessName, userPermission }: MemoSe
                       {memo.content}
                     </p>
                   </div>
-                  {!isAutoMemo && memo.id && !isTempMemo && userPermission >= 1 && (
+                  {memo.id && !isTempMemo && ((!isAutoMemo && userPermission >= 1) || (isAutoMemo && canDeleteAutoMemos)) && (
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                      <button
-                        onClick={() => startEditMemo(memo)}
-                        className="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                        title="메모 수정"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
+                      {!isAutoMemo && (
+                        <button
+                          onClick={() => startEditMemo(memo)}
+                          className="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                          title="메모 수정"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteMemo(memo)}
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                        title="메모 삭제"
+                        title={isAutoMemo ? "자동 메모 삭제" : "메모 삭제"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

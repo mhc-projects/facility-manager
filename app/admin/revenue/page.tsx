@@ -256,7 +256,7 @@ function RevenueDashboard() {
 
     const COST_FIELDS = [
       'additional_cost', 'multiple_stack_cost', 'negotiation', 'multiple_stack',
-      'revenue_adjustments',
+      'revenue_adjustments', 'purchase_adjustments',
     ];
 
     const applyFieldUpdate = (businessId: string, field: string, value: any) => {
@@ -2512,6 +2512,7 @@ function RevenueDashboard() {
         <BusinessRevenueModal
           business={selectedEquipmentBusiness}
           isOpen={showEquipmentModal}
+          canDeleteAutoMemos={permissions?.canDeleteAutoMemos || false}
           onClose={async (dataChanged = false) => {
             console.log('🔄 [MODAL-CLOSE] 모달 닫기 시작');
             setShowEquipmentModal(false);
