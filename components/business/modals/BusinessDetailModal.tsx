@@ -675,6 +675,12 @@ export default function BusinessDetailModal({
                             추가 비용 협의: {Number(business.additional_cost).toLocaleString()}원
                           </div>
                         )}
+                        {business.installation_extra_cost && business.installation_extra_cost > 0 && (
+                          <div className="text-xs sm:text-sm text-orange-600 p-2 bg-orange-50 rounded-lg flex items-center">
+                            <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                            추가설치비: {Number(business.installation_extra_cost).toLocaleString()}원
+                          </div>
+                        )}
                       </div>
                     </div>
 
