@@ -712,6 +712,36 @@ export async function PUT(request: Request) {
       updateObject.is_active = Boolean(updateData.is_active);
     }
 
+    // 다중 대표자/담당자 (JSONB 배열)
+    if (updateData.representatives !== undefined) {
+      if (Array.isArray(updateData.representatives)) {
+        const validatedReps = updateData.representatives
+          .filter((r: any) => r && typeof r === 'object' && typeof r.name === 'string' && r.name.trim() !== '')
+          .map((r: any) => ({
+            name: normalizeUTF8(r.name.trim()),
+            birth_date: r.birth_date || null,
+          }));
+        updateObject.representatives = JSON.stringify(validatedReps);
+      } else {
+        updateObject.representatives = '[]';
+      }
+    }
+    if (updateData.contacts_list !== undefined) {
+      if (Array.isArray(updateData.contacts_list)) {
+        const validatedContacts = updateData.contacts_list
+          .filter((c: any) => c && typeof c === 'object' && typeof c.name === 'string' && c.name.trim() !== '')
+          .map((c: any) => ({
+            name: normalizeUTF8(c.name.trim()),
+            position: normalizeUTF8(c.position || ''),
+            phone: normalizeUTF8(c.phone || ''),
+            email: normalizeUTF8(c.email || ''),
+          }));
+        updateObject.contacts_list = JSON.stringify(validatedContacts);
+      } else {
+        updateObject.contacts_list = '[]';
+      }
+    }
+
     // 실사 관리 필드
     if (updateData.estimate_survey_manager !== undefined) {
       updateObject.estimate_survey_manager = normalizeUTF8(updateData.estimate_survey_manager || '');
