@@ -647,6 +647,11 @@ export default function BusinessDetailModal({
                             • 설치 예정일: {formatDate(business.installation_date)}
                           </div>
                         )}
+                        {business.installation_extra_cost && business.installation_extra_cost > 0 && (
+                          <div className="text-xs sm:text-sm text-orange-700 p-2 sm:p-3 bg-orange-50 rounded-lg font-medium">
+                            • 추가설치비: {Number(business.installation_extra_cost).toLocaleString()}원
+                          </div>
+                        )}
                       </div>
                     </div>
 

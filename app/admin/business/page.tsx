@@ -6094,7 +6094,7 @@ function BusinessManagementPage() {
                       </label>
                       <input
                         type="text"
-                        value={formData.installation_extra_cost ? formData.installation_extra_cost.toLocaleString() : ''}
+                        value={formData.installation_extra_cost ? Math.floor(formData.installation_extra_cost).toLocaleString() : ''}
                         onChange={(e) => {
                           const value = e.target.value.replace(/,/g, '');
                           setFormData({...formData, installation_extra_cost: value ? parseInt(value) : null});
