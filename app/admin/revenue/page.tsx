@@ -1171,8 +1171,8 @@ function RevenueDashboard() {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('매출관리');
 
-    // 금액 컬럼 인덱스 (1-based): 환경부고시가(J), 매출(K), 발주금액(L), 기본설치비(M), 영업비(N), 실사비(O)
-    const CURRENCY_COLS = [10, 11, 12, 13, 14, 15];
+    // 금액 컬럼 인덱스 (1-based): 환경부고시가(J), 매출(K), 발주금액(L), 기본설치비(M), 추가설치비(N), 영업비(O), 실사비(P)
+    const CURRENCY_COLS = [10, 11, 12, 13, 14, 15, 16];
 
     // 헤더
     sheet.columns = [
@@ -1188,9 +1188,10 @@ function RevenueDashboard() {
       { header: '환경부고시가', key: 'official_price_total', width: 16 },
       { header: '매출',        key: 'total_revenue',        width: 16 },
       { header: '발주금액',    key: 'total_cost',           width: 16 },
-      { header: '기본설치비',  key: 'installation_costs',   width: 16 },
-      { header: '영업비',      key: 'sales_commission',     width: 16 },
-      { header: '실사비',      key: 'survey_costs',         width: 16 },
+      { header: '기본설치비',  key: 'installation_costs',       width: 16 },
+      { header: '추가설치비',  key: 'installation_extra_cost',  width: 16 },
+      { header: '영업비',      key: 'sales_commission',         width: 16 },
+      { header: '실사비',      key: 'survey_costs',             width: 16 },
     ];
 
     // 헤더 스타일
@@ -1245,9 +1246,10 @@ function RevenueDashboard() {
         official_price_total: officialPriceTotal,
         total_revenue:        b.total_revenue || 0,
         total_cost:           b.total_cost || 0,
-        installation_costs:   b.installation_costs || 0,
-        sales_commission:     b.sales_commission || 0,
-        survey_costs:         b.survey_costs || 0,
+        installation_costs:       b.installation_costs || 0,
+        installation_extra_cost:  b.installation_extra_cost || 0,
+        sales_commission:         b.sales_commission || 0,
+        survey_costs:             b.survey_costs || 0,
       });
 
       // 금액 컬럼 숫자 서식 적용 (천단위 콤마)
