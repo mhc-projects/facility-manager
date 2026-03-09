@@ -445,7 +445,7 @@ function BusinessManagementPage() {
   const router = useRouter()
 
   // ⚡ 커스텀 훅 사용 (Phase 2.1 성능 최적화)
-  const { allBusinesses, isLoading, error: businessDataError, refetch: refetchBusinesses, addNormalizedBusiness, deleteBusiness } = useBusinessData()
+  const { allBusinesses, isLoading, error: businessDataError, refetch: refetchBusinesses, addNormalizedBusiness, updateNormalizedBusiness, deleteBusiness } = useBusinessData()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
@@ -4008,7 +4008,6 @@ function BusinessManagementPage() {
               installation_team: serverData.installation_team || null,
               설치팀: serverData.installation_team || null,
               order_manager: serverData.order_manager || null,
-              receipt_date: serverData.receipt_date || null,
               // 시스템 필드 (한글/영어 병행)
               manufacturer: serverData.manufacturer || null,
               vpn: serverData.vpn || null,
@@ -4111,12 +4110,29 @@ function BusinessManagementPage() {
               operation_start_date: serverData.operation_start_date || null,
               subsidy_approval_date: serverData.subsidy_approval_date || null,
               representative_birth_date: serverData.representative_birth_date || null,
+              // 다중 대표자/담당자 (JSONB 배열) - 서버 응답에서 직접 사용
+              representatives: (() => {
+                const list = serverData.representatives;
+                if (Array.isArray(list) && list.length > 0) return list;
+                return serverData.representative_name
+                  ? [{ name: serverData.representative_name, birth_date: serverData.representative_birth_date || null }]
+                  : [{ name: '', birth_date: null }];
+              })(),
+              contacts_list: (() => {
+                const list = serverData.contacts_list;
+                if (Array.isArray(list) && list.length > 0) return list;
+                return serverData.manager_name
+                  ? [{ name: serverData.manager_name, position: serverData.manager_position || '', phone: serverData.manager_contact || '', email: serverData.email || '' }]
+                  : [];
+              })(),
               // 기존 통계 데이터 유지
               fileStats: (editingBusiness as any).fileStats
             }
 
             // 원자적 상태 업데이트 함수 사용 (서버 데이터 동기화)
             updateBusinessState(updatedBusiness as unknown as UnifiedBusinessInfo, editingBusiness.id);
+            // allBusinesses 즉시 업데이트 (서버에서 받은 데이터로 캐시 교체)
+            updateNormalizedBusiness(serverData);
 
             // 🗑️ 캐시 무효화 (서버에서 최신 데이터를 받았으므로)
             invalidateBusinessCache(editingBusiness.id);

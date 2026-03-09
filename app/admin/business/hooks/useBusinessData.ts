@@ -31,6 +31,21 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     email: business.email || '',
     local_government: business.local_government || '',
     representative_birth_date: business.representative_birth_date || '',
+    // 다중 대표자/담당자 (JSONB 배열)
+    representatives: (() => {
+      const list = business.representatives;
+      if (Array.isArray(list) && list.length > 0) return list;
+      return business.representative_name
+        ? [{ name: business.representative_name, birth_date: business.representative_birth_date || null }]
+        : [{ name: '', birth_date: null }];
+    })(),
+    contacts_list: (() => {
+      const list = business.contacts_list;
+      if (Array.isArray(list) && list.length > 0) return list;
+      return business.manager_name
+        ? [{ name: business.manager_name, position: business.manager_position || '', phone: business.manager_contact || '', email: business.email || '' }]
+        : [];
+    })(),
     // 센서 및 장비 정보
     ph_meter: business.ph_meter || 0,
     differential_pressure_meter: business.differential_pressure_meter || 0,
@@ -310,12 +325,24 @@ export function useBusinessData() {
     console.log('✅ [useBusinessData.addNormalizedBusiness] 새 사업장 추가 완료:', normalized.사업장명);
   }, []);
 
+  /**
+   * 기존 사업장을 정규화 후 목록에서 업데이트
+   * - normalizeBusiness로 변환하여 전체 로딩 시와 동일한 형태 보장
+   * - 수정 후 즉시 캐시 업데이트 (별도 refetch 없이)
+   */
+  const updateNormalizedBusiness = useCallback((rawServerData: any) => {
+    const normalized = normalizeBusiness(rawServerData);
+    setAllBusinesses(prev => prev.map(b => b.id === normalized.id ? { ...b, ...normalized } : b));
+    console.log('✅ [useBusinessData.updateNormalizedBusiness] 사업장 업데이트 완료:', normalized.사업장명);
+  }, []);
+
   return {
     allBusinesses,
     isLoading,
     error,
     refetch: loadAllBusinesses,
     addNormalizedBusiness,
+    updateNormalizedBusiness,
     deleteBusiness  // 삭제 함수 노출
   };
 }
