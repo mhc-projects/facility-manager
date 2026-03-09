@@ -21,6 +21,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { CacheManager } from '@/utils/cache-manager';
 import { PaymentDateCell } from '@/components/admin/PaymentDateCell';
+import { CollectionManagerCell } from '@/components/admin/CollectionManagerCell';
 
 // Code Splitting: 무거운 모달 및 디스플레이 컴포넌트를 동적 로딩
 const InvoiceDisplay = dynamic(() => import('@/components/business/InvoiceDisplay').then(mod => ({ default: mod.InvoiceDisplay })), {
@@ -159,6 +160,12 @@ function RevenueDashboard() {
   const [taskStatusMap, setTaskStatusMap] = useState<Record<string, Array<{ task_type: string; status: string }>>>({});
   const [selectedTaskTypes, setSelectedTaskTypes] = useState<string[]>([]); // 업무단계 다중 선택
   const [selectedRiskLevels, setSelectedRiskLevels] = useState<string[]>([]); // 위험도 다중 선택
+  // 수금 담당자 관련 상태
+  const [collectionManagerMap, setCollectionManagerMap] = useState<Record<string, string[]>>({}); // businessId → employeeIds[]
+  const [selectedCollectionManagers, setSelectedCollectionManagers] = useState<string[]>([]); // 필터용
+  const [candidateEmployees, setCandidateEmployees] = useState<{ id: string; name: string; department: string; permission_level: number }[]>([]);
+  const [openCollectionDropdown, setOpenCollectionDropdown] = useState<string | null>(null); // 현재 열린 드롭다운의 businessId
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null); // 드롭다운 위치
   const [isFilterExpanded, setIsFilterExpanded] = useState(false); // 필터 섹션 접기/펼치기 상태 (기본값: 접힌 상태)
   const [sortField, setSortField] = useState<string>('business_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -169,7 +176,7 @@ function RevenueDashboard() {
   const [quickCalcBusiness, setQuickCalcBusiness] = useState<string>(''); // 빈 상태용 빠른 계산 선택
 
   const { user, permissions } = useAuth();
-  const userPermission = user?.permission_level || 0;
+  const userPermission = (user as any)?.permission_level ?? user?.role ?? 0;
 
   // 특별 계정 접근 차단
   useEffect(() => {
@@ -202,7 +209,8 @@ function RevenueDashboard() {
       await Promise.all([
         loadBusinesses(),
         loadCalculations(),
-        loadTaskStatuses()
+        loadTaskStatuses(),
+        loadCandidateEmployees()
       ]);
 
       console.log('✅ [INIT] Step 3: 모든 데이터 로드 완료');
@@ -354,6 +362,19 @@ function RevenueDashboard() {
     }
   };
 
+  // 수금 담당자 후보 직원 목록 로드 (permission_level >= 1)
+  const loadCandidateEmployees = async () => {
+    try {
+      const response = await fetch('/api/collection-managers-candidates', { headers: getAuthHeaders() });
+      const data = await response.json();
+      if (data.success) {
+        setCandidateEmployees(data.data);
+      }
+    } catch (error) {
+      console.error('[loadCandidateEmployees] 오류:', error);
+    }
+  };
+
   // 위험도 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
   // risk=null: 수동 해제 → 자동화 재개, risk=값: 수동 설정 → 자동화 비활성화
   const handleRiskUpdate = (businessId: string, risk: '상' | '중' | '하' | null) => {
@@ -398,6 +419,35 @@ function RevenueDashboard() {
   const handleRiskCardClick = (level: string) => {
     setSelectedRiskLevels(prev => prev.includes(level) ? [] : [level]);
     setCurrentPage(1);
+  };
+
+  // 수금 담당자 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
+  const handleCollectionManagerUpdate = (businessId: string, employeeId: string, checked: boolean) => {
+    const previous = collectionManagerMap[businessId] ?? [];
+    const updated = checked
+      ? [...previous, employeeId]
+      : previous.filter(id => id !== employeeId);
+
+    console.log('[수금담당자] 업데이트:', { businessId, employeeId, checked, previous, updated });
+
+    // 즉시 UI 반영
+    setCollectionManagerMap(prev => ({ ...prev, [businessId]: updated }));
+
+    // 백그라운드 DB 저장
+    fetch(`/api/business-collection-manager/${businessId}`, {
+      method: 'PATCH',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collection_manager_ids: updated }),
+    }).then(response => {
+      if (!response.ok) {
+        return response.json().then(err => { throw new Error(err.error || '수금 담당자 업데이트 실패'); });
+      }
+      console.log('[수금담당자] DB 저장 성공');
+    }).catch(error => {
+      console.error('[handleCollectionManagerUpdate] 오류:', error);
+      // 실패 시 롤백
+      setCollectionManagerMap(prev => ({ ...prev, [businessId]: previous }));
+    });
   };
 
   // 입금예정일 업데이트 (낙관적 업데이트 + 즉시 캐시 동기화)
@@ -799,6 +849,11 @@ function RevenueDashboard() {
         }
         setRiskMap(cachedRiskMap);
         setRiskIsManualMap(cachedManualMap);
+        const cachedCollectionManagerMap: Record<string, string[]> = {};
+        for (const b of cachedBusinesses) {
+          cachedCollectionManagerMap[b.id] = Array.isArray(b.collection_manager_ids) ? b.collection_manager_ids : [];
+        }
+        setCollectionManagerMap(cachedCollectionManagerMap);
         const endTime = performance.now();
         console.log(`⚡ [LOAD-BUSINESSES] 캐시에서 ${cachedBusinesses.length}개 로드 완료 (${(endTime - startTime).toFixed(0)}ms)`);
         return;
@@ -836,6 +891,13 @@ function RevenueDashboard() {
         }
         setRiskMap(initialRiskMap);
         setRiskIsManualMap(initialManualMap);
+
+        // 수금 담당자 맵 초기화
+        const initialCollectionManagerMap: Record<string, string[]> = {};
+        for (const b of businessData) {
+          initialCollectionManagerMap[b.id] = Array.isArray(b.collection_manager_ids) ? b.collection_manager_ids : [];
+        }
+        setCollectionManagerMap(initialCollectionManagerMap);
 
         // 🚀 캐시 저장
         setCachedData(CACHE_KEYS.BUSINESSES, businessData);
@@ -1463,6 +1525,15 @@ function RevenueDashboard() {
         .map(s => s.status);
       const taskList = taskStatusMap[business.business_name] ?? [];
       return taskList.some(ts => matchingStatuses.includes(ts.status as any));
+    }).filter(business => {
+      // 수금 담당자 필터 (미수금 필터 활성화 시에만 적용)
+      if (!showReceivablesOnly) return true;
+      if (selectedCollectionManagers.length === 0) return true;
+      const ids = collectionManagerMap[business.id] ?? [];
+      if (selectedCollectionManagers.includes('__unassigned__')) {
+        if (ids.length === 0) return true;
+      }
+      return selectedCollectionManagers.some(id => id !== '__unassigned__' && ids.includes(id));
     }); // ← 위험도 필터 전 목록 (preRiskFilteredBusinesses로 별도 파생)
   }, [
     businesses,
@@ -1483,6 +1554,8 @@ function RevenueDashboard() {
     taskStatusMap,
     selectedTaskTypes,
     riskMap,
+    selectedCollectionManagers,
+    collectionManagerMap,
   ]);
 
   // 위험도 필터 적용 (preRiskFilteredBusinesses → filteredBusinesses)
@@ -2158,6 +2231,32 @@ function RevenueDashboard() {
                 </div>
               )}
 
+              {/* 수금 담당자 필터 (미수금 ON 시에만 표시) */}
+              {showReceivablesOnly && (
+                <div className="shrink-0 min-w-[200px]">
+                  <MultiSelectDropdown
+                    label="수금담당자"
+                    options={[
+                      '미지정',
+                      ...candidateEmployees
+                        .filter(e => Object.values(collectionManagerMap).some(ids => ids.includes(e.id)))
+                        .map(e => e.name)
+                    ]}
+                    selectedValues={selectedCollectionManagers.map(id =>
+                      id === '__unassigned__' ? '미지정' : (candidateEmployees.find(e => e.id === id)?.name ?? id)
+                    )}
+                    onChange={(vals) => {
+                      setSelectedCollectionManagers(vals.map(v =>
+                        v === '미지정' ? '__unassigned__' : (candidateEmployees.find(e => e.name === v)?.id ?? v)
+                      ));
+                      setCurrentPage(1);
+                    }}
+                    placeholder="전체 담당자"
+                    inline={true}
+                  />
+                </div>
+              )}
+
               {/* 체크박스: 항상 우측 끝 고정 */}
               <div className="flex items-center gap-3 ml-auto shrink-0">
                 <div className="flex items-center gap-1.5">
@@ -2170,6 +2269,7 @@ function RevenueDashboard() {
                       if (!e.target.checked) {
                         setSelectedTaskTypes([]);
                         setSelectedRiskLevels([]);
+                        setSelectedCollectionManagers([]);
                       }
                       setCurrentPage(1);
                     }}
@@ -2374,9 +2474,6 @@ function RevenueDashboard() {
                 <button
                   onClick={() => {
                     setSearchTerm('');
-                    setSelectedBusiness('');
-                    setSelectedOffice('');
-                    setSelectedRegion('');
                     setRevenueFilter({ min: '', max: '' });
                     setShowReceivablesOnly(false);
                     setSelectedInvoiceYears([]);
@@ -2502,6 +2599,13 @@ function RevenueDashboard() {
                   riskMap={riskMap}
                   riskIsManualMap={riskIsManualMap}
                   showPaymentSchedule={selectedCategories.includes('자비')}
+                  collectionManagerMap={collectionManagerMap}
+                  candidateEmployees={candidateEmployees}
+                  handleCollectionManagerUpdate={handleCollectionManagerUpdate}
+                  openCollectionDropdown={openCollectionDropdown}
+                  setOpenCollectionDropdown={setOpenCollectionDropdown}
+                  dropdownPos={dropdownPos}
+                  setDropdownPos={setDropdownPos}
                 />
               </>
             )}
@@ -2563,6 +2667,13 @@ function VirtualizedTable({
   riskMap,
   riskIsManualMap,
   showPaymentSchedule,
+  collectionManagerMap,
+  candidateEmployees,
+  handleCollectionManagerUpdate,
+  openCollectionDropdown,
+  setOpenCollectionDropdown,
+  dropdownPos,
+  setDropdownPos,
 }: {
   businesses: any[];
   showReceivablesOnly: boolean;
@@ -2578,8 +2689,29 @@ function VirtualizedTable({
   riskMap: Record<string, string | null>;
   riskIsManualMap: Record<string, boolean>;
   showPaymentSchedule: boolean;
+  collectionManagerMap: Record<string, string[]>;
+  candidateEmployees: { id: string; name: string; department: string; permission_level: number }[];
+  handleCollectionManagerUpdate: (businessId: string, employeeId: string, checked: boolean) => void;
+  openCollectionDropdown: string | null;
+  setOpenCollectionDropdown: (id: string | null) => void;
+  dropdownPos: { top: number; left: number } | null;
+  setDropdownPos: (pos: { top: number; left: number } | null) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!openCollectionDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-collection-dropdown]')) {
+        setOpenCollectionDropdown(null);
+        setDropdownPos(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openCollectionDropdown]);
 
   const rowVirtualizer = useVirtualizer({
     count: businesses.length,
@@ -2593,23 +2725,20 @@ function VirtualizedTable({
 
   const columnWidths = (() => {
     if (showPaymentSchedule && showReceivablesOnly && showSurveyCostsColumn) {
-      // 자비+미수금+실사비용: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (13컬럼)
-      return ['13%', '9%', '7%', '7%', '7%', '6%', '6%', '8%', '8%', '8%', '5%', '7%', '9%']; // 총합 100%
+      // 자비+미수금+실사비용: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (14컬럼)
+      return ['11%', '7%', '8%', '6%', '7%', '6%', '6%', '6%', '7%', '7%', '7%', '5%', '6%', '11%']; // 총합 100%
     } else if (showPaymentSchedule && showReceivablesOnly) {
-      // 자비+미수금: 사업장명, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 미수금 (12컬럼)
-      return ['14%', '9%', '7%', '7%', '7%', '7%', '7%', '9%', '9%', '9%', '5%', '10%']; // 총합 100%
+      // 자비+미수금: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 미수금 (13컬럼)
+      return ['12%', '8%', '8%', '7%', '7%', '6%', '6%', '7%', '8%', '8%', '8%', '5%', '10%']; // 총합 100%
     } else if (showPaymentSchedule) {
       // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
-      // 사업장명 18%→17% (-1%), 입금예정일 10%→12% (+2%), 매출/매입/이익 11%→10% (각 -1%)
       return ['17%', '12%', '9%', '7%', '8%', '8%', '10%', '10%', '10%', '7%']; // 총합 98%
     } else if (showReceivablesOnly && showSurveyCostsColumn) {
-      // 미수금 + 실사비용 + 업무단계 + 위험도 (13컬럼)
-      // 사업장명, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금
-      return ['13%', '8%', '7%', '6%', '6%', '7%', '7%', '8%', '8%', '8%', '5%', '7%', '10%']; // 총합 100%
+      // 미수금+실사비용: 사업장명, 수금담당자, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (14컬럼)
+      return ['11%', '7%', '7%', '7%', '6%', '6%', '6%', '6%', '7%', '7%', '7%', '5%', '7%', '11%']; // 총합 100%
     } else if (showReceivablesOnly) {
-      // 미수금 + 업무단계 + 위험도 (12컬럼)
-      // 사업장명, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 미수금
-      return ['14%', '9%', '7%', '6%', '6%', '8%', '8%', '9%', '9%', '9%', '5%', '10%']; // 총합 100%
+      // 미수금: 사업장명, 수금담당자, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 미수금 (13컬럼)
+      return ['12%', '8%', '8%', '7%', '6%', '6%', '7%', '7%', '8%', '8%', '8%', '5%', '10%']; // 총합 100%
     } else if (showSurveyCostsColumn) {
       // 실사비용만 표시 (기존 유지)
       return ['18%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%', '10%'];  // 총합 100%
@@ -2642,6 +2771,11 @@ function VirtualizedTable({
           >
             사업장명 {sortField === 'business_name' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
+          {showReceivablesOnly && (
+            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold bg-purple-50 text-purple-700">
+              수금담당자
+            </div>
+          )}
           {showPaymentSchedule && (
             <div
               className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center cursor-pointer hover:bg-gray-100 bg-teal-50 text-teal-700 text-xs font-semibold"
@@ -2742,6 +2876,17 @@ function VirtualizedTable({
                     {business.business_name}
                   </button>
                 </div>
+                {/* 수금담당자 (미수금 ON 시) */}
+                {showReceivablesOnly && (
+                  <div className="border-r border-gray-300 px-2 py-1.5 flex items-center bg-purple-50/20">
+                    <CollectionManagerCell
+                      businessId={business.id}
+                      assignedIds={collectionManagerMap[business.id] ?? []}
+                      candidates={candidateEmployees}
+                      onUpdate={handleCollectionManagerUpdate}
+                    />
+                  </div>
+                )}
                 {/* 입금예정일 (자비 필터 ON 시) - 인라인 편집 */}
                 {showPaymentSchedule && (
                   <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-xs bg-teal-50/30">
