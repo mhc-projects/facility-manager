@@ -487,7 +487,21 @@ export default function BusinessDetailModal({
                         <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-purple-500 flex-shrink-0" />
                         대표자명
                       </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{business.대표자 || '-'}</div>
+                      {(() => {
+                        const reps = business.representatives?.length
+                          ? business.representatives
+                          : business.대표자
+                            ? [{ name: business.대표자, birth_date: business.representative_birth_date || null }]
+                            : [];
+                        if (reps.length === 0) return <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">-</div>;
+                        return (
+                          <div className="space-y-0.5">
+                            {reps.map((r, i) => (
+                              <div key={i} className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{r.name}</div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
