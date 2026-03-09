@@ -79,6 +79,7 @@ interface UnifiedBusinessInfo {
   other_equipment?: string | null
   additional_cost?: number | null
   installation_extra_cost?: number | null
+  survey_fee_adjustment?: number | null
   negotiation?: number | string | null
   multiple_stack_cost?: number | null
   representative_birth_date?: string | null
@@ -677,13 +678,25 @@ export default function BusinessDetailModal({
                         {business.additional_cost && business.additional_cost > 0 && (
                           <div className="text-xs sm:text-sm text-blue-600 p-2 bg-blue-50 rounded-lg flex items-center">
                             <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                            추가 비용 협의: {Number(business.additional_cost).toLocaleString()}원
+                            추가공사비: {Number(business.additional_cost).toLocaleString()}원
                           </div>
                         )}
                         {business.installation_extra_cost && business.installation_extra_cost > 0 && (
                           <div className="text-xs sm:text-sm text-orange-600 p-2 bg-orange-50 rounded-lg flex items-center">
                             <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                             추가설치비: {Number(business.installation_extra_cost).toLocaleString()}원
+                          </div>
+                        )}
+                        {business.negotiation && Number(business.negotiation) !== 0 && (
+                          <div className="text-xs sm:text-sm text-purple-600 p-2 bg-purple-50 rounded-lg flex items-center">
+                            <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                            협의사항: {Number(business.negotiation).toLocaleString()}원
+                          </div>
+                        )}
+                        {business.survey_fee_adjustment && Number(business.survey_fee_adjustment) !== 0 && (
+                          <div className="text-xs sm:text-sm text-teal-600 p-2 bg-teal-50 rounded-lg flex items-center">
+                            <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                            실사비 조정: {Number(business.survey_fee_adjustment).toLocaleString()}원
                           </div>
                         )}
                       </div>

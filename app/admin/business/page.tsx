@@ -2691,11 +2691,28 @@ function BusinessManagementPage() {
           expansion_pack: business.expansion_pack,
           other_equipment: business.other_equipment,
           additional_cost: business.additional_cost,
+          installation_extra_cost: business.installation_extra_cost,
           survey_fee_adjustment: business.survey_fee_adjustment,
           negotiation: business.negotiation,
           multiple_stack_cost: business.multiple_stack_cost,
           representative_birth_date: business.representative_birth_date,
-          
+
+          // 다중 대표자/담당자 (JSONB 배열)
+          representatives: (() => {
+            const list = business.representatives;
+            if (Array.isArray(list) && list.length > 0) return list;
+            return business.representative_name
+              ? [{ name: business.representative_name, birth_date: business.representative_birth_date || null }]
+              : [{ name: '', birth_date: null }];
+          })(),
+          contacts_list: (() => {
+            const list = business.contacts_list;
+            if (Array.isArray(list) && list.length > 0) return list;
+            return business.manager_name
+              ? [{ name: business.manager_name, position: business.manager_position || '', phone: business.manager_contact || '', email: business.email || '' }]
+              : [];
+          })(),
+
           // 시스템 필드들
           manufacturer: business.manufacturer,
           vpn: business.vpn,
@@ -5267,7 +5284,7 @@ function BusinessManagementPage() {
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-sm font-medium text-gray-700">담당자</label>
                         <button type="button"
-                          onClick={() => setFormData({...formData, contacts_list: [...(formData.contacts_list || []), {name:'',position:'',phone:'',email:''}]})}
+                          onClick={() => setFormData(prev => ({...prev, contacts_list: [...(prev.contacts_list || []), {name:'',position:'',phone:'',email:''}]}))}
                           className="text-xs text-blue-600 hover:text-blue-800">+ 추가</button>
                       </div>
                       <div className="space-y-1.5">
@@ -5275,23 +5292,23 @@ function BusinessManagementPage() {
                           <div key={i} className="flex items-center gap-1.5">
                             <input type="text" lang="ko" inputMode="text" placeholder="이름"
                               value={c.name}
-                              onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],name:e.target.value}; setFormData({...formData,contacts_list:next}) }}
+                              onChange={e => { const val=e.target.value; setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],name:val}; return {...prev,contacts_list:next} }) }}
                               className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
                             <input type="text" lang="ko" inputMode="text" placeholder="직급"
                               value={c.position}
-                              onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],position:e.target.value}; setFormData({...formData,contacts_list:next}) }}
+                              onChange={e => { const val=e.target.value; setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],position:val}; return {...prev,contacts_list:next} }) }}
                               className="w-16 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
                             <input type="tel" placeholder="전화번호"
                               value={c.phone}
-                              onChange={e => { const formatted=formatMobilePhone(e.target.value); const next=[...(formData.contacts_list||[])]; next[i]={...next[i],phone:formatted}; setFormData({...formData,contacts_list:next}) }}
+                              onChange={e => { const formatted=formatMobilePhone(e.target.value); setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],phone:formatted}; return {...prev,contacts_list:next} }) }}
                               maxLength={14}
                               className="w-32 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
                             <input type="email" placeholder="이메일"
                               value={c.email}
-                              onChange={e => { const next=[...(formData.contacts_list||[])]; next[i]={...next[i],email:e.target.value}; setFormData({...formData,contacts_list:next}) }}
+                              onChange={e => { const val=e.target.value; setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],email:val}; return {...prev,contacts_list:next} }) }}
                               className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
                             <button type="button"
-                              onClick={() => setFormData({...formData, contacts_list: (formData.contacts_list||[]).filter((_:ContactPerson, idx:number)=>idx!==i)})}
+                              onClick={() => setFormData(prev => ({...prev, contacts_list: (prev.contacts_list||[]).filter((_:ContactPerson, idx:number)=>idx!==i)}))}
                               className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5"/></button>
                           </div>
                         ))}
