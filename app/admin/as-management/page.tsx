@@ -184,7 +184,7 @@ export default function AsManagementPage() {
   );
 
   return (
-    <AdminLayout title="AS 관리" description={`총 ${total}건`} actions={actions}>
+    <AdminLayout title="AS 관리" description="AS 접수·진행 현황 및 단가표 관리" actions={actions}>
       <div className="flex flex-col gap-4">
 
         {/* ── 필터 카드 ── */}
@@ -300,16 +300,28 @@ export default function AsManagementPage() {
               )}
             </div>
 
-            {/* 초기화 버튼 */}
-            {hasActiveFilters && (
-              <button
-                onClick={resetFilters}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors ml-auto"
-              >
-                <X className="w-3.5 h-3.5" />
-                필터 초기화
-              </button>
-            )}
+            {/* 오른쪽 끝: 건수 + 초기화 */}
+            <div className="flex items-center gap-2 ml-auto">
+              {hasActiveFilters ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                  <span className="text-xs text-blue-400 font-medium">필터 결과</span>
+                  <span className="text-sm font-bold text-blue-600">{total.toLocaleString()}건</span>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-400">
+                  전체 <span className="font-semibold text-gray-500">{total.toLocaleString()}건</span>
+                </span>
+              )}
+              {hasActiveFilters && (
+                <button
+                  onClick={resetFilters}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  초기화
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
