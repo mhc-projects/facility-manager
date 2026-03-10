@@ -96,6 +96,9 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/migrations/',        // 마이그레이션 API (관리자 전용)
     '/api/business-collection-manager', // 수금 담당자 업데이트 API (Bearer 토큰 인증)
     '/api/collection-managers-candidates', // 수금 담당자 후보 조회 API (Bearer 토큰 인증)
+    '/api/as-records',       // AS 건 관리 API (Bearer 토큰 인증)
+    '/api/as-price-list',    // AS 단가표 API (Bearer 토큰 인증)
+    '/api/as-materials',     // AS 자재 API (Bearer 토큰 인증)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }

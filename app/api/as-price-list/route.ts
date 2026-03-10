@@ -1,0 +1,78 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { query as pgQuery } from '@/lib/supabase-direct';
+import { verifyTokenString } from '@/utils/auth';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/as-price-list
+ * 단가표 목록 조회
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: '인증 토큰이 필요합니다' }, { status: 401 });
+    }
+    const token = authHeader.substring(7);
+    if (!verifyTokenString(token)) {
+      return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const includeInactive = searchParams.get('include_inactive') === 'true';
+
+    const whereClause = includeInactive ? '' : 'WHERE is_active = true';
+
+    const result = await pgQuery(
+      `SELECT * FROM as_price_list
+       ${whereClause}
+       ORDER BY category ASC NULLS LAST, sort_order ASC, item_name ASC`,
+      []
+    );
+
+    return NextResponse.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('[as-price-list] GET error:', error);
+    return NextResponse.json({ success: false, error: '단가표 조회 실패' }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/as-price-list
+ * 단가표 항목 등록
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: '인증 토큰이 필요합니다' }, { status: 401 });
+    }
+    const token = authHeader.substring(7);
+    if (!verifyTokenString(token)) {
+      return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { category, item_name, unit_price, unit = '개', description, sort_order = 0 } = body;
+
+    if (!item_name) {
+      return NextResponse.json({ success: false, error: '항목명이 필요합니다' }, { status: 400 });
+    }
+    if (unit_price === undefined || unit_price === null || isNaN(Number(unit_price))) {
+      return NextResponse.json({ success: false, error: '단가가 필요합니다' }, { status: 400 });
+    }
+
+    const result = await pgQuery(
+      `INSERT INTO as_price_list (category, item_name, unit_price, unit, description, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [category || null, item_name, Number(unit_price), unit, description || null, sort_order]
+    );
+
+    return NextResponse.json({ success: true, data: result.rows[0] }, { status: 201 });
+  } catch (error) {
+    console.error('[as-price-list] POST error:', error);
+    return NextResponse.json({ success: false, error: '단가표 항목 등록 실패' }, { status: 500 });
+  }
+}

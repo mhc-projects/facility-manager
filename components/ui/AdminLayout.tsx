@@ -26,7 +26,8 @@ import {
   Users,
   Package,
   Calendar,
-  FileEdit
+  FileEdit,
+  Wrench
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -113,6 +114,13 @@ const navigationItems: NavigationItem[] = [
     href: '/admin/order-management',
     icon: Package,
     description: '제품 발주 진행 상황 및 단계 관리',
+    requiredLevel: 1
+  },
+  {
+    name: 'AS 관리',
+    href: '/admin/as-management',
+    icon: Wrench,
+    description: 'AS 접수, 진행 현황 및 단가표 관리',
     requiredLevel: 1
   },
   {

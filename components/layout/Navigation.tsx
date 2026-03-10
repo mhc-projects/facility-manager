@@ -15,7 +15,9 @@ import {
   Building2,
   FileText,
   BarChart3,
-  ClipboardList
+  ClipboardList,
+  Wrench,
+  Receipt
 } from 'lucide-react';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,7 +42,7 @@ const navigationItems: NavigationItem[] = [
     name: '관리자 대시보드',
     href: '/admin',
     icon: BarChart3,
-    requiredLevel: 3 // ✅ 슈퍼 관리자(레벨 3) 이상만 표시
+    requiredLevel: 3
   },
   {
     name: '프로젝트',
@@ -58,6 +60,15 @@ const navigationItems: NavigationItem[] = [
     children: [
       { name: '사업장 목록', href: '/admin/business', icon: Building2 },
       { name: '대기 오염 허가', href: '/admin/air-permit', icon: FileText }
+    ]
+  },
+  {
+    name: 'AS 관리',
+    href: '/admin/as-management',
+    icon: Wrench,
+    children: [
+      { name: 'AS 건 목록', href: '/admin/as-management', icon: ClipboardList },
+      { name: '유상 단가표', href: '/admin/as-management/price-list', icon: Receipt }
     ]
   },
   {
@@ -82,7 +93,7 @@ export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
 
   const toggleExpanded = (href: string) => {
     setExpandedItems(prev =>
@@ -92,27 +103,23 @@ export default function Navigation() {
     );
   };
 
-  // 권한 체크 함수
   const hasPermission = (requiredLevel?: number): boolean => {
-    if (!requiredLevel) return true; // 권한 요구 없음 → 모두 표시
-    if (!user) return false; // 로그인 안 됨 → 숨김
+    if (!requiredLevel) return true;
+    if (!user) return false;
     return user.permission_level >= requiredLevel;
   };
 
-  // 특별 계정 경로 숨김 체크 (permission_level과 무관하게 항상 적용)
   const isHiddenForSpecialAccount = (href: string): boolean => {
     if (!user?.email || !permissions?.isSpecialAccount) return false;
     return isPathHiddenForAccount(user.email, href);
   };
 
-  // 자식 메뉴 필터링 함수
   const filterChildren = (children: NavigationItem[]): NavigationItem[] => {
     return children.filter(child =>
       !isHiddenForSpecialAccount(child.href) && hasPermission(child.requiredLevel)
     );
   };
 
-  // 상위 메뉴 필터링 함수 (권한 체크 포함)
   const filterNavigationItems = (items: NavigationItem[]): NavigationItem[] => {
     return items.filter(item =>
       !isHiddenForSpecialAccount(item.href) && hasPermission(item.requiredLevel)
@@ -172,7 +179,6 @@ export default function Navigation() {
           )}
         </div>
 
-        {/* 하위 메뉴 */}
         {hasChildren && isExpanded && (
           <div className="ml-6 space-y-1">
             {filteredChildren.map((child) => (
@@ -202,13 +208,11 @@ export default function Navigation() {
       {/* 데스크톱 사이드바 */}
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64 border-r border-gray-200 bg-white pt-5 pb-4 overflow-y-auto">
-          {/* 로고 */}
           <div className="flex items-center flex-shrink-0 px-4">
             <Building2 className="h-8 w-8 text-blue-600" />
             <span className="ml-2 text-xl font-bold text-gray-900">시설관리</span>
           </div>
 
-          {/* 알림 버튼 */}
           <div className="mt-6 px-4">
             <div className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
               <Bell className="mr-3 h-5 w-5" />
@@ -219,7 +223,6 @@ export default function Navigation() {
             </div>
           </div>
 
-          {/* 네비게이션 메뉴 */}
           <nav className="mt-6 flex-1 px-4 space-y-1">
             {filterNavigationItems(navigationItems).map((item) => (
               <NavigationLink key={item.href} item={item} />
