@@ -361,7 +361,7 @@ export default function PriceListPage() {
                       <th className="text-right px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-1/6">단가</th>
                       <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-16">단위</th>
                       <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">비고</th>
-                      <th className="text-center px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-16">상태</th>
+                      <th className="text-center px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-20">상태</th>
                       <th className="w-16" />
                     </tr>
                   </thead>
@@ -373,15 +373,15 @@ export default function PriceListPage() {
                       >
                         <td className="px-5 py-3 font-medium text-gray-900">{item.item_name}</td>
                         <td className="px-5 py-3 text-right font-semibold tabular-nums text-gray-800">
-                          {item.unit_price.toLocaleString()}원
+                          {Math.round(Number(item.unit_price)).toLocaleString()}원
                         </td>
                         <td className="px-5 py-3 text-gray-500 text-xs">{item.unit}</td>
                         <td className="px-5 py-3 text-gray-400 text-xs">{item.description || '—'}</td>
-                        <td className="px-5 py-3 text-center">
+                        <td className="px-5 py-3 text-center whitespace-nowrap">
                           {item.is_active ? (
-                            <span className="inline-block text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200 font-medium">활성</span>
+                            <span className="inline-block text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200 font-medium whitespace-nowrap">활성</span>
                           ) : (
-                            <span className="inline-block text-[10px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md border border-gray-200 font-medium">비활성</span>
+                            <span className="inline-block text-[10px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md border border-gray-200 font-medium whitespace-nowrap">비활성</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
