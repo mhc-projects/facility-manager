@@ -19,6 +19,11 @@ export interface AsRecord {
   business_management_code: number | null;
   delivery_date: string | null;
   address: string | null;
+  manager_name: string | null;
+  manager_contact: string | null;
+  site_address: string | null;
+  site_manager: string | null;
+  site_contact: string | null;
   receipt_date: string | null;
   work_date: string | null;
   receipt_content: string | null;

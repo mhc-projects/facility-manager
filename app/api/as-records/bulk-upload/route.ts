@@ -79,6 +79,9 @@ function strFirstLine(val: unknown): string | null {
  * J: 소속/회사
  * K: 상태 (접수/일정조율중/진행중/부품대기/보류/완료/취소)
  * L: 유상/무상 (유상/무상/자동)
+ * M: 사업장주소 (타업체 사업장의 경우 직접 입력)
+ * N: 사업장담당자 (타업체 사업장의 경우 직접 입력)
+ * O: 사업장연락처 (타업체 사업장의 경우 직접 입력)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -184,14 +187,19 @@ export async function POST(request: NextRequest) {
 
       const paidRaw = str(row[11]) || '';
       const isPaidOverride = paidRaw in PAID_MAP ? PAID_MAP[paidRaw] : null;
+      // 타업체 사업장인 경우(businessId 없음)에만 사업장 정보 저장
+      const siteAddress = str(row[12]);
+      const siteManager = str(row[13]);
+      const siteContact = strFirstLine(row[14]);
 
       try {
         await pgQuery(
           `INSERT INTO as_records (
             business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
             outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
+            site_address, site_manager, site_contact,
             is_paid_override, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
           [
             businessId || null,
             businessId ? null : businessName,  // 미등록 사업장은 이름 직접 저장
@@ -203,6 +211,9 @@ export async function POST(request: NextRequest) {
             asManagerName,
             asManagerContact,
             asManagerAffiliation,
+            businessId ? null : siteAddress,
+            businessId ? null : siteManager,
+            businessId ? null : siteContact,
             isPaidOverride,
             status,
           ]

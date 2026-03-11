@@ -395,7 +395,7 @@ export async function deleteBusinessMemo(id: string) {
 export async function searchBusinesses(query: string, limit: number = 20) {
   const { data, error } = await supabaseAdmin
     .from('business_info')
-    .select('id, business_name, local_government, address, manager_name, business_management_code, delivery_date')
+    .select('id, business_name, local_government, address, manager_name, manager_contact, business_management_code, delivery_date')
     .or(`business_name.ilike.%${query}%,address.ilike.%${query}%,manager_name.ilike.%${query}%`)
     .eq('is_deleted', false)
     .eq('is_active', true)

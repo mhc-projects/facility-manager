@@ -98,6 +98,11 @@ export async function GET(request: NextRequest) {
         bi.business_management_code,
         bi.delivery_date,
         bi.address,
+        bi.manager_name,
+        bi.manager_contact,
+        ar.site_address,
+        ar.site_manager,
+        ar.site_contact,
         ar.receipt_date,
         ar.work_date,
         ar.receipt_content,
@@ -180,6 +185,9 @@ export async function POST(request: NextRequest) {
       as_manager_name,
       as_manager_contact,
       as_manager_affiliation,
+      site_address,
+      site_manager,
+      site_contact,
       is_paid_override,
       status = 'received',
     } = body;
@@ -197,8 +205,9 @@ export async function POST(request: NextRequest) {
       `INSERT INTO as_records (
         business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
         outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
+        site_address, site_manager, site_contact,
         is_paid_override, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         business_id || null,
@@ -211,6 +220,9 @@ export async function POST(request: NextRequest) {
         as_manager_name || null,
         as_manager_contact || null,
         as_manager_affiliation || null,
+        business_id ? null : (site_address || null),
+        business_id ? null : (site_manager || null),
+        business_id ? null : (site_contact || null),
         is_paid_override ?? null,
         status,
       ]

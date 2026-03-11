@@ -33,6 +33,8 @@ interface BusinessSuggestion {
   business_management_code: number | null;
   delivery_date: string | null;
   address: string | null;
+  manager_name: string | null;
+  manager_contact: string | null;
 }
 
 interface AsRecordModalProps {
@@ -98,6 +100,10 @@ export default function AsRecordModal({
     : 'auto'
   );
   const [status, setStatus] = useState(record?.status || 'received');
+  // 타업체 사업장 직접 입력 필드
+  const [siteAddress, setSiteAddress] = useState(record?.site_address || '');
+  const [siteManager, setSiteManager] = useState(record?.site_manager || '');
+  const [siteContact, setSiteContact] = useState(record?.site_contact || '');
 
   // 자재 상태
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
@@ -189,6 +195,10 @@ export default function AsRecordModal({
     setSelectedBusiness(biz);
     setShowSuggestions(false);
     setBusinessSuggestions([]);
+    // 블루온 사업장 선택 시 타업체 입력 필드 초기화
+    setSiteAddress('');
+    setSiteManager('');
+    setSiteContact('');
   };
 
   // 유상/무상 자동 계산
@@ -302,6 +312,9 @@ export default function AsRecordModal({
         as_manager_name: asManagerName || null,
         as_manager_contact: asManagerContact || null,
         as_manager_affiliation: asManagerAffiliation || null,
+        site_address: unregisteredMode ? (siteAddress || null) : null,
+        site_manager: unregisteredMode ? (siteManager || null) : null,
+        site_contact: unregisteredMode ? (siteContact || null) : null,
         is_paid_override: isPaidOverride === 'paid' ? true : isPaidOverride === 'free' ? false : null,
         status,
       };
@@ -543,6 +556,81 @@ export default function AsRecordModal({
                   </div>
                 </div>
               )}
+
+              {/* 사업장 주소/담당자/연락처 */}
+              {unregisteredMode ? (
+                /* 타업체: 직접 입력 */
+                <div className="space-y-3 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">사업장 정보 (직접 입력)</p>
+                  <div>
+                    <label className={LABEL_CLS}>주소</label>
+                    <input
+                      type="text"
+                      value={siteAddress}
+                      onChange={e => setSiteAddress(e.target.value)}
+                      placeholder="사업장 주소 입력"
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={LABEL_CLS}>담당자</label>
+                      <input
+                        type="text"
+                        value={siteManager}
+                        onChange={e => setSiteManager(e.target.value)}
+                        placeholder="담당자 이름"
+                        className={INPUT_CLS}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>연락처</label>
+                      <input
+                        type="text"
+                        value={siteContact}
+                        onChange={e => setSiteContact(e.target.value)}
+                        placeholder="연락처"
+                        className={INPUT_CLS}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (businessId || record?.business_id) ? (
+                /* 블루온 사업장: 자동 표시 (읽기 전용) */
+                (() => {
+                  const addr = selectedBusiness?.address ?? record?.address;
+                  const mgr = selectedBusiness?.manager_name ?? record?.manager_name;
+                  const contact = selectedBusiness?.manager_contact ?? record?.manager_contact;
+                  if (!addr && !mgr && !contact) return null;
+                  return (
+                    <div className="space-y-1 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">사업장 정보</p>
+                      {addr && (
+                        <div className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="text-xs text-gray-400 w-12 flex-shrink-0 pt-0.5">주소</span>
+                          <span>{addr}</span>
+                        </div>
+                      )}
+                      {(mgr || contact) && (
+                        <div className="flex items-center gap-6 text-sm text-gray-700">
+                          {mgr && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">담당자</span>
+                              <span className="font-medium">{mgr}</span>
+                            </div>
+                          )}
+                          {contact && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">연락처</span>
+                              <span className="font-medium">{contact}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : null}
 
               {/* 날짜 행 */}
               <div className="grid grid-cols-2 gap-4">

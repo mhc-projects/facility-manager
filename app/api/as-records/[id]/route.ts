@@ -102,6 +102,9 @@ export async function PATCH(
       as_manager_name,
       as_manager_contact,
       as_manager_affiliation,
+      site_address,
+      site_manager,
+      site_contact,
       is_paid_override,
       status,
     } = body;
@@ -123,10 +126,13 @@ export async function PATCH(
         as_manager_name = COALESCE($6, as_manager_name),
         as_manager_contact = COALESCE($7, as_manager_contact),
         as_manager_affiliation = COALESCE($8, as_manager_affiliation),
-        is_paid_override = $9,
-        status = COALESCE($10, status),
+        site_address = $9,
+        site_manager = $10,
+        site_contact = $11,
+        is_paid_override = $12,
+        status = COALESCE($13, status),
         updated_at = NOW()
-      WHERE id = $11 AND is_deleted = false
+      WHERE id = $14 AND is_deleted = false
       RETURNING *`,
       [
         receipt_date ?? null,
@@ -137,6 +143,9 @@ export async function PATCH(
         as_manager_name ?? null,
         as_manager_contact ?? null,
         as_manager_affiliation ?? null,
+        site_address ?? null,
+        site_manager ?? null,
+        site_contact ?? null,
         is_paid_override !== undefined ? is_paid_override : null,
         status ?? null,
         id,
