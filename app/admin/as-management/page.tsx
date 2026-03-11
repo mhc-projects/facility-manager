@@ -502,7 +502,7 @@ export default function AsManagementPage() {
       {modalOpen && (
         <AsRecordModal
           record={editingRecord}
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setModalOpen(false); fetchRecords(); }}
           onSave={handleModalSave}
           currentUser={user}
         />
