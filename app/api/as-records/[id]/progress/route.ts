@@ -53,7 +53,7 @@ export async function POST(
 
     const result = await pgQuery(
       `UPDATE as_records
-       SET progress_notes = progress_notes || $1::jsonb,
+       SET progress_notes = COALESCE(progress_notes, '[]'::jsonb) || $1::jsonb,
            updated_at = NOW()
        WHERE id = $2 AND is_deleted = false
        RETURNING id, progress_notes, status`,
@@ -103,7 +103,7 @@ export async function DELETE(
       `UPDATE as_records
        SET progress_notes = (
          SELECT jsonb_agg(note)
-         FROM jsonb_array_elements(progress_notes) AS note
+         FROM jsonb_array_elements(COALESCE(progress_notes, '[]'::jsonb)) AS note
          WHERE (note->>'id') != $1
        ),
        updated_at = NOW()
