@@ -6,6 +6,7 @@ import { X, Plus, Trash2, Send, Clock, FileText, Wrench, MessageSquare, ChevronR
 import { AsRecord, ProgressNote } from '../page';
 import { STATUS_CONFIG } from './AsStatusBadge';
 import { TokenManager } from '@/lib/api-client';
+import { supabase } from '@/lib/supabase';
 
 interface PriceItem {
   id: string;
@@ -212,6 +213,33 @@ export default function AsRecordModal({
     return () => clearTimeout(timer);
   }, [businessName, businessId, searchBusiness]);
 
+  // 진행 메모 Realtime 동기화
+  useEffect(() => {
+    if (!isEdit || !record?.id) return;
+    const channelName = `as-record-notes-${record.id}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'as_records',
+          filter: `id=eq.${record.id}`,
+        },
+        (payload: any) => {
+          const notes = payload.new?.progress_notes;
+          if (Array.isArray(notes)) {
+            setProgressNotes(notes);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [record?.id, isEdit]);
+
   const selectBusiness = (biz: BusinessSuggestion) => {
     setBusinessId(biz.id);
     setBusinessName(biz.business_name);
@@ -271,23 +299,39 @@ export default function AsRecordModal({
   const addProgressNote = async () => {
     if (!newNoteContent.trim() || !record?.id) return;
     setAddingNote(true);
+    const content = newNoteContent.trim();
+    // Optimistic update
+    const optimisticNote: ProgressNote = {
+      id: `temp-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      author: currentUser?.name || '담당자',
+      content,
+      status_at_time: '',
+    };
+    const prevNotes = progressNotes;
+    setProgressNotes(prev => [...prev, optimisticNote]);
+    setNewNoteContent('');
     try {
       const res = await fetch(`/api/as-records/${record.id}/progress`, {
         method: 'POST',
         headers: { ...authHeader(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: newNoteContent.trim(),
+          content,
           author: currentUser?.name || '담당자',
         }),
       });
       const json = await res.json();
       if (json.success) {
+        // Realtime will update, but also set directly for immediate consistency
         setProgressNotes(json.data.progress_notes || []);
-        setNewNoteContent('');
       } else {
+        setProgressNotes(prevNotes);
+        setNewNoteContent(content);
         alert(json.error || '메모 추가 실패');
       }
     } catch (e) {
+      setProgressNotes(prevNotes);
+      setNewNoteContent(content);
       console.error('메모 추가 실패:', e);
     } finally {
       setAddingNote(false);
