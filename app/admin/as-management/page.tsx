@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Receipt, Search, X, ChevronDown, Wrench, User, Package, SlidersHorizontal } from 'lucide-react';
+import { Plus, Receipt, Search, X, ChevronDown, Wrench, User, Package, SlidersHorizontal, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TokenManager } from '@/lib/api-client';
 import AsRecordModal from './components/AsRecordModal';
@@ -38,6 +38,9 @@ export interface AsRecord {
   progress_notes: ProgressNote[];
   material_count: number;
   total_material_cost: number;
+  dispatch_count: number;
+  dispatch_cost_price_id: string | null;
+  dispatch_revenue_price_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -171,11 +174,18 @@ export default function AsManagementPage() {
   const actions = (
     <div className="flex items-center gap-2">
       <Link
+        href="/admin/as-management/revenue"
+        className="flex items-center gap-1 px-2.5 py-1.5 border border-emerald-200 text-emerald-700 bg-emerald-50 rounded-md hover:bg-emerald-100 hover:border-emerald-300 text-xs font-medium transition-colors"
+      >
+        <TrendingUp className="w-3 h-3" />
+        매출관리
+      </Link>
+      <Link
         href="/admin/as-management/price-list"
         className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-200 text-gray-600 rounded-md hover:bg-gray-50 hover:border-gray-300 text-xs font-medium transition-colors"
       >
         <Receipt className="w-3 h-3" />
-        유상 단가표
+        단가표
       </Link>
       <AsExcelUpload onComplete={fetchRecords} />
       <button
@@ -370,7 +380,7 @@ export default function AsManagementPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">배출구</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[9%]">AS 담당자</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[7%]">비용</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[6%]">자재</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">자재</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">상태</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">최근 메모</th>
                     <th className="w-10" />
@@ -447,7 +457,7 @@ export default function AsManagementPage() {
                         <td className="px-4 py-3.5 text-center">
                           {record.material_count > 0 ? (
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-md font-medium border border-orange-100">
+                              <span className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-md font-medium border border-orange-100 whitespace-nowrap">
                                 <Package className="w-3 h-3" />
                                 {record.material_count}종
                               </span>

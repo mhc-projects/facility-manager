@@ -24,7 +24,7 @@ export async function PATCH(
 
     const { id } = params;
     const body = await request.json();
-    const { category, item_name, unit_price, unit, description, sort_order, is_active } = body;
+    const { category, item_name, unit_price, unit, description, sort_order, is_active, price_type } = body;
 
     const result = await pgQuery(
       `UPDATE as_price_list SET
@@ -35,8 +35,9 @@ export async function PATCH(
         description = COALESCE($5, description),
         sort_order = COALESCE($6, sort_order),
         is_active = COALESCE($7, is_active),
+        price_type = COALESCE($8, price_type),
         updated_at = NOW()
-      WHERE id = $8
+      WHERE id = $9
       RETURNING *`,
       [
         category ?? null,
@@ -46,6 +47,7 @@ export async function PATCH(
         description ?? null,
         sort_order ?? null,
         is_active ?? null,
+        price_type ?? null,
         id,
       ]
     );

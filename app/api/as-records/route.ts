@@ -114,6 +114,9 @@ export async function GET(request: NextRequest) {
         ar.is_paid_override,
         ar.status,
         ar.progress_notes,
+        ar.dispatch_count,
+        ar.dispatch_cost_price_id,
+        ar.dispatch_revenue_price_id,
         ar.created_at,
         ar.updated_at,
         -- 유상/무상 자동 계산 컬럼 (business_info 연결된 경우에만)
@@ -190,6 +193,9 @@ export async function POST(request: NextRequest) {
       site_contact,
       is_paid_override,
       status = 'received',
+      dispatch_count = 1,
+      dispatch_cost_price_id,
+      dispatch_revenue_price_id,
     } = body;
 
     if (!business_id && !business_name_raw) {
@@ -206,8 +212,9 @@ export async function POST(request: NextRequest) {
         business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
         outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
         site_address, site_manager, site_contact,
-        is_paid_override, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        is_paid_override, status,
+        dispatch_count, dispatch_cost_price_id, dispatch_revenue_price_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *`,
       [
         business_id || null,
@@ -225,6 +232,9 @@ export async function POST(request: NextRequest) {
         business_id ? null : (site_contact || null),
         is_paid_override ?? null,
         status,
+        Number(dispatch_count) || 1,
+        dispatch_cost_price_id || null,
+        dispatch_revenue_price_id || null,
       ]
     );
 

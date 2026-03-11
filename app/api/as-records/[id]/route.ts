@@ -107,6 +107,9 @@ export async function PATCH(
       site_contact,
       is_paid_override,
       status,
+      dispatch_count,
+      dispatch_cost_price_id,
+      dispatch_revenue_price_id,
     } = body;
 
     if (status) {
@@ -131,8 +134,11 @@ export async function PATCH(
         site_contact = $11,
         is_paid_override = $12,
         status = COALESCE($13, status),
+        dispatch_count = COALESCE($14, dispatch_count),
+        dispatch_cost_price_id = $15,
+        dispatch_revenue_price_id = $16,
         updated_at = NOW()
-      WHERE id = $14 AND is_deleted = false
+      WHERE id = $17 AND is_deleted = false
       RETURNING *`,
       [
         receipt_date ?? null,
@@ -148,6 +154,9 @@ export async function PATCH(
         site_contact ?? null,
         is_paid_override !== undefined ? is_paid_override : null,
         status ?? null,
+        dispatch_count !== undefined ? Number(dispatch_count) : null,
+        dispatch_cost_price_id !== undefined ? (dispatch_cost_price_id || null) : null,
+        dispatch_revenue_price_id !== undefined ? (dispatch_revenue_price_id || null) : null,
         id,
       ]
     );

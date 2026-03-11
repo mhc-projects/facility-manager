@@ -104,10 +104,16 @@ export default function AsRecordModal({
   const [siteAddress, setSiteAddress] = useState(record?.site_address || '');
   const [siteManager, setSiteManager] = useState(record?.site_manager || '');
   const [siteContact, setSiteContact] = useState(record?.site_contact || '');
+  // 출동 정보
+  const [dispatchCount, setDispatchCount] = useState(record?.dispatch_count ?? 1);
+  const [dispatchCostPriceId, setDispatchCostPriceId] = useState(record?.dispatch_cost_price_id || '');
+  const [dispatchRevenuePriceId, setDispatchRevenuePriceId] = useState(record?.dispatch_revenue_price_id || '');
 
   // 자재 상태
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [priceList, setPriceList] = useState<PriceItem[]>([]);
+  const [dispatchCostList, setDispatchCostList] = useState<PriceItem[]>([]);
+  const [dispatchRevenueList, setDispatchRevenueList] = useState<PriceItem[]>([]);
 
   // 진행 메모 상태
   const [progressNotes, setProgressNotes] = useState<ProgressNote[]>(record?.progress_notes || []);
@@ -121,16 +127,33 @@ export default function AsRecordModal({
 
   // 단가표 로딩
   useEffect(() => {
-    const fetchPriceList = async () => {
+    const fetchPriceLists = async () => {
       try {
-        const res = await fetch('/api/as-price-list', { headers: authHeader() });
-        const json = await res.json();
-        if (json.success) setPriceList(json.data);
+        const [costRes, dispCostRes, dispRevRes] = await Promise.all([
+          fetch('/api/as-price-list?price_type=cost', { headers: authHeader() }),
+          fetch('/api/as-price-list?price_type=dispatch_cost', { headers: authHeader() }),
+          fetch('/api/as-price-list?price_type=dispatch_revenue', { headers: authHeader() }),
+        ]);
+        const [costJson, dispCostJson, dispRevJson] = await Promise.all([
+          costRes.json(), dispCostRes.json(), dispRevRes.json(),
+        ]);
+        if (costJson.success) setPriceList(costJson.data);
+        if (dispCostJson.success) setDispatchCostList(dispCostJson.data);
+        if (dispRevJson.success) {
+          setDispatchRevenueList(dispRevJson.data);
+          // 기본 출동 매출단가 자동 선택 (신규 등록 시)
+          if (!record && dispRevJson.data.length > 0 && !dispatchRevenuePriceId) {
+            setDispatchRevenuePriceId(dispRevJson.data[0].id);
+          }
+        }
+        if (dispCostJson.success && dispCostJson.data.length > 0 && !record && !dispatchCostPriceId) {
+          setDispatchCostPriceId(dispCostJson.data[0].id);
+        }
       } catch (e) {
         console.error('단가표 로딩 실패:', e);
       }
     };
-    fetchPriceList();
+    fetchPriceLists();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 수정 시 자재 로딩
@@ -290,11 +313,11 @@ export default function AsRecordModal({
 
   // 저장
   const handleSave = async () => {
-    if (!unregisteredMode && !businessId) {
+    if (!isEdit && !unregisteredMode && !businessId) {
       alert('사업장을 선택하거나 직접 입력하세요.');
       return;
     }
-    if (unregisteredMode && !businessName.trim()) {
+    if (!isEdit && unregisteredMode && !businessName.trim()) {
       alert('사업장명을 입력해주세요.');
       return;
     }
@@ -317,6 +340,9 @@ export default function AsRecordModal({
         site_contact: unregisteredMode ? (siteContact || null) : null,
         is_paid_override: isPaidOverride === 'paid' ? true : isPaidOverride === 'free' ? false : null,
         status,
+        dispatch_count: dispatchCount,
+        dispatch_cost_price_id: dispatchCostPriceId || null,
+        dispatch_revenue_price_id: dispatchRevenuePriceId || null,
       };
 
       const url = isEdit ? `/api/as-records/${record!.id}` : '/api/as-records';
@@ -723,6 +749,70 @@ export default function AsRecordModal({
                   </select>
                 </div>
               </div>
+
+              {/* 출동 정보 */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">출동 정보</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className={LABEL_CLS}>출동 횟수</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={dispatchCount}
+                      onChange={e => setDispatchCount(Math.max(1, parseInt(e.target.value) || 1))}
+                      className={`${INPUT_CLS} tabular-nums`}
+                    />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>출동 원가단가</label>
+                    <select
+                      value={dispatchCostPriceId}
+                      onChange={e => setDispatchCostPriceId(e.target.value)}
+                      className={`${INPUT_CLS} appearance-none`}
+                    >
+                      <option value="">— 선택 안함 —</option>
+                      {dispatchCostList.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.item_name} ({Math.round(Number(p.unit_price)).toLocaleString()}원/{p.unit})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>출동 매출단가</label>
+                    <select
+                      value={dispatchRevenuePriceId}
+                      onChange={e => setDispatchRevenuePriceId(e.target.value)}
+                      className={`${INPUT_CLS} appearance-none`}
+                    >
+                      <option value="">— 선택 안함 —</option>
+                      {dispatchRevenueList.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.item_name} ({Math.round(Number(p.unit_price)).toLocaleString()}원/{p.unit})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {/* 계산 미리보기 */}
+                {(dispatchCostPriceId || dispatchRevenuePriceId) && (
+                  <div className="flex items-center gap-4 text-xs text-gray-500 pt-1 border-t border-gray-200">
+                    {dispatchCostPriceId && (() => {
+                      const item = dispatchCostList.find(p => p.id === dispatchCostPriceId);
+                      return item ? (
+                        <span>원가: {Math.round(Number(item.unit_price)).toLocaleString()}원 × {dispatchCount}회 = <strong className="text-gray-700">{(Math.round(Number(item.unit_price)) * dispatchCount).toLocaleString()}원</strong></span>
+                      ) : null;
+                    })()}
+                    {dispatchRevenuePriceId && (() => {
+                      const item = dispatchRevenueList.find(p => p.id === dispatchRevenuePriceId);
+                      return item ? (
+                        <span>매출: {Math.round(Number(item.unit_price)).toLocaleString()}원 × {dispatchCount}회 = <strong className="text-emerald-700">{(Math.round(Number(item.unit_price)) * dispatchCount).toLocaleString()}원</strong></span>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -819,10 +909,14 @@ export default function AsRecordModal({
                       </div>
                       <div className="col-span-2">
                         <input
-                          type="number"
-                          value={mat.unit_price}
-                          onChange={e => updateMaterial(idx, 'unit_price', Number(e.target.value))}
-                          min="0"
+                          type="text"
+                          inputMode="numeric"
+                          value={mat.unit_price === 0 ? '' : Math.round(mat.unit_price).toLocaleString()}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '');
+                            updateMaterial(idx, 'unit_price', raw === '' ? 0 : Number(raw));
+                          }}
+                          placeholder="0"
                           className="w-full px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all tabular-nums"
                         />
                       </div>
@@ -949,7 +1043,7 @@ export default function AsRecordModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !businessId}
+            disabled={saving || (!businessId && !businessName.trim())}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-semibold transition-colors shadow-sm"
           >
             {saving ? '저장 중...' : isEdit ? '수정 저장' : '등록'}

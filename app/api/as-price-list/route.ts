@@ -4,9 +4,14 @@ import { verifyTokenString } from '@/utils/auth';
 
 export const dynamic = 'force-dynamic';
 
+const VALID_PRICE_TYPES = ['cost', 'revenue', 'dispatch_cost', 'dispatch_revenue'] as const;
+type PriceType = typeof VALID_PRICE_TYPES[number];
+
 /**
  * GET /api/as-price-list
  * 단가표 목록 조회
+ * ?price_type=cost|revenue|dispatch_cost|dispatch_revenue
+ * ?include_inactive=true
  */
 export async function GET(request: NextRequest) {
   try {
@@ -21,14 +26,24 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('include_inactive') === 'true';
+    const priceType = searchParams.get('price_type') as PriceType | null;
 
-    const whereClause = includeInactive ? '' : 'WHERE is_active = true';
+    const conditions: string[] = [];
+    const queryParams: unknown[] = [];
+
+    if (!includeInactive) conditions.push('is_active = true');
+    if (priceType && VALID_PRICE_TYPES.includes(priceType)) {
+      queryParams.push(priceType);
+      conditions.push(`price_type = $${queryParams.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const result = await pgQuery(
       `SELECT * FROM as_price_list
        ${whereClause}
-       ORDER BY category ASC NULLS LAST, sort_order ASC, item_name ASC`,
-      []
+       ORDER BY price_type ASC, category ASC NULLS LAST, sort_order ASC, item_name ASC`,
+      queryParams
     );
 
     return NextResponse.json({ success: true, data: result.rows });
@@ -54,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { category, item_name, unit_price, unit = '개', description, sort_order = 0 } = body;
+    const { category, item_name, unit_price, unit = '개', description, sort_order = 0, price_type = 'cost' } = body;
 
     if (!item_name) {
       return NextResponse.json({ success: false, error: '항목명이 필요합니다' }, { status: 400 });
@@ -62,12 +77,15 @@ export async function POST(request: NextRequest) {
     if (unit_price === undefined || unit_price === null || isNaN(Number(unit_price))) {
       return NextResponse.json({ success: false, error: '단가가 필요합니다' }, { status: 400 });
     }
+    if (!VALID_PRICE_TYPES.includes(price_type)) {
+      return NextResponse.json({ success: false, error: '유효하지 않은 단가 유형입니다' }, { status: 400 });
+    }
 
     const result = await pgQuery(
-      `INSERT INTO as_price_list (category, item_name, unit_price, unit, description, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO as_price_list (category, item_name, unit_price, unit, description, sort_order, price_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [category || null, item_name, Number(unit_price), unit, description || null, sort_order]
+      [category || null, item_name, Number(unit_price), unit, description || null, sort_order, price_type]
     );
 
     return NextResponse.json({ success: true, data: result.rows[0] }, { status: 201 });

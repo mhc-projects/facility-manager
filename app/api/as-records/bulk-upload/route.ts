@@ -82,6 +82,7 @@ function strFirstLine(val: unknown): string | null {
  * M: 사업장주소 (타업체 사업장의 경우 직접 입력)
  * N: 사업장담당자 (타업체 사업장의 경우 직접 입력)
  * O: 사업장연락처 (타업체 사업장의 경우 직접 입력)
+ * P: 출동횟수 (숫자, 기본값 1)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -191,6 +192,10 @@ export async function POST(request: NextRequest) {
       const siteAddress = str(row[12]);
       const siteManager = str(row[13]);
       const siteContact = strFirstLine(row[14]);
+      const dispatchCountRaw = row[15];
+      const dispatchCount = (dispatchCountRaw !== undefined && dispatchCountRaw !== null && dispatchCountRaw !== '')
+        ? Math.max(1, Math.round(Number(dispatchCountRaw)))
+        : 1;
 
       try {
         await pgQuery(
@@ -198,8 +203,8 @@ export async function POST(request: NextRequest) {
             business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
             outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
             site_address, site_manager, site_contact,
-            is_paid_override, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            is_paid_override, status, dispatch_count
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
           [
             businessId || null,
             businessId ? null : businessName,  // 미등록 사업장은 이름 직접 저장
@@ -216,6 +221,7 @@ export async function POST(request: NextRequest) {
             businessId ? null : siteContact,
             isPaidOverride,
             status,
+            dispatchCount,
           ]
         );
         results.push({ row: rowNum, success: true, business_name: businessName });
