@@ -73,6 +73,7 @@ export default function PriceListPage() {
       const qs = showInactive ? '?include_inactive=true' : '';
       const res = await fetch(`/api/as-price-list${qs}`, {
         headers: { 'Authorization': `Bearer ${TokenManager.getToken()}` },
+        cache: 'no-store',
       });
       const json = await res.json();
       if (json.success) {
@@ -146,16 +147,24 @@ export default function PriceListPage() {
 
   const deleteItem = async (item: PriceItem) => {
     if (!confirm(`"${item.item_name}" 항목을 삭제하시겠습니까?`)) return;
+    // 낙관적 업데이트: UI에서 즉시 제거
+    setItemsByType(prev => ({
+      ...prev,
+      [item.price_type]: prev[item.price_type as PriceType].filter(i => i.id !== item.id),
+    }));
     try {
       const res = await fetch(`/api/as-price-list/${item.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${TokenManager.getToken()}` },
       });
       const json = await res.json();
-      if (json.success) await fetchItems();
-      else alert(json.error || '삭제 실패');
+      if (!json.success) {
+        alert(json.error || '삭제 실패');
+        await fetchItems(); // 실패 시 원복
+      }
     } catch (e) {
       console.error('삭제 실패:', e);
+      await fetchItems(); // 에러 시 원복
     }
   };
 
