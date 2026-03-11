@@ -99,7 +99,7 @@ export default function AsRecordModal({
     : record?.is_paid_override === false ? 'free'
     : 'auto'
   );
-  const [status, setStatus] = useState(record?.status || 'received');
+  const [status, setStatus] = useState(record?.status || 'scheduled');
   // 타업체 사업장 직접 입력 필드
   const [siteAddress, setSiteAddress] = useState(record?.site_address || '');
   const [siteManager, setSiteManager] = useState(record?.site_manager || '');

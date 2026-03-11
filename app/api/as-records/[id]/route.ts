@@ -107,13 +107,14 @@ export async function PATCH(
       site_contact,
       is_paid_override,
       status,
+      chimney_number,
       dispatch_count,
       dispatch_cost_price_id,
       dispatch_revenue_price_id,
     } = body;
 
     if (status) {
-      const validStatuses = ['received', 'scheduled', 'in_progress', 'parts_waiting', 'on_hold', 'completed', 'cancelled'];
+      const validStatuses = ['completed', 'scheduled', 'finished', 'on_hold', 'site_check', 'installation', 'completion_fix', 'modem_check'];
       if (!validStatuses.includes(status)) {
         return NextResponse.json({ success: false, error: '유효하지 않은 상태값입니다' }, { status: 400 });
       }
@@ -134,11 +135,12 @@ export async function PATCH(
         site_contact = $11,
         is_paid_override = $12,
         status = COALESCE($13, status),
-        dispatch_count = COALESCE($14, dispatch_count),
-        dispatch_cost_price_id = $15,
-        dispatch_revenue_price_id = $16,
+        chimney_number = COALESCE($14, chimney_number),
+        dispatch_count = COALESCE($15, dispatch_count),
+        dispatch_cost_price_id = $16,
+        dispatch_revenue_price_id = $17,
         updated_at = NOW()
-      WHERE id = $17 AND is_deleted = false
+      WHERE id = $18 AND is_deleted = false
       RETURNING *`,
       [
         receipt_date ?? null,
@@ -154,6 +156,7 @@ export async function PATCH(
         site_contact ?? null,
         is_paid_override !== undefined ? is_paid_override : null,
         status ?? null,
+        chimney_number !== undefined ? (chimney_number || null) : null,
         dispatch_count !== undefined ? Number(dispatch_count) : null,
         dispatch_cost_price_id !== undefined ? (dispatch_cost_price_id || null) : null,
         dispatch_revenue_price_id !== undefined ? (dispatch_revenue_price_id || null) : null,

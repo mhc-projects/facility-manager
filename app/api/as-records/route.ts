@@ -114,6 +114,7 @@ export async function GET(request: NextRequest) {
         ar.is_paid_override,
         ar.status,
         ar.progress_notes,
+        ar.chimney_number,
         ar.dispatch_count,
         ar.dispatch_cost_price_id,
         ar.dispatch_revenue_price_id,
@@ -192,7 +193,8 @@ export async function POST(request: NextRequest) {
       site_manager,
       site_contact,
       is_paid_override,
-      status = 'received',
+      status = 'scheduled',
+      chimney_number,
       dispatch_count = 1,
       dispatch_cost_price_id,
       dispatch_revenue_price_id,
@@ -202,7 +204,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '사업장 ID 또는 사업장명이 필요합니다' }, { status: 400 });
     }
 
-    const validStatuses = ['received', 'scheduled', 'in_progress', 'parts_waiting', 'on_hold', 'completed', 'cancelled'];
+    const validStatuses = ['completed', 'scheduled', 'finished', 'on_hold', 'site_check', 'installation', 'completion_fix', 'modem_check'];
     if (!validStatuses.includes(status)) {
       return NextResponse.json({ success: false, error: '유효하지 않은 상태값입니다' }, { status: 400 });
     }
@@ -212,9 +214,9 @@ export async function POST(request: NextRequest) {
         business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
         outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
         site_address, site_manager, site_contact,
-        is_paid_override, status,
+        is_paid_override, status, chimney_number,
         dispatch_count, dispatch_cost_price_id, dispatch_revenue_price_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *`,
       [
         business_id || null,
@@ -232,6 +234,7 @@ export async function POST(request: NextRequest) {
         business_id ? null : (site_contact || null),
         is_paid_override ?? null,
         status,
+        chimney_number || null,
         Number(dispatch_count) || 1,
         dispatch_cost_price_id || null,
         dispatch_revenue_price_id || null,

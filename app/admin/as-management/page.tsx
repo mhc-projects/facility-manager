@@ -54,13 +54,14 @@ export interface ProgressNote {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'received',      label: '접수',      color: 'bg-blue-500' },
-  { value: 'scheduled',     label: '일정조율중', color: 'bg-sky-500' },
-  { value: 'in_progress',   label: '진행중',    color: 'bg-amber-500' },
-  { value: 'parts_waiting', label: '부품대기',  color: 'bg-orange-500' },
-  { value: 'on_hold',       label: '보류',      color: 'bg-gray-400' },
-  { value: 'completed',     label: '완료',      color: 'bg-emerald-500' },
-  { value: 'cancelled',     label: '취소',      color: 'bg-red-400' },
+  { value: 'completed',      label: '진행완료', color: 'bg-green-500' },
+  { value: 'scheduled',      label: '진행예정', color: 'bg-red-400' },
+  { value: 'finished',       label: '완료',     color: 'bg-yellow-500' },
+  { value: 'on_hold',        label: '보류',     color: 'bg-red-700' },
+  { value: 'site_check',     label: '현장확인', color: 'bg-purple-700' },
+  { value: 'installation',   label: '포설',     color: 'bg-green-700' },
+  { value: 'completion_fix', label: '준공보완', color: 'bg-purple-400' },
+  { value: 'modem_check',    label: '모뎀확인', color: 'bg-yellow-800' },
 ];
 
 const PAID_OPTIONS = [

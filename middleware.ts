@@ -99,6 +99,7 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/as-records',       // AS 건 관리 API (Bearer 토큰 인증)
     '/api/as-price-list',    // AS 단가표 API (Bearer 토큰 인증)
     '/api/as-materials',     // AS 자재 API (Bearer 토큰 인증)
+    '/api/external/',        // 외부 시스템 연동 API (API 키 인증)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }

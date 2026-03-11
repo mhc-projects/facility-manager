@@ -5,16 +5,17 @@ import * as XLSX from 'xlsx';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_STATUSES = ['received', 'scheduled', 'in_progress', 'parts_waiting', 'on_hold', 'completed', 'cancelled'];
+const VALID_STATUSES = ['completed', 'scheduled', 'finished', 'on_hold', 'site_check', 'installation', 'completion_fix', 'modem_check'];
 
 const STATUS_MAP: Record<string, string> = {
-  '접수': 'received',
-  '일정조율중': 'scheduled',
-  '진행중': 'in_progress',
-  '부품대기': 'parts_waiting',
+  '진행완료': 'completed',
+  '진행예정': 'scheduled',
+  '완료': 'finished',
   '보류': 'on_hold',
-  '완료': 'completed',
-  '취소': 'cancelled',
+  '현장확인': 'site_check',
+  '포설': 'installation',
+  '준공보완': 'completion_fix',
+  '모뎀확인': 'modem_check',
 };
 
 const PAID_MAP: Record<string, boolean | null> = {
@@ -83,6 +84,7 @@ function strFirstLine(val: unknown): string | null {
  * N: 사업장담당자 (타업체 사업장의 경우 직접 입력)
  * O: 사업장연락처 (타업체 사업장의 경우 직접 입력)
  * P: 출동횟수 (숫자, 기본값 1)
+ * Q: 굴뚝번호 (예: 1번 굴뚝, A굴뚝)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -184,7 +186,7 @@ export async function POST(request: NextRequest) {
       const asManagerAffiliation = str(row[9]);
 
       const statusRaw = str(row[10]) || '';
-      const status = STATUS_MAP[statusRaw] || (VALID_STATUSES.includes(statusRaw) ? statusRaw : 'received');
+      const status = STATUS_MAP[statusRaw] || (VALID_STATUSES.includes(statusRaw) ? statusRaw : 'scheduled');
 
       const paidRaw = str(row[11]) || '';
       const isPaidOverride = paidRaw in PAID_MAP ? PAID_MAP[paidRaw] : null;
@@ -196,6 +198,7 @@ export async function POST(request: NextRequest) {
       const dispatchCount = (dispatchCountRaw !== undefined && dispatchCountRaw !== null && dispatchCountRaw !== '')
         ? Math.max(1, Math.round(Number(dispatchCountRaw)))
         : 1;
+      const chimneyNumber = str(row[16]);
 
       try {
         await pgQuery(
@@ -203,8 +206,8 @@ export async function POST(request: NextRequest) {
             business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
             outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
             site_address, site_manager, site_contact,
-            is_paid_override, status, dispatch_count
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+            is_paid_override, status, dispatch_count, chimney_number
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
             businessId || null,
             businessId ? null : businessName,  // 미등록 사업장은 이름 직접 저장
@@ -222,6 +225,7 @@ export async function POST(request: NextRequest) {
             isPaidOverride,
             status,
             dispatchCount,
+            chimneyNumber,
           ]
         );
         results.push({ row: rowNum, success: true, business_name: businessName });
