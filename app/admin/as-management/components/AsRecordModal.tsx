@@ -41,7 +41,7 @@ interface BusinessSuggestion {
 interface AsRecordModalProps {
   record: AsRecord | null;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (savedId: string, isNew: boolean) => void;
   currentUser: { name?: string } | null;
 }
 
@@ -365,6 +365,14 @@ export default function AsRecordModal({
       alert('사업장명을 입력해주세요.');
       return;
     }
+    if (!status) {
+      alert('진행 상태를 선택해주세요.');
+      return;
+    }
+    if (!dispatchCount || dispatchCount < 1) {
+      alert('출동 횟수는 1 이상이어야 합니다.');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -439,7 +447,7 @@ export default function AsRecordModal({
         }
       }
 
-      onSave();
+      onSave(recordId, !isEdit);
     } catch (e) {
       console.error('저장 실패:', e);
       alert('저장 중 오류가 발생했습니다.');
@@ -654,7 +662,7 @@ export default function AsRecordModal({
                       />
                     </div>
                     <div>
-                      <label className={LABEL_CLS}>연락처</label>
+                      <label className={LABEL_CLS}>사업장 연락처</label>
                       <input
                         type="text"
                         value={siteContact}
@@ -721,7 +729,7 @@ export default function AsRecordModal({
                   <input type="text" value={asManagerName} onChange={e => setAsManagerName(e.target.value)} placeholder="이름" className={INPUT_CLS} />
                 </div>
                 <div>
-                  <label className={LABEL_CLS}>연락처</label>
+                  <label className={LABEL_CLS}>AS 담당자 연락처</label>
                   <input type="text" value={asManagerContact} onChange={e => setAsManagerContact(e.target.value)} placeholder="연락처" className={INPUT_CLS} />
                 </div>
                 <div>
@@ -804,9 +812,15 @@ export default function AsRecordModal({
                       type="number"
                       min={1}
                       value={dispatchCount}
-                      onChange={e => setDispatchCount(Math.max(1, parseInt(e.target.value) || 1))}
-                      className={`${INPUT_CLS} tabular-nums`}
+                      onChange={e => {
+                        const val = parseInt(e.target.value);
+                        setDispatchCount(isNaN(val) ? 1 : val);
+                      }}
+                      className={`${INPUT_CLS} tabular-nums ${dispatchCount < 1 ? 'border-red-400 ring-1 ring-red-400' : ''}`}
                     />
+                    {dispatchCount < 1 && (
+                      <p className="mt-1 text-xs text-red-500">출동 횟수는 1 이상이어야 합니다.</p>
+                    )}
                   </div>
                   <div>
                     <label className={LABEL_CLS}>출동 원가단가</label>

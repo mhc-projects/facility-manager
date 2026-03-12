@@ -77,8 +77,13 @@ export default function AsManagementPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // 입력 상태 (즉시 반응 — UI에 표시)
   const [businessName, setBusinessName] = useState('');
   const [managerName, setManagerName] = useState('');
+  // 검색 상태 (debounced — API 호출에 사용)
+  const [debouncedBusinessName, setDebouncedBusinessName] = useState('');
+  const [debouncedManagerName, setDebouncedManagerName] = useState('');
+
   const [workDateFrom, setWorkDateFrom] = useState('');
   const [workDateTo, setWorkDateTo] = useState('');
   const [paidStatus, setPaidStatus] = useState('all');
@@ -88,40 +93,56 @@ export default function AsManagementPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AsRecord | null>(null);
 
+  // 텍스트 검색 필드에 150ms debounce 적용
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedBusinessName(businessName), 150);
+    return () => clearTimeout(timer);
+  }, [businessName]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedManagerName(managerName), 150);
+    return () => clearTimeout(timer);
+  }, [managerName]);
+
   const buildQueryString = useCallback(() => {
     const params = new URLSearchParams();
-    if (businessName) params.set('business_name', businessName);
-    if (managerName) params.set('manager_name', managerName);
+    if (debouncedBusinessName) params.set('business_name', debouncedBusinessName);
+    if (debouncedManagerName) params.set('manager_name', debouncedManagerName);
     if (workDateFrom) params.set('work_date_from', workDateFrom);
     if (workDateTo) params.set('work_date_to', workDateTo);
     if (paidStatus !== 'all') params.set('paid_status', paidStatus);
     if (selectedStatuses.length > 0) params.set('status', selectedStatuses.join(','));
     params.set('limit', '200');
     return params.toString();
-  }, [businessName, managerName, workDateFrom, workDateTo, paidStatus, selectedStatuses]);
+  }, [debouncedBusinessName, debouncedManagerName, workDateFrom, workDateTo, paidStatus, selectedStatuses]);
 
-  const fetchRecords = useCallback(async () => {
-    setLoading(true);
+  const fetchRecords = useCallback(async (signal?: AbortSignal) => {
+    if (!signal) setLoading(true);
     try {
       const qs = buildQueryString();
       const token = TokenManager.getToken();
       const res = await fetch(`/api/as-records?${qs}`, {
         headers: { 'Authorization': `Bearer ${token}` },
+        signal,
       });
+      if (signal?.aborted) return;
       const json = await res.json();
       if (json.success) {
         setRecords(json.data);
         setTotal(json.total);
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') return;
       console.error('AS 건 목록 조회 실패:', e);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [buildQueryString]);
 
   useEffect(() => {
-    fetchRecords();
+    const controller = new AbortController();
+    fetchRecords(controller.signal);
+    return () => controller.abort();
   }, [fetchRecords]);
 
   const handleAddNew = () => { setEditingRecord(null); setModalOpen(true); };
@@ -142,7 +163,30 @@ export default function AsManagementPage() {
     }
   };
 
-  const handleModalSave = () => { setModalOpen(false); fetchRecords(); };
+  const handleModalSave = async (savedId: string, isNew: boolean) => {
+    setModalOpen(false);
+    try {
+      const token = TokenManager.getToken();
+      const res = await fetch(`/api/as-records/${savedId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!json.success) { fetchRecords(); return; }
+      const { materials, ...rest } = json.data;
+      const validMaterials: { quantity: number; unit_price: number }[] = materials ?? [];
+      const material_count = validMaterials.length;
+      const total_material_cost = validMaterials.reduce((sum, m) => sum + (m.quantity * m.unit_price), 0);
+      const updated: AsRecord = { ...rest, material_count, total_material_cost };
+      if (isNew) {
+        setRecords(prev => [updated, ...prev]);
+        setTotal(prev => prev + 1);
+      } else {
+        setRecords(prev => prev.map(r => r.id === savedId ? updated : r));
+      }
+    } catch {
+      fetchRecords();
+    }
+  };
 
   const toggleStatus = (val: string) => {
     setSelectedStatuses(prev =>
@@ -153,6 +197,8 @@ export default function AsManagementPage() {
   const resetFilters = () => {
     setBusinessName('');
     setManagerName('');
+    setDebouncedBusinessName('');
+    setDebouncedManagerName('');
     setWorkDateFrom('');
     setWorkDateTo('');
     setPaidStatus('all');
