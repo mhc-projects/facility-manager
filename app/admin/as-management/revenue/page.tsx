@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Package, Truck, Search, ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Package, Truck, Search, ChevronLeft, User, Download, X, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { TokenManager } from '@/lib/api-client';
 import AdminLayout from '@/components/ui/AdminLayout';
@@ -18,6 +18,10 @@ interface RevenueRecord {
   total_cost: number;
   total_revenue: number;
   profit: number;
+  incentive_pay: number;
+  dispatch_pay: number;
+  total_manager_pay: number;
+  net_profit: number;
 }
 
 interface BusinessRevenue {
@@ -33,7 +37,20 @@ interface BusinessRevenue {
   total_revenue: number;
   profit: number;
   profit_rate: number;
+  incentive_pay: number;
+  dispatch_pay: number;
+  total_manager_pay: number;
+  net_profit: number;
   records: RevenueRecord[];
+}
+
+interface ManagerPay {
+  manager_name: string;
+  record_count: number;
+  total_dispatch_count: number;
+  dispatch_pay: number;
+  incentive_pay: number;
+  total_pay: number;
 }
 
 interface Summary {
@@ -46,6 +63,8 @@ interface Summary {
   total_revenue: number;
   profit: number;
   profit_rate: number;
+  total_manager_pay: number;
+  net_profit: number;
 }
 
 function getThisMonth() {
@@ -70,7 +89,9 @@ export default function AsRevenuePage() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRevenue[]>([]);
+  const [managers, setManagers] = useState<ManagerPay[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [managerModalOpen, setManagerModalOpen] = useState(false);
 
   const fetchRevenue = useCallback(async () => {
     setLoading(true);
@@ -84,6 +105,7 @@ export default function AsRevenuePage() {
       if (json.success) {
         setSummary(json.summary);
         setBusinesses(json.businesses);
+        setManagers(json.managers || []);
       }
     } catch (e) {
       console.error('매출 조회 실패:', e);
@@ -101,6 +123,72 @@ export default function AsRevenuePage() {
       else next.add(key);
       return next;
     });
+  };
+
+  const downloadManagerPayExcel = async () => {
+    if (!managers.length) return;
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('담당자 지급 현황');
+
+    const CURRENCY_COLS = [4, 5, 6];
+    sheet.columns = [
+      { header: '담당자',               key: 'manager_name',  width: 18 },
+      { header: '건수',                 key: 'record_count',  width: 10 },
+      { header: '출동 횟수',            key: 'dispatch_cnt',  width: 12 },
+      { header: '출동원가 지급(원)',     key: 'dispatch_pay',  width: 18 },
+      { header: '자재마진 인센티브(원)', key: 'incentive_pay', width: 22 },
+      { header: '총 지급액(원)',         key: 'total_pay',     width: 16 },
+    ];
+
+    sheet.getRow(1).eachCell(cell => {
+      cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD9B3' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFE07020' } } };
+    });
+
+    managers.forEach(mgr => {
+      const row = sheet.addRow({
+        manager_name:  mgr.manager_name,
+        record_count:  mgr.record_count,
+        dispatch_cnt:  mgr.total_dispatch_count,
+        dispatch_pay:  mgr.dispatch_pay,
+        incentive_pay: mgr.incentive_pay,
+        total_pay:     mgr.total_pay,
+      });
+      CURRENCY_COLS.forEach(col => {
+        const cell = row.getCell(col);
+        cell.numFmt = '#,##0';
+        cell.alignment = { horizontal: 'right' };
+      });
+    });
+
+    // 합계 행
+    if (managers.length > 1) {
+      const totalRow = sheet.addRow({
+        manager_name:  '합계',
+        record_count:  managers.reduce((s, m) => s + m.record_count, 0),
+        dispatch_cnt:  managers.reduce((s, m) => s + m.total_dispatch_count, 0),
+        dispatch_pay:  managers.reduce((s, m) => s + m.dispatch_pay, 0),
+        incentive_pay: managers.reduce((s, m) => s + m.incentive_pay, 0),
+        total_pay:     managers.reduce((s, m) => s + m.total_pay, 0),
+      });
+      totalRow.font = { bold: true };
+      totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3E0' } };
+      CURRENCY_COLS.forEach(col => {
+        const cell = totalRow.getCell(col);
+        cell.numFmt = '#,##0';
+        cell.alignment = { horizontal: 'right' };
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `담당자지급현황_${periodFrom}~${periodTo}.xlsx`;
+    link.click();
   };
 
   return (
@@ -150,33 +238,55 @@ export default function AsRevenuePage() {
 
         {/* 요약 카드 */}
         {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">유상 건수</p>
-              <p className="text-2xl font-bold text-gray-900">{summary.paid_count}<span className="text-sm font-medium text-gray-500 ml-1">건</span></p>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">총 매출</p>
-              <p className="text-xl font-bold text-emerald-700">{fmt(summary.total_revenue)}<span className="text-sm font-normal ml-1">원</span></p>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">총 원가</p>
-              <p className="text-xl font-bold text-red-600">{fmt(summary.total_cost)}<span className="text-sm font-normal ml-1">원</span></p>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">순이익</p>
-              <p className={`text-xl font-bold ${summary.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                {fmt(summary.profit)}<span className="text-sm font-normal ml-1">원</span>
-              </p>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">이익률</p>
-              <div className="flex items-center gap-2 mt-1">
-                {summary.profit >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
-                <ProfitBadge rate={summary.profit_rate} />
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">유상 건수</p>
+                <p className="text-2xl font-bold text-gray-900">{summary.paid_count}<span className="text-sm font-medium text-gray-500 ml-1">건</span></p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">총 매출</p>
+                <p className="text-xl font-bold text-emerald-700">{fmt(summary.total_revenue)}<span className="text-sm font-normal ml-1">원</span></p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">총 원가</p>
+                <p className="text-xl font-bold text-red-600">{fmt(summary.total_cost)}<span className="text-sm font-normal ml-1">원</span></p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">순이익</p>
+                <p className={`text-xl font-bold ${summary.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                  {fmt(summary.profit)}<span className="text-sm font-normal ml-1">원</span>
+                </p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">이익률</p>
+                <div className="flex items-center gap-2 mt-1">
+                  {summary.profit >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
+                  <ProfitBadge rate={summary.profit_rate} />
+                </div>
               </div>
             </div>
-          </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => managers.length > 0 && setManagerModalOpen(true)}
+                className="bg-orange-50 rounded-xl border border-orange-100 shadow-sm px-4 py-3 text-left hover:shadow-md hover:border-orange-200 transition-all cursor-pointer group relative"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-orange-400 uppercase tracking-wide">담당자 지급 합계</p>
+                  <ExternalLink className="w-3.5 h-3.5 text-orange-300 group-hover:text-orange-500 transition-colors" />
+                </div>
+                <p className="text-xl font-bold text-orange-700">{fmt(summary.total_manager_pay)}<span className="text-sm font-normal ml-1">원</span></p>
+                <p className="text-xs text-orange-400 mt-1">출동원가 + 자재마진×30% · 클릭하여 담당자별 상세 보기</p>
+              </button>
+              <div className="bg-purple-50 rounded-xl border border-purple-100 shadow-sm px-4 py-3">
+                <p className="text-xs font-semibold text-purple-400 uppercase tracking-wide mb-1">회사 실수익</p>
+                <p className={`text-xl font-bold ${summary.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                  {fmt(summary.net_profit)}<span className="text-sm font-normal ml-1">원</span>
+                </p>
+                <p className="text-xs text-purple-400 mt-1">순이익 - 담당자 지급 합계</p>
+              </div>
+            </div>
+          </>
         )}
 
         {/* 원가 / 매출 세부 요약 */}
@@ -231,6 +341,8 @@ export default function AsRevenuePage() {
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재 매출</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">총 매출</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">순이익</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold text-orange-400 uppercase tracking-wider">담당자 지급</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold text-purple-400 uppercase tracking-wider">회사 실수익</th>
                   <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-20">이익률</th>
                   <th className="w-10" />
                 </tr>
@@ -254,6 +366,10 @@ export default function AsRevenuePage() {
                         <td className={`px-4 py-3 text-right tabular-nums font-semibold ${biz.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
                           {fmt(biz.profit)}
                         </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-600">{fmt(biz.total_manager_pay)}</td>
+                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${biz.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                          {fmt(biz.net_profit)}
+                        </td>
                         <td className="px-4 py-3 text-center"><ProfitBadge rate={biz.profit_rate} /></td>
                         <td className="px-3 py-3 text-center">
                           {isExpanded
@@ -266,7 +382,7 @@ export default function AsRevenuePage() {
                       {/* 상세 펼치기 */}
                       {isExpanded && (
                         <tr className="bg-gray-50/80">
-                          <td colSpan={11} className="px-0 py-0">
+                          <td colSpan={13} className="px-0 py-0">
                             <div className="border-t border-gray-100">
                               <table className="w-full text-xs">
                                 <thead>
@@ -280,6 +396,8 @@ export default function AsRevenuePage() {
                                     <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재매출</th>
                                     <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">총매출</th>
                                     <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">순이익</th>
+                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-orange-400 uppercase tracking-wider">담당자 지급</th>
+                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-purple-400 uppercase tracking-wider">회사 실수익</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -295,6 +413,10 @@ export default function AsRevenuePage() {
                                       <td className="px-4 py-2 text-right tabular-nums font-medium text-gray-800">{fmt(rec.total_revenue)}</td>
                                       <td className={`px-4 py-2 text-right tabular-nums font-medium ${rec.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
                                         {fmt(rec.profit)}
+                                      </td>
+                                      <td className="px-4 py-2 text-right tabular-nums text-orange-600">{fmt(rec.total_manager_pay)}</td>
+                                      <td className={`px-4 py-2 text-right tabular-nums ${rec.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                                        {fmt(rec.net_profit)}
                                       </td>
                                     </tr>
                                   ))}
@@ -321,6 +443,10 @@ export default function AsRevenuePage() {
                     <td className={`px-4 py-3 text-right tabular-nums font-bold ${summary.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
                       {fmt(summary.profit)}
                     </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-orange-600">{fmt(summary.total_manager_pay)}</td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-bold ${summary.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                      {fmt(summary.net_profit)}
+                    </td>
                     <td className="px-4 py-3 text-center"><ProfitBadge rate={summary.profit_rate} /></td>
                     <td />
                   </tr>
@@ -330,6 +456,89 @@ export default function AsRevenuePage() {
           </div>
         )}
       </div>
+
+      {/* 담당자별 지급 현황 모달 */}
+      {managerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setManagerModalOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-orange-500" />
+                <span className="text-base font-semibold text-gray-800">담당자별 지급 현황</span>
+                <span className="text-xs text-gray-400 ml-1">{periodFrom} ~ {periodTo}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={downloadManagerPayExcel}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  엑셀 다운로드
+                </button>
+                <button
+                  onClick={() => setManagerModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 테이블 */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">담당자</th>
+                    <th className="text-center px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-14">건수</th>
+                    <th className="text-center px-3 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-14">출동</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">출동원가 지급</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재마진 인센티브<br/><span className="font-normal normal-case">(자재마진×30%)</span></th>
+                    <th className="text-right px-4 py-3 text-[10px] font-semibold text-orange-400 uppercase tracking-wider">총 지급액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managers.map(mgr => (
+                    <tr key={mgr.manager_name} className="border-b border-gray-50 hover:bg-orange-50/30 transition-colors">
+                      <td className="px-5 py-3 font-medium text-gray-900">{mgr.manager_name}</td>
+                      <td className="px-3 py-3 text-center text-gray-600">{mgr.record_count}</td>
+                      <td className="px-3 py-3 text-center text-gray-600">{mgr.total_dispatch_count}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(mgr.dispatch_pay)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(mgr.incentive_pay)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-600">{fmt(mgr.total_pay)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {managers.length > 1 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-orange-50/40">
+                      <td className="px-5 py-3 text-xs font-bold text-gray-700 uppercase tracking-wide" colSpan={3}>합계</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-700">
+                        {fmt(managers.reduce((s, m) => s + m.dispatch_pay, 0))}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-700">
+                        {fmt(managers.reduce((s, m) => s + m.incentive_pay, 0))}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-bold text-orange-600">
+                        {fmt(managers.reduce((s, m) => s + m.total_pay, 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+
+            {/* 모달 푸터 - 계산식 설명 */}
+            <div className="px-6 py-3 bg-gray-50 border-t border-gray-100">
+              <p className="text-xs text-gray-400">
+                총 지급액 = 출동원가(전액) + (자재 매출 − 자재 원가) × 30%
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

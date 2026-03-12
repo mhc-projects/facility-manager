@@ -162,25 +162,51 @@ export async function GET(request: NextRequest) {
     // 요약 집계
     const businesses = result.rows.map((row: Record<string, unknown>) => {
       const totalRevenue = Number(row.total_revenue);
+      const profit = Number(row.profit);
+      const totalDispatchCost = Number(row.total_dispatch_cost);
+      const totalMaterialRevenue = Number(row.total_material_revenue);
+      const totalMaterialCost = Number(row.total_material_cost);
+      const incentivePay = Math.round((totalMaterialRevenue - totalMaterialCost) * 0.3);
+      const dispatchPay = totalDispatchCost;
+      const totalManagerPay = incentivePay + dispatchPay;
+      const records = ((row.records as Record<string, unknown>[]) || []).map((rec: Record<string, unknown>) => {
+        const recProfit = Number(rec.profit);
+        const recDispatchCost = Number(rec.dispatch_cost);
+        const recMaterialRevenue = Number(rec.material_revenue);
+        const recMaterialCost = Number(rec.material_cost);
+        const recIncentivePay = Math.round((recMaterialRevenue - recMaterialCost) * 0.3);
+        const recDispatchPay = recDispatchCost;
+        return {
+          ...rec,
+          incentive_pay: recIncentivePay,
+          dispatch_pay: recDispatchPay,
+          total_manager_pay: recIncentivePay + recDispatchPay,
+          net_profit: recProfit - recIncentivePay - recDispatchPay,
+        };
+      });
       return {
         business_id: row.business_id,
         business_name: row.business_name,
         record_count: Number(row.record_count),
         total_dispatch_count: Number(row.total_dispatch_count),
-        total_dispatch_cost: Number(row.total_dispatch_cost),
+        total_dispatch_cost: totalDispatchCost,
         total_dispatch_revenue: Number(row.total_dispatch_revenue),
         total_material_cost: Number(row.total_material_cost),
         total_material_revenue: Number(row.total_material_revenue),
         total_cost: Number(row.total_cost),
         total_revenue: totalRevenue,
-        profit: Number(row.profit),
-        profit_rate: totalRevenue > 0 ? Math.round((Number(row.profit) / totalRevenue) * 1000) / 10 : 0,
-        records: row.records || [],
+        profit,
+        profit_rate: totalRevenue > 0 ? Math.round((profit / totalRevenue) * 1000) / 10 : 0,
+        incentive_pay: incentivePay,
+        dispatch_pay: dispatchPay,
+        total_manager_pay: totalManagerPay,
+        net_profit: profit - totalManagerPay,
+        records,
       };
     });
 
     type BizRow = typeof businesses[0];
-    type BizSummary = { paid_count: number; total_dispatch_cost: number; total_dispatch_revenue: number; total_material_cost: number; total_material_revenue: number; total_cost: number; total_revenue: number; profit: number; };
+    type BizSummary = { paid_count: number; total_dispatch_cost: number; total_dispatch_revenue: number; total_material_cost: number; total_material_revenue: number; total_cost: number; total_revenue: number; profit: number; total_manager_pay: number; };
     const summary = businesses.reduce(
       (acc: BizSummary, b: BizRow) => ({
         paid_count: acc.paid_count + b.record_count,
@@ -191,6 +217,7 @@ export async function GET(request: NextRequest) {
         total_cost: acc.total_cost + b.total_cost,
         total_revenue: acc.total_revenue + b.total_revenue,
         profit: acc.profit + b.profit,
+        total_manager_pay: acc.total_manager_pay + b.total_manager_pay,
       }),
       {
         paid_count: 0,
@@ -201,6 +228,7 @@ export async function GET(request: NextRequest) {
         total_cost: 0,
         total_revenue: 0,
         profit: 0,
+        total_manager_pay: 0,
       }
     );
 
@@ -208,11 +236,73 @@ export async function GET(request: NextRequest) {
       ? Math.round((summary.profit / summary.total_revenue) * 1000) / 10
       : 0;
 
+    // 담당자별 지급 집계
+    const managerSql = `
+      WITH record_costs AS (
+        SELECT
+          COALESCE(ar.as_manager_name, '미배정') AS manager_name,
+          ar.dispatch_count,
+          COALESCE(
+            (SELECT apl.unit_price FROM as_price_list apl WHERE apl.id = ar.dispatch_cost_price_id AND apl.is_active = true),
+            0
+          ) * ar.dispatch_count AS dispatch_cost,
+
+          -- 자재 원가
+          COALESCE(
+            (SELECT SUM(amu.quantity * amu.unit_price) FROM as_material_usage amu WHERE amu.as_record_id = ar.id),
+            0
+          ) AS material_cost,
+
+          -- 자재 매출
+          COALESCE(
+            (
+              SELECT SUM(
+                amu.quantity *
+                COALESCE(
+                  amu.revenue_unit_price,
+                  (SELECT apl2.unit_price FROM as_price_list apl2 WHERE apl2.id = amu.revenue_price_list_id AND apl2.is_active = true),
+                  (SELECT apl3.unit_price FROM as_price_list apl3 WHERE apl3.item_name = amu.material_name AND apl3.price_type = 'revenue' AND apl3.is_active = true ORDER BY apl3.sort_order ASC LIMIT 1),
+                  0
+                )
+              )
+              FROM as_material_usage amu
+              WHERE amu.as_record_id = ar.id
+            ),
+            0
+          ) AS material_revenue
+
+        FROM as_records ar
+        LEFT JOIN business_info bi ON ar.business_id = bi.id
+        WHERE ${whereClause}
+      )
+      SELECT
+        manager_name,
+        COUNT(*) AS record_count,
+        SUM(dispatch_count) AS total_dispatch_count,
+        SUM(dispatch_cost) AS total_dispatch_cost,
+        SUM(ROUND((material_revenue - material_cost) * 0.3)) AS incentive_pay,
+        SUM(dispatch_cost) + SUM(ROUND((material_revenue - material_cost) * 0.3)) AS total_pay
+      FROM record_costs
+      GROUP BY manager_name
+      ORDER BY total_pay DESC
+    `;
+
+    const managerResult = await pgQuery(managerSql, values);
+    const managers = managerResult.rows.map((row: Record<string, unknown>) => ({
+      manager_name: row.manager_name as string,
+      record_count: Number(row.record_count),
+      total_dispatch_count: Number(row.total_dispatch_count),
+      dispatch_pay: Number(row.total_dispatch_cost),
+      incentive_pay: Number(row.incentive_pay),
+      total_pay: Number(row.total_pay),
+    }));
+
     return NextResponse.json({
       success: true,
       period: { from: dateFrom, to: dateTo },
-      summary: { ...summary, profit_rate: profitRate },
+      summary: { ...summary, profit_rate: profitRate, net_profit: summary.profit - summary.total_manager_pay },
       businesses,
+      managers,
     });
   } catch (error) {
     console.error('[as-revenue] GET error:', error);

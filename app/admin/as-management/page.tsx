@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Receipt, Search, X, ChevronDown, Wrench, User, Package, SlidersHorizontal, TrendingUp } from 'lucide-react';
+import { Plus, Receipt, Search, X, ChevronDown, Wrench, User, Package, SlidersHorizontal, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TokenManager } from '@/lib/api-client';
 import AsRecordModal from './components/AsRecordModal';
@@ -157,6 +157,7 @@ export default function AsManagementPage() {
     setWorkDateTo('');
     setPaidStatus('all');
     setSelectedStatuses([]);
+    setShowUnworkedOnly(false);
   };
 
   const getLastProgressNote = (notes: ProgressNote[]) => {
@@ -169,8 +170,31 @@ export default function AsManagementPage() {
     return dateStr.slice(0, 10);
   };
 
+  const [showUnworkedOnly, setShowUnworkedOnly] = useState(false);
+
   const hasActiveFilters = businessName || managerName || workDateFrom || workDateTo
     || paidStatus !== 'all' || selectedStatuses.length > 0;
+
+  // 날짜 경과일수 계산
+  const calcDays = (from: string | null, to: string | null): number | null => {
+    if (!from) return null;
+    const fromDate = new Date(from);
+    const toDate = to ? new Date(to) : new Date();
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(0, 0, 0, 0);
+    return Math.floor((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const DONE_STATUSES = ['completed', 'finished'];
+
+  // 미작업: work_date 없고 완료 상태가 아닌 건
+  const unworkedRecords = records.filter(r => !r.work_date && !DONE_STATUSES.includes(r.status));
+  const maxUnworkedDays = unworkedRecords.reduce((max, r) => {
+    const days = calcDays(r.receipt_date, null);
+    return days !== null && days > max ? days : max;
+  }, 0);
+
+  const displayRecords = showUnworkedOnly ? unworkedRecords : records;
 
   const actions = (
     <div className="flex items-center gap-2">
@@ -341,6 +365,39 @@ export default function AsManagementPage() {
           </div>
         </div>
 
+        {/* ── 미작업 경고 배너 ── */}
+        {!loading && unworkedRecords.length > 0 && (
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+            maxUnworkedDays >= 7
+              ? 'bg-red-50 border-red-200'
+              : 'bg-orange-50 border-orange-200'
+          }`}>
+            <AlertTriangle className={`w-4 h-4 flex-shrink-0 ${maxUnworkedDays >= 7 ? 'text-red-500' : 'text-orange-500'}`} />
+            <div className="flex-1 text-sm">
+              <span className={`font-semibold ${maxUnworkedDays >= 7 ? 'text-red-700' : 'text-orange-700'}`}>
+                미작업 {unworkedRecords.length}건
+              </span>
+              <span className={`ml-1.5 ${maxUnworkedDays >= 7 ? 'text-red-600' : 'text-orange-600'}`}>
+                — 최대 <span className="font-semibold">{maxUnworkedDays}일</span> 경과
+              </span>
+            </div>
+            <button
+              onClick={() => setShowUnworkedOnly(prev => !prev)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                showUnworkedOnly
+                  ? maxUnworkedDays >= 7
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-orange-500 text-white hover:bg-orange-600'
+                  : maxUnworkedDays >= 7
+                    ? 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
+                    : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
+              }`}
+            >
+              {showUnworkedOnly ? '전체 보기' : '미작업만 보기'}
+            </button>
+          </div>
+        )}
+
         {/* ── 테이블 카드 ── */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           {loading ? (
@@ -375,8 +432,7 @@ export default function AsManagementPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/70">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">사업장</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[7%]">접수일</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[7%]">작업일</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[13%]">일정</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[18%]">접수내용</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">배출구</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[9%]">AS 담당자</th>
@@ -388,8 +444,11 @@ export default function AsManagementPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {records.map(record => {
+                  {displayRecords.map(record => {
                     const lastNote = getLastProgressNote(record.progress_notes);
+                    const isDone = DONE_STATUSES.includes(record.status);
+                    const isUnworked = !record.work_date && !isDone;
+                    const days = calcDays(record.receipt_date, record.work_date);
                     return (
                       <tr
                         key={record.id}
@@ -425,14 +484,45 @@ export default function AsManagementPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className="text-gray-600 text-xs tabular-nums">
-                            {formatDate(record.receipt_date) || <span className="text-gray-300">—</span>}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-gray-600 text-xs tabular-nums">
-                            {formatDate(record.work_date) || <span className="text-gray-300">—</span>}
-                          </span>
+                          {/* 접수일 */}
+                          <div className="text-gray-500 text-xs tabular-nums">
+                            {formatDate(record.receipt_date) ?? <span className="text-gray-300">접수일 없음</span>}
+                          </div>
+                          {/* 작업일 또는 미작업 표시 */}
+                          {record.work_date ? (
+                            <div className="text-gray-600 text-xs tabular-nums mt-0.5">
+                              → {formatDate(record.work_date)}
+                            </div>
+                          ) : (
+                            <div className="mt-0.5 text-xs text-gray-400 italic">미작업</div>
+                          )}
+                          {/* 소요일수 배지 */}
+                          {days !== null && (
+                            <div className="mt-1">
+                              {isUnworked ? (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
+                                  days >= 7
+                                    ? 'bg-red-100 text-red-700 border border-red-200'
+                                    : 'bg-orange-100 text-orange-700 border border-orange-200'
+                                }`}>
+                                  {days >= 7 && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
+                                  )}
+                                  {days}일 경과
+                                </span>
+                              ) : (
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
+                                  days <= 3
+                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                    : days <= 7
+                                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                      : 'bg-red-100 text-red-700 border border-red-200'
+                                }`}>
+                                  {days}일 소요
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="text-gray-700 text-xs line-clamp-2 max-w-[200px] leading-relaxed" title={record.receipt_content || ''}>

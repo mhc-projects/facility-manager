@@ -68,8 +68,13 @@ export async function POST(request: NextRequest) {
     console.log(`📤 [CALENDAR-UPLOAD] 파일 업로드 시작: ${file.name} (${file.size} bytes)`);
 
     // 파일명 생성 (타임스탬프 + 원본 파일명으로 충돌 방지)
+    // Supabase Storage key는 ASCII 문자만 허용 (한글 등 non-ASCII → 제거)
+    // macOS는 NFD, Windows/Linux는 NFC로 파일명을 전송하므로 NFC로 정규화 후 ASCII만 추출
     const timestamp = Date.now();
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
+    const ext = file.name.includes('.') ? '.' + file.name.split('.').pop()?.toLowerCase() : '';
+    const baseName = file.name.replace(/\.[^.]+$/, '').normalize('NFC');
+    const sanitizedBase = baseName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^_+|_+$/g, '') || 'file';
+    const sanitizedFileName = sanitizedBase + ext;
     const fileName = `${timestamp}_${sanitizedFileName}`;
 
     // 저장 경로 생성
