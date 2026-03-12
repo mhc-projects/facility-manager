@@ -11,6 +11,7 @@ interface RevenueRecord {
   work_date: string;
   receipt_content: string | null;
   dispatch_count: number;
+  is_free: boolean;
   dispatch_cost: number;
   dispatch_revenue: number;
   material_cost: number;
@@ -30,6 +31,7 @@ interface BusinessRevenue {
   business_id: string | null;
   business_name: string;
   record_count: number;
+  free_record_count: number;
   total_dispatch_count: number;
   total_dispatch_cost: number;
   total_dispatch_revenue: number;
@@ -58,7 +60,7 @@ interface ManagerPay {
 }
 
 interface Summary {
-  paid_count: number;
+  paid_count: number; // total count (유상+무상)
   total_dispatch_cost: number;
   total_dispatch_revenue: number;
   total_material_cost: number;
@@ -111,6 +113,7 @@ function BusinessDetailModal({ biz, period, onClose }: {
   period: { from: string; to: string };
   onClose: () => void;
 }) {
+  const allFree = biz.free_record_count === biz.record_count;
   const netProfitRate = biz.total_revenue > 0
     ? Math.round((biz.net_profit / biz.total_revenue) * 1000) / 10
     : 0;
@@ -134,6 +137,14 @@ function BusinessDetailModal({ biz, period, onClose }: {
         </div>
 
         <div className="overflow-y-auto flex-1">
+          {/* 무상 사업장 안내 */}
+          {allFree && (
+            <div className="mx-6 mt-5 flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
+              <span className="font-semibold">무상 AS 사업장</span>
+              <span className="text-emerald-400">—</span>
+              <span>자재·출동 매출은 발생하지 않으며, 출동 원가 및 담당자 지급만 집계됩니다.</span>
+            </div>
+          )}
           {/* 계산식 요약 */}
           <div className="px-6 py-5 border-b border-gray-100">
             <div className="grid grid-cols-2 gap-6">
@@ -225,11 +236,14 @@ function BusinessDetailModal({ biz, period, onClose }: {
                     const netAdj = rec.revenue_adjustment - rec.cost_adjustment;
                     const hasAdj = rec.revenue_adjustment !== 0 || rec.cost_adjustment !== 0;
                     return (
-                      <tr key={rec.id} className={`border-b border-gray-50 last:border-0 transition-colors ${hasAdj ? 'bg-yellow-50/40' : 'hover:bg-gray-50'}`}>
+                      <tr key={rec.id} className={`border-b border-gray-50 last:border-0 transition-colors ${rec.is_free ? 'bg-emerald-50/30' : hasAdj ? 'bg-yellow-50/40' : 'hover:bg-gray-50'}`}>
                         <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{rec.work_date?.slice(0, 10) || '—'}</td>
-                        <td className="px-4 py-2 text-gray-600 max-w-[160px] truncate">{rec.receipt_content || '—'}</td>
+                        <td className="px-4 py-2 text-gray-600 max-w-[160px] truncate">
+                          {rec.receipt_content || '—'}
+                          {rec.is_free && <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-700">무상</span>}
+                        </td>
                         <td className="px-3 py-2 text-center text-gray-500">{rec.dispatch_count}회</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{fmt(rec.total_revenue)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{rec.is_free ? <span className="text-gray-300 text-xs">—</span> : fmt(rec.total_revenue)}</td>
                         <td className="px-4 py-2 text-right tabular-nums text-gray-500">{fmt(rec.total_cost - rec.cost_adjustment)}</td>
                         <td className={`px-4 py-2 text-right tabular-nums ${netAdj !== 0 ? (netAdj > 0 ? 'text-emerald-500' : 'text-red-500') : 'text-gray-300'}`}>
                           {netAdj !== 0 ? `${netAdj > 0 ? '+' : ''}${fmt(netAdj)}` : '—'}
@@ -405,7 +419,7 @@ export default function AsRevenuePage() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">유상 건수</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">총 건수</p>
                 <p className="text-2xl font-bold text-gray-900">{summary.paid_count}<span className="text-sm font-medium text-gray-500 ml-1">건</span></p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
@@ -500,8 +514,8 @@ export default function AsRevenuePage() {
         ) : businesses.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-xl border border-gray-200 shadow-sm">
             <TrendingUp className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-            <p className="text-base font-semibold text-gray-700 mb-1">유상 AS 건 없음</p>
-            <p className="text-sm text-gray-400">해당 기간에 유상 AS 건이 없습니다</p>
+            <p className="text-base font-semibold text-gray-700 mb-1">AS 건 없음</p>
+            <p className="text-sm text-gray-400">해당 기간에 AS 건이 없습니다</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -528,17 +542,26 @@ export default function AsRevenuePage() {
               <tbody>
                 {businesses.map(biz => {
                   const key = biz.business_id || biz.business_name;
+                  const allFree = biz.free_record_count === biz.record_count;
+                  const hasFree = biz.free_record_count > 0;
                   return (
                     <tr key={key}
-                      className="border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer group"
+                      className={`border-b border-gray-50 transition-colors cursor-pointer group ${allFree ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : 'hover:bg-gray-50'}`}
                       onClick={() => setSelectedBiz(biz)}>
-                      <td className="px-5 py-3 font-medium text-gray-900 group-hover:text-blue-700 transition-colors">{biz.business_name}</td>
+                      <td className="px-5 py-3 font-medium text-gray-900 group-hover:text-blue-700 transition-colors">
+                        <span>{biz.business_name}</span>
+                        {hasFree && (
+                          <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${allFree ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                            무상 {biz.free_record_count}건
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-center text-gray-600">{biz.record_count}</td>
                       <td className="px-3 py-3 text-center text-gray-600">{biz.total_dispatch_count}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_dispatch_cost)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_dispatch_revenue)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_material_cost)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_material_revenue)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{allFree ? <span className="text-gray-300">—</span> : fmt(biz.total_dispatch_revenue)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{allFree ? <span className="text-gray-300">—</span> : fmt(biz.total_material_cost)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{allFree ? <span className="text-gray-300">—</span> : fmt(biz.total_material_revenue)}</td>
                       <td className={`px-4 py-3 text-right tabular-nums text-sm ${biz.total_cost_adjustment !== 0 ? (biz.total_cost_adjustment > 0 ? 'text-red-600' : 'text-emerald-600') : 'text-gray-300'}`}>
                         {biz.total_cost_adjustment !== 0 ? `${biz.total_cost_adjustment > 0 ? '+' : ''}${fmt(biz.total_cost_adjustment)}` : '—'}
                       </td>

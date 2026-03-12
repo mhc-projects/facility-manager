@@ -879,8 +879,15 @@ export default function AsRecordModal({
           {/* ── 사용자재 탭 ── */}
           {activeTab === 'materials' && (
             <div>
+              {displayedPaidStatus === false && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
+                  <span className="font-semibold">무상 AS</span>
+                  <span className="text-emerald-500">—</span>
+                  <span>자재 종류·수량은 기록되지만 금액은 계산되지 않습니다.</span>
+                </div>
+              )}
               <div className="flex items-center justify-between mb-4">
-                {materials.length > 0 ? (
+                {materials.length > 0 && displayedPaidStatus !== false ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">합계</span>
                     <span className="text-sm font-bold text-gray-900 tabular-nums">
@@ -911,16 +918,20 @@ export default function AsRecordModal({
               ) : (
                 <div className="space-y-2">
                   {/* 헤더 */}
-                  <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-1">
+                  <div className={`grid gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-1 ${displayedPaidStatus === false ? 'grid-cols-8' : 'grid-cols-12'}`}>
                     <div className="col-span-2">기기종류</div>
-                    <div className="col-span-3">자재명</div>
+                    <div className={displayedPaidStatus === false ? 'col-span-3' : 'col-span-3'}>자재명</div>
                     <div className="col-span-2">수량 / 단위</div>
-                    <div className="col-span-2">단가</div>
-                    <div className="col-span-2 text-right">금액</div>
+                    {displayedPaidStatus !== false && (
+                      <>
+                        <div className="col-span-2">단가</div>
+                        <div className="col-span-2 text-right">금액</div>
+                      </>
+                    )}
                     <div className="col-span-1" />
                   </div>
                   {materials.map((mat, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                    <div key={idx} className={`grid gap-2 items-center bg-gray-50 rounded-xl p-2.5 border border-gray-100 ${displayedPaidStatus === false ? 'grid-cols-8' : 'grid-cols-12'}`}>
                       <div className="col-span-2">
                         <input
                           type="text"
@@ -970,22 +981,26 @@ export default function AsRecordModal({
                           className="w-10 px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-center"
                         />
                       </div>
-                      <div className="col-span-2">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={mat.unit_price === 0 ? '' : Math.round(mat.unit_price).toLocaleString()}
-                          onChange={e => {
-                            const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '');
-                            updateMaterial(idx, 'unit_price', raw === '' ? 0 : Number(raw));
-                          }}
-                          placeholder="0"
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all tabular-nums"
-                        />
-                      </div>
-                      <div className="col-span-2 text-xs font-semibold tabular-nums text-right text-gray-700 pr-1">
-                        {(Number(mat.quantity) * Number(mat.unit_price)).toLocaleString()}원
-                      </div>
+                      {displayedPaidStatus !== false && (
+                        <>
+                          <div className="col-span-2">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={mat.unit_price === 0 ? '' : Math.round(mat.unit_price).toLocaleString()}
+                              onChange={e => {
+                                const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '');
+                                updateMaterial(idx, 'unit_price', raw === '' ? 0 : Number(raw));
+                              }}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all tabular-nums"
+                            />
+                          </div>
+                          <div className="col-span-2 text-xs font-semibold tabular-nums text-right text-gray-700 pr-1">
+                            {(Number(mat.quantity) * Number(mat.unit_price)).toLocaleString()}원
+                          </div>
+                        </>
+                      )}
                       <div className="col-span-1 flex justify-center">
                         <button onClick={() => removeMaterial(idx)} className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
@@ -994,7 +1009,7 @@ export default function AsRecordModal({
                     </div>
                   ))}
 
-                  {materials.length > 0 && (
+                  {materials.length > 0 && displayedPaidStatus !== false && (
                     <div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">합계</span>
