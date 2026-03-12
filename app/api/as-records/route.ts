@@ -51,9 +51,21 @@ export async function GET(request: NextRequest) {
       conditions.push(`ar.work_date <= $${paramIdx++}`);
       values.push(workDateTo);
     }
-    if (managerName) {
-      conditions.push(`ar.as_manager_name ILIKE $${paramIdx++}`);
-      values.push(`%${managerName}%`);
+    if (businessName && managerName && businessName === managerName) {
+      // 통합 검색: 사업장명 OR AS 담당자명
+      conditions.push(`(bi.business_name ILIKE $${paramIdx} OR ar.business_name_raw ILIKE $${paramIdx} OR ar.as_manager_name ILIKE $${paramIdx})`);
+      values.push(`%${businessName}%`);
+      paramIdx++;
+    } else {
+      if (managerName) {
+        conditions.push(`ar.as_manager_name ILIKE $${paramIdx++}`);
+        values.push(`%${managerName}%`);
+      }
+      if (businessName) {
+        conditions.push(`(bi.business_name ILIKE $${paramIdx} OR ar.business_name_raw ILIKE $${paramIdx})`);
+        values.push(`%${businessName}%`);
+        paramIdx++;
+      }
     }
     if (statusParam) {
       const statuses = statusParam.split(',').map(s => s.trim()).filter(Boolean);
@@ -61,12 +73,6 @@ export async function GET(request: NextRequest) {
         conditions.push(`ar.status = ANY($${paramIdx++}::VARCHAR[])`);
         values.push(statuses);
       }
-    }
-    if (businessName) {
-      // business_info 연결된 경우와 직접 입력된 경우 모두 검색
-      conditions.push(`(bi.business_name ILIKE $${paramIdx} OR ar.business_name_raw ILIKE $${paramIdx})`);
-      values.push(`%${businessName}%`);
-      paramIdx++;
     }
 
     // 유상/무상 필터 (delivery_date 기준 26개월, business_info 연결된 경우에만)

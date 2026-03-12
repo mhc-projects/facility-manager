@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Receipt, Search, X, ChevronDown, Wrench, User, Package, SlidersHorizontal, TrendingUp, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Receipt, Search, X, ChevronDown, Wrench, Package, SlidersHorizontal, TrendingUp, AlertTriangle, Calendar } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TokenManager } from '@/lib/api-client';
 import AsRecordModal from './components/AsRecordModal';
@@ -77,12 +77,15 @@ export default function AsManagementPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // 입력 상태 (즉시 반응 — UI에 표시)
-  const [businessName, setBusinessName] = useState('');
-  const [managerName, setManagerName] = useState('');
-  // 검색 상태 (debounced — API 호출에 사용)
-  const [debouncedBusinessName, setDebouncedBusinessName] = useState('');
-  const [debouncedManagerName, setDebouncedManagerName] = useState('');
+  // 통합 검색 (사업장 / AS 담당자 OR 검색)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  // 날짜 팝오버
+  const [showDatePopover, setShowDatePopover] = useState(false);
+  const datePopoverRef = useRef<HTMLDivElement>(null);
+  const dateButtonRef = useRef<HTMLButtonElement>(null);
+  const [datePopoverPos, setDatePopoverPos] = useState({ top: 0, left: 0 });
 
   const [workDateFrom, setWorkDateFrom] = useState('');
   const [workDateTo, setWorkDateTo] = useState('');
@@ -93,28 +96,36 @@ export default function AsManagementPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AsRecord | null>(null);
 
-  // 텍스트 검색 필드에 150ms debounce 적용
+  // 통합 검색 150ms debounce
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedBusinessName(businessName), 150);
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 150);
     return () => clearTimeout(timer);
-  }, [businessName]);
+  }, [searchQuery]);
 
+  // 날짜 팝오버 외부 클릭 닫기
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedManagerName(managerName), 150);
-    return () => clearTimeout(timer);
-  }, [managerName]);
+    const handler = (e: MouseEvent) => {
+      if (datePopoverRef.current && !datePopoverRef.current.contains(e.target as Node)) {
+        setShowDatePopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const buildQueryString = useCallback(() => {
     const params = new URLSearchParams();
-    if (debouncedBusinessName) params.set('business_name', debouncedBusinessName);
-    if (debouncedManagerName) params.set('manager_name', debouncedManagerName);
+    if (debouncedSearchQuery) {
+      params.set('business_name', debouncedSearchQuery);
+      params.set('manager_name', debouncedSearchQuery);
+    }
     if (workDateFrom) params.set('work_date_from', workDateFrom);
     if (workDateTo) params.set('work_date_to', workDateTo);
     if (paidStatus !== 'all') params.set('paid_status', paidStatus);
     if (selectedStatuses.length > 0) params.set('status', selectedStatuses.join(','));
     params.set('limit', '200');
     return params.toString();
-  }, [debouncedBusinessName, debouncedManagerName, workDateFrom, workDateTo, paidStatus, selectedStatuses]);
+  }, [debouncedSearchQuery, workDateFrom, workDateTo, paidStatus, selectedStatuses]);
 
   const fetchRecords = useCallback(async (signal?: AbortSignal) => {
     if (!signal) setLoading(true);
@@ -195,10 +206,8 @@ export default function AsManagementPage() {
   };
 
   const resetFilters = () => {
-    setBusinessName('');
-    setManagerName('');
-    setDebouncedBusinessName('');
-    setDebouncedManagerName('');
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
     setWorkDateFrom('');
     setWorkDateTo('');
     setPaidStatus('all');
@@ -218,7 +227,7 @@ export default function AsManagementPage() {
 
   const [daysFilter, setDaysFilter] = useState<'all' | 'fast' | 'normal' | 'delayed' | 'unworked'>('all');
 
-  const hasActiveFilters = businessName || managerName || workDateFrom || workDateTo
+  const hasActiveFilters = searchQuery || workDateFrom || workDateTo
     || paidStatus !== 'all' || selectedStatuses.length > 0;
 
   // 날짜 경과일수 계산
@@ -288,59 +297,80 @@ export default function AsManagementPage() {
       <div className="flex flex-col gap-4">
 
         {/* ── 필터 카드 ── */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-3">
+          <div className="flex items-center gap-2 flex-nowrap overflow-x-auto">
 
-            {/* 사업장 검색 */}
+            {/* 통합 검색 (사업장 / AS 담당자) */}
             <div className="relative flex-shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
-                value={businessName}
-                onChange={e => setBusinessName(e.target.value)}
-                placeholder="사업장 검색"
-                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white transition-all"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="사업장 / AS 담당자"
+                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm w-48 focus:outline-none focus:border-blue-500 bg-gray-50 focus:bg-white transition-all"
               />
             </div>
 
             {/* 구분선 */}
-            <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
 
-            {/* AS 담당자 검색 */}
-            <div className="relative flex-shrink-0">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                value={managerName}
-                onChange={e => setManagerName(e.target.value)}
-                placeholder="AS 담당자"
-                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm w-36 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white transition-all"
-              />
+            {/* 작업일 팝오버 버튼 */}
+            <div className="flex-shrink-0" ref={datePopoverRef}>
+              <button
+                ref={dateButtonRef}
+                onClick={() => {
+                  if (!showDatePopover && dateButtonRef.current) {
+                    const rect = dateButtonRef.current.getBoundingClientRect();
+                    setDatePopoverPos({ top: rect.bottom + 6, left: rect.left });
+                  }
+                  setShowDatePopover(v => !v);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm transition-all ${
+                  workDateFrom || workDateTo
+                    ? 'border-blue-400 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white hover:border-gray-300'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span className="font-medium text-xs">
+                  {workDateFrom || workDateTo
+                    ? `${workDateFrom || '~'} — ${workDateTo || '~'}`
+                    : '작업일'}
+                </span>
+                {(workDateFrom || workDateTo) && (
+                  <span
+                    className="ml-0.5 text-blue-400 hover:text-blue-600"
+                    onClick={e => { e.stopPropagation(); setWorkDateFrom(''); setWorkDateTo(''); }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
+                )}
+              </button>
+              {showDatePopover && (
+                <div
+                  style={{ top: datePopoverPos.top, left: datePopoverPos.left }}
+                  className="fixed bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-3 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <input
+                    type="date"
+                    value={workDateFrom}
+                    onChange={e => setWorkDateFrom(e.target.value)}
+                    className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
+                  />
+                  <span className="text-gray-300 font-light">—</span>
+                  <input
+                    type="date"
+                    value={workDateTo}
+                    onChange={e => setWorkDateTo(e.target.value)}
+                    className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
+                  />
+                </div>
+              )}
             </div>
 
             {/* 구분선 */}
-            <div className="h-6 w-px bg-gray-200 hidden sm:block" />
-
-            {/* 작업일 범위 */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-xs font-medium text-gray-500 whitespace-nowrap">작업일</span>
-              <input
-                type="date"
-                value={workDateFrom}
-                onChange={e => setWorkDateFrom(e.target.value)}
-                className="px-2.5 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
-              />
-              <span className="text-gray-300 font-light">—</span>
-              <input
-                type="date"
-                value={workDateTo}
-                onChange={e => setWorkDateTo(e.target.value)}
-                className="px-2.5 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
-              />
-            </div>
-
-            {/* 구분선 */}
-            <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
 
             {/* 유상/무상 세그먼트 */}
             <div className="flex items-center bg-gray-100 rounded-lg p-0.5 flex-shrink-0">
@@ -384,7 +414,7 @@ export default function AsManagementPage() {
             </div>
 
             {/* 구분선 */}
-            <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
 
             {/* 상태 드롭다운 */}
             <div className="relative flex-shrink-0">
@@ -428,7 +458,7 @@ export default function AsManagementPage() {
             </div>
 
             {/* 오른쪽 끝: 건수 + 초기화 */}
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 ml-auto flex-shrink-0">
               {hasActiveFilters ? (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg">
                   <span className="text-xs text-blue-400 font-medium">필터 결과</span>
