@@ -157,7 +157,7 @@ export default function AsManagementPage() {
     setWorkDateTo('');
     setPaidStatus('all');
     setSelectedStatuses([]);
-    setShowUnworkedOnly(false);
+    setDaysFilter('all');
   };
 
   const getLastProgressNote = (notes: ProgressNote[]) => {
@@ -170,7 +170,7 @@ export default function AsManagementPage() {
     return dateStr.slice(0, 10);
   };
 
-  const [showUnworkedOnly, setShowUnworkedOnly] = useState(false);
+  const [daysFilter, setDaysFilter] = useState<'all' | 'fast' | 'normal' | 'delayed' | 'unworked'>('all');
 
   const hasActiveFilters = businessName || managerName || workDateFrom || workDateTo
     || paidStatus !== 'all' || selectedStatuses.length > 0;
@@ -187,6 +187,18 @@ export default function AsManagementPage() {
 
   const DONE_STATUSES = ['completed', 'finished'];
 
+  // 소요일 카테고리 분류
+  const getDaysCategory = (record: AsRecord): 'fast' | 'normal' | 'delayed' | 'unworked' | null => {
+    const isDone = DONE_STATUSES.includes(record.status);
+    if (!record.work_date && !isDone) return 'unworked';
+    if (!record.receipt_date) return null;
+    const days = calcDays(record.receipt_date, record.work_date);
+    if (days === null) return null;
+    if (days <= 3) return 'fast';
+    if (days <= 7) return 'normal';
+    return 'delayed';
+  };
+
   // 미작업: work_date 없고 완료 상태가 아닌 건
   const unworkedRecords = records.filter(r => !r.work_date && !DONE_STATUSES.includes(r.status));
   const maxUnworkedDays = unworkedRecords.reduce((max, r) => {
@@ -194,7 +206,9 @@ export default function AsManagementPage() {
     return days !== null && days > max ? days : max;
   }, 0);
 
-  const displayRecords = showUnworkedOnly ? unworkedRecords : records;
+  const displayRecords = daysFilter === 'all'
+    ? records
+    : records.filter(r => getDaysCategory(r) === daysFilter);
 
   const actions = (
     <div className="flex items-center gap-2">
@@ -299,6 +313,33 @@ export default function AsManagementPage() {
               ))}
             </div>
 
+            {/* 소요일 필터 */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5 flex-shrink-0">
+              {([
+                { value: 'all',      label: '전체',   dot: null },
+                { value: 'fast',     label: '신속',   dot: 'bg-emerald-500' },
+                { value: 'normal',   label: '보통',   dot: 'bg-amber-500' },
+                { value: 'delayed',  label: '지연',   dot: 'bg-red-500' },
+                { value: 'unworked', label: '미작업', dot: 'bg-orange-500' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setDaysFilter(opt.value)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    daysFilter === opt.value
+                      ? 'bg-white text-blue-600 shadow-sm font-semibold'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {opt.dot && <span className={`w-1.5 h-1.5 rounded-full ${opt.dot} flex-shrink-0`} />}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 구분선 */}
+            <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+
             {/* 상태 드롭다운 */}
             <div className="relative flex-shrink-0">
               <button
@@ -382,9 +423,9 @@ export default function AsManagementPage() {
               </span>
             </div>
             <button
-              onClick={() => setShowUnworkedOnly(prev => !prev)}
+              onClick={() => setDaysFilter(prev => prev === 'unworked' ? 'all' : 'unworked')}
               className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                showUnworkedOnly
+                daysFilter === 'unworked'
                   ? maxUnworkedDays >= 7
                     ? 'bg-red-500 text-white hover:bg-red-600'
                     : 'bg-orange-500 text-white hover:bg-orange-600'
@@ -393,7 +434,7 @@ export default function AsManagementPage() {
                     : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
               }`}
             >
-              {showUnworkedOnly ? '전체 보기' : '미작업만 보기'}
+              {daysFilter === 'unworked' ? '전체 보기' : '미작업만 보기'}
             </button>
           </div>
         )}
@@ -432,7 +473,8 @@ export default function AsManagementPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/70">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">사업장</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[13%]">일정</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[10%]">일정</th>
+                    <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[6%]">소요</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[18%]">접수내용</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">배출구</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[9%]">AS 담당자</th>
@@ -483,12 +525,11 @@ export default function AsManagementPage() {
                             )}
                           </div>
                         </td>
+                        {/* 일정: 접수일 + 작업일 2줄 */}
                         <td className="px-4 py-3.5">
-                          {/* 접수일 */}
                           <div className="text-gray-500 text-xs tabular-nums">
-                            {formatDate(record.receipt_date) ?? <span className="text-gray-300">접수일 없음</span>}
+                            {formatDate(record.receipt_date) ?? <span className="text-gray-300">—</span>}
                           </div>
-                          {/* 작업일 또는 미작업 표시 */}
                           {record.work_date ? (
                             <div className="text-gray-600 text-xs tabular-nums mt-0.5">
                               → {formatDate(record.work_date)}
@@ -496,32 +537,34 @@ export default function AsManagementPage() {
                           ) : (
                             <div className="mt-0.5 text-xs text-gray-400 italic">미작업</div>
                           )}
-                          {/* 소요일수 배지 */}
-                          {days !== null && (
-                            <div className="mt-1">
-                              {isUnworked ? (
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
-                                  days >= 7
-                                    ? 'bg-red-100 text-red-700 border border-red-200'
-                                    : 'bg-orange-100 text-orange-700 border border-orange-200'
-                                }`}>
-                                  {days >= 7 && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
-                                  )}
-                                  {days}일 경과
-                                </span>
-                              ) : (
-                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
-                                  days <= 3
-                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                    : days <= 7
-                                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                      : 'bg-red-100 text-red-700 border border-red-200'
-                                }`}>
-                                  {days}일 소요
-                                </span>
-                              )}
-                            </div>
+                        </td>
+                        {/* 소요: 배지만 */}
+                        <td className="px-3 py-3.5 text-center">
+                          {days !== null ? (
+                            isUnworked ? (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
+                                days >= 7
+                                  ? 'bg-red-100 text-red-700 border border-red-200'
+                                  : 'bg-orange-100 text-orange-700 border border-orange-200'
+                              }`}>
+                                {days >= 7 && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
+                                )}
+                                {days}일
+                              </span>
+                            ) : (
+                              <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
+                                days <= 3
+                                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                  : days <= 7
+                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                    : 'bg-red-100 text-red-700 border border-red-200'
+                              }`}>
+                                {days}일
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3.5">
