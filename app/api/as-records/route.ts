@@ -132,12 +132,18 @@ export async function GET(request: NextRequest) {
           WHEN bi.delivery_date IS NULL THEN NULL
           ELSE (bi.delivery_date + INTERVAL '26 months' <= NOW())
         END AS is_paid,
-        -- 사용자재 집계
-        (SELECT COUNT(*) FROM as_material_usage amu WHERE amu.as_record_id = ar.id) AS material_count,
-        (SELECT COALESCE(SUM(amu.quantity * amu.unit_price), 0)
-         FROM as_material_usage amu WHERE amu.as_record_id = ar.id) AS total_material_cost
+        -- 사용자재 집계 (서브쿼리 → JOIN으로 최적화)
+        COALESCE(amu_agg.material_count, 0) AS material_count,
+        COALESCE(amu_agg.total_material_cost, 0) AS total_material_cost
       FROM as_records ar
       LEFT JOIN business_info bi ON ar.business_id = bi.id
+      LEFT JOIN (
+        SELECT as_record_id,
+               COUNT(*) AS material_count,
+               SUM(quantity * unit_price) AS total_material_cost
+        FROM as_material_usage
+        GROUP BY as_record_id
+      ) amu_agg ON amu_agg.as_record_id = ar.id
       WHERE ${whereClause}
       ORDER BY ar.work_date DESC NULLS LAST, ar.receipt_date DESC NULLS LAST, ar.created_at DESC
       LIMIT $${paramIdx++} OFFSET $${paramIdx++}

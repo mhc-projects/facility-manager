@@ -92,6 +92,8 @@ export default function AsManagementPage() {
   const [paidStatus, setPaidStatus] = useState('all');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const statusButtonRef = useRef<HTMLButtonElement>(null);
+  const [statusDropdownPos, setStatusDropdownPos] = useState({ top: 0, left: 0 });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AsRecord | null>(null);
@@ -417,9 +419,16 @@ export default function AsManagementPage() {
             <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
 
             {/* 상태 드롭다운 */}
-            <div className="relative flex-shrink-0">
+            <div className="flex-shrink-0">
               <button
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                ref={statusButtonRef}
+                onClick={() => {
+                  if (!showStatusDropdown && statusButtonRef.current) {
+                    const rect = statusButtonRef.current.getBoundingClientRect();
+                    setStatusDropdownPos({ top: rect.bottom + 6, left: rect.left });
+                  }
+                  setShowStatusDropdown(v => !v);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm transition-all ${
                   selectedStatuses.length > 0
                     ? 'border-blue-400 bg-blue-50 text-blue-700'
@@ -435,26 +444,6 @@ export default function AsManagementPage() {
                 )}
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showStatusDropdown ? 'rotate-180' : ''}`} />
               </button>
-
-              {showStatusDropdown && (
-                <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-2 min-w-40">
-                  {STATUS_OPTIONS.map(opt => (
-                    <label
-                      key={opt.value}
-                      className="flex items-center gap-2.5 px-2.5 py-2 hover:bg-gray-50 rounded-lg cursor-pointer text-sm transition-colors"
-                    >
-                      <div className={`w-2 h-2 rounded-full ${opt.color}`} />
-                      <span className="flex-1 text-gray-700">{opt.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={selectedStatuses.includes(opt.value)}
-                        onChange={() => toggleStatus(opt.value)}
-                        className="rounded accent-blue-600"
-                      />
-                    </label>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* 오른쪽 끝: 건수 + 초기화 */}
@@ -717,12 +706,34 @@ export default function AsManagementPage() {
         />
       )}
 
-      {/* 상태 드롭다운 닫기 오버레이 */}
+      {/* 상태 드롭다운 */}
       {showStatusDropdown && (
-        <div
-          className="fixed inset-0 z-10"
-          onClick={() => setShowStatusDropdown(false)}
-        />
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setShowStatusDropdown(false)}
+          />
+          <div
+            style={{ top: statusDropdownPos.top, left: statusDropdownPos.left }}
+            className="fixed bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-2 min-w-40"
+          >
+            {STATUS_OPTIONS.map(opt => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-2.5 px-2.5 py-2 hover:bg-gray-50 rounded-lg cursor-pointer text-sm transition-colors"
+              >
+                <div className={`w-2 h-2 rounded-full ${opt.color}`} />
+                <span className="flex-1 text-gray-700">{opt.label}</span>
+                <input
+                  type="checkbox"
+                  checked={selectedStatuses.includes(opt.value)}
+                  onChange={() => toggleStatus(opt.value)}
+                  className="rounded accent-blue-600"
+                />
+              </label>
+            ))}
+          </div>
+        </>
       )}
     </AdminLayout>
   );
