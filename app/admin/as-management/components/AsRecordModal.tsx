@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, Send, Clock, FileText, Wrench, MessageSquare, ChevronRight } from 'lucide-react';
+import { X, Plus, Trash2, Send, Clock, FileText, Wrench, MessageSquare, ChevronRight, DollarSign } from 'lucide-react';
 import { AsRecord, ProgressNote } from '../page';
 import { STATUS_CONFIG } from './AsStatusBadge';
 import { TokenManager } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
+import AsPricingAdjustmentTab from './AsPricingAdjustmentTab';
 
 interface PriceItem {
   id: string;
@@ -122,7 +123,7 @@ export default function AsRecordModal({
   const [addingNote, setAddingNote] = useState(false);
 
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'materials' | 'progress'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'materials' | 'progress' | 'pricing'>('basic');
 
   const suggestRef = useRef<HTMLDivElement>(null);
 
@@ -465,6 +466,7 @@ export default function AsRecordModal({
     { key: 'basic' as const, label: '기본 정보', icon: FileText },
     { key: 'materials' as const, label: '사용자재', badge: materials.length > 0 ? materials.length : undefined, icon: Wrench },
     { key: 'progress' as const, label: '진행 메모', badge: progressNotes.length > 0 ? progressNotes.length : undefined, icon: MessageSquare },
+    { key: 'pricing' as const, label: '금액 조정', icon: DollarSign },
   ];
 
   const modal = (
@@ -951,11 +953,14 @@ export default function AsRecordModal({
                       </div>
                       <div className="col-span-2 flex gap-1">
                         <input
-                          type="number"
-                          value={mat.quantity}
-                          onChange={e => updateMaterial(idx, 'quantity', Number(e.target.value))}
-                          min="0"
-                          step="0.1"
+                          type="text"
+                          inputMode="numeric"
+                          value={mat.quantity === 0 ? '' : Math.round(mat.quantity).toLocaleString('ko-KR')}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/,/g, '').replace(/[^0-9]/g, '');
+                            updateMaterial(idx, 'quantity', raw === '' ? 0 : Number(raw));
+                          }}
+                          placeholder="0"
                           className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all tabular-nums"
                         />
                         <input
@@ -1000,6 +1005,36 @@ export default function AsRecordModal({
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── 금액 조정 탭 ── */}
+          {activeTab === 'pricing' && (
+            <div>
+              {!isEdit ? (
+                <div className="text-center py-12">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <DollarSign className="w-6 h-6 text-gray-300" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-500">아직 저장되지 않았습니다</p>
+                  <p className="text-xs text-gray-400 mt-1">AS 건을 먼저 저장한 후 금액 조정을 추가할 수 있습니다</p>
+                </div>
+              ) : (
+                <AsPricingAdjustmentTab
+                  recordId={record!.id}
+                  materialCost={totalMaterialCost}
+                  dispatchCost={(() => {
+                    const item = dispatchCostList.find(p => p.id === dispatchCostPriceId);
+                    return item ? Math.round(Number(item.unit_price)) * dispatchCount : 0;
+                  })()}
+                  materialRevenue={totalMaterialCost}
+                  dispatchRevenue={(() => {
+                    const item = dispatchRevenueList.find(p => p.id === dispatchRevenuePriceId);
+                    return item ? Math.round(Number(item.unit_price)) * dispatchCount : 0;
+                  })()}
+                  currentUserName={currentUser?.name || null}
+                />
               )}
             </div>
           )}

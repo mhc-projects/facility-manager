@@ -118,7 +118,21 @@ export async function GET(request: NextRequest) {
               WHERE amu.as_record_id = ar.id
             ),
             0
-          ) AS material_revenue
+          ) AS material_revenue,
+
+          -- 매출 조정 합계
+          COALESCE(
+            (SELECT SUM(apa.amount) FROM as_price_adjustments apa
+             WHERE apa.as_record_id = ar.id AND apa.adjustment_type = 'revenue' AND apa.is_deleted = false),
+            0
+          ) AS revenue_adjustment,
+
+          -- 매입 조정 합계
+          COALESCE(
+            (SELECT SUM(apa.amount) FROM as_price_adjustments apa
+             WHERE apa.as_record_id = ar.id AND apa.adjustment_type = 'cost' AND apa.is_deleted = false),
+            0
+          ) AS cost_adjustment
 
         FROM as_records ar
         LEFT JOIN business_info bi ON ar.business_id = bi.id
@@ -133,9 +147,11 @@ export async function GET(request: NextRequest) {
         SUM(dispatch_revenue) AS total_dispatch_revenue,
         SUM(material_cost) AS total_material_cost,
         SUM(material_revenue) AS total_material_revenue,
-        SUM(dispatch_cost + material_cost) AS total_cost,
-        SUM(dispatch_revenue + material_revenue) AS total_revenue,
-        SUM((dispatch_revenue + material_revenue) - (dispatch_cost + material_cost)) AS profit,
+        SUM(revenue_adjustment) AS total_revenue_adjustment,
+        SUM(cost_adjustment) AS total_cost_adjustment,
+        SUM(dispatch_cost + material_cost + cost_adjustment) AS total_cost,
+        SUM(dispatch_revenue + material_revenue + revenue_adjustment) AS total_revenue,
+        SUM((dispatch_revenue + material_revenue + revenue_adjustment) - (dispatch_cost + material_cost + cost_adjustment)) AS profit,
         JSON_AGG(
           JSON_BUILD_OBJECT(
             'id', record_id,
@@ -146,9 +162,11 @@ export async function GET(request: NextRequest) {
             'dispatch_revenue', dispatch_revenue,
             'material_cost', material_cost,
             'material_revenue', material_revenue,
-            'total_cost', dispatch_cost + material_cost,
-            'total_revenue', dispatch_revenue + material_revenue,
-            'profit', (dispatch_revenue + material_revenue) - (dispatch_cost + material_cost)
+            'revenue_adjustment', revenue_adjustment,
+            'cost_adjustment', cost_adjustment,
+            'total_cost', dispatch_cost + material_cost + cost_adjustment,
+            'total_revenue', dispatch_revenue + material_revenue + revenue_adjustment,
+            'profit', (dispatch_revenue + material_revenue + revenue_adjustment) - (dispatch_cost + material_cost + cost_adjustment)
           )
           ORDER BY work_date DESC
         ) AS records
@@ -166,6 +184,9 @@ export async function GET(request: NextRequest) {
       const totalDispatchCost = Number(row.total_dispatch_cost);
       const totalMaterialRevenue = Number(row.total_material_revenue);
       const totalMaterialCost = Number(row.total_material_cost);
+      const totalRevenueAdjustment = Number(row.total_revenue_adjustment);
+      const totalCostAdjustment = Number(row.total_cost_adjustment);
+      // 인센티브: 자재마진 기준 (조정 금액은 인센티브 계산에 미포함)
       const incentivePay = Math.round((totalMaterialRevenue - totalMaterialCost) * 0.3);
       const dispatchPay = totalDispatchCost;
       const totalManagerPay = incentivePay + dispatchPay;
@@ -178,6 +199,8 @@ export async function GET(request: NextRequest) {
         const recDispatchPay = recDispatchCost;
         return {
           ...rec,
+          revenue_adjustment: Number(rec.revenue_adjustment),
+          cost_adjustment: Number(rec.cost_adjustment),
           incentive_pay: recIncentivePay,
           dispatch_pay: recDispatchPay,
           total_manager_pay: recIncentivePay + recDispatchPay,
@@ -191,12 +214,14 @@ export async function GET(request: NextRequest) {
         total_dispatch_count: Number(row.total_dispatch_count),
         total_dispatch_cost: totalDispatchCost,
         total_dispatch_revenue: Number(row.total_dispatch_revenue),
-        total_material_cost: Number(row.total_material_cost),
-        total_material_revenue: Number(row.total_material_revenue),
+        total_material_cost: totalMaterialCost,
+        total_material_revenue: totalMaterialRevenue,
+        total_revenue_adjustment: totalRevenueAdjustment,
+        total_cost_adjustment: totalCostAdjustment,
         total_cost: Number(row.total_cost),
         total_revenue: totalRevenue,
         profit,
-        profit_rate: totalRevenue > 0 ? Math.round((profit / totalRevenue) * 1000) / 10 : 0,
+        profit_rate: totalRevenue > 0 ? Math.round(((profit - totalManagerPay) / totalRevenue) * 1000) / 10 : 0,
         incentive_pay: incentivePay,
         dispatch_pay: dispatchPay,
         total_manager_pay: totalManagerPay,
@@ -206,7 +231,7 @@ export async function GET(request: NextRequest) {
     });
 
     type BizRow = typeof businesses[0];
-    type BizSummary = { paid_count: number; total_dispatch_cost: number; total_dispatch_revenue: number; total_material_cost: number; total_material_revenue: number; total_cost: number; total_revenue: number; profit: number; total_manager_pay: number; };
+    type BizSummary = { paid_count: number; total_dispatch_cost: number; total_dispatch_revenue: number; total_material_cost: number; total_material_revenue: number; total_revenue_adjustment: number; total_cost_adjustment: number; total_cost: number; total_revenue: number; profit: number; total_manager_pay: number; };
     const summary = businesses.reduce(
       (acc: BizSummary, b: BizRow) => ({
         paid_count: acc.paid_count + b.record_count,
@@ -214,6 +239,8 @@ export async function GET(request: NextRequest) {
         total_dispatch_revenue: acc.total_dispatch_revenue + b.total_dispatch_revenue,
         total_material_cost: acc.total_material_cost + b.total_material_cost,
         total_material_revenue: acc.total_material_revenue + b.total_material_revenue,
+        total_revenue_adjustment: acc.total_revenue_adjustment + b.total_revenue_adjustment,
+        total_cost_adjustment: acc.total_cost_adjustment + b.total_cost_adjustment,
         total_cost: acc.total_cost + b.total_cost,
         total_revenue: acc.total_revenue + b.total_revenue,
         profit: acc.profit + b.profit,
@@ -225,6 +252,8 @@ export async function GET(request: NextRequest) {
         total_dispatch_revenue: 0,
         total_material_cost: 0,
         total_material_revenue: 0,
+        total_revenue_adjustment: 0,
+        total_cost_adjustment: 0,
         total_cost: 0,
         total_revenue: 0,
         profit: 0,
@@ -233,7 +262,7 @@ export async function GET(request: NextRequest) {
     );
 
     const profitRate = summary.total_revenue > 0
-      ? Math.round((summary.profit / summary.total_revenue) * 1000) / 10
+      ? Math.round(((summary.profit - summary.total_manager_pay) / summary.total_revenue) * 1000) / 10
       : 0;
 
     // 담당자별 지급 집계

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Package, Truck, Search, ChevronLeft, User, Download, X, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { TrendingUp, TrendingDown, Package, Truck, Search, ChevronLeft, User, Download, X, ExternalLink, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { TokenManager } from '@/lib/api-client';
 import AdminLayout from '@/components/ui/AdminLayout';
@@ -15,6 +15,8 @@ interface RevenueRecord {
   dispatch_revenue: number;
   material_cost: number;
   material_revenue: number;
+  revenue_adjustment: number;
+  cost_adjustment: number;
   total_cost: number;
   total_revenue: number;
   profit: number;
@@ -33,6 +35,8 @@ interface BusinessRevenue {
   total_dispatch_revenue: number;
   total_material_cost: number;
   total_material_revenue: number;
+  total_revenue_adjustment: number;
+  total_cost_adjustment: number;
   total_cost: number;
   total_revenue: number;
   profit: number;
@@ -59,6 +63,8 @@ interface Summary {
   total_dispatch_revenue: number;
   total_material_cost: number;
   total_material_revenue: number;
+  total_revenue_adjustment: number;
+  total_cost_adjustment: number;
   total_cost: number;
   total_revenue: number;
   profit: number;
@@ -81,6 +87,173 @@ function ProfitBadge({ rate }: { rate: number }) {
   return <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-semibold ${color}`}>{rate.toFixed(1)}%</span>;
 }
 
+function CalcRow({ label, value, sub, bold, color, indent, separator }: {
+  label: string; value: number; sub?: string; bold?: boolean; color?: string; indent?: boolean; separator?: boolean;
+}) {
+  const valColor = color || (value >= 0 ? 'text-gray-800' : 'text-red-600');
+  return (
+    <>
+      {separator && <tr><td colSpan={2} className="py-1"><div className="border-t border-gray-200" /></td></tr>}
+      <tr>
+        <td className={`py-1 pr-4 text-sm ${bold ? 'font-semibold text-gray-700' : 'text-gray-500'} ${indent ? 'pl-4' : ''}`}>
+          {label}{sub && <span className="text-xs text-gray-400 ml-1">{sub}</span>}
+        </td>
+        <td className={`py-1 text-right tabular-nums text-sm ${bold ? 'font-bold' : 'font-medium'} ${valColor}`}>
+          {value >= 0 ? '' : '−'}{fmt(Math.abs(value))}원
+        </td>
+      </tr>
+    </>
+  );
+}
+
+function BusinessDetailModal({ biz, period, onClose }: {
+  biz: BusinessRevenue;
+  period: { from: string; to: string };
+  onClose: () => void;
+}) {
+  const netProfitRate = biz.total_revenue > 0
+    ? Math.round((biz.net_profit / biz.total_revenue) * 1000) / 10
+    : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-purple-500" />
+            <span className="text-base font-semibold text-gray-800">{biz.business_name}</span>
+            <span className="text-xs text-gray-400 ml-1">{period.from.slice(0, 7)} ~ {period.to.slice(0, 7)}</span>
+            <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-500">{biz.record_count}건</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {/* 계산식 요약 */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="grid grid-cols-2 gap-6">
+              {/* 매출 구성 */}
+              <div className="bg-emerald-50/50 rounded-xl px-5 py-4 border border-emerald-100">
+                <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-3">매출 구성</p>
+                <table className="w-full">
+                  <tbody>
+                    <CalcRow label="출동 매출" value={biz.total_dispatch_revenue} color="text-gray-700" />
+                    <CalcRow label="자재 매출" value={biz.total_material_revenue} color="text-gray-700" />
+                    {biz.total_revenue_adjustment !== 0 && (
+                      <CalcRow
+                        label="매출 조정"
+                        value={biz.total_revenue_adjustment}
+                        color={biz.total_revenue_adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}
+                      />
+                    )}
+                    <CalcRow label="총 매출" value={biz.total_revenue} bold color="text-emerald-700" separator />
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 원가 구성 */}
+              <div className="bg-red-50/50 rounded-xl px-5 py-4 border border-red-100">
+                <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-3">원가 구성</p>
+                <table className="w-full">
+                  <tbody>
+                    <CalcRow label="출동 원가" value={biz.total_dispatch_cost} color="text-gray-700" />
+                    <CalcRow label="자재 원가" value={biz.total_material_cost} color="text-gray-700" />
+                    {biz.total_cost_adjustment !== 0 && (
+                      <CalcRow
+                        label="매입 조정"
+                        value={biz.total_cost_adjustment}
+                        color={biz.total_cost_adjustment >= 0 ? 'text-red-600' : 'text-emerald-600'}
+                      />
+                    )}
+                    <CalcRow label="총 원가" value={biz.total_cost} bold color="text-red-600" separator />
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 실수익 계산 */}
+            <div className="mt-4 bg-gray-50 rounded-xl px-5 py-4 border border-gray-200">
+              <table className="w-full">
+                <tbody>
+                  <CalcRow label="순이익" sub="(총매출 − 총원가)" value={biz.profit} color={biz.profit >= 0 ? 'text-blue-700' : 'text-red-700'} />
+                  <tr>
+                    <td className="py-1 pr-4 text-sm text-gray-500">
+                      담당자 지급 <span className="text-xs text-gray-400 ml-1">(출동원가 + 자재마진×30%)</span>
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-sm font-medium text-orange-600">
+                      −{fmt(biz.total_manager_pay)}원
+                    </td>
+                  </tr>
+                  <tr><td colSpan={2} className="py-1"><div className="border-t-2 border-gray-300" /></td></tr>
+                  <tr>
+                    <td className="py-1 pr-4 text-base font-bold text-purple-700">회사 실수익</td>
+                    <td className={`py-1 text-right tabular-nums text-base font-bold ${biz.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                      {biz.net_profit >= 0 ? '' : '−'}{fmt(Math.abs(biz.net_profit))}원
+                      <span className="ml-2"><ProfitBadge rate={netProfitRate} /></span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 건별 내역 */}
+          <div className="px-6 py-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">건별 내역</p>
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">작업일</th>
+                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">접수 내용</th>
+                    <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">출동</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">총 매출</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">총 원가</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-yellow-600 uppercase tracking-wider">조정</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">순이익</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-orange-400 uppercase tracking-wider">지급</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-purple-500 uppercase tracking-wider">실수익</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {biz.records.map(rec => {
+                    const netAdj = rec.revenue_adjustment - rec.cost_adjustment;
+                    const hasAdj = rec.revenue_adjustment !== 0 || rec.cost_adjustment !== 0;
+                    return (
+                      <tr key={rec.id} className={`border-b border-gray-50 last:border-0 transition-colors ${hasAdj ? 'bg-yellow-50/40' : 'hover:bg-gray-50'}`}>
+                        <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{rec.work_date?.slice(0, 10) || '—'}</td>
+                        <td className="px-4 py-2 text-gray-600 max-w-[160px] truncate">{rec.receipt_content || '—'}</td>
+                        <td className="px-3 py-2 text-center text-gray-500">{rec.dispatch_count}회</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{fmt(rec.total_revenue)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-gray-500">{fmt(rec.total_cost - rec.cost_adjustment)}</td>
+                        <td className={`px-4 py-2 text-right tabular-nums ${netAdj !== 0 ? (netAdj > 0 ? 'text-emerald-500' : 'text-red-500') : 'text-gray-300'}`}>
+                          {netAdj !== 0 ? `${netAdj > 0 ? '+' : ''}${fmt(netAdj)}` : '—'}
+                        </td>
+                        <td className={`px-4 py-2 text-right tabular-nums font-medium ${rec.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                          {fmt(rec.profit)}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-orange-500">{fmt(rec.total_manager_pay)}</td>
+                        <td className={`px-4 py-2 text-right tabular-nums font-semibold ${rec.net_profit >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                          {fmt(rec.net_profit)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AsRevenuePage() {
   const thisMonth = getThisMonth();
   const [periodFrom, setPeriodFrom] = useState(thisMonth);
@@ -90,7 +263,7 @@ export default function AsRevenuePage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRevenue[]>([]);
   const [managers, setManagers] = useState<ManagerPay[]>([]);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedBiz, setSelectedBiz] = useState<BusinessRevenue | null>(null);
   const [managerModalOpen, setManagerModalOpen] = useState(false);
 
   const fetchRevenue = useCallback(async () => {
@@ -115,15 +288,6 @@ export default function AsRevenuePage() {
   }, [periodFrom, periodTo, businessName]);
 
   useEffect(() => { fetchRevenue(); }, [fetchRevenue]);
-
-  const toggleExpand = (key: string) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
 
   const downloadManagerPayExcel = async () => {
     if (!managers.length) return;
@@ -264,6 +428,7 @@ export default function AsRevenuePage() {
                   {summary.profit >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
                   <ProfitBadge rate={summary.profit_rate} />
                 </div>
+                <p className="text-[10px] text-gray-400 mt-1">회사 실수익 기준</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -291,7 +456,7 @@ export default function AsRevenuePage() {
 
         {/* 원가 / 매출 세부 요약 */}
         {summary && (summary.total_dispatch_cost > 0 || summary.total_material_cost > 0) && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${(summary.total_revenue_adjustment !== 0 || summary.total_cost_adjustment !== 0) ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
               <div className="flex items-center gap-2 mb-3">
                 <Package className="w-4 h-4 text-blue-500" />
@@ -312,6 +477,17 @@ export default function AsRevenuePage() {
                 <div><span className="text-gray-400 text-xs">매출</span><p className="font-semibold text-emerald-700">{fmt(summary.total_dispatch_revenue)}원</p></div>
               </div>
             </div>
+            {(summary.total_revenue_adjustment !== 0 || summary.total_cost_adjustment !== 0) && (
+              <div className="bg-yellow-50 rounded-xl border border-yellow-100 shadow-sm px-5 py-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-yellow-700">금액 조정</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="text-gray-400 text-xs">매입 조정</span><p className={`font-semibold ${summary.total_cost_adjustment >= 0 ? 'text-red-600' : 'text-emerald-700'}`}>{summary.total_cost_adjustment >= 0 ? '+' : ''}{fmt(summary.total_cost_adjustment)}원</p></div>
+                  <div><span className="text-gray-400 text-xs">매출 조정</span><p className={`font-semibold ${summary.total_revenue_adjustment >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{summary.total_revenue_adjustment >= 0 ? '+' : ''}{fmt(summary.total_revenue_adjustment)}원</p></div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -339,94 +515,49 @@ export default function AsRevenuePage() {
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">출동 매출</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재 원가</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재 매출</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold text-yellow-600 uppercase tracking-wider">매입 조정</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold text-yellow-600 uppercase tracking-wider">매출 조정</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">총 매출</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">순이익</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-orange-400 uppercase tracking-wider">담당자 지급</th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold text-purple-400 uppercase tracking-wider">회사 실수익</th>
-                  <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-20">이익률</th>
+                  <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-20">이익률<br/><span className="font-normal normal-case text-gray-300">실수익 기준</span></th>
                   <th className="w-10" />
                 </tr>
               </thead>
               <tbody>
                 {businesses.map(biz => {
                   const key = biz.business_id || biz.business_name;
-                  const isExpanded = expandedIds.has(key);
                   return (
-                    <React.Fragment key={key}>
-                      <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => toggleExpand(key)}>
-                        <td className="px-5 py-3 font-medium text-gray-900">{biz.business_name}</td>
-                        <td className="px-3 py-3 text-center text-gray-600">{biz.record_count}</td>
-                        <td className="px-3 py-3 text-center text-gray-600">{biz.total_dispatch_count}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_dispatch_cost)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_dispatch_revenue)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_material_cost)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_material_revenue)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">{fmt(biz.total_revenue)}</td>
-                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${biz.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                          {fmt(biz.profit)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-600">{fmt(biz.total_manager_pay)}</td>
-                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${biz.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
-                          {fmt(biz.net_profit)}
-                        </td>
-                        <td className="px-4 py-3 text-center"><ProfitBadge rate={biz.profit_rate} /></td>
-                        <td className="px-3 py-3 text-center">
-                          {isExpanded
-                            ? <ChevronDown className="w-4 h-4 text-gray-400 mx-auto" />
-                            : <ChevronRight className="w-4 h-4 text-gray-400 mx-auto" />
-                          }
-                        </td>
-                      </tr>
-
-                      {/* 상세 펼치기 */}
-                      {isExpanded && (
-                        <tr className="bg-gray-50/80">
-                          <td colSpan={13} className="px-0 py-0">
-                            <div className="border-t border-gray-100">
-                              <table className="w-full text-xs">
-                                <thead>
-                                  <tr className="border-b border-gray-100">
-                                    <th className="text-left pl-12 pr-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">작업일</th>
-                                    <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">접수 내용</th>
-                                    <th className="text-center px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-16">출동</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">출동원가</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">출동매출</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재원가</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">자재매출</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">총매출</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">순이익</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-orange-400 uppercase tracking-wider">담당자 지급</th>
-                                    <th className="text-right px-4 py-2 text-[10px] font-semibold text-purple-400 uppercase tracking-wider">회사 실수익</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {biz.records.map(rec => (
-                                    <tr key={rec.id} className="border-b border-gray-100 last:border-0 hover:bg-white transition-colors">
-                                      <td className="pl-12 pr-4 py-2 text-gray-600 whitespace-nowrap">{rec.work_date?.slice(0, 10) || '—'}</td>
-                                      <td className="px-4 py-2 text-gray-600 max-w-[200px] truncate">{rec.receipt_content || '—'}</td>
-                                      <td className="px-3 py-2 text-center text-gray-500">{rec.dispatch_count}회</td>
-                                      <td className="px-4 py-2 text-right tabular-nums text-gray-500">{fmt(rec.dispatch_cost)}</td>
-                                      <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{fmt(rec.dispatch_revenue)}</td>
-                                      <td className="px-4 py-2 text-right tabular-nums text-gray-500">{fmt(rec.material_cost)}</td>
-                                      <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{fmt(rec.material_revenue)}</td>
-                                      <td className="px-4 py-2 text-right tabular-nums font-medium text-gray-800">{fmt(rec.total_revenue)}</td>
-                                      <td className={`px-4 py-2 text-right tabular-nums font-medium ${rec.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                                        {fmt(rec.profit)}
-                                      </td>
-                                      <td className="px-4 py-2 text-right tabular-nums text-orange-600">{fmt(rec.total_manager_pay)}</td>
-                                      <td className={`px-4 py-2 text-right tabular-nums ${rec.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
-                                        {fmt(rec.net_profit)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                    <tr key={key}
+                      className="border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer group"
+                      onClick={() => setSelectedBiz(biz)}>
+                      <td className="px-5 py-3 font-medium text-gray-900 group-hover:text-blue-700 transition-colors">{biz.business_name}</td>
+                      <td className="px-3 py-3 text-center text-gray-600">{biz.record_count}</td>
+                      <td className="px-3 py-3 text-center text-gray-600">{biz.total_dispatch_count}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_dispatch_cost)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_dispatch_revenue)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_material_cost)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_material_revenue)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums text-sm ${biz.total_cost_adjustment !== 0 ? (biz.total_cost_adjustment > 0 ? 'text-red-600' : 'text-emerald-600') : 'text-gray-300'}`}>
+                        {biz.total_cost_adjustment !== 0 ? `${biz.total_cost_adjustment > 0 ? '+' : ''}${fmt(biz.total_cost_adjustment)}` : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right tabular-nums text-sm ${biz.total_revenue_adjustment !== 0 ? (biz.total_revenue_adjustment > 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-300'}`}>
+                        {biz.total_revenue_adjustment !== 0 ? `${biz.total_revenue_adjustment > 0 ? '+' : ''}${fmt(biz.total_revenue_adjustment)}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">{fmt(biz.total_revenue)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums font-semibold ${biz.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                        {fmt(biz.profit)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-600">{fmt(biz.total_manager_pay)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums font-semibold ${biz.net_profit >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                        {fmt(biz.net_profit)}
+                      </td>
+                      <td className="px-4 py-3 text-center"><ProfitBadge rate={biz.profit_rate} /></td>
+                      <td className="px-3 py-3 text-center">
+                        <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-blue-400 mx-auto transition-colors" />
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -439,6 +570,12 @@ export default function AsRevenuePage() {
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-700">{fmt(summary.total_dispatch_revenue)}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-700">{fmt(summary.total_material_cost)}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-700">{fmt(summary.total_material_revenue)}</td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-semibold ${summary.total_cost_adjustment !== 0 ? (summary.total_cost_adjustment > 0 ? 'text-red-600' : 'text-emerald-600') : 'text-gray-300'}`}>
+                      {summary.total_cost_adjustment !== 0 ? `${summary.total_cost_adjustment > 0 ? '+' : ''}${fmt(summary.total_cost_adjustment)}` : '—'}
+                    </td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-semibold ${summary.total_revenue_adjustment !== 0 ? (summary.total_revenue_adjustment > 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-300'}`}>
+                      {summary.total_revenue_adjustment !== 0 ? `${summary.total_revenue_adjustment > 0 ? '+' : ''}${fmt(summary.total_revenue_adjustment)}` : '—'}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums font-bold text-gray-900">{fmt(summary.total_revenue)}</td>
                     <td className={`px-4 py-3 text-right tabular-nums font-bold ${summary.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
                       {fmt(summary.profit)}
@@ -456,6 +593,15 @@ export default function AsRevenuePage() {
           </div>
         )}
       </div>
+
+      {/* 사업장 상세 모달 */}
+      {selectedBiz && (
+        <BusinessDetailModal
+          biz={selectedBiz}
+          period={{ from: periodFrom, to: periodTo }}
+          onClose={() => setSelectedBiz(null)}
+        />
+      )}
 
       {/* 담당자별 지급 현황 모달 */}
       {managerModalOpen && (
