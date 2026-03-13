@@ -142,7 +142,7 @@ function BusinessDetailModal({ biz, period, onClose }: {
             <div className="mx-6 mt-5 flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
               <span className="font-semibold">무상 AS 사업장</span>
               <span className="text-emerald-400">—</span>
-              <span>자재·출동 매출은 발생하지 않으며, 출동 원가 및 담당자 지급만 집계됩니다.</span>
+              <span>자재 매출·원가는 발생하지 않으며, 출동 매출·원가 및 담당자 지급만 집계됩니다.</span>
             </div>
           )}
           {/* 계산식 요약 */}
@@ -243,7 +243,7 @@ function BusinessDetailModal({ biz, period, onClose }: {
                           {rec.is_free && <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-700">무상</span>}
                         </td>
                         <td className="px-3 py-2 text-center text-gray-500">{rec.dispatch_count}회</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{rec.is_free ? <span className="text-gray-300 text-xs">—</span> : fmt(rec.total_revenue)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-emerald-600">{fmt(rec.is_free ? rec.dispatch_revenue : rec.total_revenue)}</td>
                         <td className="px-4 py-2 text-right tabular-nums text-gray-500">{fmt(rec.total_cost - rec.cost_adjustment)}</td>
                         <td className={`px-4 py-2 text-right tabular-nums ${netAdj !== 0 ? (netAdj > 0 ? 'text-emerald-500' : 'text-red-500') : 'text-gray-300'}`}>
                           {netAdj !== 0 ? `${netAdj > 0 ? '+' : ''}${fmt(netAdj)}` : '—'}
@@ -687,7 +687,7 @@ export default function AsRevenuePage() {
                       <td className="px-3 py-3 text-center text-gray-600">{biz.record_count}</td>
                       <td className="px-3 py-3 text-center text-gray-600">{biz.total_dispatch_count}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmt(biz.total_dispatch_cost)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{allFree ? <span className="text-gray-300">—</span> : fmt(biz.total_dispatch_revenue)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmt(biz.total_dispatch_revenue)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-600">{allFree ? <span className="text-gray-300">—</span> : fmt(biz.total_material_cost)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{allFree ? <span className="text-gray-300">—</span> : fmt(biz.total_material_revenue)}</td>
                       <td className={`px-4 py-3 text-right tabular-nums text-sm ${biz.total_cost_adjustment !== 0 ? (biz.total_cost_adjustment > 0 ? 'text-red-600' : 'text-emerald-600') : 'text-gray-300'}`}>

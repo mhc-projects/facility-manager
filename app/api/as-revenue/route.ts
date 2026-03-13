@@ -88,18 +88,11 @@ export async function GET(request: NextRequest) {
             0
           ) * ar.dispatch_count AS dispatch_cost,
 
-          -- 출동 매출 (무상이면 0)
-          CASE
-            WHEN ar.is_paid_override = false THEN 0
-            WHEN ar.is_paid_override IS NULL AND (
-              bi.delivery_date IS NULL
-              OR bi.delivery_date + INTERVAL '26 months' > NOW()
-            ) THEN 0
-            ELSE COALESCE(
-              (SELECT apl.unit_price FROM as_price_list apl WHERE apl.id = ar.dispatch_revenue_price_id AND apl.is_active = true),
-              0
-            ) * ar.dispatch_count
-          END AS dispatch_revenue,
+          -- 출동 매출 (무상/유상 공통 - 자재와 달리 출동 매출은 무상이어도 계산)
+          COALESCE(
+            (SELECT apl.unit_price FROM as_price_list apl WHERE apl.id = ar.dispatch_revenue_price_id AND apl.is_active = true),
+            0
+          ) * ar.dispatch_count AS dispatch_revenue,
 
           -- 자재 원가 합계 (무상이면 0)
           CASE
