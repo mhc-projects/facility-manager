@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
         GROUP BY as_record_id
       ) amu_agg ON amu_agg.as_record_id = ar.id
       WHERE ${whereClause}
-      ORDER BY ar.work_date DESC NULLS LAST, ar.receipt_date DESC NULLS LAST, ar.created_at DESC
+      ORDER BY ar.receipt_date DESC NULLS LAST, ar.created_at DESC
       LIMIT $${paramIdx++} OFFSET $${paramIdx++}
     `;
 

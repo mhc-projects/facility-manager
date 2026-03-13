@@ -230,7 +230,7 @@ export default function AsManagementPage() {
   const [daysFilter, setDaysFilter] = useState<'all' | 'fast' | 'normal' | 'delayed' | 'unworked'>('all');
 
   const hasActiveFilters = searchQuery || workDateFrom || workDateTo
-    || paidStatus !== 'all' || selectedStatuses.length > 0;
+    || paidStatus !== 'all' || selectedStatuses.length > 0 || daysFilter !== 'all';
 
   // 날짜 경과일수 계산
   const calcDays = (from: string | null, to: string | null): number | null => {
@@ -451,7 +451,7 @@ export default function AsManagementPage() {
               {hasActiveFilters ? (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg">
                   <span className="text-xs text-blue-400 font-medium">필터 결과</span>
-                  <span className="text-sm font-bold text-blue-600">{total.toLocaleString()}건</span>
+                  <span className="text-sm font-bold text-blue-600">{displayRecords.length.toLocaleString()}건</span>
                 </div>
               ) : (
                 <span className="text-xs text-gray-400">
@@ -472,7 +472,7 @@ export default function AsManagementPage() {
         </div>
 
         {/* ── 미작업 경고 배너 ── */}
-        {!loading && unworkedRecords.length > 0 && (
+        {!loading && daysFilter === 'unworked' && unworkedRecords.length > 0 && (
           <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
             maxUnworkedDays >= 7
               ? 'bg-red-50 border-red-200'
