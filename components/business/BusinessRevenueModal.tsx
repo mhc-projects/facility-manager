@@ -969,6 +969,14 @@ export default function BusinessRevenueModal({
                 <span className="text-xs md:text-sm font-medium text-gray-600">제조사:</span>
                 <span className="ml-2 text-xs md:text-sm text-gray-900">{business.manufacturer || business.제조사 || '미지정'}</span>
               </div>
+              <div>
+                <span className="text-xs md:text-sm font-medium text-gray-600">설치일:</span>
+                <span className="ml-2 text-xs md:text-sm text-gray-900">
+                  {business.installation_date
+                    ? new Date(business.installation_date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+                    : '미입력'}
+                </span>
+              </div>
             </div>
             {(business.address || business.주소) && (
               <div>
