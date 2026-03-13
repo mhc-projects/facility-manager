@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
             id: item.id,
             business_id: '',
             business_name: item.department || '안건',
-            issue_description: item.title + (item.description ? ` — ${item.description.slice(0, 60)}${item.description.length > 60 ? '…' : ''}` : ''),
+            issue_description: item.title + (item.description ? ` — ${item.description}` : ''),
             assignee_id: item.assignee_id,
             assignee_name: item.assignee_name,
             assignee_ids: item.assignee_ids || [],
