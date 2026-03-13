@@ -120,7 +120,7 @@ export function PaymentDateCell({
           className="w-full px-2 py-1 text-xs text-left hover:bg-teal-50 rounded transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
           title="클릭하여 입금예정일 수정"
         >
-          <Calendar className="w-3 h-3 text-teal-600 flex-shrink-0" />
+          {!localDate && <Calendar className="w-3 h-3 text-teal-600 flex-shrink-0" />}
           <span className={localDate ? 'text-teal-700 font-medium' : 'text-gray-400'}>
             {isLoading ? '저장 중...' : (localDate || '-')}
           </span>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,7 +52,9 @@ import {
   Settings,
   ChevronDown,
   ShoppingCart,
-  PackagePlus
+  PackagePlus,
+  Pencil,
+  RefreshCw
 } from 'lucide-react';
 
 interface BusinessInfo {
@@ -2698,6 +2701,22 @@ function VirtualizedTable({
   setDropdownPos: (pos: { top: number; left: number } | null) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const [openRiskDropdown, setOpenRiskDropdown] = useState<string | null>(null);
+  const [riskDropdownPos, setRiskDropdownPos] = useState<{ top: number; left: number } | null>(null);
+
+  // 위험도 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!openRiskDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-risk-dropdown]')) {
+        setOpenRiskDropdown(null);
+        setRiskDropdownPos(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openRiskDropdown]);
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -2724,21 +2743,15 @@ function VirtualizedTable({
   const showSurveyCostsColumn = selectedSurveyMonths.length > 0;
 
   const columnWidths = (() => {
-    if (showPaymentSchedule && showReceivablesOnly && showSurveyCostsColumn) {
-      // 자비+미수금+실사비용: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (14컬럼)
-      return ['11%', '7%', '8%', '6%', '7%', '6%', '6%', '6%', '7%', '7%', '7%', '5%', '6%', '11%']; // 총합 100%
-    } else if (showPaymentSchedule && showReceivablesOnly) {
-      // 자비+미수금: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 영업점, 매출, 매입, 이익, 이익률, 미수금 (13컬럼)
-      return ['12%', '8%', '8%', '7%', '7%', '6%', '6%', '7%', '8%', '8%', '8%', '5%', '10%']; // 총합 100%
+    if (showReceivablesOnly && showSurveyCostsColumn) {
+      // 미수금+실사비용: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 입금액, 실사비용, 미수금 (16컬럼)
+      return ['130px', '80px', '90px', '80px', '76px', '70px', '65px', '75px', '75px', '95px', '90px', '90px', '52px', '90px', '80px', '110px'];
+    } else if (showReceivablesOnly) {
+      // 미수금: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 입금액, 미수금 (15컬럼)
+      return ['140px', '88px', '92px', '88px', '78px', '72px', '68px', '78px', '78px', '98px', '92px', '92px', '54px', '92px', '110px'];
     } else if (showPaymentSchedule) {
       // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
       return ['17%', '12%', '9%', '7%', '8%', '8%', '10%', '10%', '10%', '7%']; // 총합 98%
-    } else if (showReceivablesOnly && showSurveyCostsColumn) {
-      // 미수금+실사비용: 사업장명, 수금담당자, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 실사비용, 미수금 (14컬럼)
-      return ['11%', '7%', '7%', '7%', '6%', '6%', '6%', '6%', '7%', '7%', '7%', '5%', '7%', '11%']; // 총합 100%
-    } else if (showReceivablesOnly) {
-      // 미수금: 사업장명, 수금담당자, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 미수금 (13컬럼)
-      return ['12%', '8%', '8%', '7%', '6%', '6%', '7%', '7%', '8%', '8%', '8%', '5%', '10%']; // 총합 100%
     } else if (showSurveyCostsColumn) {
       // 실사비용만 표시 (기존 유지)
       return ['18%', '9%', '7%', '8%', '8%', '11%', '11%', '11%', '7%', '10%'];  // 총합 100%
@@ -2748,93 +2761,100 @@ function VirtualizedTable({
     }
   })();
 
+  // 미수금 필터 활성화 시 셀 크기 축소 (컬럼이 많아 공간이 좁아짐)
+  const cellText = showReceivablesOnly ? 'text-[10px]' : 'text-xs';
+  const cellPad = showReceivablesOnly ? 'px-1 py-1.5' : 'px-2 py-2';
+
   return (
     <div className="hidden md:block">
       {/* 테이블 컨테이너 (스크롤 영역) */}
       <div
         ref={parentRef}
-        className="border border-gray-300 bg-white overflow-y-auto overflow-x-hidden"
-        style={{ height: '660px' }}  // 헤더 높이(60px) + 바디(600px)
+        className={`border border-gray-300 bg-white overflow-y-auto ${showReceivablesOnly ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
+        style={{ height: '660px' }}
       >
         {/* 헤더 (sticky로 고정) */}
         <div
           className="grid bg-gray-50 sticky top-0 z-10 border-b border-gray-300"
           style={{
             gridTemplateColumns: columnWidths.join(' '),
-            width: '100%',
+            minWidth: '100%',
             boxSizing: 'border-box'
           }}
         >
           <div
-            className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+            className={`border-r border-gray-300 ${cellPad} flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 ${cellText} font-semibold`}
             onClick={() => handleSort('business_name')}
           >
             사업장명 {sortField === 'business_name' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
           {showReceivablesOnly && (
-            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold bg-purple-50 text-purple-700">
+            <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-start text-left ${cellText} font-semibold bg-purple-50 text-purple-700`}>
               수금담당자
             </div>
           )}
-          {showPaymentSchedule && (
+          {(showPaymentSchedule || showReceivablesOnly) && (
             <div
-              className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center cursor-pointer hover:bg-gray-100 bg-teal-50 text-teal-700 text-xs font-semibold"
+              className={`border-r border-gray-300 ${cellPad} flex items-center justify-center text-center cursor-pointer hover:bg-gray-100 bg-teal-50 text-teal-700 ${cellText} font-semibold`}
               onClick={() => handleSort('payment_scheduled_date')}
             >
               입금예정일 {sortField === 'payment_scheduled_date' && (sortOrder === 'asc' ? '↑' : '↓')}
             </div>
           )}
           {showReceivablesOnly && (
-            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold bg-indigo-50 text-indigo-700">
+            <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-start text-left ${cellText} font-semibold bg-indigo-50 text-indigo-700`}>
               업무단계
             </div>
           )}
           {showReceivablesOnly && (
-            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold bg-orange-50 text-orange-700">
+            <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-center text-center ${cellText} font-semibold bg-orange-50 text-orange-700`}>
               위험도
             </div>
           )}
-          <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold">지역</div>
-          <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left text-xs font-semibold">담당자</div>
-          {!(showPaymentSchedule && showReceivablesOnly) && (
-            <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs font-semibold">카테고리</div>
-          )}
+          <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-start text-left ${cellText} font-semibold`}>지역</div>
+          <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-start text-left ${cellText} font-semibold`}>담당자</div>
+          <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-center text-center ${cellText} font-semibold`}>카테고리</div>
           <div
-            className="border-r border-gray-300 px-2 py-2 flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+            className={`border-r border-gray-300 ${cellPad} flex items-center justify-start text-left cursor-pointer hover:bg-gray-100 ${cellText} font-semibold`}
             onClick={() => handleSort('sales_office')}
           >
             영업점 {sortField === 'sales_office' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
           <div
-            className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+            className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 ${cellText} font-semibold`}
             onClick={() => handleSort('total_revenue')}
           >
             매출금액 {sortField === 'total_revenue' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
           <div
-            className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+            className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 ${cellText} font-semibold`}
             onClick={() => handleSort('total_cost')}
           >
             매입금액 {sortField === 'total_cost' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
           <div
-            className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 text-xs font-semibold"
+            className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 ${cellText} font-semibold`}
             onClick={() => handleSort('net_profit')}
           >
             이익금액 {sortField === 'net_profit' && (sortOrder === 'asc' ? '↑' : '↓')}
           </div>
-          <div className={`${showReceivablesOnly || showSurveyCostsColumn ? 'border-r' : ''} border-gray-300 px-2 py-2 flex items-center justify-end text-right text-xs font-semibold`}>이익률</div>
+          <div className={`${showReceivablesOnly || showSurveyCostsColumn ? 'border-r' : ''} border-gray-300 ${cellPad} flex items-center justify-end text-right ${cellText} font-semibold`}>이익률</div>
           {showSurveyCostsColumn && (
             <div
-              className={`${showReceivablesOnly ? 'border-r' : ''} px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 bg-blue-50 text-xs font-semibold`}
+              className={`${showReceivablesOnly ? 'border-r' : ''} ${cellPad} flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 bg-blue-50 ${cellText} font-semibold`}
               onClick={() => handleSort('survey_costs')}
             >
               실사비용 {sortField === 'survey_costs' && (sortOrder === 'asc' ? '↑' : '↓')}
             </div>
           )}
           {showReceivablesOnly && (
+            <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right bg-blue-50 text-blue-700 ${cellText} font-semibold`}>
+              입금액
+            </div>
+          )}
+          {showReceivablesOnly && (
             <div
-              className="px-2 py-2 flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 bg-red-50 text-xs font-semibold"
+              className={`${cellPad} flex items-center justify-end text-right cursor-pointer hover:bg-gray-100 bg-red-50 ${cellText} font-semibold`}
               onClick={() => handleSort('total_receivables')}
             >
               미수금 {sortField === 'total_receivables' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -2859,13 +2879,13 @@ function VirtualizedTable({
                   position: 'absolute',
                   top: 0,
                   left: 0,
-                  width: '100%',
+                  minWidth: '100%',
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                   boxSizing: 'border-box'
                 }}
               >
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs">
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center ${cellText}`}>
                   <button
                     onClick={() => {
                       setSelectedEquipmentBusiness(business);
@@ -2878,7 +2898,7 @@ function VirtualizedTable({
                 </div>
                 {/* 수금담당자 (미수금 ON 시) */}
                 {showReceivablesOnly && (
-                  <div className="border-r border-gray-300 px-2 py-1.5 flex items-center bg-purple-50/20">
+                  <div className={`border-r border-gray-300 ${cellPad} flex items-center bg-purple-50/20 [&_*]:!text-[10px]`}>
                     <CollectionManagerCell
                       businessId={business.id}
                       assignedIds={collectionManagerMap[business.id] ?? []}
@@ -2887,9 +2907,9 @@ function VirtualizedTable({
                     />
                   </div>
                 )}
-                {/* 입금예정일 (자비 필터 ON 시) - 인라인 편집 */}
-                {showPaymentSchedule && (
-                  <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-xs bg-teal-50/30">
+                {/* 입금예정일 (자비 필터 또는 미수금 필터 ON 시) - 인라인 편집 */}
+                {(showPaymentSchedule || showReceivablesOnly) && (
+                  <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-center ${cellText} bg-teal-50/30${showReceivablesOnly ? ' [&_*]:!text-[10px]' : ''}`}>
                     <PaymentDateCell
                       businessId={business.id}
                       currentDate={business.payment_scheduled_date}
@@ -2918,74 +2938,82 @@ function VirtualizedTable({
                     )}
                   </div>
                 )}
-                {/* 위험도 (미수금 ON 시) */}
-                {showReceivablesOnly && (
-                  <div className="border-r border-gray-300 px-1 py-1 flex items-center justify-center gap-0.5 bg-orange-50/30">
-                    {/* 자동/수동 구분 아이콘 */}
-                    {(riskMap[business.id] ?? null) !== null && (
-                      <span
-                        title={riskIsManualMap[business.id] ? '수동 설정됨 (자동화 비활성화)' : '자동 계산됨 (설치일 기준)'}
-                        className="text-[9px] leading-none select-none"
+                {/* 위험도 (미수금 ON 시) — 뱃지 클릭 시 드롭다운 선택 */}
+                {showReceivablesOnly && (() => {
+                  const currentRisk = (riskMap[business.id] ?? null) as '상' | '중' | '하' | null;
+                  const isManual = riskIsManualMap[business.id] ?? false;
+                  const isDropdownOpen = openRiskDropdown === business.id;
+                  const badgeStyle = currentRisk === '상'
+                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                    : currentRisk === '중'
+                    ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                    : currentRisk === '하'
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200';
+                  return (
+                    <div className="border-r border-gray-300 px-1 py-1 flex items-center justify-center gap-0.5 bg-orange-50/30 relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isDropdownOpen) {
+                            setOpenRiskDropdown(null);
+                            setRiskDropdownPos(null);
+                          } else {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setRiskDropdownPos({ top: rect.bottom + 2, left: rect.left });
+                            setOpenRiskDropdown(business.id);
+                          }
+                        }}
+                        title={currentRisk
+                          ? `위험도: ${currentRisk} · ${isManual ? '수동 설정' : '자동 계산'}`
+                          : '위험도 미설정'}
+                        className={`px-1.5 py-0.5 text-[10px] rounded font-semibold transition-colors cursor-pointer ${badgeStyle}`}
                       >
-                        {riskIsManualMap[business.id] ? '✏️' : '🔄'}
-                      </span>
-                    )}
-                    {(['상', '중', '하'] as const).map(level => {
-                      const isActive = (riskMap[business.id] ?? null) === level;
-                      const colorMap = {
-                        상: isActive ? 'bg-red-100 text-red-700 ring-1 ring-red-400' : 'bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500',
-                        중: isActive ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-400' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500',
-                        하: isActive ? 'bg-green-100 text-green-700 ring-1 ring-green-400' : 'bg-gray-50 text-gray-400 hover:bg-green-50 hover:text-green-500',
-                      };
-                      return (
-                        <button
-                          key={level}
-                          onClick={() => handleRiskUpdate(business.id, isActive ? null : level)}
-                          className={`px-1.5 py-0.5 text-[10px] rounded font-medium transition-all cursor-pointer ${colorMap[level]}`}
-                        >
-                          {level}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs truncate">
+                        {currentRisk ?? '—'}
+                      </button>
+                      {currentRisk !== null && (
+                        isManual
+                          ? <span title="수동 설정" className="order-first"><Pencil className="w-2.5 h-2.5 text-amber-500 flex-shrink-0" /></span>
+                          : <span title="자동 계산" className="order-first"><RefreshCw className="w-2.5 h-2.5 text-sky-500 flex-shrink-0" /></span>
+                      )}
+                    </div>
+                  );
+                })()}
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center ${cellText} truncate`}>
                   {business.address ? business.address.split(' ').slice(0, 2).join(' ') : '미등록'}
                 </div>
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs truncate">
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center ${cellText} truncate`}>
                   {business.manager_name || '미등록'}
                 </div>
-                {!(showPaymentSchedule && showReceivablesOnly) && (
-                  <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-center text-center text-xs">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      business.category === '보조금' || business.category === '보조금 동시진행'
-                        ? 'bg-purple-100 text-purple-800' :
-                      business.category === '자비' ? 'bg-green-100 text-green-800' :
-                      business.category === 'AS' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {business.category || 'N/A'}
-                    </span>
-                  </div>
-                )}
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center text-xs">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-center text-center ${cellText}`}>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full ${cellText} font-medium ${
+                    business.category === '보조금' || business.category === '보조금 동시진행'
+                      ? 'bg-purple-100 text-purple-800' :
+                    business.category === '자비' ? 'bg-green-100 text-green-800' :
+                    business.category === 'AS' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {business.category || 'N/A'}
+                  </span>
+                </div>
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center ${cellText}`}>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full ${cellText} font-medium bg-blue-100 text-blue-800`}>
                     {business.sales_office || '미배정'}
                   </span>
                 </div>
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right font-mono text-xs">
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right font-mono ${cellText}`}>
                   {formatCurrency(business.total_revenue)}
                 </div>
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right font-mono text-xs">
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right font-mono ${cellText}`}>
                   {formatCurrency(business.total_cost)}
                 </div>
-                <div className="border-r border-gray-300 px-2 py-2 flex items-center justify-end text-right font-mono font-bold text-xs">
+                <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right font-mono font-bold ${cellText}`}>
                   <span className={(business.net_profit ?? 0) >= 0 ? 'text-blue-600' : 'text-red-600'}>
                     {formatCurrency(business.net_profit ?? 0)}
                   </span>
                 </div>
-                <div className={`${showReceivablesOnly || showSurveyCostsColumn ? 'border-r' : ''} border-gray-300 px-2 py-2 flex items-center justify-end text-right text-xs`}>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                <div className={`${showReceivablesOnly || showSurveyCostsColumn ? 'border-r' : ''} border-gray-300 ${cellPad} flex items-center justify-end text-right ${cellText}`}>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full ${cellText} font-medium ${
                     parseFloat(profitMargin) >= 10 ? 'bg-green-100 text-green-800' :
                     parseFloat(profitMargin) >= 5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
                   }`}>
@@ -2993,14 +3021,21 @@ function VirtualizedTable({
                   </span>
                 </div>
                 {showSurveyCostsColumn && (
-                  <div className={`${showReceivablesOnly ? 'border-r' : ''} px-2 py-2 flex items-center justify-end text-right font-mono font-bold bg-blue-50 text-xs`}>
+                  <div className={`${showReceivablesOnly ? 'border-r' : ''} ${cellPad} flex items-center justify-end text-right font-mono font-bold bg-blue-50 ${cellText}`}>
                     <span className="text-blue-600">
                       {formatCurrency(business.survey_costs || 0)}
                     </span>
                   </div>
                 )}
                 {showReceivablesOnly && (
-                  <div className="px-2 py-2 flex items-center justify-end text-right font-mono font-bold bg-red-50 text-xs">
+                  <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right font-mono bg-blue-50/30 ${cellText}`}>
+                    <span className="text-blue-700">
+                      {formatCurrency(sumAllPayments(business))}
+                    </span>
+                  </div>
+                )}
+                {showReceivablesOnly && (
+                  <div className={`${cellPad} flex items-center justify-end text-right font-mono font-bold bg-red-50 ${cellText}`}>
                     <span className={`${
                       business.total_receivables > 0 ? 'text-red-600' : 'text-green-600'
                     }`}>
@@ -3014,6 +3049,50 @@ function VirtualizedTable({
           })}
         </div>
       </div>  {/* 테이블 컨테이너 닫기 */}
+
+      {/* 위험도 드롭다운 포털 */}
+      {openRiskDropdown && riskDropdownPos && typeof window !== 'undefined' && createPortal(
+        <div
+          data-risk-dropdown
+          className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[90px]"
+          style={{ top: riskDropdownPos.top, left: riskDropdownPos.left }}
+        >
+          {(['상', '중', '하'] as const).map((level) => {
+            const colorClass = level === '상' ? 'text-red-700 hover:bg-red-50'
+              : level === '중' ? 'text-yellow-700 hover:bg-yellow-50'
+              : 'text-green-700 hover:bg-green-50';
+            const isCurrent = riskMap[openRiskDropdown] === level;
+            return (
+              <button
+                key={level}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRiskUpdate(openRiskDropdown, level);
+                  setOpenRiskDropdown(null);
+                  setRiskDropdownPos(null);
+                }}
+                className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${colorClass} ${isCurrent ? 'font-bold' : ''}`}
+              >
+                {level} {isCurrent ? '✓' : ''}
+              </button>
+            );
+          })}
+          <div className="border-t border-gray-100 mt-1 pt-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRiskUpdate(openRiskDropdown, null);
+                setOpenRiskDropdown(null);
+                setRiskDropdownPos(null);
+              }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              초기화
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
