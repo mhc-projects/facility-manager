@@ -25,6 +25,7 @@ interface MaterialRow {
   quantity: number;
   unit: string;
   unit_price: number;
+  revenue_unit_price: number | null;
   notes: string;
   isNew?: boolean;
 }
@@ -58,6 +59,7 @@ const EMPTY_MATERIAL: MaterialRow = {
   quantity: 1,
   unit: '개',
   unit_price: 0,
+  revenue_unit_price: null,
   notes: '',
   isNew: true,
 };
@@ -114,6 +116,7 @@ export default function AsRecordModal({
   // 자재 상태
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [priceList, setPriceList] = useState<PriceItem[]>([]);
+  const [revenuePriceList, setRevenuePriceList] = useState<PriceItem[]>([]);
   const [dispatchCostList, setDispatchCostList] = useState<PriceItem[]>([]);
   const [dispatchRevenueList, setDispatchRevenueList] = useState<PriceItem[]>([]);
 
@@ -131,15 +134,17 @@ export default function AsRecordModal({
   useEffect(() => {
     const fetchPriceLists = async () => {
       try {
-        const [costRes, dispCostRes, dispRevRes] = await Promise.all([
+        const [costRes, revRes, dispCostRes, dispRevRes] = await Promise.all([
           fetch('/api/as-price-list?price_type=cost', { headers: authHeader() }),
+          fetch('/api/as-price-list?price_type=revenue', { headers: authHeader() }),
           fetch('/api/as-price-list?price_type=dispatch_cost', { headers: authHeader() }),
           fetch('/api/as-price-list?price_type=dispatch_revenue', { headers: authHeader() }),
         ]);
-        const [costJson, dispCostJson, dispRevJson] = await Promise.all([
-          costRes.json(), dispCostRes.json(), dispRevRes.json(),
+        const [costJson, revJson, dispCostJson, dispRevJson] = await Promise.all([
+          costRes.json(), revRes.json(), dispCostRes.json(), dispRevRes.json(),
         ]);
         if (costJson.success) setPriceList(costJson.data);
+        if (revJson.success) setRevenuePriceList(revJson.data);
         if (dispCostJson.success) setDispatchCostList(dispCostJson.data);
         if (dispRevJson.success) {
           setDispatchRevenueList(dispRevJson.data);
@@ -174,6 +179,7 @@ export default function AsRecordModal({
             quantity: m.quantity,
             unit: m.unit,
             unit_price: m.unit_price,
+            revenue_unit_price: m.revenue_unit_price ?? null,
             notes: m.notes || '',
           })));
         }
@@ -295,6 +301,15 @@ export default function AsRecordModal({
     (sum, m) => sum + (Number(m.quantity) * Number(m.unit_price)),
     0
   );
+
+  // 자재 매출: revenue_unit_price 직접입력 → 매출 단가표 자동매핑 → 원가 fallback
+  const totalMaterialRevenue = materials.reduce((sum, m) => {
+    const qty = Number(m.quantity);
+    if (m.revenue_unit_price !== null) return sum + qty * Number(m.revenue_unit_price);
+    const matched = revenuePriceList.find(p => p.item_name === m.material_name);
+    if (matched) return sum + qty * Number(matched.unit_price);
+    return sum + qty * Number(m.unit_price);
+  }, 0);
 
   // 진행 메모 추가
   const addProgressNote = async () => {
@@ -1043,7 +1058,7 @@ export default function AsRecordModal({
                     const item = dispatchCostList.find(p => p.id === dispatchCostPriceId);
                     return item ? Math.round(Number(item.unit_price)) * dispatchCount : 0;
                   })()}
-                  materialRevenue={totalMaterialCost}
+                  materialRevenue={totalMaterialRevenue}
                   dispatchRevenue={(() => {
                     const item = dispatchRevenueList.find(p => p.id === dispatchRevenuePriceId);
                     return item ? Math.round(Number(item.unit_price)) * dispatchCount : 0;
