@@ -71,11 +71,27 @@ const PAID_OPTIONS = [
   { value: 'unknown', label: '미확인' },
 ];
 
+export interface PriceItem {
+  id: string;
+  category: string | null;
+  item_name: string;
+  unit_price: number;
+  unit: string;
+}
+
+export interface PriceLists {
+  cost: PriceItem[];
+  revenue: PriceItem[];
+  dispatchCost: PriceItem[];
+  dispatchRevenue: PriceItem[];
+}
+
 export default function AsManagementPage() {
   const { user } = useAuth();
   const [records, setRecords] = useState<AsRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [priceLists, setPriceLists] = useState<PriceLists>({ cost: [], revenue: [], dispatchCost: [], dispatchRevenue: [] });
 
   // 통합 검색 (사업장 / AS 담당자 OR 검색)
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,6 +168,24 @@ export default function AsManagementPage() {
     }
   }, [buildQueryString]);
 
+  // 가격표 최초 1회 로딩 (모달 열 때마다 재요청 방지)
+  useEffect(() => {
+    const authHeader = () => ({ 'Authorization': `Bearer ${TokenManager.getToken()}` });
+    Promise.all([
+      fetch('/api/as-price-list?price_type=cost', { headers: authHeader() }).then(r => r.json()),
+      fetch('/api/as-price-list?price_type=revenue', { headers: authHeader() }).then(r => r.json()),
+      fetch('/api/as-price-list?price_type=dispatch_cost', { headers: authHeader() }).then(r => r.json()),
+      fetch('/api/as-price-list?price_type=dispatch_revenue', { headers: authHeader() }).then(r => r.json()),
+    ]).then(([costJson, revJson, dispCostJson, dispRevJson]) => {
+      setPriceLists({
+        cost: costJson.success ? costJson.data : [],
+        revenue: revJson.success ? revJson.data : [],
+        dispatchCost: dispCostJson.success ? dispCostJson.data : [],
+        dispatchRevenue: dispRevJson.success ? dispRevJson.data : [],
+      });
+    }).catch(e => console.error('단가표 로딩 실패:', e));
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     fetchRecords(controller.signal);
@@ -176,29 +210,9 @@ export default function AsManagementPage() {
     }
   };
 
-  const handleModalSave = async (savedId: string, isNew: boolean) => {
+  const handleModalSave = async (_savedId: string, _isNew: boolean) => {
     setModalOpen(false);
-    try {
-      const token = TokenManager.getToken();
-      const res = await fetch(`/api/as-records/${savedId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!json.success) { fetchRecords(); return; }
-      const { materials, ...rest } = json.data;
-      const validMaterials: { quantity: number; unit_price: number }[] = materials ?? [];
-      const material_count = validMaterials.length;
-      const total_material_cost = validMaterials.reduce((sum, m) => sum + (m.quantity * m.unit_price), 0);
-      const updated: AsRecord = { ...rest, material_count, total_material_cost };
-      if (isNew) {
-        setRecords(prev => [updated, ...prev]);
-        setTotal(prev => prev + 1);
-      } else {
-        setRecords(prev => prev.map(r => r.id === savedId ? updated : r));
-      }
-    } catch {
-      fetchRecords();
-    }
+    await fetchRecords();
   };
 
   const toggleStatus = (val: string) => {
@@ -700,9 +714,10 @@ export default function AsManagementPage() {
       {modalOpen && (
         <AsRecordModal
           record={editingRecord}
-          onClose={() => { setModalOpen(false); fetchRecords(); }}
+          onClose={() => setModalOpen(false)}
           onSave={handleModalSave}
           currentUser={user}
+          priceLists={priceLists}
         />
       )}
 

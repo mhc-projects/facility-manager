@@ -3,19 +3,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Send, Clock, FileText, Wrench, MessageSquare, ChevronRight, DollarSign } from 'lucide-react';
-import { AsRecord, ProgressNote } from '../page';
+import { AsRecord, ProgressNote, PriceLists } from '../page';
 import { STATUS_CONFIG } from './AsStatusBadge';
 import { TokenManager } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
 import AsPricingAdjustmentTab from './AsPricingAdjustmentTab';
 
-interface PriceItem {
-  id: string;
-  category: string | null;
-  item_name: string;
-  unit_price: number;
-  unit: string;
-}
 
 interface MaterialRow {
   id?: string;
@@ -45,6 +38,7 @@ interface AsRecordModalProps {
   onClose: () => void;
   onSave: (savedId: string, isNew: boolean) => void;
   currentUser: { name?: string } | null;
+  priceLists: PriceLists;
 }
 
 const STATUS_OPTIONS = Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({
@@ -72,6 +66,7 @@ export default function AsRecordModal({
   onClose,
   onSave,
   currentUser,
+  priceLists,
 }: AsRecordModalProps) {
   const authHeader = () => ({ 'Authorization': `Bearer ${TokenManager.getToken()}` });
   const isEdit = !!record;
@@ -115,10 +110,10 @@ export default function AsRecordModal({
 
   // 자재 상태
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
-  const [priceList, setPriceList] = useState<PriceItem[]>([]);
-  const [revenuePriceList, setRevenuePriceList] = useState<PriceItem[]>([]);
-  const [dispatchCostList, setDispatchCostList] = useState<PriceItem[]>([]);
-  const [dispatchRevenueList, setDispatchRevenueList] = useState<PriceItem[]>([]);
+  const priceList = priceLists.cost;
+  const revenuePriceList = priceLists.revenue;
+  const dispatchCostList = priceLists.dispatchCost;
+  const dispatchRevenueList = priceLists.dispatchRevenue;
 
   // 진행 메모 상태
   const [progressNotes, setProgressNotes] = useState<ProgressNote[]>(record?.progress_notes || []);
@@ -130,38 +125,17 @@ export default function AsRecordModal({
 
   const suggestRef = useRef<HTMLDivElement>(null);
 
-  // 단가표 로딩
+  // 신규 등록 시 기본 출동 단가 자동 선택
   useEffect(() => {
-    const fetchPriceLists = async () => {
-      try {
-        const [costRes, revRes, dispCostRes, dispRevRes] = await Promise.all([
-          fetch('/api/as-price-list?price_type=cost', { headers: authHeader() }),
-          fetch('/api/as-price-list?price_type=revenue', { headers: authHeader() }),
-          fetch('/api/as-price-list?price_type=dispatch_cost', { headers: authHeader() }),
-          fetch('/api/as-price-list?price_type=dispatch_revenue', { headers: authHeader() }),
-        ]);
-        const [costJson, revJson, dispCostJson, dispRevJson] = await Promise.all([
-          costRes.json(), revRes.json(), dispCostRes.json(), dispRevRes.json(),
-        ]);
-        if (costJson.success) setPriceList(costJson.data);
-        if (revJson.success) setRevenuePriceList(revJson.data);
-        if (dispCostJson.success) setDispatchCostList(dispCostJson.data);
-        if (dispRevJson.success) {
-          setDispatchRevenueList(dispRevJson.data);
-          // 기본 출동 매출단가 자동 선택 (신규 등록 시)
-          if (!record && dispRevJson.data.length > 0 && !dispatchRevenuePriceId) {
-            setDispatchRevenuePriceId(dispRevJson.data[0].id);
-          }
-        }
-        if (dispCostJson.success && dispCostJson.data.length > 0 && !record && !dispatchCostPriceId) {
-          setDispatchCostPriceId(dispCostJson.data[0].id);
-        }
-      } catch (e) {
-        console.error('단가표 로딩 실패:', e);
+    if (!record) {
+      if (dispatchRevenueList.length > 0 && !dispatchRevenuePriceId) {
+        setDispatchRevenuePriceId(dispatchRevenueList[0].id);
       }
-    };
-    fetchPriceLists();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      if (dispatchCostList.length > 0 && !dispatchCostPriceId) {
+        setDispatchCostPriceId(dispatchCostList[0].id);
+      }
+    }
+  }, [dispatchRevenueList, dispatchCostList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 수정 시 자재 로딩
   useEffect(() => {
