@@ -113,6 +113,25 @@ function calcAutoRisk(installationDate: string | null | undefined): '상' | '중
   return null;
 }
 
+/**
+ * 추가공사비 입금을 제외한 가장 마지막 입금일 반환
+ * 보조금계열: payment_1st_date, payment_2nd_date
+ * 자비/기타계열: payment_advance_date, payment_balance_date
+ */
+function getLastPaymentDate(business: Record<string, any>): string | null {
+  const status = (business.progress_status || '').trim();
+  const dates: string[] = [];
+  if (status.includes('보조금')) {
+    if (business.payment_1st_date) dates.push(business.payment_1st_date);
+    if (business.payment_2nd_date) dates.push(business.payment_2nd_date);
+  } else {
+    if (business.payment_advance_date) dates.push(business.payment_advance_date);
+    if (business.payment_balance_date) dates.push(business.payment_balance_date);
+  }
+  if (dates.length === 0) return null;
+  return dates.sort().at(-1) ?? null;
+}
+
 function RevenueDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -157,6 +176,8 @@ function RevenueDashboard() {
   const [selectedSurveyMonths, setSelectedSurveyMonths] = useState<string[]>([]); // 실사 월 필터 ['견적|1', '착공|2', '준공|9']
   const [selectedInvoiceYears, setSelectedInvoiceYears] = useState<string[]>([]); // 세금계산서 발행 연도 필터
   const [selectedInvoiceMonths, setSelectedInvoiceMonths] = useState<string[]>([]); // 세금계산서 발행 월 필터
+  const [selectedPaymentYears, setSelectedPaymentYears] = useState<string[]>([]); // 입금연도 필터 - 추가공사비 제외 최신 입금일 기준
+  const [selectedPaymentMonths, setSelectedPaymentMonths] = useState<string[]>([]); // 입금월 필터 (1-12) - 추가공사비 제외 최신 입금일 기준
   const [showReceivablesOnly, setShowReceivablesOnly] = useState(false); // 미수금 필터
   const [showUninstalledOnly, setShowUninstalledOnly] = useState(false); // 미설치 필터
   // 미수금 필터 활성화 시 업무관리 연동
@@ -1439,7 +1460,24 @@ function RevenueDashboard() {
         });
       }
 
-      return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch && invoiceMatch;
+      // 입금연도/월 필터 (추가공사비 제외 최신 입금일 기준)
+      let paymentMonthMatch = true;
+      let paymentYearMatch = true;
+      if (selectedPaymentYears.length > 0 || selectedPaymentMonths.length > 0) {
+        const lastPaymentDate = getLastPaymentDate(business);
+        if (lastPaymentDate) {
+          const dt = new Date(lastPaymentDate);
+          const year = String(dt.getFullYear());
+          const month = String(dt.getMonth() + 1);
+          paymentYearMatch = selectedPaymentYears.length === 0 || selectedPaymentYears.includes(year);
+          paymentMonthMatch = selectedPaymentMonths.length === 0 || selectedPaymentMonths.includes(month);
+        } else {
+          paymentYearMatch = selectedPaymentYears.length === 0;
+          paymentMonthMatch = selectedPaymentMonths.length === 0;
+        }
+      }
+
+      return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch && invoiceMatch && paymentYearMatch && paymentMonthMatch;
     }).map((business) => {
       // ✅ 실시간 계산 적용 (Admin 대시보드와 동일한 계산식)
       const calculatedData = calculateBusinessRevenue(business, pricingData);
@@ -1551,6 +1589,8 @@ function RevenueDashboard() {
     selectedSurveyMonths,
     selectedInvoiceYears,
     selectedInvoiceMonths,
+    selectedPaymentYears,
+    selectedPaymentMonths,
     revenueFilter,
     showReceivablesOnly,
     showUninstalledOnly,
@@ -1631,6 +1671,13 @@ function RevenueDashboard() {
   const projectYears = [...new Set(businesses
     .map(b => b.installation_date ? new Date(b.installation_date).getFullYear() : null)
     .filter(Boolean) as number[]
+  )].sort((a, b) => b - a);
+
+  // 입금 연도 목록 (추가공사비 제외 최신 입금일 기준)
+  const paymentYears = [...new Set(businesses
+    .map(b => getLastPaymentDate(b))
+    .filter(Boolean)
+    .map(d => new Date(d!).getFullYear())
   )].sort((a, b) => b - a);
 
   // 세금계산서 발행 연도 목록 (5가지 계산서 날짜 필드에서 추출)
@@ -2098,83 +2145,100 @@ function RevenueDashboard() {
             )}
           </button>
           <div className={`space-y-2 sm:space-y-3 ${isMobile && !isFilterExpanded ? 'hidden' : ''}`}>
-            {/* 첫 번째 행: MultiSelectDropdown 필터들 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
-              {/* 영업점 필터 - 주석처리 (검색창에서 영업점명 검색 가능)
-              <MultiSelectDropdown
-                label="영업점"
-                options={salesOffices}
-                selectedValues={selectedOffices}
-                onChange={(values) => { setSelectedOffices(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
-              */}
+            {/* 첫 번째 행: 필터들 전체 너비로 한 줄 배치 */}
+            <div className="flex gap-2 items-center w-full">
+              {/* 진행구분 */}
+              <div className="flex-[1.5_1.5_0%] min-w-0">
+                <MultiSelectDropdown
+                  label="진행구분"
+                  options={['자비', '보조금', '보조금 동시진행', '대리점', 'AS']}
+                  selectedValues={selectedCategories}
+                  onChange={(values) => { setSelectedCategories(values); setCurrentPage(1); }}
+                  placeholder="전체"
+                  inline
+                />
+              </div>
 
-              {/* 지역 필터 - 주석처리 (검색창에서 주소 검색 가능)
-              <MultiSelectDropdown
-                label="지역"
-                options={regions.sort()}
-                selectedValues={selectedRegions}
-                onChange={(values) => { setSelectedRegions(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
-              */}
+              {/* 실사월 */}
+              <div className="flex-1 min-w-0">
+                <TwoStageDropdown
+                  label="실사월"
+                  stage1Options={['견적', '착공', '준공']}
+                  stage2Options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
+                  onChange={(values) => { setSelectedSurveyMonths(values); setCurrentPage(1); }}
+                  placeholder="전체"
+                  inline
+                />
+              </div>
 
-              <MultiSelectDropdown
-                label="진행구분"
-                options={['자비', '보조금', '보조금 동시진행', '대리점', 'AS']}
-                selectedValues={selectedCategories}
-                onChange={(values) => { setSelectedCategories(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
+              {/* 설치: 연도 + 월 묶음 */}
+              <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
+                <span className="text-xs font-medium whitespace-nowrap shrink-0">설치</span>
+                <div className="flex-1 min-w-0">
+                  <MultiSelectDropdown
+                    label=""
+                    options={projectYears.map(year => String(year))}
+                    selectedValues={selectedProjectYears}
+                    onChange={(values) => { setSelectedProjectYears(values); setCurrentPage(1); }}
+                    placeholder="연도"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <MultiSelectDropdown
+                    label=""
+                    options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
+                    selectedValues={selectedMonths}
+                    onChange={(values) => { setSelectedMonths(values); setCurrentPage(1); }}
+                    placeholder="월"
+                  />
+                </div>
+              </div>
 
-              <MultiSelectDropdown
-                label="설치연도"
-                options={projectYears.map(year => String(year))}
-                selectedValues={selectedProjectYears}
-                onChange={(values) => { setSelectedProjectYears(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
+              {/* 계산서: 연도 + 월 묶음 */}
+              <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
+                <span className="text-xs font-medium whitespace-nowrap shrink-0">계산서</span>
+                <div className="flex-1 min-w-0">
+                  <MultiSelectDropdown
+                    label=""
+                    options={invoiceYears.map(year => String(year))}
+                    selectedValues={selectedInvoiceYears}
+                    onChange={(values) => { setSelectedInvoiceYears(values); setCurrentPage(1); }}
+                    placeholder="연도"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <MultiSelectDropdown
+                    label=""
+                    options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
+                    selectedValues={selectedInvoiceMonths}
+                    onChange={(values) => { setSelectedInvoiceMonths(values); setCurrentPage(1); }}
+                    placeholder="월"
+                  />
+                </div>
+              </div>
 
-              <MultiSelectDropdown
-                label="설치월"
-                options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
-                selectedValues={selectedMonths}
-                onChange={(values) => { setSelectedMonths(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
-
-              <TwoStageDropdown
-                label="실사월"
-                stage1Options={['견적', '착공', '준공']}
-                stage2Options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
-                onChange={(values) => { setSelectedSurveyMonths(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
-
-              <MultiSelectDropdown
-                label="계산서연도"
-                options={invoiceYears.map(year => String(year))}
-                selectedValues={selectedInvoiceYears}
-                onChange={(values) => { setSelectedInvoiceYears(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
-
-              <MultiSelectDropdown
-                label="계산서월"
-                options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
-                selectedValues={selectedInvoiceMonths}
-                onChange={(values) => { setSelectedInvoiceMonths(values); setCurrentPage(1); }}
-                placeholder="전체"
-                inline
-              />
+              {/* 입금: 연도 + 월 묶음 */}
+              <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
+                <span className="text-xs font-medium whitespace-nowrap shrink-0">입금</span>
+                <div className="flex-1 min-w-0">
+                  <MultiSelectDropdown
+                    label=""
+                    options={paymentYears.map(year => String(year))}
+                    selectedValues={selectedPaymentYears}
+                    onChange={(values) => { setSelectedPaymentYears(values); setCurrentPage(1); }}
+                    placeholder="연도"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <MultiSelectDropdown
+                    label=""
+                    options={['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']}
+                    selectedValues={selectedPaymentMonths}
+                    onChange={(values) => { setSelectedPaymentMonths(values); setCurrentPage(1); }}
+                    placeholder="월"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* 두 번째 행: 검색, 매출금액, 업무단계(미수금 ON시), 체크박스 */}
@@ -2602,6 +2666,7 @@ function RevenueDashboard() {
                   riskMap={riskMap}
                   riskIsManualMap={riskIsManualMap}
                   showPaymentSchedule={selectedCategories.includes('자비')}
+                  showPaymentMonthFilter={selectedPaymentYears.length > 0 || selectedPaymentMonths.length > 0}
                   collectionManagerMap={collectionManagerMap}
                   candidateEmployees={candidateEmployees}
                   handleCollectionManagerUpdate={handleCollectionManagerUpdate}
@@ -2670,6 +2735,7 @@ function VirtualizedTable({
   riskMap,
   riskIsManualMap,
   showPaymentSchedule,
+  showPaymentMonthFilter,
   collectionManagerMap,
   candidateEmployees,
   handleCollectionManagerUpdate,
@@ -2692,6 +2758,7 @@ function VirtualizedTable({
   riskMap: Record<string, string | null>;
   riskIsManualMap: Record<string, boolean>;
   showPaymentSchedule: boolean;
+  showPaymentMonthFilter: boolean;
   collectionManagerMap: Record<string, string[]>;
   candidateEmployees: { id: string; name: string; department: string; permission_level: number }[];
   handleCollectionManagerUpdate: (businessId: string, employeeId: string, checked: boolean) => void;
@@ -2749,8 +2816,8 @@ function VirtualizedTable({
     } else if (showReceivablesOnly) {
       // 미수금: 사업장명, 수금담당자, 입금예정일, 업무단계, 위험도, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률, 입금액, 미수금 (15컬럼)
       return ['140px', '88px', '92px', '88px', '78px', '72px', '68px', '78px', '78px', '98px', '92px', '92px', '54px', '92px', '110px'];
-    } else if (showPaymentSchedule) {
-      // 자비 필터: 사업장명, 입금예정일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
+    } else if (showPaymentSchedule || showPaymentMonthFilter) {
+      // 자비 필터 또는 입금월 필터: 사업장명, 입금예정일/입금일, 지역, 담당자, 카테고리, 영업점, 매출, 매입, 이익, 이익률 (10컬럼)
       return ['17%', '12%', '9%', '7%', '8%', '8%', '10%', '10%', '10%', '7%']; // 총합 98%
     } else if (showSurveyCostsColumn) {
       // 실사비용만 표시 (기존 유지)
@@ -2793,12 +2860,12 @@ function VirtualizedTable({
               수금담당자
             </div>
           )}
-          {(showPaymentSchedule || showReceivablesOnly) && (
+          {(showPaymentSchedule || showReceivablesOnly || showPaymentMonthFilter) && (
             <div
               className={`border-r border-gray-300 ${cellPad} flex items-center justify-center text-center cursor-pointer hover:bg-gray-100 bg-teal-50 text-teal-700 ${cellText} font-semibold`}
               onClick={() => handleSort('payment_scheduled_date')}
             >
-              입금예정일 {sortField === 'payment_scheduled_date' && (sortOrder === 'asc' ? '↑' : '↓')}
+              {showPaymentMonthFilter && !showPaymentSchedule ? '입금일' : '입금예정일'} {sortField === 'payment_scheduled_date' && (sortOrder === 'asc' ? '↑' : '↓')}
             </div>
           )}
           {showReceivablesOnly && (
@@ -2907,14 +2974,30 @@ function VirtualizedTable({
                     />
                   </div>
                 )}
-                {/* 입금예정일 (자비 필터 또는 미수금 필터 ON 시) - 인라인 편집 */}
-                {(showPaymentSchedule || showReceivablesOnly) && (
+                {/* 입금예정일 또는 입금일 컬럼 */}
+                {(showPaymentSchedule || showReceivablesOnly || showPaymentMonthFilter) && (
                   <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-center ${cellText} bg-teal-50/30${showReceivablesOnly ? ' [&_*]:!text-[10px]' : ''}`}>
-                    <PaymentDateCell
-                      businessId={business.id}
-                      currentDate={business.payment_scheduled_date}
-                      onUpdate={handlePaymentDateUpdate}
-                    />
+                    {showPaymentMonthFilter && !showPaymentSchedule ? (
+                      // 입금월 필터 ON: 실제 입금일 표시 (읽기 전용)
+                      <span className="text-center">
+                        {(() => {
+                          const d = getLastPaymentDate(business);
+                          if (!d) return <span className="text-gray-300">—</span>;
+                          const dt = new Date(d);
+                          const yy = String(dt.getFullYear()).slice(2);
+                          const mm = String(dt.getMonth() + 1).padStart(2, '0');
+                          const dd = String(dt.getDate()).padStart(2, '0');
+                          return `${yy}-${mm}-${dd}`;
+                        })()}
+                      </span>
+                    ) : (
+                      // 입금예정일: 인라인 편집
+                      <PaymentDateCell
+                        businessId={business.id}
+                        currentDate={business.payment_scheduled_date}
+                        onUpdate={handlePaymentDateUpdate}
+                      />
+                    )}
                   </div>
                 )}
                 {/* 업무단계 (미수금 ON 시) */}
