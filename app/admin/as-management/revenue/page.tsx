@@ -303,6 +303,126 @@ export default function AsRevenuePage() {
 
   useEffect(() => { fetchRevenue(); }, [fetchRevenue]);
 
+  const downloadRevenueExcel = async () => {
+    if (!businesses.length) return;
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+
+    // ── 시트 1: 사업장별 매출 현황 ──
+    const sheet = workbook.addWorksheet('사업장별 매출현황');
+    const HEADER_FILL  = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8EAF6' } };
+    const TOTAL_FILL   = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF3F4F6' } };
+    const FREE_FILL    = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD1FAE5' } }; // 연두 (무상)
+    const MIXED_FILL   = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFECFDF5' } }; // 연연두 (혼합)
+    const CURRENCY_FMT = '#,##0';
+
+    sheet.columns = [
+      { header: '사업장',        key: 'name',           width: 22 },
+      { header: '구분',          key: 'category',       width: 8  },
+      { header: '건수',          key: 'record_count',   width: 8  },
+      { header: '무상건수',      key: 'free_count',     width: 8  },
+      { header: '출동 횟수',     key: 'dispatch_cnt',   width: 10 },
+      { header: '출동 원가(원)', key: 'dispatch_cost',  width: 16 },
+      { header: '출동 매출(원)', key: 'dispatch_rev',   width: 16 },
+      { header: '자재 원가(원)', key: 'material_cost',  width: 16 },
+      { header: '자재 매출(원)', key: 'material_rev',   width: 16 },
+      { header: '매입 조정(원)', key: 'cost_adj',       width: 14 },
+      { header: '매출 조정(원)', key: 'rev_adj',        width: 14 },
+      { header: '총 매출(원)',   key: 'total_rev',      width: 16 },
+      { header: '순이익(원)',    key: 'profit',         width: 16 },
+      { header: '담당자 지급(원)', key: 'manager_pay',  width: 16 },
+      { header: '회사 실수익(원)', key: 'net_profit',   width: 16 },
+      { header: '이익률(%)',     key: 'profit_rate',    width: 10 },
+    ];
+
+    // 구분 컬럼=2, 금액 컬럼=6~15
+    const CURRENCY_COLS = [6,7,8,9,10,11,12,13,14,15];
+    const headerRow = sheet.getRow(1);
+    headerRow.eachCell(cell => {
+      cell.font = { bold: true };
+      cell.fill = HEADER_FILL;
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFB0BEC5' } } };
+    });
+
+    businesses.forEach(biz => {
+      const allFree  = biz.free_record_count === biz.record_count;
+      const hasFree  = biz.free_record_count > 0;
+      const category = allFree ? '무상' : hasFree ? '혼합' : '유상';
+
+      const row = sheet.addRow({
+        name:          biz.business_name,
+        category,
+        record_count:  biz.record_count,
+        free_count:    biz.free_record_count,
+        dispatch_cnt:  biz.total_dispatch_count,
+        dispatch_cost: biz.total_dispatch_cost,
+        dispatch_rev:  biz.total_dispatch_revenue,
+        material_cost: biz.total_material_cost,
+        material_rev:  biz.total_material_revenue,
+        cost_adj:      biz.total_cost_adjustment,
+        rev_adj:       biz.total_revenue_adjustment,
+        total_rev:     biz.total_revenue,
+        profit:        biz.profit,
+        manager_pay:   biz.total_manager_pay,
+        net_profit:    biz.net_profit,
+        profit_rate:   Math.round(biz.profit_rate * 10) / 10,
+      });
+
+      // 무상/혼합 행 배경색
+      if (allFree || hasFree) {
+        const rowFill = allFree ? FREE_FILL : MIXED_FILL;
+        row.eachCell(cell => { cell.fill = rowFill; });
+      }
+
+      // 구분 컬럼 가운데 정렬
+      row.getCell(2).alignment = { horizontal: 'center' };
+
+      CURRENCY_COLS.forEach(col => {
+        row.getCell(col).numFmt = CURRENCY_FMT;
+        row.getCell(col).alignment = { horizontal: 'right' };
+      });
+      row.getCell(16).numFmt = '0.0"%"';
+      row.getCell(16).alignment = { horizontal: 'center' };
+    });
+
+    // 합계 행
+    if (summary && businesses.length > 1) {
+      const totalRow = sheet.addRow({
+        name:          '합계',
+        record_count:  businesses.reduce((s, b) => s + b.record_count, 0),
+        free_count:    businesses.reduce((s, b) => s + b.free_record_count, 0),
+        dispatch_cnt:  businesses.reduce((s, b) => s + b.total_dispatch_count, 0),
+        dispatch_cost: summary.total_dispatch_cost,
+        dispatch_rev:  summary.total_dispatch_revenue,
+        material_cost: summary.total_material_cost,
+        material_rev:  summary.total_material_revenue,
+        cost_adj:      summary.total_cost_adjustment,
+        rev_adj:       summary.total_revenue_adjustment,
+        total_rev:     summary.total_revenue,
+        profit:        summary.profit,
+        manager_pay:   summary.total_manager_pay,
+        net_profit:    summary.net_profit,
+        profit_rate:   Math.round(summary.profit_rate * 10) / 10,
+      });
+      totalRow.font = { bold: true };
+      totalRow.fill = TOTAL_FILL;
+      CURRENCY_COLS.forEach(col => {
+        totalRow.getCell(col).numFmt = CURRENCY_FMT;
+        totalRow.getCell(col).alignment = { horizontal: 'right' };
+      });
+      totalRow.getCell(16).numFmt = '0.0"%"';
+      totalRow.getCell(16).alignment = { horizontal: 'center' };
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `AS매출현황_${periodFrom}~${periodTo}.xlsx`;
+    link.click();
+  };
+
   const downloadManagerPayExcel = async () => {
     if (!managers.length) return;
     const ExcelJS = (await import('exceljs')).default;
@@ -410,6 +530,14 @@ export default function AsRevenuePage() {
             <button onClick={fetchRevenue}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
               조회
+            </button>
+            <button
+              onClick={downloadRevenueExcel}
+              disabled={!businesses.length}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-medium shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              엑셀 다운로드
             </button>
           </div>
         </div>

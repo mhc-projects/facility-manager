@@ -562,29 +562,29 @@ export default function AsManagementPage() {
                         className="hover:bg-blue-50/30 cursor-pointer transition-colors group"
                         onClick={() => handleEdit(record)}
                       >
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1.5">
+                        <td className="px-4 py-3.5 w-[180px] max-w-[180px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             {record.business_management_code && (
                               <span className="flex-shrink-0 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded tabular-nums">
                                 {record.business_management_code}
                               </span>
                             )}
-                            <div className="font-semibold text-gray-900 truncate max-w-[140px] text-sm" title={record.business_name}>
+                            <div className="font-semibold text-gray-900 truncate text-sm" title={record.business_name}>
                               {record.business_name}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                             {record.business_id ? (
-                              <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded font-medium">
+                              <span className="flex-shrink-0 text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
                                 블루온 사업장
                               </span>
                             ) : (
-                              <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded font-medium">
+                              <span className="flex-shrink-0 text-[10px] text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
                                 타업체 사업장
                               </span>
                             )}
                             {record.address && (
-                              <span className="text-[10px] text-gray-400 truncate max-w-[120px]" title={record.address}>
+                              <span className="text-[10px] text-gray-400 truncate min-w-0" title={record.address}>
                                 {record.address}
                               </span>
                             )}
