@@ -32,8 +32,33 @@ export async function POST(
     const body = await request.json();
     const { device_type, device_label, price_list_id, material_name, quantity = 1, unit = '개', unit_price = 0, notes } = body;
 
-    if (!material_name) {
-      return NextResponse.json({ success: false, error: '자재명이 필요합니다' }, { status: 400 });
+    // price_list_id 필수 (외부 API 키 인증 시)
+    // JWT 인증(내부)은 기존대로 material_name만으로도 허용
+    const isJwtRequest = isJwt;
+    if (!isJwtRequest && !price_list_id) {
+      return NextResponse.json({ success: false, error: 'price_list_id가 필요합니다. GET /api/as-price-list 로 단가표 항목 ID를 조회하세요.' }, { status: 400 });
+    }
+    if (!material_name && !price_list_id) {
+      return NextResponse.json({ success: false, error: '자재명 또는 price_list_id가 필요합니다' }, { status: 400 });
+    }
+
+    // price_list_id로 단가표 항목 조회 → material_name, unit, unit_price 자동 세팅
+    let resolvedName = material_name || null;
+    let resolvedUnit = unit;
+    let resolvedUnitPrice = unit_price;
+
+    if (price_list_id) {
+      const priceItem = await pgQuery(
+        `SELECT item_name, unit, unit_price FROM as_price_list WHERE id = $1 AND is_active = true`,
+        [price_list_id]
+      );
+      if (priceItem.rows.length === 0) {
+        return NextResponse.json({ success: false, error: '유효하지 않은 price_list_id입니다.' }, { status: 400 });
+      }
+      const p = priceItem.rows[0];
+      resolvedName = resolvedName || p.item_name;
+      resolvedUnit = unit !== '개' ? unit : p.unit;
+      resolvedUnitPrice = unit_price !== 0 ? unit_price : p.unit_price;
     }
 
     // AS 건 존재 확인
@@ -56,10 +81,10 @@ export async function POST(
         device_type || null,
         device_label || null,
         price_list_id || null,
-        material_name,
+        resolvedName,
         quantity,
-        unit,
-        unit_price,
+        resolvedUnit,
+        resolvedUnitPrice,
         notes || null,
       ]
     );

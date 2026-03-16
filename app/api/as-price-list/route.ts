@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query as pgQuery } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { verifyApiKey } from '@/utils/api-key-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,16 +13,21 @@ type PriceType = typeof VALID_PRICE_TYPES[number];
  * 단가표 목록 조회
  * ?price_type=cost|revenue|dispatch_cost|dispatch_revenue
  * ?include_inactive=true
+ * JWT 토큰 또는 API 키 인증 모두 허용 (에코센스 등 외부 시스템 지원)
  */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, error: '인증 토큰이 필요합니다' }, { status: 401 });
+      return NextResponse.json({ success: false, error: '인증이 필요합니다' }, { status: 401 });
     }
     const token = authHeader.substring(7);
-    if (!verifyTokenString(token)) {
-      return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
+
+    // JWT 또는 API 키 중 하나 인증
+    const isJwt = verifyTokenString(token);
+    const apiKeyInfo = isJwt ? null : await verifyApiKey(token, '/api/as-price-list');
+    if (!isJwt && !apiKeyInfo) {
+      return NextResponse.json({ success: false, error: '유효하지 않은 인증 정보입니다' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
