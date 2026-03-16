@@ -1,8 +1,7 @@
 // app/api/business-invoices/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, query as pgQuery, queryAll } from '@/lib/supabase-direct';
+import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
 import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
-import { calculateBusinessRevenue } from '@/lib/revenue-calculator';
 import { calculateReceivables, sumAllPayments } from '@/lib/receivables-calculator';
 
 // Force dynamic rendering for API routes
@@ -58,40 +57,6 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
-
-    // pricing 데이터 로드 (매출 계산용)
-    const [govPricing, mfgPricing, installCostData, salesOfficeData, surveyCostData] = await Promise.all([
-      queryAll('SELECT * FROM government_pricing WHERE is_active = true', []),
-      queryAll('SELECT * FROM manufacturer_pricing WHERE is_active = true', []),
-      queryAll('SELECT * FROM equipment_installation_cost WHERE is_active = true', []),
-      queryAll('SELECT * FROM sales_office_cost_settings WHERE is_active = true', []),
-      queryAll('SELECT * FROM survey_cost_settings WHERE is_active = true', []),
-    ]);
-
-    const officialPrices: Record<string, number> = {};
-    govPricing?.forEach((item: any) => { officialPrices[item.equipment_type] = Number(item.official_price) || 0; });
-
-    const manufacturerPrices: Record<string, Record<string, number>> = {};
-    mfgPricing?.forEach((item: any) => {
-      const key = item.manufacturer.toLowerCase().trim();
-      if (!manufacturerPrices[key]) manufacturerPrices[key] = {};
-      manufacturerPrices[key][item.equipment_type] = Number(item.cost_price) || 0;
-    });
-
-    const baseInstallationCosts: Record<string, number> = {};
-    installCostData?.forEach((item: any) => { baseInstallationCosts[item.equipment_type] = Number(item.base_installation_cost) || 0; });
-
-    const salesOfficeSettings: Record<string, any> = {};
-    salesOfficeData?.forEach((item: any) => { salesOfficeSettings[item.sales_office] = item; });
-
-    const surveyCostSettings: Record<string, number> = {};
-    surveyCostData?.forEach((item: any) => { surveyCostSettings[item.survey_type] = Number(item.cost) || 0; });
-
-    const pricingData = { officialPrices, manufacturerPrices, baseInstallationCosts, salesOfficeSettings, surveyCostSettings };
-
-    // 전체 매출 계산 (부가세 포함)
-    const revenueResult = calculateBusinessRevenue(business, pricingData);
-    const totalRevenueWithTax = Math.round(revenueResult.total_revenue * 1.1);
 
     // 총 입금액 (business_info 기본값 - invoice_records 조회 후 재계산될 수 있음)
     let allPayments = sumAllPayments(business);
@@ -257,11 +222,14 @@ export async function GET(request: NextRequest) {
             invoicesData.second.receivable     = rec2nd.total_amount - rec2nd.payment_amount;
           }
           if (recAdditional) {
-            invoicesData.additional.invoice_date   = recAdditional.issue_date;
-            invoicesData.additional.invoice_amount = recAdditional.total_amount;
-            invoicesData.additional.payment_date   = recAdditional.payment_date;
-            invoicesData.additional.payment_amount = recAdditional.payment_amount;
-            invoicesData.additional.receivable     = recAdditional.total_amount - recAdditional.payment_amount;
+            // issue_date가 null이면 business_info.invoice_additional_date fallback 사용
+            invoicesData.additional.invoice_date   = recAdditional.issue_date || business.invoice_additional_date;
+            // total_amount가 0이면 business_info 기반 금액 fallback 사용
+            const recAdditionalAmount = recAdditional.total_amount || Math.round((Number(business.additional_cost) || 0) * 1.1);
+            invoicesData.additional.invoice_amount = recAdditionalAmount;
+            invoicesData.additional.payment_date   = recAdditional.payment_date || business.payment_additional_date;
+            invoicesData.additional.payment_amount = recAdditional.payment_amount || Number(business.payment_additional_amount) || 0;
+            invoicesData.additional.receivable     = recAdditionalAmount - (recAdditional.payment_amount || Number(business.payment_additional_amount) || 0);
           }
         } else if (category === '자비') {
           const recAdvance = getStageRecord('self_advance');
@@ -297,6 +265,12 @@ export async function GET(request: NextRequest) {
       const rec1st = getStageRecordFinal('subsidy_1st');
       const rec2nd = getStageRecordFinal('subsidy_2nd');
       const recAdditional = getStageRecordFinal('subsidy_additional');
+
+        // invoice_records에 추가공사비가 있는데 business_info.additional_cost가 0/NULL인 경우 보완
+      // (invoice_records로 마이그레이션 후 business_info 필드가 초기화된 케이스)
+      if (recAdditional && (!business.additional_cost || Number(business.additional_cost) === 0)) {
+        business.additional_cost = recAdditional.supply_amount || 0;
+      }
       // invoice_records 입금액이 business_info 필드보다 크면 (또는 business_info가 0) invoice_records 값 사용
       const pay1st = rec1st ? Math.max(rec1st.payment_amount || 0, Number(business.payment_1st_amount) || 0) : (Number(business.payment_1st_amount) || 0);
       const pay2nd = rec2nd ? Math.max(rec2nd.payment_amount || 0, Number(business.payment_2nd_amount) || 0) : (Number(business.payment_2nd_amount) || 0);
@@ -317,10 +291,38 @@ export async function GET(request: NextRequest) {
     allPayments += extraPayments;
 
 
-    // 최종 미수금 계산 — totalRevenueWithTax는 calculateBusinessRevenue를 통해 revenue_adjustments 포함됨
+    // 전체 매출 계산 (부가세 포함) — invoice_records 기반 청구금액 합계
+    // revenue_adjustments는 내부 이익 조정 항목이므로 미수금 계산에서 제외
+    // 미수금은 실제 발행된 계산서 금액 기준으로 계산
+    let totalInvoicedAmount = 0;
+    if (category === '보조금') {
+      const rec1stFinal = getStageRecordFinal('subsidy_1st');
+      const rec2ndFinal = getStageRecordFinal('subsidy_2nd');
+      const recAdditionalFinal = getStageRecordFinal('subsidy_additional');
+      // invoice_records가 있으면 그 금액 사용, 없거나 0이면 business_info 필드 fallback
+      const inv1st = rec1stFinal?.total_amount || (Number(business.invoice_1st_amount) || 0);
+      const inv2nd = rec2ndFinal?.total_amount || (Number(business.invoice_2nd_amount) || 0);
+      const invAdditional = recAdditionalFinal?.total_amount || Math.round((Number(business.additional_cost) || 0) * 1.1);
+      totalInvoicedAmount = inv1st + inv2nd + invAdditional;
+    } else {
+      const recAdvanceFinal = getStageRecordFinal('self_advance');
+      const recBalanceFinal = getStageRecordFinal('self_balance');
+      const invAdvance = recAdvanceFinal?.total_amount || (Number(business.invoice_advance_amount) || 0);
+      const invBalance = recBalanceFinal?.total_amount || (Number(business.invoice_balance_amount) || 0);
+      totalInvoicedAmount = invAdvance + invBalance;
+    }
+    // extra 계산서 포함
+    const extraInvoiced = invoiceRecordsByStage.extra
+      .filter(r => r.record_type !== 'cancelled')
+      .reduce((sum, r) => sum + (r.total_amount || 0), 0);
+    totalInvoicedAmount += extraInvoiced;
+
+    const totalRevenueWithTax = totalInvoicedAmount; // 청구금액 기반
+
+    // 최종 미수금 계산 — 실제 발행된 계산서 금액 - 총 입금액
     totalReceivables = calculateReceivables({
       installationDate: business.installation_date,
-      totalRevenueWithTax,
+      totalRevenueWithTax: totalInvoicedAmount,
       totalPayments: allPayments,
     });
 

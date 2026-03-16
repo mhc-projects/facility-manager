@@ -26,7 +26,7 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
 
   // invoice_records 데이터가 있으면 그것을 우선 사용
   const displayDate = invoiceRecord?.issue_date || invoiceDate;
-  const displayAmount = invoiceRecord?.total_amount ?? invoiceAmount;
+  const displayAmount = (invoiceRecord && invoiceRecord.total_amount > 0) ? invoiceRecord.total_amount : invoiceAmount;
   const displaySupply = invoiceRecord?.supply_amount;
   const displayTax = invoiceRecord?.tax_amount;
   const displayInvoiceNumber = invoiceRecord?.invoice_number;

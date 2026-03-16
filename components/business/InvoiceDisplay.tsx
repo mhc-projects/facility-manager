@@ -48,6 +48,7 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
         success: result.success,
         hasData: !!result.data,
         invoices: result.data?.invoices,
+        additional_invoice_date: result.data?.invoices?.additional?.invoice_date,
         total_receivables: result.data?.total_receivables,
         grand_total_receivables: result.data?.grand_total_receivables,
         extra_count: result.data?.invoice_records?.extra?.length,
