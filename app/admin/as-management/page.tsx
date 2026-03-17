@@ -10,6 +10,7 @@ import PaidStatusBadge from './components/PaidStatusBadge';
 import Link from 'next/link';
 import AdminLayout from '@/components/ui/AdminLayout';
 import AsExcelUpload from './components/AsExcelUpload';
+import { useAsRecordsRealtime } from '@/hooks/useAsRecordsRealtime';
 
 export interface AsRecord {
   id: string;
@@ -191,6 +192,14 @@ export default function AsManagementPage() {
     fetchRecords(controller.signal);
     return () => controller.abort();
   }, [fetchRecords]);
+
+  // 외부 시스템에서 AS 건이 입력되면 목록 자동 갱신
+  useAsRecordsRealtime({
+    enabled: !!user,
+    onInsert: () => fetchRecords(),
+    onUpdate: () => fetchRecords(),
+    onDelete: () => fetchRecords(),
+  });
 
   const handleAddNew = () => { setEditingRecord(null); setModalOpen(true); };
   const handleEdit = (record: AsRecord) => { setEditingRecord(record); setModalOpen(true); };
