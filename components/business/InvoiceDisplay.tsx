@@ -9,6 +9,7 @@ interface InvoiceDisplayProps {
   businessId: string;
   businessCategory: string;  // 모든 진행구분 허용
   additionalCost?: number;
+  totalRevenueOverride?: number; // 모달 상위에서 계산된 최종 매출금액 (부가세 포함)
   onReceivablesLoaded?: (receivables: number) => void;
 }
 
@@ -28,6 +29,7 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   businessId,
   businessCategory,
   additionalCost = 0,
+  totalRevenueOverride,
   onReceivablesLoaded,
 }) => {
   const [invoiceData, setInvoiceData] = useState<any>(null);
@@ -84,7 +86,8 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   }
 
   const grandTotalReceivables = invoiceData.grand_total_receivables ?? invoiceData.total_receivables ?? 0;
-  const totalRevenue = invoiceData.total_revenue ?? 0;
+  // totalRevenueOverride: 모달 상위의 최종 매출금액(부가세 포함) 우선 사용, 없으면 API의 계산서 기반 금액
+  const totalRevenue = totalRevenueOverride != null ? totalRevenueOverride : (invoiceData.total_revenue ?? 0);
   const totalPaymentAmount = invoiceData.total_payment_amount ?? 0;
   const extraReceivables = invoiceData.extra_receivables || 0;
 
@@ -197,8 +200,7 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
 
           {additionalCost > 0 &&
            (invoiceData.invoices.additional?.invoice_date ||
-            invoiceData.invoices.additional?.payment_date ||
-            getStageRecord('subsidy_additional') !== null) && (
+            getStageRecord('subsidy_additional')?.issue_date) && (
             <InvoiceDisplayCard
               title="추가공사비"
               invoiceDate={invoiceData.invoices.additional?.invoice_date}
