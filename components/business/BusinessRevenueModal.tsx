@@ -1851,6 +1851,7 @@ export default function BusinessRevenueModal({
                 businessId={business.id}
                 businessCategory={business.progress_status || business.category}
                 additionalCost={business.additional_cost}
+                totalRevenueOverride={displayData?.total_revenue ? Math.round(Number(displayData.total_revenue) * 1.1) : undefined}
                 onReceivablesLoaded={(receivables) => onReceivablesUpdate?.(business.id, receivables)}
               />
             </div>

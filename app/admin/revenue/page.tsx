@@ -179,6 +179,8 @@ function RevenueDashboard() {
   const [selectedPaymentYears, setSelectedPaymentYears] = useState<string[]>([]); // 입금연도 필터 - 추가공사비 제외 최신 입금일 기준
   const [selectedPaymentMonths, setSelectedPaymentMonths] = useState<string[]>([]); // 입금월 필터 (1-12) - 추가공사비 제외 최신 입금일 기준
   const [showReceivablesOnly, setShowReceivablesOnly] = useState(false); // 미수금 필터
+  const [showOverpaymentOnly, setShowOverpaymentOnly] = useState(false); // 초과입금(마이너스) 필터
+  const [excludeOverpayment, setExcludeOverpayment] = useState(false); // 초과입금 제외 필터
   const [showUninstalledOnly, setShowUninstalledOnly] = useState(false); // 미설치 필터
   // 미수금 필터 활성화 시 업무관리 연동
   const [taskStatusMap, setTaskStatusMap] = useState<Record<string, Array<{ task_type: string; status: string }>>>({});
@@ -197,6 +199,8 @@ function RevenueDashboard() {
   const itemsPerPage = 20;
   const [showEquipmentModal, setShowEquipmentModal] = useState(false);
   const [selectedEquipmentBusiness, setSelectedEquipmentBusiness] = useState<any>(null);
+  // 모달이 열린 사업장 ID 추적 — 모달 열림 중 _api_receivables 업데이트로 필터에서 사라지는 현상 방지
+  const [openModalBusinessId, setOpenModalBusinessId] = useState<string | null>(null);
   const [quickCalcBusiness, setQuickCalcBusiness] = useState<string>(''); // 빈 상태용 빠른 계산 선택
 
   const { user, permissions } = useAuth();
@@ -266,6 +270,7 @@ function RevenueDashboard() {
       // Revenue 모달 열기
       setSelectedEquipmentBusiness(targetBusiness);
       setShowEquipmentModal(true);
+      setOpenModalBusinessId(targetBusiness.id);
 
       // URL 정리 (파라미터 제거)
       window.history.replaceState({}, '', '/admin/revenue');
@@ -602,11 +607,25 @@ function RevenueDashboard() {
       // 🚀 캐시 확인
       const cachedPricing = getCachedData(CACHE_KEYS.PRICING);
       if (cachedPricing) {
-        setOfficialPrices(cachedPricing.official);
+        // 🔧 구버전 캐시에 문자열로 저장된 고시가를 숫자로 변환
+        const normalizedOfficial: Record<string, number> = {};
+        Object.entries(cachedPricing.official || {}).forEach(([k, v]) => {
+          normalizedOfficial[k] = Number(v) || 0;
+        });
+        setOfficialPrices(normalizedOfficial);
         setManufacturerPrices(cachedPricing.manufacturer);
         setSalesOfficeSettings(cachedPricing.salesOffice);
-        setSurveyCostSettings(cachedPricing.surveyCost);
-        setBaseInstallationCosts(cachedPricing.installation);
+        // 🔧 구버전 캐시 호환: 문자열로 저장된 숫자값을 변환
+        const normalizedSurveyCost: Record<string, number> = {};
+        Object.entries(cachedPricing.surveyCost || {}).forEach(([k, v]) => {
+          normalizedSurveyCost[k] = Number(v) || 0;
+        });
+        setSurveyCostSettings(normalizedSurveyCost);
+        const normalizedInstallation: Record<string, number> = {};
+        Object.entries(cachedPricing.installation || {}).forEach(([k, v]) => {
+          normalizedInstallation[k] = Number(v) || 0;
+        });
+        setBaseInstallationCosts(normalizedInstallation);
         setCommissionRates(cachedPricing.commission);
         setPricesLoaded(true);
         setCostSettingsLoaded(true);
@@ -654,10 +673,11 @@ function RevenueDashboard() {
       ]);
 
       // 환경부 고시가 처리
+      // 🔧 PostgreSQL DECIMAL 타입이 문자열로 반환되므로 Number()로 변환
       if (govData.success) {
         const govPrices: Record<string, number> = {};
         govData.data.pricing.forEach((item: any) => {
-          govPrices[item.equipment_type] = item.official_price;
+          govPrices[item.equipment_type] = Number(item.official_price) || 0;
         });
         setOfficialPrices(govPrices);
       }
@@ -698,10 +718,11 @@ function RevenueDashboard() {
       }
 
       // 기본 설치비 처리
+      // 🔧 PostgreSQL DECIMAL 타입이 문자열로 반환되므로 Number()로 변환
       if (installCostData.success) {
         const installCosts: Record<string, number> = {};
         installCostData.data.costs.forEach((item: any) => {
-          installCosts[item.equipment_type] = item.base_installation_cost;
+          installCosts[item.equipment_type] = Number(item.base_installation_cost) || 0;
         });
         setBaseInstallationCosts(installCosts);
       }
@@ -727,7 +748,7 @@ function RevenueDashboard() {
       // 🚀 캐시 저장
       const pricingCache = {
         official: govData.success ? Object.fromEntries(
-          govData.data.pricing.map((item: any) => [item.equipment_type, item.official_price])
+          govData.data.pricing.map((item: any) => [item.equipment_type, Number(item.official_price) || 0])
         ) : {},
         manufacturer: manuData.success ? (() => {
           const manuPrices: Record<string, Record<string, number>> = {};
@@ -745,11 +766,11 @@ function RevenueDashboard() {
           return acc;
         }, {}) : {},
         surveyCost: surveyCostData.success ? surveyCostData.data.reduce((acc: any, item: any) => {
-          acc[item.survey_type] = item.base_cost;
+          acc[item.survey_type] = Number(item.base_cost) || 0;
           return acc;
         }, {}) : {},
         installation: installCostData.success ? installCostData.data.costs.reduce((acc: any, item: any) => {
-          acc[item.equipment_type] = item.base_installation_cost; // ✅ 올바른 필드명 사용
+          acc[item.equipment_type] = Number(item.base_installation_cost) || 0; // ✅ 올바른 필드명 사용
           return acc;
         }, {}) : {},
         commission: commissionData.success ? (() => {
@@ -1505,18 +1526,40 @@ function RevenueDashboard() {
       const installationExtraCost = calculatedData.installation_extra_cost;
       const netProfit = calculatedData.net_profit;
 
-    // 미수금 계산: 전체 매출(부가세 포함) - 총 입금액
-    // 설치일 없으면 0, 계산서 발행 여부 무관
-    // totalRevenueWithTax는 calculateBusinessRevenue를 통해 revenue_adjustments 이미 포함됨
-    const totalRevenueWithTax = Math.round(calculatedData.total_revenue * 1.1);
-    // API에서 이미 계산된 미수금이 있으면 우선 사용 (revenue_adjustments 포함한 정확한 값)
+    // 미수금 계산 우선순위:
+    // 1) 모달에서 계산된 _api_receivables (가장 정확)
+    // 2) DB에서 계산된 ir_receivables (청구서 기반, 보조금/자비 구분)
+    // 3) bi 인보이스 필드 기반 fallback (invoice_records 없는 구형 데이터)
+    const irReceivables = (business as any).ir_receivables;
+    // ir_receivables는 invoice_records 데이터가 불완전한 사업장에서 마이너스가 나올 수 있음
+    // (예: business_info에만 입금 기록이 있고 invoice_records에 청구 기록이 없는 경우)
+    // 마이너스이거나 소수점 오류(0~10)인 경우 고시가 기반 fallback으로 처리
+    const irReceivablesNum = irReceivables !== null && irReceivables !== undefined ? Number(irReceivables) : null;
+    // ir_receivables 유효성: null 제외, 0~10 반올림 오차 제외, 음수(초과입금)는 유효
+    const isValidIrReceivables = irReceivablesNum !== null && !(irReceivablesNum > 0 && irReceivablesNum <= 10);
+    // ir_has_any_record=1이면 invoice_records가 존재 → ir_receivables=NULL은 청구서 미발행 의미 → 0
+    // ir_has_any_record=NULL이면 구형 데이터 → bi 인보이스 필드 기반 계산
+    const hasAnyRecord = (business as any).ir_has_any_record != null;
+    // 구형 데이터 fallback: bi 필드의 실제 계산서 금액 기준 (고시가 아닌 실제 발행 금액)
+    // business-invoices API와 동일하게: 계산서 없으면 0, 있으면 계산서 합계
+    const b = business as any;
+    const legacyInvoiced = b.progress_status?.includes('보조금')
+      ? (Number(b.invoice_1st_amount) || 0) + (Number(b.invoice_2nd_amount) || 0)
+        + (b.invoice_additional_date ? Math.round((Number(b.additional_cost) || 0) * 1.1) : 0)
+      : (Number(b.invoice_advance_amount) || 0) + (Number(b.invoice_balance_amount) || 0);
     const totalReceivables = (business as any)._api_receivables !== undefined
       ? (business as any)._api_receivables
-      : calculateReceivables({
-          installationDate: (business as any).installation_date,
-          totalRevenueWithTax,
-          totalPayments: sumAllPayments(business as any),
-        });
+      : isValidIrReceivables
+        ? irReceivablesNum
+        : hasAnyRecord
+          ? 0  // invoice_records 있지만 청구서 미발행 → 미수금 없음
+          : legacyInvoiced === 0
+            ? 0  // legacy 데이터도 청구서 미발행이면 미수금 없음 (선입금은 미수금 아님)
+            : calculateReceivables({
+                installationDate: (business as any).installation_date,
+                totalRevenueWithTax: legacyInvoiced,
+                totalPayments: sumAllPayments(business as any),
+              });
 
       return {
         ...business,
@@ -1546,10 +1589,14 @@ function RevenueDashboard() {
       return business.total_revenue >= minRevenue && business.total_revenue <= maxRevenue;
     }).filter(business => {
       // 미수금 필터 적용
-      if (!showReceivablesOnly) {
-        return true;
-      }
-      return business.total_receivables > 0;
+      if (!showReceivablesOnly) return true;
+      // 현재 모달이 열린 사업장은 필터에서 제외하지 않음 (_api_receivables 업데이트로 사라지는 현상 방지)
+      if (openModalBusinessId && business.id === openModalBusinessId) return true;
+      const r = business.total_receivables;
+      if (r === 0 || r === null || r === undefined) return false;
+      if (showOverpaymentOnly) return (r as number) < 0;   // 초과입금만
+      if (excludeOverpayment) return (r as number) > 0;    // 초과입금 제외 (양수만)
+      return true;
     }).filter(business => {
       // 미설치 필터 적용
       if (!showUninstalledOnly) {
@@ -1593,7 +1640,10 @@ function RevenueDashboard() {
     selectedPaymentMonths,
     revenueFilter,
     showReceivablesOnly,
+    showOverpaymentOnly,
+    excludeOverpayment,
     showUninstalledOnly,
+    openModalBusinessId,
     taskStatusMap,
     selectedTaskTypes,
     riskMap,
@@ -2243,8 +2293,8 @@ function RevenueDashboard() {
 
             {/* 두 번째 행: 검색, 매출금액, 업무단계(미수금 ON시), 체크박스 */}
             <div className="flex flex-wrap gap-2 items-center">
-              {/* 검색: 미수금 ON 시 더 넓게 */}
-              <div className={`flex items-center gap-1.5 ${showReceivablesOnly ? 'flex-[2_2_0%]' : 'flex-[1_1_0%]'} min-w-[140px]`}>
+              {/* 검색: 미수금 ON 시 축소 */}
+              <div className={`flex items-center gap-1.5 ${showReceivablesOnly ? 'flex-[1_1_0%] min-w-[80px]' : 'flex-[1_1_0%] min-w-[140px]'}`}>
                 <label className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">검색</label>
                 <div className="relative flex-1">
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -2265,7 +2315,7 @@ function RevenueDashboard() {
                   placeholder="0"
                   value={revenueFilter.min}
                   onChange={(e) => { setRevenueFilter(prev => ({ ...prev, min: e.target.value })); setCurrentPage(1); }}
-                  className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent w-40"
+                  className={`px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${showReceivablesOnly ? 'w-24' : 'w-40'}`}
                   min="0"
                   step="100000"
                 />
@@ -2278,7 +2328,7 @@ function RevenueDashboard() {
                   placeholder="제한없음"
                   value={revenueFilter.max}
                   onChange={(e) => { setRevenueFilter(prev => ({ ...prev, max: e.target.value })); setCurrentPage(1); }}
-                  className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent w-40"
+                  className={`px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${showReceivablesOnly ? 'w-24' : 'w-40'}`}
                   min="0"
                   step="100000"
                 />
@@ -2286,7 +2336,7 @@ function RevenueDashboard() {
 
               {/* 업무단계 필터 (미수금 ON 시에만 표시) */}
               {showReceivablesOnly && (
-                <div className="shrink-0 min-w-[320px]">
+                <div className="shrink-0 min-w-[252px]">
                   <MultiSelectDropdown
                     label="업무단계"
                     options={uniqueTaskStepLabels.map(s => s.label)}
@@ -2300,7 +2350,7 @@ function RevenueDashboard() {
 
               {/* 수금 담당자 필터 (미수금 ON 시에만 표시) */}
               {showReceivablesOnly && (
-                <div className="shrink-0 min-w-[200px]">
+                <div className="shrink-0 min-w-[150px]">
                   <MultiSelectDropdown
                     label="수금담당자"
                     options={[
@@ -2326,6 +2376,36 @@ function RevenueDashboard() {
 
               {/* 체크박스: 항상 우측 끝 고정 */}
               <div className="flex items-center gap-3 ml-auto shrink-0">
+                {/* 초과입금 서브필터: 미수금 필터 활성화 시에만 표시 */}
+                {showReceivablesOnly && (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        id="overpayment-filter"
+                        checked={showOverpaymentOnly}
+                        onChange={(e) => { setShowOverpaymentOnly(e.target.checked); if (e.target.checked) setExcludeOverpayment(false); setCurrentPage(1); }}
+                        className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <label htmlFor="overpayment-filter" className="text-xs sm:text-sm font-medium text-blue-700 cursor-pointer whitespace-nowrap">
+                        초과입금
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        id="exclude-overpayment-filter"
+                        checked={excludeOverpayment}
+                        onChange={(e) => { setExcludeOverpayment(e.target.checked); if (e.target.checked) setShowOverpaymentOnly(false); setCurrentPage(1); }}
+                        className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <label htmlFor="exclude-overpayment-filter" className="text-xs sm:text-sm font-medium text-blue-700 cursor-pointer whitespace-nowrap">
+                        초과입금 제외
+                      </label>
+                    </div>
+                  </>
+                )}
+
                 <div className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
@@ -2337,6 +2417,8 @@ function RevenueDashboard() {
                         setSelectedTaskTypes([]);
                         setSelectedRiskLevels([]);
                         setSelectedCollectionManagers([]);
+                        setShowOverpaymentOnly(false);
+                        setExcludeOverpayment(false);
                       }
                       setCurrentPage(1);
                     }}
@@ -2571,6 +2653,7 @@ function RevenueDashboard() {
                             onClick={() => {
                               setSelectedEquipmentBusiness(business);
                               setShowEquipmentModal(true);
+                              setOpenModalBusinessId(business.id);
                             }}
                             className="text-xs sm:text-sm md:text-base font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left flex-1"
                           >
@@ -2636,11 +2719,11 @@ function RevenueDashboard() {
                               </div>
                             </div>
                           )}
-                          {showReceivablesOnly && business.total_receivables > 0 && (
-                            <div className="col-span-2 bg-red-50 p-1.5 sm:p-2 rounded">
+                          {showReceivablesOnly && business.total_receivables !== 0 && business.total_receivables != null && (
+                            <div className={`col-span-2 ${business.total_receivables < 0 ? 'bg-blue-50' : 'bg-red-50'} p-1.5 sm:p-2 rounded`}>
                               <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5">미수금</div>
-                              <div className="font-mono font-bold text-red-600 text-[10px] sm:text-xs md:text-sm">
-                                {formatCurrency(business.total_receivables)} ⚠️
+                              <div className={`font-mono font-bold ${business.total_receivables < 0 ? 'text-blue-600' : 'text-red-600'} text-[10px] sm:text-xs md:text-sm`}>
+                                {formatCurrency(business.total_receivables)} {business.total_receivables < 0 ? '🔵' : '⚠️'}
                               </div>
                             </div>
                           )}
@@ -2661,6 +2744,7 @@ function RevenueDashboard() {
                   formatCurrency={formatCurrency}
                   setSelectedEquipmentBusiness={setSelectedEquipmentBusiness}
                   setShowEquipmentModal={setShowEquipmentModal}
+                  setOpenModalBusinessId={setOpenModalBusinessId}
                   handleRiskUpdate={handleRiskUpdate}
                   handlePaymentDateUpdate={handlePaymentDateUpdate}
                   riskMap={riskMap}
@@ -2690,6 +2774,7 @@ function RevenueDashboard() {
           onClose={async (dataChanged = false) => {
             console.log('🔄 [MODAL-CLOSE] 모달 닫기 시작');
             setShowEquipmentModal(false);
+            setOpenModalBusinessId(null);
 
             // ✅ 데이터가 실제로 변경된 경우에만 재조회
             if (dataChanged) {
@@ -2730,6 +2815,7 @@ function VirtualizedTable({
   formatCurrency,
   setSelectedEquipmentBusiness,
   setShowEquipmentModal,
+  setOpenModalBusinessId,
   handleRiskUpdate,
   handlePaymentDateUpdate,
   riskMap,
@@ -2753,6 +2839,7 @@ function VirtualizedTable({
   formatCurrency: (value: number) => string;
   setSelectedEquipmentBusiness: (business: any) => void;
   setShowEquipmentModal: (show: boolean) => void;
+  setOpenModalBusinessId: (id: string | null) => void;
   handleRiskUpdate: (businessId: string, risk: '상' | '중' | '하' | null) => void;
   handlePaymentDateUpdate: (businessId: string, date: string | null) => Promise<void>;
   riskMap: Record<string, string | null>;
@@ -2957,6 +3044,7 @@ function VirtualizedTable({
                     onClick={() => {
                       setSelectedEquipmentBusiness(business);
                       setShowEquipmentModal(true);
+                      setOpenModalBusinessId(business.id);
                     }}
                     className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left w-full truncate"
                   >
@@ -3118,12 +3206,12 @@ function VirtualizedTable({
                   </div>
                 )}
                 {showReceivablesOnly && (
-                  <div className={`${cellPad} flex items-center justify-end text-right font-mono font-bold bg-red-50 ${cellText}`}>
+                  <div className={`${cellPad} flex items-center justify-end text-right font-mono font-bold ${business.total_receivables < 0 ? 'bg-blue-50' : 'bg-red-50'} ${cellText}`}>
                     <span className={`${
-                      business.total_receivables > 0 ? 'text-red-600' : 'text-green-600'
+                      business.total_receivables > 0 ? 'text-red-600' : business.total_receivables < 0 ? 'text-blue-600' : 'text-green-600'
                     }`}>
                       {formatCurrency(business.total_receivables)}
-                      {business.total_receivables > 0 ? ' ⚠️' : ' ✅'}
+                      {business.total_receivables > 0 ? ' ⚠️' : business.total_receivables < 0 ? ' 🔵' : ' ✅'}
                     </span>
                   </div>
                 )}
