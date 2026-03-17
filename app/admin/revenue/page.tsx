@@ -1594,8 +1594,6 @@ function RevenueDashboard() {
       if (openModalBusinessId && business.id === openModalBusinessId) return true;
       const r = business.total_receivables;
       if (r === 0 || r === null || r === undefined) return false;
-      if (showOverpaymentOnly) return (r as number) < 0;   // 초과입금만
-      if (excludeOverpayment) return (r as number) > 0;    // 초과입금 제외 (양수만)
       return true;
     }).filter(business => {
       // 미설치 필터 적용
@@ -1640,8 +1638,6 @@ function RevenueDashboard() {
     selectedPaymentMonths,
     revenueFilter,
     showReceivablesOnly,
-    showOverpaymentOnly,
-    excludeOverpayment,
     showUninstalledOnly,
     openModalBusinessId,
     taskStatusMap,
@@ -1651,15 +1647,33 @@ function RevenueDashboard() {
     collectionManagerMap,
   ]);
 
-  // 위험도 필터 적용 (preRiskFilteredBusinesses → filteredBusinesses)
+  // 위험도 + 초과입금 서브필터 적용 (preRiskFilteredBusinesses → filteredBusinesses)
   const filteredBusinesses = useMemo(() => {
-    if (!showReceivablesOnly || selectedRiskLevels.length === 0) return preRiskFilteredBusinesses;
-    return preRiskFilteredBusinesses.filter(business => {
-      const risk = riskMap[business.id] ?? null;
-      const riskKey = risk === '상' || risk === '중' || risk === '하' ? risk : '없음';
-      return selectedRiskLevels.includes(riskKey);
-    });
-  }, [preRiskFilteredBusinesses, showReceivablesOnly, selectedRiskLevels, riskMap]);
+    let result = preRiskFilteredBusinesses;
+    if (showReceivablesOnly && selectedRiskLevels.length > 0) {
+      result = result.filter(business => {
+        const risk = riskMap[business.id] ?? null;
+        const riskKey = risk === '상' || risk === '중' || risk === '하' ? risk : '없음';
+        return selectedRiskLevels.includes(riskKey);
+      });
+    }
+    if (showReceivablesOnly) {
+      if (showOverpaymentOnly) result = result.filter(b => (b.total_receivables as number) < 0);
+      else if (excludeOverpayment) result = result.filter(b => (b.total_receivables as number) > 0);
+    }
+    return result;
+  }, [preRiskFilteredBusinesses, showReceivablesOnly, selectedRiskLevels, riskMap, showOverpaymentOnly, excludeOverpayment]);
+
+  // 미수금 필터 활성화 시 초과입금 건수 계산 (서브필터 표시 여부 결정)
+  // preRiskFilteredBusinesses에서 showOverpaymentOnly/excludeOverpayment 무관하게 카운트
+  // (filteredBusinesses는 이미 서브필터 적용 후라 음수 항목이 제거될 수 있음)
+  const overpaymentCount = useMemo(() => {
+    if (!showReceivablesOnly) return 0;
+    return preRiskFilteredBusinesses.filter(b => {
+      const r = (b as any).total_receivables;
+      return r !== null && r !== undefined && Number(r) < 0;
+    }).length;
+  }, [showReceivablesOnly, preRiskFilteredBusinesses]);
 
   // ✅ 실시간 계산 결과로 통계 계산 (filteredBusinesses에서 직접 계산)
   const stats = useMemo(() => {
@@ -2377,7 +2391,7 @@ function RevenueDashboard() {
               {/* 체크박스: 항상 우측 끝 고정 */}
               <div className="flex items-center gap-3 ml-auto shrink-0">
                 {/* 초과입금 서브필터: 미수금 필터 활성화 시에만 표시 */}
-                {showReceivablesOnly && (
+                {showReceivablesOnly && overpaymentCount > 0 && (
                   <>
                     <div className="flex items-center gap-1.5">
                       <input
