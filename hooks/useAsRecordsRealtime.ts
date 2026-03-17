@@ -17,6 +17,9 @@ export interface UseAsRecordsRealtimeOptions {
 export function useAsRecordsRealtime(options: UseAsRecordsRealtimeOptions = {}) {
   const { enabled = true, onInsert, onUpdate, onDelete } = options;
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // 콜백을 ref로 보관 → 함수 레퍼런스 변경 시 채널 재구독 방지
+  const callbacksRef = useRef({ onInsert, onUpdate, onDelete });
+  callbacksRef.current = { onInsert, onUpdate, onDelete };
 
   useEffect(() => {
     if (!enabled) return;
@@ -29,13 +32,13 @@ export function useAsRecordsRealtime(options: UseAsRecordsRealtimeOptions = {}) 
     const channel = supabase
       .channel('as_records_changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'as_records' }, (payload) => {
-        onInsert?.(payload.new as Record<string, unknown>);
+        callbacksRef.current.onInsert?.(payload.new as Record<string, unknown>);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'as_records' }, (payload) => {
-        onUpdate?.(payload.new as Record<string, unknown>);
+        callbacksRef.current.onUpdate?.(payload.new as Record<string, unknown>);
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'as_records' }, (payload) => {
-        onDelete?.((payload.old as { id: string }).id);
+        callbacksRef.current.onDelete?.((payload.old as { id: string }).id);
       })
       .subscribe();
 
@@ -45,5 +48,5 @@ export function useAsRecordsRealtime(options: UseAsRecordsRealtimeOptions = {}) 
       channelRef.current?.unsubscribe();
       channelRef.current = null;
     };
-  }, [enabled, onInsert, onUpdate, onDelete]);
+  }, [enabled]); // enabled 변경 시에만 재구독
 }

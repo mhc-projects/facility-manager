@@ -23,6 +23,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { CacheManager } from '@/utils/cache-manager';
 import { PaymentDateCell } from '@/components/admin/PaymentDateCell';
 import { CollectionManagerCell } from '@/components/admin/CollectionManagerCell';
+import { useBusinessInfoRealtime } from '@/hooks/useBusinessInfoRealtime';
 
 // Code Splitting: 무거운 모달 및 디스플레이 컴포넌트를 동적 로딩
 const InvoiceDisplay = dynamic(() => import('@/components/business/InvoiceDisplay').then(mod => ({ default: mod.InvoiceDisplay })), {
@@ -359,6 +360,14 @@ function RevenueDashboard() {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [pricesLoaded]);
+
+  // business_info 변경 시 매출 데이터 자동 갱신
+  useBusinessInfoRealtime({
+    enabled: !!user && pricesLoaded,
+    onInsert: () => { CacheManager.invalidateAll(); loadBusinesses(); },
+    onUpdate: () => { CacheManager.invalidateAll(); loadBusinesses(); },
+    onDelete: () => { CacheManager.invalidateAll(); loadBusinesses(); },
+  });
 
   const getAuthHeaders = () => {
     const token = TokenManager.getToken();
