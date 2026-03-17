@@ -292,8 +292,15 @@ export default function BusinessRevenueModal({
 
   // 🗑️ 캐시 무효화 유틸리티 함수
   const invalidateRevenueCache = (businessId: string) => {
-    const cacheKey = `revenue_calc_${businessId}`;
-    sessionStorage.removeItem(cacheKey);
+    // Revenue 페이지의 sessionStorage 캐시 키 패턴으로 삭제
+    Object.keys(sessionStorage)
+      .filter(k =>
+        k.startsWith('revenue_businesses_cache') ||
+        k.startsWith('revenue_calculations_cache') ||
+        k.startsWith('revenue_pricing_cache') ||
+        k === `revenue_calc_${businessId}`
+      )
+      .forEach(k => sessionStorage.removeItem(k));
     console.log('🗑️ [CACHE-INVALIDATE] Revenue 캐시 삭제:', businessId);
   };
 

@@ -3904,9 +3904,16 @@ function BusinessManagementPage() {
 
         // 사업장 정보 변경 시 매출 관리 페이지의 캐시 무효화
         // revenue 페이지는 버전 접미사 포함 키 사용 (e.g. revenue_businesses_cache_v3_adj)
+        // BusinessRevenueModal 자체 캐시(revenue_calc_{id})도 함께 삭제
         // 버전이 바뀌어도 대응하도록 패턴 매칭으로 모두 제거
+        const businessIdForCache = result.data?.id || editingBusiness?.id;
         Object.keys(sessionStorage)
-          .filter(k => k.startsWith('revenue_businesses_cache') || k.startsWith('revenue_calculations_cache') || k.startsWith('revenue_pricing_cache'))
+          .filter(k =>
+            k.startsWith('revenue_businesses_cache') ||
+            k.startsWith('revenue_calculations_cache') ||
+            k.startsWith('revenue_pricing_cache') ||
+            (businessIdForCache && k === `revenue_calc_${businessIdForCache}`)
+          )
           .forEach(k => sessionStorage.removeItem(k));
 
         // 같은 탭의 매출관리 페이지에 캐시 무효화 신호 전송 (revenue_adjustments 등 모든 필드 반영)
