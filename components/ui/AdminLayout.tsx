@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronLeft,
   User,
   Clock,
   Activity,
@@ -174,7 +175,7 @@ const navigationItems: NavigationItem[] = [
   },
 ]
 
-function NavigationItems({ pathname, onItemClick }: { pathname: string, onItemClick: () => void }) {
+function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: string, onItemClick: () => void, collapsed: boolean }) {
   const router = useRouter()
   const { user, permissions } = useAuth()
 
@@ -199,25 +200,37 @@ function NavigationItems({ pathname, onItemClick }: { pathname: string, onItemCl
               router.push(item.href)
               onItemClick()
             }}
+            title={collapsed ? item.name : undefined}
             className={`
-              group flex items-center px-3 py-2 lg:px-3 lg:py-2 rounded-xl text-xs lg:text-sm font-medium transition-all duration-200 cursor-pointer
+              relative group flex items-center rounded-xl text-xs lg:text-sm font-medium transition-all duration-200 cursor-pointer
+              ${collapsed ? 'justify-center px-2 py-2' : 'px-3 py-2 lg:px-3 lg:py-2'}
               ${isActive
                 ? 'bg-gradient-to-r from-blue-50 to-indigo-50 lg:bg-gradient-to-br lg:from-blue-100 lg:to-indigo-100 text-blue-700 shadow-sm border border-blue-200'
                 : 'text-gray-600 hover:bg-gray-50 lg:hover:bg-gray-100 hover:text-gray-900'
               }
             `}
           >
-            <Icon className={`w-4 h-4 lg:w-4 lg:h-4 mr-2 lg:mr-2 ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
-            <div className="flex-1 min-w-0">
-              <div className={`font-medium text-xs lg:text-sm ${isActive ? 'text-blue-900' : ''}`}>
+            <Icon className={`w-4 h-4 flex-shrink-0 ${collapsed ? '' : 'mr-2 lg:mr-2'} ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+            {!collapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <div className={`font-medium text-xs lg:text-sm ${isActive ? 'text-blue-900' : ''}`}>
+                    {item.name}
+                  </div>
+                  <div className={`text-xs lg:text-xs mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-400'} truncate`}>
+                    {item.description}
+                  </div>
+                </div>
+                {isActive && (
+                  <ChevronRight className="w-3 h-3 lg:w-3 lg:h-3 text-blue-600" />
+                )}
+              </>
+            )}
+            {/* Collapsed 상태 tooltip */}
+            {collapsed && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                 {item.name}
               </div>
-              <div className={`text-xs lg:text-xs mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-400'} truncate`}>
-                {item.description}
-              </div>
-            </div>
-            {isActive && (
-              <ChevronRight className="w-3 h-3 lg:w-3 lg:h-3 text-blue-600" />
             )}
           </div>
         )
@@ -228,10 +241,22 @@ function NavigationItems({ pathname, onItemClick }: { pathname: string, onItemCl
 
 export default function AdminLayout({ children, title, description, actions }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('admin-sidebar-collapsed') === 'true'
+    }
+    return false
+  })
   const [currentTime, setCurrentTime] = useState('')
   const [mounted, setMounted] = useState(false)
   // 초기 인증 확인이 완료될 때까지 리다이렉트를 지연시키기 위한 플래그
   const [authChecked, setAuthChecked] = useState(false)
+
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed
+    setSidebarCollapsed(next)
+    localStorage.setItem('admin-sidebar-collapsed', String(next))
+  }
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
@@ -305,56 +330,91 @@ export default function AdminLayout({ children, title, description, actions }: A
 
       {/* Container with improved layout */}
       <div className="md:flex md:gap-4 md:p-4 md:h-screen">
-        {/* Sidebar - Improved responsive design (20% reduced width) */}
+        {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-80 md:w-52 xl:w-64 bg-white/95 md:bg-white backdrop-blur-md
+          fixed inset-y-0 left-0 z-50 bg-white/95 md:bg-white backdrop-blur-md
           shadow-xl md:shadow-lg md:border md:border-gray-200 md:rounded-xl transform transition-all duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${sidebarOpen ? 'translate-x-0 w-80' : '-translate-x-full w-80'}
           md:translate-x-0 md:static md:z-0 md:flex md:flex-col md:h-full md:min-w-0 md:flex-shrink-0
+          ${sidebarCollapsed ? 'md:w-16' : 'md:w-52 xl:w-64'}
         `}>
           <div className="flex flex-col h-full lg:p-2">
-            {/* Logo/Header - Integrated with main design */}
-            <div className="flex items-center justify-between lg:h-20 h-16 px-6 lg:px-4 bg-gray-800 lg:bg-white/80 lg:backdrop-blur-sm lg:rounded-xl lg:border lg:border-gray-100/50 lg:mb-4">
-              <Link
-                href="/"
-                className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200 cursor-pointer"
-                onClick={() => setSidebarOpen(false)}
-              >
-                <div className="w-8 h-8 bg-white lg:bg-blue-100 rounded-lg flex items-center justify-center lg:shadow-sm">
-                  <Building2 className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-white lg:text-gray-800">시설관리</h1>
-                  <p className="text-xs text-blue-100 lg:text-gray-500">주식회사 블루온</p>
-                </div>
-              </Link>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
+            {/* Logo/Header */}
+            <div className={`flex items-center lg:h-20 h-16 bg-gray-800 lg:bg-white/80 lg:backdrop-blur-sm lg:rounded-xl lg:border lg:border-gray-100/50 lg:mb-4 transition-all duration-300 ${sidebarCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between px-6 lg:px-4'}`}>
+              {/* 모바일: 항상 로고+텍스트 / 데스크톱 collapsed: 토글버튼만 */}
+              {sidebarCollapsed ? (
+                <>
+                  {/* 모바일에서는 collapsed 상태에서도 로고 표시 */}
+                  <Link href="/" className="flex items-center gap-3 md:hidden" onClick={() => setSidebarOpen(false)}>
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-bold text-white">시설관리</h1>
+                      <p className="text-xs text-blue-100">주식회사 블루온</p>
+                    </div>
+                  </Link>
+                  {/* 데스크톱 collapsed: 토글 버튼만 */}
+                  <button
+                    onClick={toggleSidebar}
+                    className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                    title="메뉴 펼치기"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  {/* 모바일 닫기 버튼 */}
+                  <button onClick={() => setSidebarOpen(false)} className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1">
+                    <X className="w-5 h-5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200 cursor-pointer" onClick={() => setSidebarOpen(false)}>
+                    <div className="w-8 h-8 bg-white lg:bg-blue-100 rounded-lg flex items-center justify-center lg:shadow-sm">
+                      <Building2 className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-bold text-white lg:text-gray-800">시설관리</h1>
+                      <p className="text-xs text-blue-100 lg:text-gray-500">주식회사 블루온</p>
+                    </div>
+                  </Link>
+                  {/* 데스크톱 토글 버튼 */}
+                  <button
+                    onClick={toggleSidebar}
+                    className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+                    title="메뉴 접기"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  {/* 모바일 닫기 버튼 */}
+                  <button onClick={() => setSidebarOpen(false)} className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1">
+                    <X className="w-5 h-5" />
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 lg:px-3 py-2 lg:py-3 space-y-1 lg:space-y-1 overflow-y-auto overscroll-contain">
-              <NavigationItems pathname={pathname || ''} onItemClick={() => setSidebarOpen(false)} />
+            <nav className="flex-1 px-2 py-2 lg:py-3 space-y-1 overflow-y-auto overscroll-contain">
+              <NavigationItems pathname={pathname || ''} onItemClick={() => setSidebarOpen(false)} collapsed={sidebarCollapsed} />
             </nav>
 
             {/* Footer */}
-            <div className="border-t border-gray-200 lg:border-gray-300 p-3 lg:p-3 lg:bg-gradient-to-r lg:from-gray-50 lg:to-blue-50 lg:rounded-xl lg:border lg:m-2 lg:mt-0">
-              <Link href="/profile" className="flex items-center gap-2 lg:gap-2 hover:bg-white/50 lg:hover:bg-blue-100/50 rounded-lg p-2 -m-2 transition-colors duration-200">
-                <div className="w-7 h-7 lg:w-7 lg:h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-sm">
-                  <User className="w-3.5 h-3.5 lg:w-3.5 lg:h-3.5 text-white" />
+            <div className={`border-t border-gray-200 lg:border-gray-300 p-3 lg:bg-gradient-to-r lg:from-gray-50 lg:to-blue-50 lg:rounded-xl lg:border lg:m-2 lg:mt-0 ${sidebarCollapsed ? 'lg:flex lg:justify-center lg:p-2' : ''}`}>
+              <Link href="/profile" className={`flex items-center hover:bg-white/50 lg:hover:bg-blue-100/50 rounded-lg p-2 transition-colors duration-200 ${sidebarCollapsed ? 'justify-center' : 'gap-2 -m-2'}`}>
+                <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
+                  <User className="w-3.5 h-3.5 text-white" />
                 </div>
-                <div className="flex-1">
-                  <div className="text-xs lg:text-xs font-medium text-gray-900">
-                    {user?.name || '관리자'}
+                {!sidebarCollapsed && (
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-gray-900">
+                      {user?.name || '관리자'}
+                    </div>
+                    <div className="text-xs text-gray-500 lg:hidden">
+                      {user?.email || '주식회사 블루온'}
+                    </div>
                   </div>
-                  <div className="text-xs lg:text-xs text-gray-500 lg:hidden">
-                    {user?.email || '주식회사 블루온'}
-                  </div>
-                </div>
+                )}
               </Link>
             </div>
           </div>
