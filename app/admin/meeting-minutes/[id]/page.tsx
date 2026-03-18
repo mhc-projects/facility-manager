@@ -17,9 +17,11 @@ import {
   Users,
   CheckCircle2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Monitor
 } from 'lucide-react'
 import { MeetingMinute, ActionItem } from '@/types/meeting-minutes'
+import PresentationMode from '@/components/meeting-minutes/PresentationMode'
 
 export default function MeetingMinuteDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -30,6 +32,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
   const [loading, setLoading] = useState(true)
   const [minute, setMinute] = useState<MeetingMinute | null>(null)
   const [departments, setDepartments] = useState<string[]>([]) // 부서 목록
+  const [presentationMode, setPresentationMode] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -160,6 +163,13 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
   }
 
   return (
+    <>
+    {presentationMode && (
+      <PresentationMode
+        minute={minute}
+        onClose={() => setPresentationMode(false)}
+      />
+    )}
     <AdminLayout
       title={minute.title}
       actions={
@@ -170,6 +180,13 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">목록</span>
+          </button>
+          <button
+            onClick={() => setPresentationMode(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Monitor className="w-4 h-4" />
+            <span className="hidden sm:inline">프레젠테이션</span>
           </button>
           <button
             onClick={handleEdit}
@@ -480,6 +497,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
         </div>
       </div>
     </AdminLayout>
+    </>
   )
 }
 
