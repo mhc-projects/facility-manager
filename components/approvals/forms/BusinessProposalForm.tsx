@@ -1,15 +1,23 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 export interface BusinessProposalData {
   writer: string
   department: string
+  department_id?: string
   written_date: string
   title: string
   content: string
   retention_period: string
   cooperative_team: string
+  cooperative_team_id?: string
   instructions: string
   attachments_desc: string
+}
+
+interface Department {
+  id: string
+  name: string
 }
 
 interface Props {
@@ -20,8 +28,23 @@ interface Props {
 
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg-transparent disabled:bg-gray-50 border-0 outline-none`
 const cellClass = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center whitespace-nowrap`
+const selectInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg-transparent border-0 outline-none cursor-pointer`
 
 export default function BusinessProposalForm({ data, onChange, disabled = false }: Props) {
+  const [departments, setDepartments] = useState<Department[]>([])
+
+  useEffect(() => {
+    if (disabled) return
+    fetch('/api/organization/departments')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setDepartments(res.data.map((d: any) => ({ id: d.id, name: d.name })))
+        }
+      })
+      .catch(() => {})
+  }, [disabled])
+
   return (
     <div className="space-y-4">
       {/* 기본 정보 */}
@@ -43,13 +66,45 @@ export default function BusinessProposalForm({ data, onChange, disabled = false 
           </div>
           <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
             <div className={cellClass}>작성팀</div>
-            <input className={cellInput} value={data.department} onChange={e => onChange({ ...data, department: e.target.value })} disabled={disabled} placeholder="관리팀" />
+            {disabled ? (
+              <input className={cellInput} value={data.department} disabled />
+            ) : (
+              <select
+                className={selectInput}
+                value={data.department_id || ''}
+                onChange={e => {
+                  const dept = departments.find(d => d.id === e.target.value)
+                  onChange({ ...data, department_id: dept?.id || '', department: dept?.name || '' })
+                }}
+              >
+                <option value="">작성팀 선택...</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-2 divide-x divide-black border-t border-black">
           <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
             <div className={cellClass}>협조팀</div>
-            <input className={cellInput} value={data.cooperative_team} onChange={e => onChange({ ...data, cooperative_team: e.target.value })} disabled={disabled} placeholder="영업팀" />
+            {disabled ? (
+              <input className={cellInput} value={data.cooperative_team} disabled />
+            ) : (
+              <select
+                className={selectInput}
+                value={data.cooperative_team_id || ''}
+                onChange={e => {
+                  const dept = departments.find(d => d.id === e.target.value)
+                  onChange({ ...data, cooperative_team_id: dept?.id || '', cooperative_team: dept?.name || '' })
+                }}
+              >
+                <option value="">협조팀 선택...</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
             <div className={cellClass}>지시사항</div>

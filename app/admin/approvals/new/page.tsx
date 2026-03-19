@@ -37,7 +37,7 @@ function getDefaultFormData(type: DocType, writerName: string, dept: string): an
     case 'leave_request':
       return { writer: writerName, department: dept, written_date: TODAY, start_date: TODAY, end_date: TODAY, total_days: 1, leave_type: 'annual', reason: '', note: '' } as LeaveRequestData
     case 'business_proposal':
-      return { writer: writerName, department: dept, written_date: TODAY, title: '', content: '', retention_period: '3년', cooperative_team: '', instructions: '', attachments_desc: '없음' } as BusinessProposalData
+      return { writer: writerName, department: dept, department_id: '', written_date: TODAY, title: '', content: '', retention_period: '3년', cooperative_team: '', cooperative_team_id: '', instructions: '', attachments_desc: '없음' } as BusinessProposalData
     case 'overtime_log':
       return { writer: writerName, department: dept, written_date: TODAY, items: Array.from({ length: 5 }, () => ({ date: '', day_of_week: '', ot_hours: 1, start_time: '18:00', work_time: '근무시간 1H (18:00~19:00)', work_content: '' })) } as OvertimeLogData
   }

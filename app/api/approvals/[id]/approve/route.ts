@@ -63,6 +63,59 @@ const DOC_TYPE_LABEL: Record<string, string> = {
 };
 
 /**
+ * 최종 승인 완료 시 협조팀 직원 전체에게 알림 발송 (업무품의서 전용)
+ */
+async function notifyCooperativeTeam({
+  doc, documentId,
+}: {
+  doc: any; documentId: string;
+}) {
+  try {
+    const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+    const cooperativeTeamId = formData?.cooperative_team_id;
+    const cooperativeTeamName = formData?.cooperative_team;
+    if (!cooperativeTeamId && !cooperativeTeamName) return;
+
+    let staffList;
+    if (cooperativeTeamId) {
+      staffList = await queryAll(
+        `SELECT id FROM employees WHERE department_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+        [cooperativeTeamId]
+      );
+    } else {
+      staffList = await queryAll(
+        `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+        [cooperativeTeamName]
+      );
+    }
+    if (!staffList || staffList.length === 0) return;
+
+    const typeLabel = DOC_TYPE_LABEL[doc.document_type] || doc.document_type;
+    const teamLabel = cooperativeTeamName || '협조팀';
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const rows = staffList.map((staff: any) => ({
+      title: '[협조 요청 완료]',
+      message: `${doc.document_number} ${typeLabel}\n협조팀(${teamLabel})으로 지정된 문서가 최종 승인되었습니다.`,
+      category: 'report_approved',
+      priority: 'normal',
+      notification_tier: 'personal',
+      target_user_id: staff.id,
+      related_resource_type: 'approval',
+      related_resource_id: documentId,
+      related_url: `/admin/approvals/${documentId}`,
+      expires_at: expiresAt,
+      metadata: { document_number: doc.document_number, document_type: doc.document_type },
+    }));
+
+    const { error } = await supabaseAdmin.from('notifications').insert(rows);
+    if (error) console.error('[APPROVAL] 협조팀 알림 DB 저장 실패:', error);
+  } catch (e) {
+    console.warn('[APPROVAL] 협조팀 통보 처리 실패:', e);
+  }
+}
+
+/**
  * 최종 승인 완료 시 경영지원 역할 부서 직원 전체에게 알림 발송
  */
 async function notifyManagementSupportDept({
@@ -229,6 +282,11 @@ export async function POST(
         documentId: params.id,
         requesterName: requesterEmployee?.name || '담당자',
       });
+
+      // 업무품의서인 경우 협조팀에 알림 발송
+      if (doc.document_type === 'business_proposal') {
+        await notifyCooperativeTeam({ doc, documentId: params.id });
+      }
 
       return NextResponse.json({ success: true, message: '최종 승인 완료', finalApproved: true });
     }
