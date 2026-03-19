@@ -292,7 +292,7 @@ export default function ApiTestPage() {
               <div className="flex items-center justify-between">
                 <label className="text-xs text-gray-500">단가표에서 자재 선택</label>
                 <button
-                  onClick={fetchPriceList}
+                  onClick={() => fetchPriceList()}
                   disabled={priceListLoading}
                   className="text-xs text-blue-600 underline hover:text-blue-800 disabled:opacity-50"
                 >
@@ -303,24 +303,63 @@ export default function ApiTestPage() {
               {priceListError && <p className="text-xs text-red-500">{priceListError}</p>}
 
               {priceList.length > 0 && (
-                <div className="border border-gray-200 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
-                  {priceList.map(item => (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">{priceList.length}개 항목 — 클릭하면 자재 선택, UUID 클릭하면 복사</span>
                     <button
-                      key={item.id}
-                      onClick={() => setSelectedPriceItem(item)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0 ${
-                        selectedPriceItem?.id === item.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                      }`}
+                      onClick={() => {
+                        const json = JSON.stringify(priceList.map(i => ({
+                          id: i.id,
+                          category: i.category,
+                          item_name: i.item_name,
+                          unit_price: i.unit_price,
+                          unit: i.unit,
+                        })), null, 2);
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = 'price_list.json'; a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="text-xs text-gray-400 underline hover:text-gray-600"
                     >
-                      <span className="font-medium">
-                        {item.category ? `[${item.category}] ` : ''}{item.item_name}
-                      </span>
-                      <span className="text-gray-400 flex-shrink-0 ml-2">
-                        {item.unit_price.toLocaleString()}원/{item.unit}
-                      </span>
+                      JSON 다운로드
                     </button>
-                  ))}
-                </div>
+                  </div>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                    {priceList.map(item => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedPriceItem(item)}
+                        className={`w-full text-left px-3 py-2 text-xs border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 transition-colors ${
+                          selectedPriceItem?.id === item.id ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`font-medium ${selectedPriceItem?.id === item.id ? 'text-blue-700' : 'text-gray-700'}`}>
+                            {item.category ? `[${item.category}] ` : ''}{item.item_name}
+                          </span>
+                          <span className="text-gray-400 flex-shrink-0 ml-2">
+                            {Number(item.unit_price).toLocaleString()}원/{item.unit}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="font-mono text-gray-300 text-[10px] select-all">{item.id}</span>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(item.id);
+                            }}
+                            className="text-[10px] text-gray-300 hover:text-blue-500 flex-shrink-0"
+                            title="UUID 복사"
+                          >
+                            복사
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
 
               {priceList.length === 0 && !priceListError && (
