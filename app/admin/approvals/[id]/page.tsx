@@ -144,16 +144,6 @@ export default function ApprovalDetailPage() {
     doc?.status === 'pending' &&
     !doc?.is_express_approved
 
-  if (process.env.NODE_ENV === 'development' && doc && user) {
-    console.log('[전결 디버그]', {
-      userId: user.id,
-      executiveId: doc.executive_id,
-      match: doc.executive_id === user.id,
-      status: doc.status,
-      isExpressApproved: doc.is_express_approved,
-      canExpressApprove,
-    })
-  }
 
   const handleFileUpload = async (file: File): Promise<AttachmentFile> => {
     const t = token()
