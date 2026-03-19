@@ -44,8 +44,10 @@ interface Employee {
   email: string;
   employee_id: string;
   department?: string;
+  team?: string;
   position?: string;
   permission_level: number;
+  role?: string;
   is_active: boolean;
   is_deleted: boolean;
   created_at: string;
@@ -413,6 +415,10 @@ function UsersManagementPage() {
   // 사용자 편집 모달
   const [editingUser, setEditingUser] = useState<Employee | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  // 편집 모달 조직 데이터 (부서/팀 드롭다운)
+  const [orgDepts, setOrgDepts] = useState<{ id: number; name: string; teams: { id: number; name: string }[] }[]>([]);
+  const [editDept, setEditDept] = useState('');
+  const [editTeam, setEditTeam] = useState('');
 
   // 비밀번호 재설정 모달
   const [resetPasswordUser, setResetPasswordUser] = useState<Employee | null>(null);
@@ -514,6 +520,8 @@ function UsersManagementPage() {
           // ✅ Realtime이 자동으로 사용자 정보 업데이트 - loadEmployees() 불필요
           setShowEditModal(false);
           setEditingUser(null);
+          setEditDept('');
+          setEditTeam('');
           alert('사용자 정보가 성공적으로 업데이트되었습니다.');
         } else {
           throw new Error(data.message || '사용자 업데이트 실패');
@@ -1212,7 +1220,10 @@ function UsersManagementPage() {
                           </div>
                         </td>
                         <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 whitespace-nowrap hidden sm:table-cell">
-                          <div className="text-[10px] sm:text-xs md:text-sm text-gray-900">{employee.department || '-'}</div>
+                          <div className="text-[10px] sm:text-xs md:text-sm text-gray-900">
+                            {employee.department || '-'}
+                            {employee.team && <span className="text-gray-400"> / {employee.team}</span>}
+                          </div>
                           <div className="text-[10px] sm:text-xs md:text-sm text-gray-500">{employee.position || '-'}</div>
                         </td>
                         <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 whitespace-nowrap">
@@ -1246,9 +1257,19 @@ function UsersManagementPage() {
                               <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                             </button>
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 setEditingUser(employee);
+                                setEditDept(employee.department || '');
+                                setEditTeam(employee.team || '');
                                 setShowEditModal(true);
+                                // 조직 데이터 로드 (캐시 없으면 fetch)
+                                if (orgDepts.length === 0) {
+                                  try {
+                                    const res = await fetch('/api/organization/departments');
+                                    const data = await res.json();
+                                    if (data.success) setOrgDepts(data.data || []);
+                                  } catch {}
+                                }
                               }}
                               className="text-indigo-600 hover:text-indigo-900 p-0.5 sm:p-1"
                               title="정보 수정"
@@ -1415,13 +1436,18 @@ function UsersManagementPage() {
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
-                handleUserEdit({
+                const payload: Partial<Employee> = {
                   name: formData.get('name') as string,
                   email: formData.get('email') as string,
-                  department: formData.get('department') as string,
+                  department: editDept || undefined,
+                  team: editTeam || undefined,
                   position: formData.get('position') as string,
                   permission_level: parseInt(formData.get('permission_level') as string)
-                });
+                };
+                if (user?.permission_level === 4) {
+                  payload.role = formData.get('role') as string;
+                }
+                handleUserEdit(payload);
               }}>
                 <div className="space-y-2 sm:space-y-3 md:space-y-4">
                   <div>
@@ -1448,12 +1474,31 @@ function UsersManagementPage() {
 
                   <div>
                     <label className="block text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 mb-1">부서</label>
-                    <input
-                      type="text"
-                      name="department"
-                      defaultValue={editingUser.department || ''}
+                    <select
+                      value={editDept}
+                      onChange={e => { setEditDept(e.target.value); setEditTeam(''); }}
                       className="w-full border border-gray-300 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs md:text-sm"
-                    />
+                    >
+                      <option value="">부서 선택</option>
+                      {orgDepts.map(dept => (
+                        <option key={dept.id} value={dept.name}>{dept.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 mb-1">팀</label>
+                    <select
+                      value={editTeam}
+                      onChange={e => setEditTeam(e.target.value)}
+                      disabled={!editDept || (orgDepts.find(d => d.name === editDept)?.teams?.length ?? 0) === 0}
+                      className="w-full border border-gray-300 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs md:text-sm disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      <option value="">팀 선택 (선택사항)</option>
+                      {(orgDepts.find(d => d.name === editDept)?.teams || []).map(team => (
+                        <option key={team.id} value={team.name}>{team.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -1490,6 +1535,28 @@ function UsersManagementPage() {
                         : '관리자 권한까지 설정할 수 있습니다.'}
                     </p>
                   </div>
+
+                  {/* 결재 역할 — 권한 4만 표시 */}
+                  {user?.permission_level === 4 && (
+                    <div>
+                      <label className="block text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 mb-1">
+                        결재 역할
+                      </label>
+                      <select
+                        name="role"
+                        defaultValue={editingUser.role || 'staff'}
+                        className="w-full border border-gray-300 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs md:text-sm"
+                      >
+                        <option value="staff">일반 직원 (담당자)</option>
+                        <option value="team_leader">팀장</option>
+                        <option value="executive">중역</option>
+                        <option value="ceo">대표이사</option>
+                      </select>
+                      <p className="text-[8px] sm:text-[9px] md:text-xs text-gray-500 mt-1">
+                        전자결재 승인 라인에서 사용되는 역할입니다.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-2 sm:space-x-3 mt-3 sm:mt-4 md:mt-6">
@@ -1498,6 +1565,8 @@ function UsersManagementPage() {
                     onClick={() => {
                       setShowEditModal(false);
                       setEditingUser(null);
+                      setEditDept('');
+                      setEditTeam('');
                     }}
                     className="bg-gray-100 text-gray-700 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md hover:bg-gray-200 text-[10px] sm:text-xs md:text-sm"
                   >
@@ -1686,8 +1755,11 @@ function UsersManagementPage() {
                             </div>
                           )}
                           <div className="flex justify-between items-start gap-2">
-                            <span className="text-[9px] sm:text-[10px] md:text-sm text-gray-600 flex-shrink-0">부서:</span>
-                            <span className="text-[9px] sm:text-[10px] md:text-sm font-medium text-gray-900 text-right">{selectedUser.department || '-'}</span>
+                            <span className="text-[9px] sm:text-[10px] md:text-sm text-gray-600 flex-shrink-0">부서/팀:</span>
+                            <span className="text-[9px] sm:text-[10px] md:text-sm font-medium text-gray-900 text-right">
+                              {selectedUser.department || '-'}
+                              {selectedUser.team && ` / ${selectedUser.team}`}
+                            </span>
                           </div>
                           <div className="flex justify-between items-start gap-2">
                             <span className="text-[9px] sm:text-[10px] md:text-sm text-gray-600 flex-shrink-0">직급:</span>

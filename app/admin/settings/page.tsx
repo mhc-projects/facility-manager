@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
@@ -22,8 +22,10 @@ import {
   Trash2,
   Edit3,
   Eye,
+  ShieldCheck,
 } from 'lucide-react';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
+import { TokenManager } from '@/lib/api-client';
 
 // 탭 타입 정의
 type SettingsTab = 'delay-criteria' | 'notifications' | 'organization' | 'api-test';
@@ -46,7 +48,9 @@ const DEFAULT_CRITERIA: DelayCriteria = {
 
 export default function AdminSettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, permissions } = useAuth();
+  const isSystemAdmin = user?.permission_level === 4;
 
   useEffect(() => {
     if (user?.email && permissions?.isSpecialAccount && isPathHiddenForAccount(user.email, '/admin/settings')) {
@@ -54,7 +58,12 @@ export default function AdminSettingsPage() {
     }
   }, [user, permissions]);
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('delay-criteria');
+  const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    tabFromUrl && ['delay-criteria', 'notifications', 'organization', 'api-test'].includes(tabFromUrl)
+      ? tabFromUrl
+      : 'delay-criteria'
+  );
 
   // 지연 기준 설정 상태
   const [criteria, setCriteria] = useState<DelayCriteria>(DEFAULT_CRITERIA);
@@ -72,6 +81,10 @@ export default function AdminSettingsPage() {
 
   // 공통 메시지 상태
   const [message, setMessage] = useState<{ type: 'success' | 'error' | null; text: string }>({ type: null, text: '' });
+
+  // 경영지원 역할 부서 상태 (권한 4 전용)
+  const [deptList, setDeptList] = useState<{ id: number; name: string; is_management_support: boolean }[]>([]);
+  const [savingMgmt, setSavingMgmt] = useState(false);
 
   // API 테스트 상태
   const [apiTestKey, setApiTestKey] = useState('');
@@ -102,6 +115,24 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     setMessage({ type: null, text: '' });
   }, [activeTab]);
+
+  // organization 탭 진입 시 부서 목록 로드
+  useEffect(() => {
+    if (activeTab === 'organization' && isSystemAdmin && deptList.length === 0) {
+      fetch('/api/organization/departments')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            setDeptList((data.data || []).map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              is_management_support: d.is_management_support ?? false,
+            })));
+          }
+        })
+        .catch(console.error);
+    }
+  }, [activeTab, isSystemAdmin]);
 
   // 현재 URL을 기반으로 기본 API URL 설정
   useEffect(() => {
@@ -216,6 +247,29 @@ export default function AdminSettingsPage() {
       setMessage({ type: 'error', text: error.message || '저장 중 오류가 발생했습니다.' });
     } finally {
       setIsSavingCriteria(false);
+    }
+  };
+
+  // 경영지원 역할 부서 지정 (권한 4 전용)
+  const handleSetManagementSupport = async (deptId: number, deptName: string) => {
+    setSavingMgmt(true);
+    try {
+      const token = TokenManager.getToken();
+      const res = await fetch('/api/organization/departments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: deptId, name: deptName, is_management_support: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeptList(prev => prev.map(d => ({ ...d, is_management_support: d.id === deptId })));
+      } else {
+        alert(data.error || '저장 실패');
+      }
+    } catch {
+      alert('저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingMgmt(false);
     }
   };
 
@@ -571,8 +625,57 @@ export default function AdminSettingsPage() {
 
           {/* 조직 관리 탭 */}
           {activeTab === 'organization' && (
-            <div className="p-2 sm:p-6">
+            <div className="p-2 sm:p-6 space-y-6">
               <OrganizationManagement />
+
+              {/* 경영지원 역할 부서 설정 — 권한 4 전용 */}
+              {isSystemAdmin && (
+                <div className="border border-amber-200 rounded-lg p-5 bg-amber-50/30">
+                  <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-amber-600" />
+                    경영지원 역할 부서
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    결재 최종 승인 시 알림을 받을 부서를 지정합니다. 부서 이름이 변경되어도 지정은 유지됩니다.
+                  </p>
+                  <div className="space-y-2">
+                    {deptList.length === 0 ? (
+                      <p className="text-sm text-gray-400">부서 정보를 불러오는 중...</p>
+                    ) : (
+                      deptList.map(dept => (
+                        <label
+                          key={dept.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                            dept.is_management_support
+                              ? 'border-amber-400 bg-amber-50'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="management_support_dept"
+                              checked={dept.is_management_support}
+                              onChange={() => handleSetManagementSupport(dept.id, dept.name)}
+                              disabled={savingMgmt}
+                              className="accent-amber-500"
+                            />
+                            <span className="text-sm font-medium text-gray-800">{dept.name}</span>
+                          </div>
+                          {dept.is_management_support && (
+                            <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                              지정됨
+                            </span>
+                          )}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {savingMgmt && (
+                    <p className="text-xs text-amber-600 mt-2">저장 중...</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

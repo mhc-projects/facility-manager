@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import ApprovalPendingBanner from '@/components/approvals/ApprovalPendingBanner'
 import {
   Home,
   Building2,
@@ -28,7 +29,8 @@ import {
   Package,
   Calendar,
   FileEdit,
-  Wrench
+  Wrench,
+  FileCheck
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -122,6 +124,13 @@ const navigationItems: NavigationItem[] = [
     href: '/admin/as-management',
     icon: Wrench,
     description: 'AS 접수, 진행 현황 및 단가표 관리',
+    requiredLevel: 1
+  },
+  {
+    name: '전자결재',
+    href: '/admin/approvals',
+    icon: FileCheck,
+    description: '결재 문서 작성 및 결재 처리',
     requiredLevel: 1
   },
   {
@@ -535,6 +544,7 @@ export default function AdminLayout({ children, title, description, actions }: A
           </div>
         </div>
       </div>
+      <ApprovalPendingBanner />
     </div>
   )
 }

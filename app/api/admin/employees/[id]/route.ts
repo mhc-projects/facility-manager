@@ -137,7 +137,7 @@ export async function PUT(
     const permissionLevel = decodedToken.permissionLevel || decodedToken.permission_level;
 
     const body = await request.json();
-    const { name, email, department, position, permission_level, phone, mobile } = body;
+    const { name, email, department, team, position, permission_level, phone, mobile, role } = body;
 
     // 자신의 프로필 수정인지 확인
     const isSelfUpdate = userId === params.id;
@@ -195,6 +195,10 @@ export async function PUT(
 
     updateFields.push(`department = $${paramIndex}`);
     updateValues.push(department?.trim() || null);
+    paramIndex++;
+
+    updateFields.push(`team = $${paramIndex}`);
+    updateValues.push(team?.trim() || null);
     paramIndex++;
 
     updateFields.push(`position = $${paramIndex}`);
@@ -272,6 +276,26 @@ export async function PUT(
       updateFields.push(`permission_level = $${paramIndex}`);
       updateValues.push(currentEmployee.permission_level);
       paramIndex++;
+    }
+
+    // role 수정 (권한 레벨 4만 가능)
+    if (role !== undefined) {
+      const validRoles = ['staff', 'team_leader', 'executive', 'ceo']
+      if (!validRoles.includes(role)) {
+        return NextResponse.json(
+          { success: false, message: '유효하지 않은 role 값입니다.' },
+          { status: 400 }
+        )
+      }
+      if (permissionLevel < 4) {
+        return NextResponse.json(
+          { success: false, message: 'role 설정은 시스템 권한(레벨 4)만 가능합니다.' },
+          { status: 403 }
+        )
+      }
+      updateFields.push(`role = $${paramIndex}`)
+      updateValues.push(role)
+      paramIndex++
     }
 
     // WHERE 조건용 파라미터 추가

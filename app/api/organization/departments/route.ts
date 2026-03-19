@@ -154,10 +154,15 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, name, description, display_order } = body;
+    const { id, name, description, display_order, is_management_support } = body;
 
     if (!id || !name) {
       return NextResponse.json({ error: '부서 ID와 부서명은 필수입니다.' }, { status: 400 });
+    }
+
+    // is_management_support 설정은 권한 레벨 4만 가능
+    if (is_management_support !== undefined && user.permission_level < 4) {
+      return NextResponse.json({ error: '경영지원 역할 설정은 시스템 권한(레벨 4)만 가능합니다.' }, { status: 403 });
     }
 
     // 기존 데이터 조회 (히스토리용) - Direct PostgreSQL
@@ -180,17 +185,27 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: '이미 존재하는 부서명입니다.' }, { status: 409 });
     }
 
+    // is_management_support 변경 시 기존 플래그 부서 해제 (1개만 유지)
+    if (is_management_support === true) {
+      await queryOne(
+        `UPDATE departments SET is_management_support = FALSE WHERE is_management_support = TRUE AND id != $1`,
+        [id]
+      );
+    }
+
     // 부서 수정 - Direct PostgreSQL
+    const mgmtFlag = is_management_support !== undefined ? is_management_support : oldData.is_management_support;
     const updatedDepartment = await queryOne(
       `UPDATE departments
-       SET name = $1, description = $2, display_order = $3, updated_at = $4
-       WHERE id = $5
+       SET name = $1, description = $2, display_order = $3, updated_at = $4, is_management_support = $5
+       WHERE id = $6
        RETURNING *`,
       [
         name,
         description || null,
         display_order !== undefined ? display_order : oldData.display_order,
         new Date().toISOString(),
+        mgmtFlag ?? false,
         id
       ]
     );
