@@ -27,6 +27,9 @@ import {
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
 
+// Force dynamic rendering - this page uses useSearchParams() and auth context
+export const dynamic = 'force-dynamic';
+
 // 탭 타입 정의
 type SettingsTab = 'delay-criteria' | 'notifications' | 'organization' | 'api-test';
 
