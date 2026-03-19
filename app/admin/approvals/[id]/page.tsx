@@ -7,7 +7,7 @@ import ApprovalLineHeader, { ApprovalStep } from '@/components/approvals/Approva
 import ApprovalStatusBadge, { DOC_TYPE_LABEL } from '@/components/approvals/ApprovalStatusBadge'
 import ApproverSelector from '@/components/approvals/ApproverSelector'
 import ExpenseClaimForm from '@/components/approvals/forms/ExpenseClaimForm'
-import PurchaseRequestForm from '@/components/approvals/forms/PurchaseRequestForm'
+import PurchaseRequestForm, { AttachmentFile } from '@/components/approvals/forms/PurchaseRequestForm'
 import LeaveRequestForm from '@/components/approvals/forms/LeaveRequestForm'
 import BusinessProposalForm from '@/components/approvals/forms/BusinessProposalForm'
 import OvertimeLogForm from '@/components/approvals/forms/OvertimeLogForm'
@@ -44,11 +44,25 @@ function formatDate(d?: string | null) {
   return new Date(d).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
-function FormViewer({ doc, editing, onFormDataChange }: { doc: ApprovalDoc, editing: boolean, onFormDataChange?: (d: any) => void }) {
+function FormViewer({
+  doc, editing, onFormDataChange, onFileUpload, onFileDelete,
+}: {
+  doc: ApprovalDoc
+  editing: boolean
+  onFormDataChange?: (d: any) => void
+  onFileUpload?: (file: File) => Promise<AttachmentFile>
+  onFileDelete?: (att: AttachmentFile) => Promise<void>
+}) {
   const props = { data: doc.form_data, onChange: onFormDataChange || (() => {}), disabled: !editing }
   switch (doc.document_type) {
     case 'expense_claim':     return <ExpenseClaimForm {...props} />
-    case 'purchase_request':  return <PurchaseRequestForm {...props} />
+    case 'purchase_request':  return (
+      <PurchaseRequestForm
+        {...props}
+        onFileUpload={editing ? onFileUpload : undefined}
+        onFileDelete={editing ? onFileDelete : undefined}
+      />
+    )
     case 'leave_request':     return <LeaveRequestForm {...props} />
     case 'business_proposal': return <BusinessProposalForm {...props} />
     case 'overtime_log':      return <OvertimeLogForm {...props} />
@@ -110,6 +124,38 @@ export default function ApprovalDetailPage() {
     s.step_order === doc.current_step + 1
   )
   const canApprove = !!myPendingStep && doc?.status === 'pending'
+
+  const handleFileUpload = async (file: File): Promise<AttachmentFile> => {
+    const t = token()
+    if (!t) throw new Error('인증 토큰이 없습니다')
+
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('document_id', id)
+
+    const res = await fetch('/api/approvals/attachments', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${t}` },
+      body: fd,
+    })
+    const data = await res.json()
+    if (!data.success) throw new Error(data.error || '업로드 실패')
+    return data.data as AttachmentFile
+  }
+
+  const handleFileDelete = async (attachment: AttachmentFile) => {
+    const t = token()
+    if (!t) throw new Error('인증 토큰이 없습니다')
+    if (!attachment.path) return
+
+    const res = await fetch('/api/approvals/attachments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ path: attachment.path }),
+    })
+    const data = await res.json()
+    if (!data.success) throw new Error(data.error || '삭제 실패')
+  }
 
   const handleSaveEdit = async () => {
     const t = token()
@@ -306,7 +352,13 @@ export default function ApprovalDetailPage() {
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 md:mb-6">
             {editing ? '내용 수정' : '문서 내용'}
           </h3>
-          <FormViewer doc={{ ...doc, form_data: editing ? editFormData : doc.form_data }} editing={editing} onFormDataChange={setEditFormData} />
+          <FormViewer
+            doc={{ ...doc, form_data: editing ? editFormData : doc.form_data }}
+            editing={editing}
+            onFormDataChange={setEditFormData}
+            onFileUpload={handleFileUpload}
+            onFileDelete={handleFileDelete}
+          />
         </div>
 
         {/* 결재 처리 영역 — 데스크탑만 (모바일은 하단 고정 버튼) */}

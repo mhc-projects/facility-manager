@@ -6,7 +6,7 @@ import AdminLayout from '@/components/ui/AdminLayout'
 import ApprovalLineHeader from '@/components/approvals/ApprovalLineHeader'
 import ApproverSelector from '@/components/approvals/ApproverSelector'
 import ExpenseClaimForm, { ExpenseClaimData } from '@/components/approvals/forms/ExpenseClaimForm'
-import PurchaseRequestForm, { PurchaseRequestData } from '@/components/approvals/forms/PurchaseRequestForm'
+import PurchaseRequestForm, { PurchaseRequestData, AttachmentFile } from '@/components/approvals/forms/PurchaseRequestForm'
 import LeaveRequestForm, { LeaveRequestData } from '@/components/approvals/forms/LeaveRequestForm'
 import BusinessProposalForm, { BusinessProposalData } from '@/components/approvals/forms/BusinessProposalForm'
 import OvertimeLogForm, { OvertimeLogData } from '@/components/approvals/forms/OvertimeLogForm'
@@ -71,6 +71,44 @@ export default function NewApprovalPage() {
   }, [docType, user])
 
   const getToken = () => TokenManager.getToken()
+
+  const handleFileUpload = async (file: File): Promise<AttachmentFile> => {
+    const token = getToken()
+    if (!token) throw new Error('인증 토큰이 없습니다')
+
+    // 문서가 아직 저장되지 않은 경우 먼저 임시 저장
+    let docId = savedId
+    if (!docId) {
+      docId = await handleSave()
+    }
+
+    const fd = new FormData()
+    fd.append('file', file)
+    if (docId) fd.append('document_id', docId)
+
+    const res = await fetch('/api/approvals/attachments', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    })
+    const data = await res.json()
+    if (!data.success) throw new Error(data.error || '업로드 실패')
+    return data.data as AttachmentFile
+  }
+
+  const handleFileDelete = async (attachment: AttachmentFile) => {
+    const token = getToken()
+    if (!token) throw new Error('인증 토큰이 없습니다')
+    if (!attachment.path) return
+
+    const res = await fetch('/api/approvals/attachments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ path: attachment.path }),
+    })
+    const data = await res.json()
+    if (!data.success) throw new Error(data.error || '삭제 실패')
+  }
 
   const handleSave = async (): Promise<string | null> => {
     const token = getToken()
@@ -205,7 +243,12 @@ export default function NewApprovalPage() {
               <ExpenseClaimForm data={formData} onChange={setFormData} />
             )}
             {docType === 'purchase_request' && (
-              <PurchaseRequestForm data={formData} onChange={setFormData} />
+              <PurchaseRequestForm
+                data={formData}
+                onChange={setFormData}
+                onFileUpload={handleFileUpload}
+                onFileDelete={handleFileDelete}
+              />
             )}
             {docType === 'leave_request' && (
               <LeaveRequestForm data={formData} onChange={setFormData} />

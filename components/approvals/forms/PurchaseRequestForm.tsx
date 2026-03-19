@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { useCallback, useRef } from 'react'
+import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
 
 export interface PurchaseItem {
   seq: number
@@ -12,6 +12,16 @@ export interface PurchaseItem {
   reason: string
 }
 
+export interface AttachmentFile {
+  id: string
+  name: string
+  url: string
+  size: number
+  type?: string
+  path?: string
+  uploaded_at: string
+}
+
 export interface PurchaseRequestData {
   writer: string
   department: string
@@ -19,6 +29,7 @@ export interface PurchaseRequestData {
   estimated_total: number
   special_notes: string
   attachment_included: boolean
+  attachments?: AttachmentFile[]
   items: PurchaseItem[]
 }
 
@@ -26,15 +37,31 @@ interface Props {
   data: PurchaseRequestData
   onChange: (data: PurchaseRequestData) => void
   disabled?: boolean
+  onFileUpload?: (file: File) => Promise<AttachmentFile>
+  onFileDelete?: (attachment: AttachmentFile) => Promise<void>
 }
 
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg-transparent disabled:bg-gray-50 border-0 outline-none`
 const mobileInput = `w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50`
 const mobileInputRight = `${mobileInput} text-right`
 
-export default function PurchaseRequestForm({ data, onChange, disabled = false }: Props) {
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+function FileIcon({ type }: { type?: string }) {
+  if (type?.startsWith('image/')) return <Image className="w-4 h-4 text-green-500 shrink-0" />
+  if (type === 'application/pdf') return <FileText className="w-4 h-4 text-red-500 shrink-0" />
+  return <File className="w-4 h-4 text-blue-500 shrink-0" />
+}
+
+export default function PurchaseRequestForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const estimatedTotal = data.items.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0)
   const totalQty = data.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+  const attachments = data.attachments || []
 
   const updateItem = useCallback((idx: number, field: keyof PurchaseItem, value: string | number) => {
     const newItems = [...data.items]
@@ -58,25 +85,125 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false }
     onChange({ ...data, items: newItems, estimated_total: newItems.reduce((s, i) => s + (Number(i.estimated_amount) || 0), 0) })
   }
 
-  const numInput = (val: number, onChange: (v: number) => void, disabled: boolean) => (
+  const handleAttachmentToggle = (value: boolean) => {
+    if (disabled) return
+    onChange({ ...data, attachment_included: value })
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onFileUpload) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    for (const file of Array.from(files)) {
+      try {
+        const uploaded = await onFileUpload(file)
+        onChange({
+          ...data,
+          attachments: [...attachments, uploaded],
+        })
+      } catch (err: any) {
+        alert(err?.message || '파일 업로드에 실패했습니다')
+      }
+    }
+    // input 초기화 (같은 파일 재선택 허용)
+    e.target.value = ''
+  }
+
+  const handleFileDelete = async (attachment: AttachmentFile) => {
+    if (!onFileDelete) return
+    try {
+      await onFileDelete(attachment)
+      onChange({
+        ...data,
+        attachments: attachments.filter(a => a.id !== attachment.id),
+      })
+    } catch (err: any) {
+      alert(err?.message || '파일 삭제에 실패했습니다')
+    }
+  }
+
+  const numInput = (val: number, onChangeFn: (v: number) => void, isDisabled: boolean) => (
     <input
       type="text" inputMode="numeric"
       className={`${cellInput} text-right`}
       value={val ? val.toLocaleString() : ''}
-      onChange={e => { const raw = e.target.value.replace(/,/g, ''); onChange(raw === '' ? 0 : parseInt(raw, 10) || 0) }}
-      disabled={disabled}
+      onChange={e => { const raw = e.target.value.replace(/,/g, ''); onChangeFn(raw === '' ? 0 : parseInt(raw, 10) || 0) }}
+      disabled={isDisabled}
     />
   )
 
-  const mobileNumInput = (val: number, onChangeFn: (v: number) => void, disabled: boolean) => (
+  const mobileNumInput = (val: number, onChangeFn: (v: number) => void, isDisabled: boolean) => (
     <input
       type="text" inputMode="numeric"
       className={mobileInputRight}
       value={val ? val.toLocaleString() : ''}
       onChange={e => { const raw = e.target.value.replace(/,/g, ''); onChangeFn(raw === '' ? 0 : parseInt(raw, 10) || 0) }}
-      disabled={disabled}
+      disabled={isDisabled}
       placeholder="0"
     />
+  )
+
+  // 첨부파일 목록 (데스크탑/모바일 공통)
+  const AttachmentList = () => (
+    <div className="mt-3 space-y-2">
+      {attachments.map(att => (
+        <div key={att.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+          <FileIcon type={att.type} />
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await fetch(att.url)
+              const blob = await res.blob()
+              const blobUrl = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = blobUrl
+              a.download = att.name
+              a.click()
+              URL.revokeObjectURL(blobUrl)
+            }}
+            className="flex-1 text-sm text-blue-600 hover:underline truncate text-left"
+          >
+            {att.name}
+          </button>
+          <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
+          {!disabled && onFileDelete && (
+            <button
+              type="button"
+              onClick={() => handleFileDelete(att)}
+              className="text-gray-400 hover:text-red-500 shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {!disabled && onFileUpload && (
+        <>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+          >
+            <Paperclip className="w-4 h-4" />
+            파일 추가
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xls,.xlsx,.doc,.docx"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </>
+      )}
+
+      {disabled && attachments.length === 0 && (
+        <p className="text-sm text-gray-400 italic">첨부된 파일이 없습니다</p>
+      )}
+    </div>
   )
 
   return (
@@ -173,12 +300,23 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false }
               <div className="flex items-center gap-3 mt-2">
                 <span className="text-sm text-gray-600">견적서 첨부:</span>
                 <label className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input type="radio" checked={data.attachment_included} onChange={() => !disabled && onChange({ ...data, attachment_included: true })} disabled={disabled} />여
+                  <input type="radio" checked={data.attachment_included} onChange={() => handleAttachmentToggle(true)} disabled={disabled} />여
                 </label>
                 <label className="flex items-center gap-1 text-sm cursor-pointer">
-                  <input type="radio" checked={!data.attachment_included} onChange={() => !disabled && onChange({ ...data, attachment_included: false })} disabled={disabled} />부
+                  <input type="radio" checked={!data.attachment_included} onChange={() => handleAttachmentToggle(false)} disabled={disabled} />부
                 </label>
               </div>
+
+              {/* 견적서 '여' 선택 시 파일 업로드 영역 */}
+              {data.attachment_included && (
+                <div className="mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    첨부 파일 (PDF, 이미지, Excel, Word)
+                  </p>
+                  <AttachmentList />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -265,12 +403,23 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false }
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">견적서 첨부</span>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="radio" checked={data.attachment_included} onChange={() => !disabled && onChange({ ...data, attachment_included: true })} disabled={disabled} />여
+              <input type="radio" checked={data.attachment_included} onChange={() => handleAttachmentToggle(true)} disabled={disabled} />여
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="radio" checked={!data.attachment_included} onChange={() => !disabled && onChange({ ...data, attachment_included: false })} disabled={disabled} />부
+              <input type="radio" checked={!data.attachment_included} onChange={() => handleAttachmentToggle(false)} disabled={disabled} />부
             </label>
           </div>
+
+          {/* 견적서 '여' 선택 시 파일 업로드 영역 */}
+          {data.attachment_included && (
+            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+              <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                <Paperclip className="w-3.5 h-3.5" />
+                첨부 파일 (PDF, 이미지, Excel, Word)
+              </p>
+              <AttachmentList />
+            </div>
+          )}
         </div>
       </div>
     </div>
