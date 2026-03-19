@@ -13,7 +13,7 @@ import BusinessProposalForm from '@/components/approvals/forms/BusinessProposalF
 import OvertimeLogForm from '@/components/approvals/forms/OvertimeLogForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
-import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save } from 'lucide-react'
+import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap } from 'lucide-react'
 
 interface ApprovalDoc {
   id: string
@@ -36,6 +36,8 @@ interface ApprovalDoc {
   created_at: string
   submitted_at: string | null
   completed_at: string | null
+  is_express_approved: boolean
+  express_approved_by: string | null
   steps: (ApprovalStep & { approver_id?: string | null })[]
 }
 
@@ -95,6 +97,9 @@ export default function ApprovalDetailPage() {
   const [rejectComment, setRejectComment] = useState('')
   const [processing, setProcessing] = useState(false)
 
+  const [expressModalOpen, setExpressModalOpen] = useState(false)
+  const [expressComment, setExpressComment] = useState('')
+
   const token = () => TokenManager.getToken()
 
   const fetchDoc = useCallback(async () => {
@@ -130,6 +135,14 @@ export default function ApprovalDetailPage() {
     s.step_order === doc.current_step + 1
   )
   const canApprove = !!myPendingStep && doc?.status === 'pending'
+
+  // 전결 조건: 결재선의 중역으로 지정된 사람 + pending + 전결 미처리
+  // role 체크는 API에서 수행 (Employee 타입의 role은 숫자형 permission_level)
+  const canExpressApprove =
+    !!user?.id &&
+    doc?.executive_id === user?.id &&
+    doc?.status === 'pending' &&
+    !doc?.is_express_approved
 
   const handleFileUpload = async (file: File): Promise<AttachmentFile> => {
     const t = token()
@@ -230,6 +243,28 @@ export default function ApprovalDetailPage() {
     } finally { setProcessing(false) }
   }
 
+  const handleExpressApprove = async () => {
+    setProcessing(true)
+    try {
+      const t = token()
+      const res = await fetch(`/api/approvals/${id}/express-approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ comment: expressComment }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setExpressModalOpen(false)
+        setExpressComment('')
+        fetchDoc()
+      } else {
+        alert(data.error || '전결 처리 실패')
+      }
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!confirm('문서를 삭제하시겠습니까?')) return
     const t = token()
@@ -280,7 +315,7 @@ export default function ApprovalDetailPage() {
       }
     >
       {/* 하단 여백 (모바일 고정 버튼 공간) */}
-      <div className={`max-w-4xl mx-auto space-y-6 ${(canApprove || (canSubmit && !editing)) ? 'pb-24 md:pb-8' : 'pb-8'}`}>
+      <div className={`max-w-4xl mx-auto space-y-6 ${(canApprove || canExpressApprove || (canSubmit && !editing)) ? 'pb-24 md:pb-8' : 'pb-8'}`}>
 
         {/* 문서 헤더 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -299,7 +334,14 @@ export default function ApprovalDetailPage() {
             </div>
             <div>
               <div className="text-xs text-gray-400">상태</div>
-              <ApprovalStatusBadge status={doc.status} />
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <ApprovalStatusBadge status={doc.status} />
+                {doc.is_express_approved && (
+                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-300">
+                    <Zap className="w-3 h-3" />전결
+                  </span>
+                )}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-400">작성일</div>
@@ -368,26 +410,39 @@ export default function ApprovalDetailPage() {
         </div>
 
         {/* 결재 처리 영역 — 데스크탑만 (모바일은 하단 고정 버튼) */}
-        {canApprove && (
+        {(canApprove || canExpressApprove) && (
           <div className="hidden md:block bg-white rounded-xl border border-blue-200 shadow-sm p-6">
             <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">
-              결재 처리 ({myPendingStep?.role_label})
+              결재 처리 {canApprove ? `(${myPendingStep?.role_label})` : ''}
             </h3>
             <div className="flex gap-3">
-              <button
-                onClick={handleApprove}
-                disabled={processing}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-              >
-                <CheckCircle className="w-4 h-4" />{processing ? '처리 중...' : '승인'}
-              </button>
-              <button
-                onClick={() => setRejectSheetOpen(true)}
-                disabled={processing}
-                className="flex items-center gap-2 border border-red-300 text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-              >
-                <XCircle className="w-4 h-4" />반려
-              </button>
+              {canApprove && (
+                <>
+                  <button
+                    onClick={handleApprove}
+                    disabled={processing}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />{processing ? '처리 중...' : '승인'}
+                  </button>
+                  <button
+                    onClick={() => setRejectSheetOpen(true)}
+                    disabled={processing}
+                    className="flex items-center gap-2 border border-red-300 text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                  >
+                    <XCircle className="w-4 h-4" />반려
+                  </button>
+                </>
+              )}
+              {canExpressApprove && (
+                <button
+                  onClick={() => setExpressModalOpen(true)}
+                  disabled={processing}
+                  className="flex items-center gap-2 border border-amber-400 text-amber-700 hover:bg-amber-50 px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                >
+                  <Zap className="w-4 h-4" />전결
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -413,24 +468,37 @@ export default function ApprovalDetailPage() {
       </div>
 
       {/* ── 모바일 하단 고정 액션 바 ── */}
-      {/* 결재자: 승인 / 반려 */}
-      {canApprove && (
+      {/* 결재자: 승인 / 반려 (+ 전결 버튼 중역에게 표시) */}
+      {(canApprove || canExpressApprove) && (
         <div className="fixed bottom-0 inset-x-0 z-20 md:hidden bg-white border-t border-gray-200 px-4 pt-3 pb-[env(safe-area-inset-bottom,12px)]">
-          <div className="flex gap-3">
-            <button
-              onClick={() => setRejectSheetOpen(true)}
-              disabled={processing}
-              className="flex-1 py-3.5 rounded-xl border border-red-300 text-red-600 font-semibold text-sm active:bg-red-50 disabled:opacity-50"
-            >
-              반려
-            </button>
-            <button
-              onClick={handleApprove}
-              disabled={processing}
-              className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 disabled:opacity-50"
-            >
-              {processing ? '처리 중...' : '✓ 승인'}
-            </button>
+          <div className="flex gap-2">
+            {canApprove && (
+              <>
+                <button
+                  onClick={() => setRejectSheetOpen(true)}
+                  disabled={processing}
+                  className="flex-1 py-3.5 rounded-xl border border-red-300 text-red-600 font-semibold text-sm active:bg-red-50 disabled:opacity-50"
+                >
+                  반려
+                </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={processing}
+                  className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 disabled:opacity-50"
+                >
+                  {processing ? '처리 중...' : '✓ 승인'}
+                </button>
+              </>
+            )}
+            {canExpressApprove && (
+              <button
+                onClick={() => setExpressModalOpen(true)}
+                disabled={processing}
+                className={`py-3.5 rounded-xl border border-amber-400 text-amber-700 font-semibold text-sm active:bg-amber-50 disabled:opacity-50 flex items-center justify-center gap-1.5 ${canApprove ? 'px-4' : 'flex-1'}`}
+              >
+                <Zap className="w-4 h-4" />전결
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -447,6 +515,99 @@ export default function ApprovalDetailPage() {
             {processing ? '처리 중...' : isResubmit ? '재상신' : '결재 상신'}
           </button>
         </div>
+      )}
+
+      {/* ── 전결 확인 모달 ── */}
+      {expressModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-30"
+            onClick={() => { setExpressModalOpen(false); setExpressComment('') }}
+          />
+
+          {/* 모바일: Bottom Sheet */}
+          <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom,16px)]">
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-gray-300" />
+            </div>
+            <div className="px-5 pb-2">
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="w-5 h-5 text-amber-500" />
+                <h3 className="text-base font-semibold text-gray-900">전결 처리</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                나머지 결재 단계를 건너뛰고 즉시 최종 완료 처리합니다.
+              </p>
+              <textarea
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 min-h-[100px]"
+                value={expressComment}
+                onChange={e => setExpressComment(e.target.value)}
+                placeholder="전결 사유 (선택)"
+                autoFocus
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => { setExpressModalOpen(false); setExpressComment('') }}
+                  className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-700 font-medium text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleExpressApprove}
+                  disabled={processing}
+                  className="flex-1 py-3.5 rounded-xl bg-amber-500 text-white font-semibold text-sm active:bg-amber-600 disabled:opacity-50"
+                >
+                  {processing ? '처리 중...' : '전결 확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 데스크탑: Center Modal */}
+          <div className="hidden md:flex fixed inset-0 items-center justify-center z-40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="w-5 h-5 text-amber-500" />
+                <h3 className="text-lg font-semibold text-gray-900">전결 처리</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-1">
+                나머지 결재 단계를 건너뛰고 즉시 최종 완료 처리합니다.
+              </p>
+              <p className="text-xs text-gray-400 mb-4">
+                이후 단계(대표이사 결재 등)는 자동으로 건너뜀 처리됩니다.
+              </p>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  전결 사유 <span className="text-gray-400 font-normal">(선택)</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  rows={3}
+                  value={expressComment}
+                  onChange={e => setExpressComment(e.target.value)}
+                  placeholder="전결 사유를 입력해 주세요..."
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => { setExpressModalOpen(false); setExpressComment('') }}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleExpressApprove}
+                  disabled={processing}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-amber-500 hover:bg-amber-600 rounded-lg disabled:opacity-50"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  {processing ? '처리 중...' : '전결 처리 확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── 반려 UI: 모바일=Bottom Sheet / 데스크탑=Modal ── */}

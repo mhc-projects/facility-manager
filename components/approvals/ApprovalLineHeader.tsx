@@ -82,10 +82,13 @@ export default function ApprovalLineHeader({
                   </div>
                   <div className={`flex items-center justify-center min-h-[52px] border-b border-black text-sm font-medium px-1 ${
                     cell.status === 'approved' ? 'text-blue-700' :
-                    cell.status === 'rejected' ? 'text-red-600' : 'text-gray-300'
+                    cell.status === 'rejected' ? 'text-red-600' :
+                    cell.status === 'skipped' ? 'text-gray-300' : 'text-gray-300'
                   }`}>
                     {cell.status === 'rejected' ? (
                       <span className="text-xs text-red-500">반려</span>
+                    ) : cell.status === 'skipped' ? (
+                      <span className="text-xs text-gray-400">-</span>
                     ) : (
                       <span>{cell.name || ''}</span>
                     )}
@@ -114,6 +117,8 @@ export default function ApprovalLineHeader({
                     ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-400'
                     : cell.status === 'rejected'
                     ? 'bg-red-100 text-red-600 ring-2 ring-red-400'
+                    : cell.status === 'skipped'
+                    ? 'bg-gray-50 text-gray-300 ring-1 ring-gray-200'
                     : cell.status === 'pending' && steps && steps.find(s => s.step_order === i + 1)?.status === 'pending'
                     ? 'bg-yellow-50 text-yellow-700 ring-2 ring-yellow-400'
                     : 'bg-gray-100 text-gray-400 ring-1 ring-gray-200'
@@ -122,6 +127,8 @@ export default function ApprovalLineHeader({
                     ? <Check className="w-4 h-4" />
                     : cell.status === 'rejected'
                     ? <X className="w-4 h-4" />
+                    : cell.status === 'skipped'
+                    ? <span className="text-gray-300">–</span>
                     : <span>{i + 1}</span>
                   }
                 </div>
