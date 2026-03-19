@@ -54,7 +54,12 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
   const handleDateChange = (field: 'start_date' | 'end_date', value: string) => {
     const updated = { ...data, [field]: value }
     // 반차면 종료일 = 시작일 고정
-    if (isHalf) updated.end_date = updated.start_date
+    if (isHalf) {
+      updated.end_date = updated.start_date
+    } else if (field === 'start_date' && updated.end_date && updated.end_date < value) {
+      // 시작일이 기존 종료일보다 나중이면 종료일을 시작일과 동일하게 조정
+      updated.end_date = value
+    }
     updated.total_days = calcDays(updated.start_date, updated.end_date, updated.leave_type)
     onChange(updated)
   }

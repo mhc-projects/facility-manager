@@ -55,6 +55,10 @@ export async function GET(request: NextRequest) {
     } else if (mine) {
       conditions.push(`d.requester_id = $${idx++}`);
       values.push(userId);
+    } else {
+      // 전체 탭: draft(임시저장)는 본인 문서만, 상신된 문서는 모두 표시
+      conditions.push(`(d.status != 'draft' OR d.requester_id = $${idx++})`);
+      values.push(userId);
     }
 
     if (typeFilter) {
