@@ -8,7 +8,7 @@ import { X } from 'lucide-react';
 interface ManualUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (announcementData: ManualAnnouncementRequest, editMode: boolean) => Promise<{ success: boolean; error?: string }>;
+  onSuccess: (announcementData: ManualAnnouncementRequest, editMode: boolean) => Promise<{ success: boolean; error?: string; duplicate_warning?: string }>;
   editMode?: boolean;
   existingData?: any; // SubsidyAnnouncement type
 }
@@ -16,6 +16,7 @@ interface ManualUploadModalProps {
 export default function ManualUploadModal({ isOpen, onClose, onSuccess, editMode = false, existingData }: ManualUploadModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<ManualAnnouncementRequest>(() => {
     if (editMode && existingData) {
@@ -83,6 +84,7 @@ export default function ManualUploadModal({ isOpen, onClose, onSuccess, editMode
       });
       setValidationErrors({});
       setError(null);
+      setDuplicateWarning(null);
     }
   }, [editMode, existingData, isOpen]);
 
@@ -158,22 +160,41 @@ export default function ManualUploadModal({ isOpen, onClose, onSuccess, editMode
       const result = await onSuccess(dataToSend as ManualAnnouncementRequest, editMode);
 
       if (result.success) {
-        // 성공: 폼 초기화 및 모달 닫기
-        setFormData({
-          region_name: '',
-          title: '',
-          source_url: '',
-          content: '',
-          application_period_start: '',
-          application_period_end: '',
-          budget: '',
-          support_amount: '',
-          target_description: '',
-          published_at: '',
-          notes: ''
-        });
-        setValidationErrors({});
-        onClose();
+        if (result.duplicate_warning) {
+          // 중복 경고가 있으면 경고 표시 후 모달 유지 (사용자가 확인 후 닫기)
+          setDuplicateWarning(result.duplicate_warning);
+          setFormData({
+            region_name: '',
+            title: '',
+            source_url: '',
+            content: '',
+            application_period_start: '',
+            application_period_end: '',
+            budget: '',
+            support_amount: '',
+            target_description: '',
+            published_at: '',
+            notes: ''
+          });
+          setValidationErrors({});
+        } else {
+          // 성공: 폼 초기화 및 모달 닫기
+          setFormData({
+            region_name: '',
+            title: '',
+            source_url: '',
+            content: '',
+            application_period_start: '',
+            application_period_end: '',
+            budget: '',
+            support_amount: '',
+            target_description: '',
+            published_at: '',
+            notes: ''
+          });
+          setValidationErrors({});
+          onClose();
+        }
       } else {
         // 실패: 에러 표시 (롤백은 부모가 처리)
         setError(result.error || '저장에 실패했습니다.');
@@ -246,6 +267,16 @@ export default function ManualUploadModal({ isOpen, onClose, onSuccess, editMode
 
         {/* Scrollable Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+
+          {duplicateWarning && (
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-start gap-2">
+              <span className="text-yellow-600 mt-0.5">⚠️</span>
+              <div>
+                <p className="text-yellow-800 font-medium">등록은 완료되었습니다.</p>
+                <p className="text-yellow-700 text-sm mt-0.5">{duplicateWarning}</p>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">

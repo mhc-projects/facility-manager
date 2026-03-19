@@ -322,7 +322,7 @@ export default function SubsidyAnnouncementsPage() {
       loadStats();
 
       console.log('✅ [createAnnouncement] 생성 성공:', result.data.id);
-      return { success: true, data: result.data };
+      return { success: true, data: result.data, duplicate_warning: result.duplicate_warning };
 
     } catch (error) {
       // 6. 실패: 임시 항목 제거 (롤백)

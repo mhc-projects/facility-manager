@@ -380,19 +380,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for duplicate source_url
-    const { data: existing } = await supabase
+    // Check for duplicate source_url (warn only, do not block)
+    const { data: existingDuplicates } = await supabase
       .from('subsidy_announcements')
-      .select('id')
-      .eq('source_url', body.source_url)
-      .single();
+      .select('id, title')
+      .eq('source_url', body.source_url);
 
-    if (existing) {
-      return NextResponse.json(
-        { success: false, error: 'Announcement with this source_url already exists' },
-        { status: 409 }
-      );
-    }
+    const duplicateWarning = existingDuplicates && existingDuplicates.length > 0
+      ? `동일한 URL로 등록된 공고가 ${existingDuplicates.length}건 있습니다.`
+      : null;
 
     // Get region info (or create a generic region code for manual entries)
     // Use shorter code to fit VARCHAR(10) constraint: "MAN" + last 7 digits of timestamp
@@ -454,7 +450,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: announcement
+      data: announcement,
+      ...(duplicateWarning && { duplicate_warning: duplicateWarning })
     });
 
   } catch (error) {
