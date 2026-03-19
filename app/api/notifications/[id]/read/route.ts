@@ -120,41 +120,46 @@ export async function POST(
         }
       });
     } else {
-      // notifications 테이블용 user_notification_reads 처리
-      const { data: existingRead } = await supabase
-        .from('user_notification_reads')
-        .select('id')
+      // notifications 테이블 - personal 알림(target_user_id 있음)은 user_notifications JOIN 없이 직접 관리
+      // user_notifications 테이블에서 읽음 처리 시도
+      const { data: userNotif } = await supabase
+        .from('user_notifications')
+        .select('id, is_read')
         .eq('notification_id', notificationId)
         .eq('user_id', user.id)
         .single();
 
-      if (existingRead) {
-        return NextResponse.json({
-          success: true,
-          data: {
-            message: '이미 읽음 처리된 알림입니다.',
-            isAlreadyRead: true
-          }
-        });
-      }
+      if (userNotif) {
+        // user_notifications row가 있으면 거기서 읽음 처리
+        if (userNotif.is_read) {
+          return NextResponse.json({ success: true, data: { message: '이미 읽음 처리된 알림입니다.', isAlreadyRead: true } });
+        }
+        const { error: updateError } = await supabase
+          .from('user_notifications')
+          .update({ is_read: true, read_at: new Date().toISOString() })
+          .eq('id', userNotif.id);
 
-      // 읽음 기록 생성
-      const { data: readRecord, error } = await supabase
-        .from('user_notification_reads')
-        .insert({
-          notification_id: notificationId,
-          user_id: user.id,
-          user_name: user.name
-        })
-        .select()
-        .single();
+        if (updateError) {
+          console.error('읽음 처리 오류:', updateError);
+          return NextResponse.json(
+            { success: false, error: { message: '읽음 처리에 실패했습니다.' } },
+            { status: 500 }
+          );
+        }
+      } else {
+        // personal 알림(target_user_id로 직접 들어온 것)은 user_notifications row가 없음
+        // user_notification_reads 테이블에 upsert해서 읽음 상태를 영구 저장
+        const { error: upsertError } = await supabase
+          .from('user_notification_reads')
+          .upsert(
+            { notification_id: notificationId, user_id: user.id, read_at: new Date().toISOString() },
+            { onConflict: 'notification_id,user_id' }
+          );
 
-      if (error) {
-        console.error('읽음 처리 오류:', error);
-        return NextResponse.json(
-          { success: false, error: { message: '읽음 처리에 실패했습니다.' } },
-          { status: 500 }
-        );
+        if (upsertError) {
+          console.error('personal 알림 읽음 처리 오류:', upsertError);
+          // 읽음 저장 실패해도 클라이언트는 정상 처리 (graceful)
+        }
       }
 
       return NextResponse.json({
@@ -162,7 +167,6 @@ export async function POST(
         data: {
           notificationId: rawNotificationId,
           notificationType: 'notification',
-          readAt: readRecord.read_at,
           message: '알림이 읽음 처리되었습니다.'
         }
       });

@@ -246,12 +246,58 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
       const notifications = await queryAll(queryParts.join(' '), params);
 
-      console.log('✅ [NOTIFICATIONS] 조회 성공:', notifications?.length || 0, '개 알림');
+      // personal 결재 알림 (notifications.target_user_id = 현재 유저) 추가 조회
+      // user_notification_reads를 LEFT JOIN해서 실제 읽음 상태 반영
+      const personalNotifs = await queryAll(
+        `SELECT n.id, n.title, n.message, n.category, n.priority, n.notification_tier,
+                n.related_resource_type, n.related_resource_id, n.related_url,
+                n.expires_at, n.created_by_name, n.target_user_id, n.created_at,
+                CASE WHEN r.id IS NOT NULL THEN true ELSE false END AS is_read,
+                r.read_at
+         FROM notifications n
+         LEFT JOIN user_notification_reads r
+           ON r.notification_id = n.id AND r.user_id = $1
+         WHERE n.target_user_id = $1::uuid
+           AND (n.expires_at IS NULL OR n.expires_at > $2)
+         ORDER BY n.created_at DESC
+         LIMIT 30`,
+        [user.id, new Date().toISOString()]
+      );
+
+      // user_notifications에 없는 personal 알림만 추가 (중복 제거)
+      const existingNotifIds = new Set((notifications || []).map((n: any) => String(n.notification_id)));
+      const newPersonal = (personalNotifs || [])
+        .filter((n: any) => !existingNotifIds.has(String(n.id)))
+        .map((n: any) => ({
+          id: n.id,
+          notification_id: n.id,
+          user_id: user.id,
+          is_read: n.is_read,   // user_notification_reads에서 읽어온 실제 상태
+          read_at: n.read_at,
+          created_at: n.created_at,
+          title: n.title,
+          message: n.message,
+          category: n.category,
+          priority: n.priority,
+          notification_tier: n.notification_tier,
+          related_resource_type: n.related_resource_type,
+          related_resource_id: n.related_resource_id,
+          related_url: n.related_url,
+          expires_at: n.expires_at,
+          created_by_name: n.created_by_name,
+        }));
+
+      const allNotifications = [...(notifications || []), ...newPersonal];
+      allNotifications.sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      console.log('✅ [NOTIFICATIONS] 조회 성공:', allNotifications.length, '개 알림 (personal:', newPersonal.length, ')');
 
       return createSuccessResponse({
-        notifications: notifications || [],
-        count: notifications?.length || 0,
-        unreadCount: notifications?.filter(n => !n.is_read).length || 0
+        notifications: allNotifications,
+        count: allNotifications.length,
+        unreadCount: allNotifications.filter((n: any) => !n.is_read).length
       });
 
     } catch (error: any) {

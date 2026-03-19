@@ -61,6 +61,14 @@ export class RateLimiter {
     '/api/uploaded-files-supabase': {
       windowMs: 15 * 60 * 1000, // 15분
       maxRequests: process.env.NODE_ENV === 'development' ? 1000 : 200 // 개발: Hot Reload 대응, 프로덕션: 정상 사용 + 여유
+    },
+    '/api/notifications': {
+      windowMs: 15 * 60 * 1000, // 15분
+      maxRequests: process.env.NODE_ENV === 'development' ? 2000 : 300 // 15초 폴링 기준: 15분=60회/유저, 복수 유저 여유분
+    },
+    '/api/approvals/pending-count': {
+      windowMs: 15 * 60 * 1000, // 15분
+      maxRequests: process.env.NODE_ENV === 'development' ? 2000 : 300 // 60초 폴링이지만 복수 유저 여유분
     }
   };
 

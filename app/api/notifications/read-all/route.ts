@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { queryAll } from '@/lib/supabase-direct';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 
 // Force dynamic rendering
@@ -101,26 +102,82 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. 일반 알림 처리 (notifications 테이블의 읽지 않은 알림만)
-    // 읽지 않은 일반 알림 조회 (user_notification_reads에 없는 것들)
-    const { data: unreadGeneralNotifications, error: generalFetchError } = await supabaseAdmin
-      .from('notifications')
-      .select('id, title, message')
-      .not('id', 'in', `(SELECT notification_id FROM user_notification_reads WHERE user_id = '${user.id}')`)
-      .gt('expiresAt', new Date().toISOString()); // 만료되지 않은 알림만
+    // 2. 일반 + personal 알림 처리 (notifications 테이블에서 이 사용자와 관련된 읽지 않은 알림)
+    // Supabase JS SDK는 .not()에 raw SQL subquery를 지원하지 않으므로
+    // 이미 읽은 알림 ID를 먼저 조회한 후 .not('id', 'in', [...]) 배열로 처리
+    const now = new Date().toISOString();
 
-    console.log('📊 [READ-ALL] 일반 알림 조회 결과:', {
+    // 이미 읽은 알림 ID 조회
+    const { data: alreadyReadRows } = await supabaseAdmin
+      .from('user_notification_reads')
+      .select('notification_id')
+      .eq('user_id', user.id);
+
+    const alreadyReadIds = (alreadyReadRows || []).map((r: any) => r.notification_id);
+
+    // user_notifications 매핑된 알림 ID 조회
+    const { data: userNotifRows } = await supabaseAdmin
+      .from('user_notifications')
+      .select('notification_id')
+      .eq('user_id', user.id);
+
+    const userNotifIds = (userNotifRows || []).map((r: any) => r.notification_id);
+
+    // personal 알림 조회 (target_user_id 기준, ::uuid 캐스팅으로 타입 불일치 방지)
+    const personalNotifsAll = await queryAll(
+      `SELECT id, title, message FROM notifications
+       WHERE target_user_id = $1::uuid
+         AND (expires_at IS NULL OR expires_at > $2)`,
+      [user.id, now]
+    );
+
+    // 클라이언트에서 이미 읽은 것 제외
+    const personalNotifs = (personalNotifsAll || []).filter(
+      (n: any) => !alreadyReadIds.includes(n.id)
+    );
+    const personalFetchError = null;
+
+    // user_notifications 매핑된 알림 조회 (broadcast/global)
+    let generalNotifs: any[] = [];
+    let generalFetchError: any = null;
+
+    if (userNotifIds.length > 0) {
+      const unreadUserNotifIds = alreadyReadIds.length > 0
+        ? userNotifIds.filter((id: string) => !alreadyReadIds.includes(id))
+        : userNotifIds;
+
+      if (unreadUserNotifIds.length > 0) {
+        const { data: gNotifs, error: gError } = await supabaseAdmin
+          .from('notifications')
+          .select('id, title, message')
+          .in('id', unreadUserNotifIds)
+          .or(`expires_at.is.null,expires_at.gt.${now}`);
+
+        generalNotifs = gNotifs || [];
+        generalFetchError = gError;
+      }
+    }
+
+    // 중복 제거 후 합산
+    const personalIds = new Set((personalNotifs || []).map((n: any) => n.id));
+    const combinedNotifs = [
+      ...(personalNotifs || []),
+      ...generalNotifs.filter((n: any) => !personalIds.has(n.id))
+    ];
+
+    const unreadGeneralNotifications = combinedNotifs;
+
+    console.log('📊 [READ-ALL] 일반/personal 알림 조회 결과:', {
       generalNotifications: unreadGeneralNotifications?.length || 0,
       error: generalFetchError?.message || 'none'
     });
 
-    // 일반 알림 읽음 처리
+    // 일반/personal 알림 읽음 처리 - user_notification_reads에 upsert
     if (generalFetchError && !generalFetchError.message?.includes('relation')) {
       console.error('❌ [READ-ALL] 일반 알림 조회 오류:', generalFetchError);
     } else if (unreadGeneralNotifications && unreadGeneralNotifications.length > 0) {
-      console.log('🔄 [READ-ALL] 일반 알림 읽음 처리:', unreadGeneralNotifications.length, '개');
+      console.log('🔄 [READ-ALL] 일반/personal 알림 읽음 처리:', unreadGeneralNotifications.length, '개');
 
-      // 각 일반 알림에 대해 읽음 기록 생성
       const readRecords = unreadGeneralNotifications.map(notification => ({
         notification_id: notification.id,
         user_id: user.id,
@@ -130,14 +187,14 @@ export async function POST(request: NextRequest) {
 
       const { data: insertedReads, error: generalUpdateError } = await supabaseAdmin
         .from('user_notification_reads')
-        .insert(readRecords)
+        .upsert(readRecords, { onConflict: 'notification_id,user_id' })
         .select();
 
       if (!generalUpdateError) {
         totalProcessed += insertedReads?.length || 0;
-        console.log('✅ [READ-ALL] 일반 알림', insertedReads?.length || 0, '개 읽음 처리 완료');
+        console.log('✅ [READ-ALL] 일반/personal 알림', insertedReads?.length || 0, '개 읽음 처리 완료');
       } else {
-        console.error('❌ [READ-ALL] 일반 알림 읽음 처리 오류:', generalUpdateError);
+        console.error('❌ [READ-ALL] 일반/personal 알림 읽음 처리 오류:', generalUpdateError);
       }
     }
 

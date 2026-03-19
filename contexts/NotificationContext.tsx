@@ -18,7 +18,7 @@ export type NotificationCategory =
   | 'task_created' | 'task_updated' | 'task_assigned' | 'task_status_changed' | 'task_completed'
   | 'system_maintenance' | 'system_update'
   | 'security_alert' | 'login_attempt'
-  | 'report_submitted' | 'report_approved'
+  | 'report_submitted' | 'report_approved' | 'report_rejected'
   | 'user_created' | 'user_updated'
   | 'business_added' | 'file_uploaded'
   | 'backup_completed' | 'maintenance_scheduled';
@@ -115,114 +115,155 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     lastEventTime: null as Date | null
   });
 
-  // 🔔 전역 알림(notifications 테이블) Realtime 구독 - 권한 3 이상인 유저에게 user_created 알림 즉시 전달
+  // settings를 ref로 유지 - Realtime 채널 핸들러가 항상 최신 settings를 참조하되
+  // settings 변경으로 채널이 재구독되어 이벤트를 놓치는 문제 방지
+  const settingsRef = useRef<NotificationSettings | null>(null);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  // 알림 payload를 받아 상태 업데이트 + 토스트 표시하는 공통 핸들러
+  const handleIncomingNotification = useCallback((notif: {
+    id: string; title: string; message: string; category: string;
+    priority: string; related_url?: string; created_at: string;
+    expires_at?: string; related_resource_type?: string;
+    related_resource_id?: string; metadata?: Record<string, any>;
+    created_by_id?: string; created_by_name?: string;
+    is_system_notification?: boolean;
+  }) => {
+    const mapped: Notification = {
+      id: notif.id,
+      title: notif.title,
+      message: notif.message,
+      category: (notif.category || 'system_update') as NotificationCategory,
+      priority: (notif.priority || 'medium') as NotificationPriority,
+      relatedResourceType: notif.related_resource_type,
+      relatedResourceId: notif.related_resource_id,
+      relatedUrl: notif.related_url,
+      metadata: notif.metadata || {},
+      createdById: notif.created_by_id,
+      createdByName: notif.created_by_name,
+      createdAt: notif.created_at,
+      expiresAt: notif.expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      isSystemNotification: notif.is_system_notification ?? false,
+      isRead: false
+    };
+
+    setNotifications(prev => {
+      if (prev.some(n => String(n.id) === String(mapped.id))) return prev;
+      return [mapped, ...prev.slice(0, 49)];
+    });
+
+    const pushEnabled = settingsRef.current?.pushNotificationsEnabled ?? true;
+    if (pushEnabled) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(mapped.title, {
+            body: mapped.message,
+            icon: '/icon.png',
+            tag: mapped.id,
+            requireInteraction: mapped.priority === 'critical' || mapped.priority === 'high'
+          });
+        } catch (err) {
+          logger.error('BROWSER-NOTIFICATION', '브라우저 알림 실패', err);
+        }
+      }
+      const toastPriority = mapped.priority === 'medium' ? 'normal' : mapped.priority;
+      setInAppToasts(prev => [{
+        id: mapped.id,
+        title: mapped.title,
+        message: mapped.message,
+        priority: toastPriority as 'low' | 'normal' | 'high' | 'critical',
+        onClick: mapped.relatedUrl ? () => { window.open(mapped.relatedUrl, '_blank'); } : undefined
+      }, ...prev.slice(0, 4)]);
+    }
+  }, []);
+
+  // 🔔 결재 알림 전용 Broadcast 채널 구독
+  // postgres_changes는 커스텀 JWT 환경에서 anon role로 동작해 personal 알림을 못받는 문제가 있음
+  // Broadcast는 RLS 없이 서버→클라이언트 직접 전달되므로 즉시 수신 가능
+  const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
   const globalNotifChannelRef = useRef<RealtimeChannel | null>(null);
+  const userIdRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     if (!user) return;
+    if (userIdRef.current === user.id && broadcastChannelRef.current) return;
+    userIdRef.current = user.id;
+
+    // 기존 채널 정리
+    if (broadcastChannelRef.current) {
+      supabase.removeChannel(broadcastChannelRef.current);
+      broadcastChannelRef.current = null;
+    }
+    if (globalNotifChannelRef.current) {
+      supabase.removeChannel(globalNotifChannelRef.current);
+      globalNotifChannelRef.current = null;
+    }
+
+    // 1. Broadcast 채널 구독 (결재 반려/승인 즉시 수신)
+    // 서버의 reject/approve API에서 supabaseAdmin으로 이 채널에 send함
+    const broadcastChannel = supabase
+      .channel(`approval-notify:${user.id}`)
+      .on('broadcast', { event: 'new_notification' }, (payload) => {
+        console.log('🚀 [BROADCAST] 결재 알림 수신:', payload.payload);
+        handleIncomingNotification(payload.payload);
+      })
+      .subscribe((status) => {
+        console.log('📡 [BROADCAST-CHANNEL] 상태:', status);
+      });
+
+    broadcastChannelRef.current = broadcastChannel;
+
+    // 2. postgres_changes 채널 구독 (공지 등 일반 알림 fallback)
+    const token = TokenManager.getToken();
+    if (token) supabase.realtime.setAuth(token);
 
     const userPermLevel = (user as any).permission_level ?? (user as any).role ?? 1;
-
-    const channel = supabase
-      .channel(`global-notifications:ctx:${user.id}`)
+    const pgChannel = supabase
+      .channel(`notif-personal:${user.id}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
           const newNotif = payload.new as any;
 
-          // 만료 확인
-          if (newNotif.expires_at && new Date(newNotif.expires_at) < new Date()) return;
+          // target_user_id가 없는 전체 공지만 여기서 처리
+          // personal 알림(target_user_id 있음)은 broadcast 채널이 담당
+          if (newNotif.target_user_id) return;
 
-          // 테스트 알림 무시
+          if (newNotif.expires_at && new Date(newNotif.expires_at) < new Date()) return;
           if (
             newNotif.title?.includes('테스트') ||
             newNotif.title?.includes('🧪') ||
-            newNotif.message?.includes('테스트') ||
-            newNotif.created_by_name === 'System Test' ||
-            newNotif.created_by_name === '테스트 관리자'
+            newNotif.message?.includes('테스트')
           ) return;
 
-          // 관리자 전용 알림 권한 확인
           const adminOnlyCategories = ['user_created', 'user_updated'];
-          if (adminOnlyCategories.includes(newNotif.category)) {
-            if (userPermLevel < 3) {
-              logger.debug('NOTIFICATIONS', '권한 부족 - 전역 알림 무시', {
-                category: newNotif.category,
-                userLevel: userPermLevel
-              });
-              return;
-            }
-          }
+          if (adminOnlyCategories.includes(newNotif.category) && userPermLevel < 3) return;
 
-          logger.info('NOTIFICATIONS', '전역 알림 실시간 수신', {
-            id: newNotif.id,
-            category: newNotif.category
-          });
-
-          const mapped: Notification = {
-            id: newNotif.id,
-            title: newNotif.title,
-            message: newNotif.message,
-            category: (newNotif.category || 'system_update') as NotificationCategory,
-            priority: (newNotif.priority || 'medium') as NotificationPriority,
-            relatedResourceType: newNotif.related_resource_type,
-            relatedResourceId: newNotif.related_resource_id,
-            relatedUrl: newNotif.related_url,
-            metadata: newNotif.metadata || {},
-            createdById: newNotif.created_by_id,
-            createdByName: newNotif.created_by_name,
-            createdAt: newNotif.created_at,
-            expiresAt: newNotif.expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            isSystemNotification: newNotif.is_system_notification ?? true,
-            isRead: false
-          };
-
-          setNotifications(prev => {
-            if (prev.some(n => n.id === mapped.id)) return prev;
-            return [mapped, ...prev.slice(0, 49)];
-          });
-
-          // 브라우저 알림
-          const pushEnabled = settings?.pushNotificationsEnabled ?? true;
-          if (pushEnabled && 'Notification' in window && Notification.permission === 'granted') {
-            try {
-              new Notification(mapped.title, {
-                body: mapped.message,
-                icon: '/icon.png',
-                tag: mapped.id,
-                requireInteraction: mapped.priority === 'critical' || mapped.priority === 'high'
-              });
-            } catch (err) {
-              logger.error('BROWSER-NOTIFICATION', '전역 알림 브라우저 알림 실패', err);
-            }
-          }
-
-          // 인앱 토스트
-          if (pushEnabled) {
-            const toastPriority = mapped.priority === 'medium' ? 'normal' : mapped.priority;
-            setInAppToasts(prev => [{
-              id: mapped.id,
-              title: mapped.title,
-              message: mapped.message,
-              priority: toastPriority as 'low' | 'normal' | 'high' | 'critical',
-              onClick: mapped.relatedUrl ? () => { window.open(mapped.relatedUrl, '_blank'); } : undefined
-            }, ...prev.slice(0, 4)]);
-          }
+          console.log('🔔 [POSTGRES-CHANGES] 공지 수신:', newNotif.id);
+          handleIncomingNotification(newNotif);
         }
       )
-      .subscribe((status) => {
-        logger.debug('REALTIME', `전역 알림 채널 상태: ${status}`);
+      .subscribe((status, err) => {
+        console.log('📡 [NOTIF-CHANNEL] 상태:', status, err || '');
       });
 
-    globalNotifChannelRef.current = channel;
+    globalNotifChannelRef.current = pgChannel;
 
     return () => {
+      if (broadcastChannelRef.current) {
+        supabase.removeChannel(broadcastChannelRef.current);
+        broadcastChannelRef.current = null;
+      }
       if (globalNotifChannelRef.current) {
         supabase.removeChannel(globalNotifChannelRef.current);
         globalNotifChannelRef.current = null;
       }
+      userIdRef.current = undefined;
     };
-  }, [user?.id, settings?.pushNotificationsEnabled]);
+  }, [user?.id, handleIncomingNotification]);
 
   // 🚀 Global Realtime Manager 사용 - 즉시 연결 경험 제공
   useEffect(() => {
@@ -568,18 +609,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           id: notif.id,
           title: notif.title,
           message: notif.message,
-          category: notif.category as NotificationCategory,
-          priority: notif.priority as NotificationPriority,
-          relatedResourceType: notif.relatedResourceType,
-          relatedResourceId: notif.relatedResourceId,
-          relatedUrl: notif.relatedUrl,
+          category: (notif.category || notif.type || 'system_update') as NotificationCategory,
+          priority: (notif.priority || 'medium') as NotificationPriority,
+          relatedResourceType: notif.related_resource_type || notif.relatedResourceType,
+          relatedResourceId: notif.related_resource_id || notif.relatedResourceId,
+          relatedUrl: notif.related_url || notif.relatedUrl,
           metadata: notif.metadata || {},
-          createdById: notif.createdById,
-          createdByName: notif.createdByName,
-          createdAt: notif.createdAt,
-          expiresAt: notif.expiresAt,
-          isSystemNotification: notif.isSystemNotification,
-          isRead: notif.isRead
+          createdById: notif.created_by_id || notif.createdById,
+          createdByName: notif.created_by_name || notif.createdByName,
+          createdAt: notif.created_at || notif.createdAt,
+          expiresAt: notif.expires_at || notif.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          isSystemNotification: notif.is_system_notification ?? notif.isSystemNotification ?? false,
+          isRead: notif.is_read ?? notif.isRead ?? false
         }));
         allNotifications.push(...generalNotifications);
       }
@@ -615,7 +656,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // 생성 시간 순으로 정렬 (최신 순)
       allNotifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      setNotifications(allNotifications);
+      // 기존 클라이언트 읽음 상태를 보존 (서버 응답이 이미 읽은 것을 unread로 덮어쓰지 않도록)
+      setNotifications(prev => {
+        const clientReadIds = new Set(prev.filter(n => n.isRead).map(n => String(n.id)));
+        return allNotifications.map(n => ({
+          ...n,
+          isRead: n.isRead || clientReadIds.has(String(n.id))
+        }));
+      });
 
       logger.info('NOTIFICATIONS', '초기 알림 로드 완료', {
         total: allNotifications.length,
@@ -742,16 +790,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        logger.error('OPTIMISTIC', 'markAsRead API 실패 - 롤백');
-        // 실패 시 롤백
-        setNotifications(prev =>
-          prev.map(notification =>
-            notification.id === notificationId
-              ? { ...notification, isRead: false }
-              : notification
-          )
-        );
-        throw new Error('알림 읽음 처리에 실패했습니다.');
+        // personal 결재 알림 등은 user_notifications row가 없어 500이 될 수 있음
+        // 이 경우 클라이언트 상태는 읽음 유지 (롤백 안 함)
+        logger.warn('OPTIMISTIC', 'markAsRead API 실패 - 클라이언트 읽음 상태 유지');
+        return;
       }
 
       logger.info('NOTIFICATIONS', 'markAsRead 완료');
@@ -1139,6 +1181,79 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchNotifications, fetchSettings, requestNotificationPermission]);
 
+  // 🔄 폴링 fallback - Realtime이 개인 알림(반려/승인)을 못받을 경우를 대비
+  // notifications 테이블을 30초마다 직접 조회해 새 알림 확인
+  useEffect(() => {
+    if (!user) return;
+
+    const pollPersonalNotifications = async () => {
+      const token = TokenManager.getToken();
+      if (!token || !TokenManager.isTokenValid(token)) return;
+
+      try {
+        const response = await fetch('/api/notifications', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const notificationsArray = data?.data?.notifications || data?.notifications || [];
+
+        if (!Array.isArray(notificationsArray) || notificationsArray.length === 0) return;
+
+        setNotifications(prev => {
+          const existingIds = new Set(prev.map(n => String(n.id)));
+          const newItems: Notification[] = notificationsArray
+            .filter((n: any) => !existingIds.has(String(n.id)))
+            .map((notif: any) => ({
+              id: notif.id,
+              title: notif.title,
+              message: notif.message,
+              category: (notif.category || 'system_update') as NotificationCategory,
+              priority: (notif.priority || 'medium') as NotificationPriority,
+              relatedResourceType: notif.related_resource_type || notif.relatedResourceType,
+              relatedResourceId: notif.related_resource_id || notif.relatedResourceId,
+              relatedUrl: notif.related_url || notif.relatedUrl,
+              metadata: notif.metadata || {},
+              createdById: notif.created_by_id || notif.createdById,
+              createdByName: notif.created_by_name || notif.createdByName,
+              createdAt: notif.created_at || notif.createdAt,
+              expiresAt: notif.expires_at || notif.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              isSystemNotification: notif.is_system_notification ?? false,
+              isRead: notif.is_read ?? false
+            }));
+
+          if (newItems.length === 0) return prev;
+
+          // 새 알림이 있으면 인앱 토스트 표시
+          newItems.forEach(item => {
+            const pushEnabled = settingsRef.current?.pushNotificationsEnabled ?? true;
+            if (pushEnabled) {
+              const toastPriority = item.priority === 'medium' ? 'normal' : item.priority;
+              setInAppToasts(t => [{
+                id: item.id,
+                title: item.title,
+                message: item.message,
+                priority: toastPriority as 'low' | 'normal' | 'high' | 'critical',
+                onClick: item.relatedUrl ? () => { window.open(item.relatedUrl, '_blank'); } : undefined
+              }, ...t.slice(0, 4)]);
+            }
+          });
+
+          return [...newItems, ...prev].slice(0, 50);
+        });
+      } catch {
+        // 폴링 실패는 무시
+      }
+    };
+
+    const intervalId = setInterval(pollPersonalNotifications, 60_000);
+    return () => clearInterval(intervalId);
+  }, [user?.id]);
+
   const value: NotificationContextType = {
     notifications,
     unreadCount,
@@ -1201,6 +1316,7 @@ export const notificationHelpers = {
       'login_attempt': '🔐',
       'report_submitted': '📊',
       'report_approved': '✅',
+      'report_rejected': '❌',
       'user_created': '👤',
       'user_updated': '👤',
       'business_added': '🏢',

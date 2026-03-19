@@ -90,7 +90,8 @@ export function useSimpleNotifications() {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .gt('expires_at', new Date().toISOString())
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+        .or(`target_user_id.eq.${user.id},target_user_id.is.null`)
         .not('title', 'like', '%테스트%')
         .not('title', 'like', '%🧪%')
         .not('message', 'like', '%테스트%')
@@ -168,9 +169,9 @@ export function useSimpleNotifications() {
         }));
       }
 
-      // Realtime 채널 구독
+      // Realtime 채널 구독 (사용자별 고유 채널명으로 충돌 방지)
       const channel = supabase
-        .channel(`notifications:global`)
+        .channel(`notifications:user:${user?.id || 'anon'}`)
         .on(
           'postgres_changes',
           {
@@ -182,6 +183,11 @@ export function useSimpleNotifications() {
             if (!mounted) return;
 
             const newNotif = payload.new as any;
+
+            // 본인 대상 알림만 처리 (target_user_id가 null이면 전체 공지)
+            if (newNotif.target_user_id && String(newNotif.target_user_id) !== String(user?.id)) {
+              return;
+            }
 
             // 만료된 알림 무시
             if (newNotif.expires_at && new Date(newNotif.expires_at) < new Date()) {

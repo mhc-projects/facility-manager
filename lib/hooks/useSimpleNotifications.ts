@@ -61,17 +61,23 @@ export function useSimpleNotifications(
   // 알림 로드
   const loadNotifications = useCallback(async () => {
     try {
-      // 전역 알림 로드
-      const { data: globalNotifications, error: globalError } = await supabase
+      // 전역 알림 로드 (본인 대상 personal 알림 + target_user_id가 없는 공지)
+      let notifQuery = supabase
         .from('notifications')
         .select('*')
-        .gt('expires_at', new Date().toISOString())
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
         .not('title', 'like', '%테스트%')
         .not('title', 'like', '%🧪%')
         .not('message', 'like', '%테스트%')
         .not('created_by_name', 'in', '("System Test", "테스트 관리자")')
         .order('created_at', { ascending: false })
         .limit(20);
+
+      if (userId) {
+        notifQuery = notifQuery.or(`target_user_id.eq.${userId},target_user_id.is.null`);
+      }
+
+      const { data: globalNotifications, error: globalError } = await notifQuery;
 
       if (globalError) {
         console.error('🔴 [SIMPLE-NOTIFICATIONS] 전역 알림 로드 오류:', globalError);
@@ -168,6 +174,9 @@ export function useSimpleNotifications(
           if (!mounted) return;
 
           const newNotif = payload.new as any;
+
+          // 본인 대상 알림만 처리 (target_user_id가 null이면 전체 공지)
+          if (newNotif.target_user_id && String(newNotif.target_user_id) !== String(userId)) return;
 
           // 만료 확인
           if (newNotif.expires_at && new Date(newNotif.expires_at) < new Date()) return;
