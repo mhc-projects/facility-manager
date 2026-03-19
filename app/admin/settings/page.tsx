@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,9 +27,6 @@ import {
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
 
-// Force dynamic rendering - this page uses useSearchParams() and auth context
-export const dynamic = 'force-dynamic';
-
 // 탭 타입 정의
 type SettingsTab = 'delay-criteria' | 'notifications' | 'organization' | 'api-test';
 
@@ -49,7 +46,7 @@ const DEFAULT_CRITERIA: DelayCriteria = {
   etc: { delayed: 7, risky: 10 }
 };
 
-export default function AdminSettingsPage() {
+function AdminSettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, permissions } = useAuth();
@@ -898,5 +895,13 @@ export default function AdminSettingsPage() {
         </div>
       </div>
     </AdminLayout>
+  );
+}
+
+export default function AdminSettingsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-gray-500">로딩 중...</div></div>}>
+      <AdminSettingsContent />
+    </Suspense>
   );
 }
