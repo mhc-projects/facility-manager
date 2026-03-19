@@ -230,16 +230,28 @@ export default function AnnouncementDetailModal({
           )}
 
           {/* Source URL */}
-          <a
-            href={announcement.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all font-medium shadow-md hover:shadow-lg transform hover:scale-105 text-xs md:text-xs"
-          >
-            <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>원문 보기</span>
-            <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={announcement.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all font-medium shadow-md hover:shadow-lg transform hover:scale-105 text-xs md:text-xs"
+            >
+              <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>원문 보기</span>
+              <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
+            </a>
+            <a
+              href={`https://web.archive.org/web/*/${announcement.source_url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="원문에 접근할 수 없을 때 인터넷 아카이브에서 저장된 페이지를 확인합니다"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-gray-100 text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-200 transition-all font-medium text-xs md:text-xs"
+            >
+              <span>캐시 보기</span>
+              <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
+            </a>
+          </div>
 
           {/* Metadata */}
           <div className="mt-6 pt-6 border-t border-gray-200 text-[10px] sm:text-xs text-gray-500 space-y-1">
