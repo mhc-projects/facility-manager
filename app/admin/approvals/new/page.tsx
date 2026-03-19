@@ -240,7 +240,12 @@ export default function NewApprovalPage() {
               {selectedType?.label} 작성
             </h3>
             {docType === 'expense_claim' && (
-              <ExpenseClaimForm data={formData} onChange={setFormData} />
+              <ExpenseClaimForm
+                data={formData}
+                onChange={setFormData}
+                onFileUpload={handleFileUpload}
+                onFileDelete={handleFileDelete}
+              />
             )}
             {docType === 'purchase_request' && (
               <PurchaseRequestForm

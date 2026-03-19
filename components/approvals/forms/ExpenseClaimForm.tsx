@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useCallback, useRef } from 'react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Paperclip, X, FileText, Image, File } from 'lucide-react'
 
 export interface ExpenseItem {
   date: string
@@ -10,11 +10,22 @@ export interface ExpenseItem {
   note: string
 }
 
+export interface AttachmentFile {
+  id: string
+  name: string
+  url: string
+  size: number
+  type?: string
+  path?: string
+  uploaded_at: string
+}
+
 export interface ExpenseClaimData {
   writer: string
   department: string
   written_date: string
   note: string
+  attachments?: AttachmentFile[]
   items: ExpenseItem[]
 }
 
@@ -22,20 +33,34 @@ interface Props {
   data: ExpenseClaimData
   onChange: (data: ExpenseClaimData) => void
   disabled?: boolean
+  onFileUpload?: (file: File) => Promise<AttachmentFile>
+  onFileDelete?: (attachment: AttachmentFile) => Promise<void>
 }
 
 const EMPTY_ITEM: ExpenseItem = { date: '', description: '', amount: 0, note: '' }
-
-// 데스크탑 셀 input 스타일
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg-transparent disabled:bg-gray-50 border-0 outline-none`
 
 function formatAmount(n: number) {
   return n ? n.toLocaleString() : ''
 }
 
-export default function ExpenseClaimForm({ data, onChange, disabled = false }: Props) {
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+function FileIcon({ type }: { type?: string }) {
+  if (type?.startsWith('image/')) return <Image className="w-4 h-4 text-green-500 shrink-0" />
+  if (type === 'application/pdf') return <FileText className="w-4 h-4 text-red-500 shrink-0" />
+  return <File className="w-4 h-4 text-blue-500 shrink-0" />
+}
+
+export default function ExpenseClaimForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
   const totalAmount = data.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachments = data.attachments || []
 
   const updateItem = useCallback((idx: number, field: keyof ExpenseItem, value: string | number) => {
     const newItems = [...data.items]
@@ -45,7 +70,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
 
   const addItem = () => {
     onChange({ ...data, items: [...data.items, { ...EMPTY_ITEM }] })
-    setExpandedIdx(data.items.length) // 새 항목 바로 펼침
+    setExpandedIdx(data.items.length)
   }
   const removeItem = (idx: number) => {
     if (data.items.length <= 1) return
@@ -53,9 +78,91 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
     if (expandedIdx === idx) setExpandedIdx(null)
   }
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onFileUpload) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    for (const file of Array.from(files)) {
+      try {
+        const uploaded = await onFileUpload(file)
+        onChange({ ...data, attachments: [...attachments, uploaded] })
+      } catch (err: any) {
+        alert(err?.message || '파일 업로드에 실패했습니다')
+      }
+    }
+    e.target.value = ''
+  }
+
+  const handleFileDelete = async (attachment: AttachmentFile) => {
+    if (!onFileDelete) return
+    try {
+      await onFileDelete(attachment)
+      onChange({ ...data, attachments: attachments.filter(a => a.id !== attachment.id) })
+    } catch (err: any) {
+      alert(err?.message || '파일 삭제에 실패했습니다')
+    }
+  }
+
+  const AttachmentSection = () => (
+    <div className="space-y-2">
+      {attachments.map(att => (
+        <div key={att.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+          <FileIcon type={att.type} />
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await fetch(att.url)
+              const blob = await res.blob()
+              const blobUrl = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = blobUrl
+              a.download = att.name
+              a.click()
+              URL.revokeObjectURL(blobUrl)
+            }}
+            className="flex-1 text-sm text-blue-600 hover:underline truncate text-left"
+          >
+            {att.name}
+          </button>
+          <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
+          {!disabled && onFileDelete && (
+            <button type="button" onClick={() => handleFileDelete(att)} className="text-gray-400 hover:text-red-500 shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {!disabled && onFileUpload && (
+        <>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+          >
+            <Paperclip className="w-4 h-4" />
+            파일 추가
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xls,.xlsx,.doc,.docx"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </>
+      )}
+
+      {disabled && attachments.length === 0 && (
+        <p className="text-sm text-gray-400 italic">첨부된 파일이 없습니다</p>
+      )}
+    </div>
+  )
+
   return (
     <div className="space-y-4 font-sans">
-      {/* ── 데스크탑: 기존 테이블 레이아웃 ── */}
+      {/* ── 데스크탑 ── */}
       <div className="hidden md:block space-y-4">
         {/* 기본 정보 */}
         <div className="border border-black">
@@ -149,9 +256,19 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
         )}
 
         <p className="text-center text-sm text-gray-600 pt-2">위 금액을 청구하오니 결재하여 주시기 바랍니다.</p>
+
+        {/* 증빙서류 첨부 */}
+        <div className="border border-black">
+          <div className="grid grid-cols-[80px_1fr] divide-x divide-black">
+            <div className="px-3 py-3 bg-gray-50 text-sm font-bold flex items-center justify-center whitespace-nowrap">증빙서류</div>
+            <div className="p-3">
+              <AttachmentSection />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── 모바일: 카드형 레이아웃 ── */}
+      {/* ── 모바일 ── */}
       <div className="md:hidden space-y-4">
         {/* 기본 정보 */}
         <div className="grid grid-cols-2 gap-3">
@@ -203,7 +320,6 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
             const isExpanded = expandedIdx === idx
             return (
               <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden">
-                {/* 요약 헤더 */}
                 <button
                   type="button"
                   onClick={() => setExpandedIdx(isExpanded ? null : idx)}
@@ -231,14 +347,10 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
-                    {isExpanded
-                      ? <ChevronUp className="w-4 h-4 text-gray-400" />
-                      : <ChevronDown className="w-4 h-4 text-gray-400" />
-                    }
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                   </div>
                 </button>
 
-                {/* 상세 입력 (펼침) */}
                 {isExpanded && (
                   <div className="border-t border-gray-100 px-4 py-3 space-y-3 bg-gray-50">
                     <div className="grid grid-cols-2 gap-3">
@@ -247,9 +359,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
                         <input
                           type="date"
                           className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50"
-                          value={item.date}
-                          onChange={e => updateItem(idx, 'date', e.target.value)}
-                          disabled={disabled}
+                          value={item.date} onChange={e => updateItem(idx, 'date', e.target.value)} disabled={disabled}
                         />
                       </div>
                       <div>
@@ -270,8 +380,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
                       <label className="block text-xs text-gray-500 mb-1">적요</label>
                       <input
                         className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50"
-                        value={item.description}
-                        onChange={e => updateItem(idx, 'description', e.target.value)}
+                        value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)}
                         disabled={disabled} placeholder="지출 내용"
                       />
                     </div>
@@ -279,8 +388,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
                       <label className="block text-xs text-gray-500 mb-1">비고</label>
                       <input
                         className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50"
-                        value={item.note}
-                        onChange={e => updateItem(idx, 'note', e.target.value)}
+                        value={item.note} onChange={e => updateItem(idx, 'note', e.target.value)}
                         disabled={disabled} placeholder="비고"
                       />
                     </div>
@@ -299,6 +407,16 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false }: P
             <Plus className="w-4 h-4" />항목 추가
           </button>
         )}
+
+        {/* 증빙서류 첨부 */}
+        <div className="space-y-2">
+          <label className="block text-xs font-semibold text-gray-500 flex items-center gap-1">
+            <Paperclip className="w-3.5 h-3.5" />증빙서류 첨부
+          </label>
+          <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+            <AttachmentSection />
+          </div>
+        </div>
       </div>
     </div>
   )

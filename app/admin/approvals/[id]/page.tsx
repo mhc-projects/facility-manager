@@ -55,7 +55,13 @@ function FormViewer({
 }) {
   const props = { data: doc.form_data, onChange: onFormDataChange || (() => {}), disabled: !editing }
   switch (doc.document_type) {
-    case 'expense_claim':     return <ExpenseClaimForm {...props} />
+    case 'expense_claim':     return (
+      <ExpenseClaimForm
+        {...props}
+        onFileUpload={editing ? onFileUpload : undefined}
+        onFileDelete={editing ? onFileDelete : undefined}
+      />
+    )
     case 'purchase_request':  return (
       <PurchaseRequestForm
         {...props}
