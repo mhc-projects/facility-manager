@@ -46,7 +46,7 @@ async function getUserFromToken(request: NextRequest) {
     // 사용자 정보 조회
     const { data: user, error } = await supabase
       .from('employees')
-      .select('id, name, email, permission_level, department')
+      .select('id, name, email, permission_level, department, role')
       .eq('id', decoded.userId || decoded.id)
       .eq('is_active', true)
       .single()
@@ -97,7 +97,9 @@ export async function GET(request: NextRequest) {
     // 접근 권한 판별
     const isFullAccess =
       user.permission_level >= 4 ||
-      FULL_ACCESS_EMAILS.includes(user.email)
+      FULL_ACCESS_EMAILS.includes(user.email) ||
+      user.role === 'ceo' ||
+      user.role === 'executive'
 
     const offset = (page - 1) * limit
 
