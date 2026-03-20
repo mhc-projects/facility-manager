@@ -90,7 +90,7 @@ export async function PUT(
     if (doc.requester_id !== userId) {
       return NextResponse.json({ success: false, error: '본인이 작성한 문서만 수정할 수 있습니다' }, { status: 403 });
     }
-    if (!['draft', 'returned'].includes(doc.status)) {
+    if (!['draft', 'returned', 'rejected'].includes(doc.status)) {
       return NextResponse.json({ success: false, error: '임시저장 또는 반려된 문서만 수정할 수 있습니다' }, { status: 400 });
     }
 
