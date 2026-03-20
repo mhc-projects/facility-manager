@@ -5115,9 +5115,16 @@ function BusinessManagementPage() {
                   <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-white bg-opacity-20 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
                     <Edit className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
                   </div>
-                  <h2 className="text-sm sm:text-base md:text-base lg:text-lg xl:text-lg font-bold">
-                    {editingBusiness ? '사업장 정보 수정' : '새 사업장 추가'}
-                  </h2>
+                  <div>
+                    <h2 className="text-sm sm:text-base md:text-base lg:text-lg xl:text-lg font-bold">
+                      {editingBusiness ? '사업장 정보 수정' : '새 사업장 추가'}
+                    </h2>
+                    {editingBusiness && (
+                      <p className="text-xs sm:text-sm text-white text-opacity-80 mt-0.5 opacity-90">
+                        {editingBusiness.사업장명}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {/* Action Buttons */}
                 <div className="flex items-center space-x-1 sm:space-x-2">
