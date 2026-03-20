@@ -125,8 +125,10 @@ export default function ApprovalDetailPage() {
   useEffect(() => { fetchDoc() }, [fetchDoc])
 
   const isMyDoc = doc?.requester_id === user?.id
+  const isSuperAdmin = (user?.role ?? 0) >= 4
   const canEdit = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
   const canDelete = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
+  const canForceCancel = isSuperAdmin && !['draft', 'returned', 'rejected'].includes(doc?.status || '') && doc?.status !== undefined
   const canSubmit = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
   const isResubmit = ['returned', 'rejected'].includes(doc?.status || '')
 
@@ -310,6 +312,11 @@ export default function ApprovalDetailPage() {
           {canDelete && (
             <button onClick={handleDelete} className="flex items-center gap-1.5 text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg text-sm">
               <Trash2 className="w-4 h-4" />삭제
+            </button>
+          )}
+          {canForceCancel && (
+            <button onClick={handleDelete} className="flex items-center gap-1.5 text-white bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm">
+              <Trash2 className="w-4 h-4" />강제 취소
             </button>
           )}
         </div>

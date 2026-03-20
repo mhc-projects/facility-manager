@@ -95,7 +95,8 @@ export default function ApprovalsPage() {
     if (!token) return
     try {
       const res = await fetch('/api/approvals/pending-count', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       })
       const data = await res.json()
       if (data.success) setPendingCount(data.count || 0)
@@ -104,6 +105,12 @@ export default function ApprovalsPage() {
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
   useEffect(() => { fetchPendingCount() }, [fetchPendingCount])
+
+  // 30초마다 폴링 (Realtime 연결 실패 시 폴백, 사파리 대응)
+  useEffect(() => {
+    const interval = setInterval(() => { fetchPendingCount() }, 30000)
+    return () => clearInterval(interval)
+  }, [fetchPendingCount])
 
   // Realtime: approval_documents/steps 변경 시 배지 즉시 갱신
   useEffect(() => {

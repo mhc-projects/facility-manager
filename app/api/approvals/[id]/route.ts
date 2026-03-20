@@ -128,7 +128,9 @@ export async function PUT(
 
 /**
  * DELETE /api/approvals/[id]
- * 결재 문서 취소/삭제 (draft 상태만 삭제, pending→cancelled)
+ * 결재 문서 취소/삭제
+ * - 일반 사용자: draft/returned/rejected 상태의 본인 문서만 삭제 가능
+ * - 권한 4(슈퍼 관리자): 모든 상태의 모든 문서 강제 취소 가능
  */
 export async function DELETE(
   request: NextRequest,
@@ -145,6 +147,8 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
     }
     const userId = decoded.userId || decoded.id;
+    const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
+    const isSuperAdmin = permissionLevel >= 4;
 
     const doc = await queryOne(
       `SELECT * FROM approval_documents WHERE id = $1 AND is_deleted = FALSE`,
@@ -154,11 +158,15 @@ export async function DELETE(
     if (!doc) {
       return NextResponse.json({ success: false, error: '문서를 찾을 수 없습니다' }, { status: 404 });
     }
-    if (doc.requester_id !== userId) {
-      return NextResponse.json({ success: false, error: '본인이 작성한 문서만 삭제할 수 있습니다' }, { status: 403 });
-    }
-    if (!['draft', 'returned', 'rejected'].includes(doc.status)) {
-      return NextResponse.json({ success: false, error: '임시저장 또는 반려된 문서만 삭제할 수 있습니다' }, { status: 400 });
+
+    if (!isSuperAdmin) {
+      // 일반 사용자: 본인 문서 + 삭제 가능한 상태만
+      if (doc.requester_id !== userId) {
+        return NextResponse.json({ success: false, error: '본인이 작성한 문서만 삭제할 수 있습니다' }, { status: 403 });
+      }
+      if (!['draft', 'returned', 'rejected'].includes(doc.status)) {
+        return NextResponse.json({ success: false, error: '임시저장 또는 반려된 문서만 삭제할 수 있습니다' }, { status: 400 });
+      }
     }
 
     await queryOne(
