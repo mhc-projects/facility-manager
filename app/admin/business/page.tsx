@@ -1192,14 +1192,8 @@ function BusinessManagementPage() {
       data: any
     }> = []
 
-    // 메모 추가 (type: 'memo') - task_sync 메모는 제외 (실제 업무가 이미 표시되므로)
+    // 메모 추가 (type: 'memo') - task_sync 메모 포함하여 업무 관리에서 등록한 메모도 표시
     businessMemos.forEach(memo => {
-      // task_sync 메모는 건너뛰기 (중복 방지)
-      if (memo.source_type === 'task_sync') {
-        console.log('🔧 [FRONTEND] task_sync 메모 제외:', memo.title)
-        return
-      }
-
       items.push({
         type: 'memo',
         id: memo.id,

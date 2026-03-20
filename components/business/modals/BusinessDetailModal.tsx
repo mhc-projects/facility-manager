@@ -737,21 +737,38 @@ export default function BusinessDetailModal({
                               const memo = item.data as Memo
                               const isAutoMemo = item.title?.startsWith('[자동]')
                               const isTaskMemo = memo.source_type === 'task_sync'
+                              const isSystemMemo = !memo.created_by || memo.created_by === 'system'
                               const isEditingThisMemo = editingMemo?.id === memo.id
 
                               return (
                                 <React.Fragment key={`memo-${item.id}-${index}`}>
-                                  <div className={`${isAutoMemo ? 'bg-gray-50 border-gray-300' : isTaskMemo ? 'bg-blue-50 border-blue-400' : 'bg-gray-50 border-indigo-400'} rounded-lg p-2 sm:p-3 border-l-4`}>
+                                  <div className={`${
+                                    isSystemMemo
+                                      ? 'bg-gray-100 border-gray-300'
+                                      : isAutoMemo
+                                        ? 'bg-gray-50 border-gray-300'
+                                        : isTaskMemo
+                                          ? 'bg-blue-50 border-blue-400'
+                                          : 'bg-gray-50 border-indigo-400'
+                                  } rounded-lg p-2 sm:p-3 border-l-4`}>
                                     <div className="flex items-start justify-between mb-1 sm:mb-2">
                                       <div className="flex-1">
                                         <div className="flex items-center space-x-1 sm:space-x-2 mb-1">
-                                          <MessageSquare className={`w-3 h-3 sm:w-4 sm:h-4 ${isAutoMemo ? 'text-gray-400' : isTaskMemo ? 'text-blue-500' : 'text-indigo-500'}`} />
-                                          <h4 className={`${isAutoMemo ? 'font-normal text-gray-600 text-xs sm:text-sm' : 'font-medium text-gray-900 text-xs sm:text-sm md:text-base'}`}>{item.title}</h4>
-                                          <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-medium rounded-full ${isAutoMemo ? 'bg-gray-100 text-gray-600' : isTaskMemo ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-indigo-100 text-indigo-700'}`}>
-                                            {isAutoMemo ? '자동' : isTaskMemo ? '업무' : '메모'}
+                                          <MessageSquare className={`w-3 h-3 sm:w-4 sm:h-4 ${isSystemMemo || isAutoMemo ? 'text-gray-400' : isTaskMemo ? 'text-blue-500' : 'text-indigo-500'}`} />
+                                          <h4 className={`${isSystemMemo || isAutoMemo ? 'font-normal text-gray-500 text-xs sm:text-sm italic' : 'font-medium text-gray-900 text-xs sm:text-sm md:text-base'}`}>{item.title}</h4>
+                                          <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-medium rounded-full ${
+                                            isSystemMemo
+                                              ? 'bg-gray-200 text-gray-500'
+                                              : isAutoMemo
+                                                ? 'bg-gray-100 text-gray-600'
+                                                : isTaskMemo
+                                                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                                  : 'bg-indigo-100 text-indigo-700'
+                                          }`}>
+                                            {isSystemMemo ? '자동기록' : isAutoMemo ? '자동' : isTaskMemo ? '업무' : '메모'}
                                           </span>
                                         </div>
-                                        <p className={`text-xs sm:text-sm ${isAutoMemo ? 'text-gray-500' : 'text-gray-700'} leading-relaxed break-words`}>{item.content}</p>
+                                        <p className={`text-xs sm:text-sm ${isSystemMemo || isAutoMemo ? 'text-gray-400 italic' : 'text-gray-700'} leading-relaxed break-words`}>{item.content}</p>
                                       </div>
                                       {((!isAutoMemo && !isTaskMemo) || ((isAutoMemo || isTaskMemo) && canDeleteAutoMemos)) && (
                                         <div className="flex items-center space-x-0.5 sm:space-x-1 ml-1 sm:ml-2">
@@ -778,7 +795,7 @@ export default function BusinessDetailModal({
                                                 : 'text-gray-300 cursor-not-allowed'
                                             }`}
                                             title={memo.id ?
-                                              (isAutoMemo ? "자동 메모 삭제 (슈퍼 관리자 전용)" : isTaskMemo ? "업무 메모 삭제 (슈퍼 관리자 전용)" : "메모 삭제") :
+                                              (isSystemMemo ? "자동 메모 삭제 (슈퍼 관리자 전용)" : isAutoMemo ? "자동 메모 삭제 (슈퍼 관리자 전용)" : isTaskMemo ? "업무 메모 삭제 (슈퍼 관리자 전용)" : "메모 삭제") :
                                               "메모 ID가 없어 삭제할 수 없습니다"
                                             }
                                           >
@@ -788,10 +805,16 @@ export default function BusinessDetailModal({
                                       )}
                                     </div>
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-[10px] sm:text-xs text-gray-500 gap-1 sm:gap-0">
-                                      <span>작성: {new Date(memo.created_at).toLocaleDateString('ko-KR', {
-                                        year: 'numeric', month: 'short', day: 'numeric'
-                                      })} ({memo.created_by})</span>
-                                      {memo.updated_at !== memo.created_at && (
+                                      {isSystemMemo ? (
+                                        <span className="italic text-gray-400">자동 기록 · {new Date(memo.created_at).toLocaleDateString('ko-KR', {
+                                          year: 'numeric', month: 'short', day: 'numeric'
+                                        })}</span>
+                                      ) : (
+                                        <span>작성: {new Date(memo.created_at).toLocaleDateString('ko-KR', {
+                                          year: 'numeric', month: 'short', day: 'numeric'
+                                        })} ({memo.created_by})</span>
+                                      )}
+                                      {!isSystemMemo && memo.updated_at !== memo.created_at && (
                                         <span>수정: {new Date(memo.updated_at).toLocaleDateString('ko-KR', {
                                           year: 'numeric', month: 'short', day: 'numeric'
                                         })} ({memo.updated_by})</span>
