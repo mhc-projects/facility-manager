@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
     }
     const userId = decoded.userId || decoded.id;
+    const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
+    const isSuperAdmin = permissionLevel >= 4;
 
     const { searchParams } = new URL(request.url);
     const typeFilter    = searchParams.get('type');
@@ -55,10 +57,17 @@ export async function GET(request: NextRequest) {
     } else if (mine) {
       conditions.push(`d.requester_id = $${idx++}`);
       values.push(userId);
+    } else if (isSuperAdmin) {
+      // 권한 4(슈퍼 관리자): 모든 문서 열람 가능
     } else {
-      // 전체 탭: draft(임시저장)는 본인 문서만, 상신된 문서는 모두 표시
-      conditions.push(`(d.status != 'draft' OR d.requester_id = $${idx++})`);
-      values.push(userId);
+      // 전체 탭: 작성자 본인 OR 결재선에 결재권자로 지정된 문서만
+      conditions.push(`(
+        d.requester_id = $${idx++}
+        OR d.id IN (
+          SELECT document_id FROM approval_steps WHERE approver_id = $${idx++}
+        )
+      )`);
+      values.push(userId, userId);
     }
 
     if (typeFilter) {
