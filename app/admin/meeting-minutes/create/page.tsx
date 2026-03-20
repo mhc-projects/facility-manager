@@ -393,7 +393,7 @@ export default function CreateMeetingMinutePage() {
         </div>
       }
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         {/* 2열 그리드 레이아웃 */}
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
           {/* 왼쪽 열: 핵심 회의 정보 */}

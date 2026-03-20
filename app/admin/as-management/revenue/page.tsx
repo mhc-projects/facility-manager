@@ -494,7 +494,7 @@ export default function AsRevenuePage() {
       title="AS 매출관리"
       description="유상 AS 사업장별 원가·매출·순이익 현황"
     >
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="space-y-5">
 
         {/* 뒤로가기 */}
         <div className="flex items-center">
