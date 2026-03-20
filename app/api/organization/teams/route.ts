@@ -162,20 +162,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '해당 부서에 이미 존재하는 팀명입니다.' }, { status: 409 });
     }
 
-    // 다음 표시 순서 계산 (부서 내에서) - Direct PostgreSQL
-    const maxOrder = await queryOne(
-      'SELECT display_order FROM teams WHERE department_id = $1 ORDER BY display_order DESC LIMIT 1',
-      [department_id]
-    );
-
-    const nextOrder = (maxOrder?.display_order || 0) + 1;
-
     // 팀 생성 - Direct PostgreSQL
     const newTeam = await queryOne(
-      `INSERT INTO teams (name, description, department_id, display_order)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO teams (name, description, department_id)
+       VALUES ($1, $2, $3)
        RETURNING *`,
-      [name, description || null, department_id, nextOrder]
+      [name, description || null, department_id]
     );
 
     if (!newTeam) {
@@ -187,11 +179,15 @@ export async function POST(request: NextRequest) {
     newTeam.department = department;
 
     // 변경 히스토리 기록 - Direct PostgreSQL
-    await pgQuery(
-      `INSERT INTO organization_changes (change_type, entity_type, entity_id, new_data, changed_by, impact_summary)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      ['create', 'team', newTeam.id, JSON.stringify(newTeam), user.id, `새 팀 생성 - ${department.name} 부서`]
-    );
+    try {
+      await pgQuery(
+        `INSERT INTO organization_changes (change_type, entity_type, entity_id, new_data, changed_by, impact_summary)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        ['create', 'team', newTeam.id, JSON.stringify(newTeam), user.id, `새 팀 생성 - ${department.name} 부서`]
+      );
+    } catch (historyError) {
+      console.warn('⚠️ [TEAMS] 히스토리 기록 실패 (무시):', historyError);
+    }
 
     return NextResponse.json({
       success: true,
@@ -254,7 +250,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, name, description, department_id, display_order } = body;
+    const { id, name, description, department_id } = body;
 
     if (!id || !name || !department_id) {
       return NextResponse.json({ error: '팀 ID, 팀명, 소속 부서는 필수입니다.' }, { status: 400 });
@@ -297,26 +293,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: '해당 부서에 이미 존재하는 팀명입니다.' }, { status: 409 });
     }
 
-    // 부서 이동 시 순서 재계산
-    let finalDisplayOrder = display_order !== undefined ? display_order : oldData.display_order;
-
-    if (department_id !== oldData.department_id) {
-      // 새 부서에서의 다음 순서 계산 - Direct PostgreSQL
-      const maxOrder = await queryOne(
-        'SELECT display_order FROM teams WHERE department_id = $1 ORDER BY display_order DESC LIMIT 1',
-        [department_id]
-      );
-
-      finalDisplayOrder = (maxOrder?.display_order || 0) + 1;
-    }
-
     // 팀 수정 - Direct PostgreSQL
     const updatedTeam = await queryOne(
       `UPDATE teams
-       SET name = $1, description = $2, department_id = $3, display_order = $4, updated_at = $5
-       WHERE id = $6
+       SET name = $1, description = $2, department_id = $3, updated_at = $4
+       WHERE id = $5
        RETURNING *`,
-      [name, description || null, department_id, finalDisplayOrder, new Date().toISOString(), id]
+      [name, description || null, department_id, new Date().toISOString(), id]
     );
 
     if (!updatedTeam) {
@@ -354,11 +337,15 @@ export async function PUT(request: NextRequest) {
     }
 
     // 변경 히스토리 기록 - Direct PostgreSQL
-    await pgQuery(
-      `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, new_data, changed_by, impact_summary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [wasMoved ? 'move' : 'update', 'team', id, JSON.stringify(oldData), JSON.stringify(updatedTeam), user.id, impactSummary]
-    );
+    try {
+      await pgQuery(
+        `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, new_data, changed_by, impact_summary)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [wasMoved ? 'move' : 'update', 'team', id, JSON.stringify(oldData), JSON.stringify(updatedTeam), user.id, impactSummary]
+      );
+    } catch (historyError) {
+      console.warn('⚠️ [TEAMS] 히스토리 기록 실패 (무시):', historyError);
+    }
 
     return NextResponse.json({
       success: true,
@@ -505,18 +492,22 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: '유효하지 않은 팀 ID입니다.' }, { status: 400 });
     }
 
-    await pgQuery(
-      `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, changed_by, impact_summary)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        'delete',
-        'team',
-        entityId,
-        JSON.stringify(team),
-        user.id,
-        `팀 삭제 - 알림 ${impact.affectedNotifications}개, 사용자 ${impact.affectedUsers}명 영향`
-      ]
-    );
+    try {
+      await pgQuery(
+        `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, changed_by, impact_summary)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          'delete',
+          'team',
+          entityId,
+          JSON.stringify(team),
+          user.id,
+          `팀 삭제 - 알림 ${impact.affectedNotifications}개, 사용자 ${impact.affectedUsers}명 영향`
+        ]
+      );
+    } catch (historyError) {
+      console.warn('⚠️ [TEAMS] 히스토리 기록 실패 (무시):', historyError);
+    }
 
     return NextResponse.json({
       success: true,

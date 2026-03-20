@@ -105,20 +105,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '이미 존재하는 부서명입니다.' }, { status: 409 });
     }
 
-    // 다음 표시 순서 계산 - Direct PostgreSQL
-    const maxOrder = await queryOne(
-      'SELECT display_order FROM departments ORDER BY display_order DESC LIMIT 1',
-      []
-    );
-
-    const nextOrder = (maxOrder?.display_order || 0) + 1;
-
     // 부서 생성 - Direct PostgreSQL
     const newDepartment = await queryOne(
-      `INSERT INTO departments (name, description, display_order)
-       VALUES ($1, $2, $3)
+      `INSERT INTO departments (name, description)
+       VALUES ($1, $2)
        RETURNING *`,
-      [name, description || null, nextOrder]
+      [name, description || null]
     );
 
     if (!newDepartment) {
@@ -127,11 +119,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 변경 히스토리 기록 - Direct PostgreSQL
-    await pgQuery(
-      `INSERT INTO organization_changes (change_type, entity_type, entity_id, new_data, changed_by, impact_summary)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      ['create', 'department', newDepartment.id, JSON.stringify(newDepartment), user.id, '새 부서 생성']
-    );
+    try {
+      await pgQuery(
+        `INSERT INTO organization_changes (change_type, entity_type, entity_id, new_data, changed_by, impact_summary)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        ['create', 'department', newDepartment.id, JSON.stringify(newDepartment), user.id, '새 부서 생성']
+      );
+    } catch (historyError) {
+      console.warn('⚠️ [DEPARTMENTS] 히스토리 기록 실패 (무시):', historyError);
+    }
 
     return NextResponse.json({
       success: true,
@@ -154,7 +150,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, name, description, display_order, is_management_support } = body;
+    const { id, name, description, is_management_support } = body;
 
     if (!id || !name) {
       return NextResponse.json({ error: '부서 ID와 부서명은 필수입니다.' }, { status: 400 });
@@ -197,13 +193,12 @@ export async function PUT(request: NextRequest) {
     const mgmtFlag = is_management_support !== undefined ? is_management_support : oldData.is_management_support;
     const updatedDepartment = await queryOne(
       `UPDATE departments
-       SET name = $1, description = $2, display_order = $3, updated_at = $4, is_management_support = $5
-       WHERE id = $6
+       SET name = $1, description = $2, updated_at = $3, is_management_support = $4
+       WHERE id = $5
        RETURNING *`,
       [
         name,
         description || null,
-        display_order !== undefined ? display_order : oldData.display_order,
         new Date().toISOString(),
         mgmtFlag ?? false,
         id
@@ -216,11 +211,15 @@ export async function PUT(request: NextRequest) {
     }
 
     // 변경 히스토리 기록 - Direct PostgreSQL
-    await pgQuery(
-      `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, new_data, changed_by, impact_summary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      ['update', 'department', id, JSON.stringify(oldData), JSON.stringify(updatedDepartment), user.id, '부서 정보 수정']
-    );
+    try {
+      await pgQuery(
+        `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, new_data, changed_by, impact_summary)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        ['update', 'department', id, JSON.stringify(oldData), JSON.stringify(updatedDepartment), user.id, '부서 정보 수정']
+      );
+    } catch (historyError) {
+      console.warn('⚠️ [DEPARTMENTS] 히스토리 기록 실패 (무시):', historyError);
+    }
 
     return NextResponse.json({
       success: true,
@@ -329,18 +328,22 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 변경 히스토리 기록 - Direct PostgreSQL
-    await pgQuery(
-      `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, changed_by, impact_summary)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        'delete',
-        'department',
-        parseInt(id),
-        JSON.stringify(department),
-        user.id,
-        `부서 삭제 - 팀 ${impact.affectedTeams}개, 알림 ${impact.affectedNotifications}개 영향`
-      ]
-    );
+    try {
+      await pgQuery(
+        `INSERT INTO organization_changes (change_type, entity_type, entity_id, old_data, changed_by, impact_summary)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          'delete',
+          'department',
+          parseInt(id),
+          JSON.stringify(department),
+          user.id,
+          `부서 삭제 - 팀 ${impact.affectedTeams}개, 알림 ${impact.affectedNotifications}개 영향`
+        ]
+      );
+    } catch (historyError) {
+      console.warn('⚠️ [DEPARTMENTS] 히스토리 기록 실패 (무시):', historyError);
+    }
 
     return NextResponse.json({
       success: true,
