@@ -174,6 +174,65 @@ async function notifyManagementSupportDept({
   }
 }
 
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  annual:     '연차',
+  condolence: '경조휴가',
+  special:    '특별휴가',
+  half_am:    '반차(오전)',
+  half_pm:    '반차(오후)',
+  other:      '기타휴가',
+};
+
+/**
+ * 휴가원 최종 승인 완료 시 일정관리에 '연차' 라벨로 자동 등록
+ * - 실패해도 결재 완료에는 영향 없음
+ */
+async function createLeaveCalendarEvent(doc: any, requesterName: string) {
+  try {
+    const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+    if (!formData?.start_date) return;
+
+    const leaveTypeDetail = LEAVE_TYPE_LABEL[formData.leave_type] || '휴가';
+    const startDate = formData.start_date;
+    const endDate = formData.end_date || formData.start_date;
+    const totalDays = formData.total_days ?? 1;
+
+    const descriptionLines = [
+      `[휴가원] ${doc.document_number}`,
+      `신청자: ${requesterName} (${formData.department || ''})`,
+      `휴가 종류: ${leaveTypeDetail}`,
+      `기간: ${startDate} ~ ${endDate} (${totalDays}일)`,
+      `사유: ${formData.reason || ''}`,
+    ];
+    if (formData.note) descriptionLines.push(`비고: ${formData.note}`);
+
+    await queryOne(
+      `INSERT INTO calendar_events (
+        title, description, event_date, end_date,
+        event_type, is_completed, author_id, author_name,
+        attached_files, labels
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
+      [
+        `${requesterName} - 연차`,
+        descriptionLines.join('\n'),
+        startDate,
+        endDate,
+        'schedule',
+        false,
+        doc.requester_id,
+        requesterName,
+        JSON.stringify([]),
+        ['연차'],
+      ]
+    );
+
+    console.log('[APPROVAL] 휴가원 일정 자동 등록 완료:', doc.document_number);
+  } catch (e) {
+    console.warn('[APPROVAL] 휴가원 일정 등록 실패 (결재 완료는 정상 처리됨):', e);
+  }
+}
+
 /**
  * POST /api/approvals/[id]/approve
  * 결재 승인
@@ -286,6 +345,11 @@ export async function POST(
       // 업무품의서인 경우 협조팀에 알림 발송
       if (doc.document_type === 'business_proposal') {
         await notifyCooperativeTeam({ doc, documentId: params.id });
+      }
+
+      // 휴가원인 경우 일정관리에 '연차' 라벨로 자동 등록
+      if (doc.document_type === 'leave_request') {
+        await createLeaveCalendarEvent(doc, requesterEmployee?.name || '담당자');
       }
 
       return NextResponse.json({ success: true, message: '최종 승인 완료', finalApproved: true });
