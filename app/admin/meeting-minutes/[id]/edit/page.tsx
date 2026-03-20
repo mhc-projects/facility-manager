@@ -90,7 +90,12 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     const token = TokenManager.getToken()
     if (!token) return
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]))
+      // URL-safe Base64 → UTF-8 디코딩 (한글 이름 깨짐 방지)
+      const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+      const jsonStr = decodeURIComponent(
+        atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+      )
+      const payload = JSON.parse(jsonStr)
       setCurrentUserId(payload.userId || payload.id || '')
       setCurrentUserName(payload.name || payload.email || '알 수 없음')
     } catch {
