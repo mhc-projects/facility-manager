@@ -153,6 +153,9 @@ function TaskManagementPage() {
   const [isDuplicateLoading, setIsDuplicateLoading] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [memoInput, setMemoInput] = useState('')
+  const [isMemoSubmitting, setIsMemoSubmitting] = useState(false)
+  const [memoRefreshKey, setMemoRefreshKey] = useState(0)
   const [draggedTask, setDraggedTask] = useState<Task | null>(null)
   const [mobileModalOpen, setMobileModalOpen] = useState(false)
   const [mobileSelectedTask, setMobileSelectedTask] = useState<Task | null>(null)
@@ -1509,6 +1512,8 @@ function TaskManagementPage() {
       // 모달 닫기
       setShowEditModal(false)
       setEditingTask(null)
+      setMemoInput('')
+      setMemoRefreshKey(0)
       setEditBusinessSearchTerm('')
       setShowEditBusinessDropdown(false)
 
@@ -1518,6 +1523,50 @@ function TaskManagementPage() {
       alert(`업무 수정 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     }
   }, [editingTask])
+
+  // 메모만 별도로 업무진행현황에 기록하는 핸들러
+  const handleAddMemo = useCallback(async () => {
+    if (!editingTask || !memoInput.trim()) return
+
+    setIsMemoSubmitting(true)
+    try {
+      const token = TokenManager.getToken()
+      const response = await fetch('/api/facility-tasks', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: editingTask.id,
+          title: editingTask.title,
+          business_name: editingTask.businessName || '기타',
+          task_type: editingTask.type,
+          status: editingTask.status,
+          priority: editingTask.priority,
+          assignees: editingTask.assignees || [],
+          start_date: editingTask.startDate || null,
+          due_date: editingTask.dueDate || null,
+          description: editingTask.description || null,
+          notes: memoInput.trim()
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '메모 기록에 실패했습니다.')
+      }
+
+      // 입력창 초기화 후 우측 패널 새로고침
+      setMemoInput('')
+      setMemoRefreshKey(prev => prev + 1)
+    } catch (error) {
+      console.error('Failed to add memo:', error)
+      alert(`메모 기록 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+    } finally {
+      setIsMemoSubmitting(false)
+    }
+  }, [editingTask, memoInput])
 
   return (
     <AdminLayout
@@ -2663,6 +2712,8 @@ function TaskManagementPage() {
                       onClick={() => {
                         setShowEditModal(false)
                         setEditingTask(null)
+                        setMemoInput('')
+                        setMemoRefreshKey(0)
                       }}
                       className="px-2 sm:px-3 py-1 sm:py-1.5 text-white bg-white bg-opacity-20 rounded-md hover:bg-opacity-30 transition-all font-medium backdrop-blur-sm border border-white border-opacity-30 text-xs sm:text-sm"
                     >
@@ -2920,20 +2971,30 @@ function TaskManagementPage() {
                 {/* 메모 */}
                 <div>
                   <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">메모</label>
-                  <textarea
-                    ref={editNotesRef}
-                    value={editingTask.notes || ''}
-                    onChange={(e) => {
-                      setEditingTask(prev => prev ? { ...prev, notes: e.target.value || undefined } : null)
-                      // Auto-resize
-                      const target = e.target as HTMLTextAreaElement
-                      target.style.height = 'auto'
-                      target.style.height = Math.min(target.scrollHeight, window.innerHeight * 0.5) + 'px'
-                    }}
-                    placeholder="메모나 추가 정보를 입력하세요"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none text-xs sm:text-sm"
-                    style={{ minHeight: '60px', maxHeight: '50vh' }}
-                  />
+                  <div className="flex gap-2 items-start">
+                    <textarea
+                      ref={editNotesRef}
+                      value={memoInput}
+                      onChange={(e) => {
+                        setMemoInput(e.target.value)
+                        // Auto-resize
+                        const target = e.target as HTMLTextAreaElement
+                        target.style.height = 'auto'
+                        target.style.height = Math.min(target.scrollHeight, window.innerHeight * 0.5) + 'px'
+                      }}
+                      placeholder="우측 업무진행현황 메모에 기록할 내용을 입력하세요"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none text-xs sm:text-sm"
+                      style={{ minHeight: '60px', maxHeight: '50vh' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddMemo}
+                      disabled={!memoInput.trim() || isMemoSubmitting}
+                      className="flex-shrink-0 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs sm:text-sm font-medium whitespace-nowrap"
+                    >
+                      {isMemoSubmitting ? '기록 중...' : '기록 추가'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* 단계 이력 */}
@@ -2967,7 +3028,7 @@ function TaskManagementPage() {
               {/* 오른쪽: 사업장 정보 패널 */}
               <div className="overflow-y-auto bg-gray-50 h-full">
                 <BusinessInfoPanel
-                  key={editingTask.businessId || 'empty'}
+                  key={`${editingTask.businessId || 'empty'}-${memoRefreshKey}`}
                   businessId={editingTask.businessId || null}
                   businessName={editingTask.businessName}
                   taskId={editingTask.id}

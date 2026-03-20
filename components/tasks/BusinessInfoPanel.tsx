@@ -223,22 +223,38 @@ function MemoSection({ memos }: { memos: Memo[] }) {
         {memos.length === 0 ? (
           <p className="text-xs text-gray-500 italic">등록된 메모가 없습니다.</p>
         ) : (
-          memos.map((memo, idx) => (
-            <div key={memo.id || idx} className="bg-gray-50 p-2 rounded text-xs border border-gray-100">
-              <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center gap-1.5">
-                  {memo.source_type === 'task_sync' && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
-                      업무
-                    </span>
-                  )}
-                  <span className="font-medium text-gray-700">{memo.author || '작성자'}</span>
+          memos.map((memo, idx) => {
+            const isSystem = !memo.author || memo.author === 'system'
+            return (
+              <div
+                key={memo.id || idx}
+                className={`p-2 rounded text-xs border ${
+                  isSystem
+                    ? 'bg-gray-100 border-gray-200'
+                    : 'bg-white border-gray-100'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <div className="flex items-center gap-1.5">
+                    {memo.source_type === 'task_sync' && !isSystem && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                        업무
+                      </span>
+                    )}
+                    {isSystem ? (
+                      <span className="text-[10px] text-gray-400 italic">자동 기록</span>
+                    ) : (
+                      <span className="font-medium text-gray-700">{memo.author}</span>
+                    )}
+                  </div>
+                  <span className="text-gray-400 text-[10px]">{formatDate(memo.created_at)}</span>
                 </div>
-                <span className="text-gray-500 text-[10px]">{formatDate(memo.created_at)}</span>
+                <p className={`whitespace-pre-wrap ${isSystem ? 'text-gray-400 italic text-[11px]' : 'text-gray-600'}`}>
+                  {memo.content}
+                </p>
               </div>
-              <p className="text-gray-600 whitespace-pre-wrap">{memo.content}</p>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>
@@ -269,7 +285,6 @@ function LoadingSpinner() {
 // 메인 컴포넌트
 export default function BusinessInfoPanel({
   businessId,
-  businessName,
   taskId,
   onModalClose
 }: BusinessInfoPanelProps) {
@@ -331,7 +346,11 @@ export default function BusinessInfoPanel({
           const memosArray = Array.isArray(memosData.data)
             ? memosData.data
             : memosData.data.data || [];
-          setMemos(memosArray)
+          // API는 created_by 필드로 반환하므로 author로 매핑
+          setMemos(memosArray.map((m: any) => ({
+            ...m,
+            author: m.author || m.created_by || null
+          })))
         }
       }
     } catch (err: any) {
