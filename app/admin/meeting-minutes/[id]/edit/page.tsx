@@ -3,7 +3,7 @@
 // ============================================
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import AutocompleteSelectInput from '@/components/ui/AutocompleteSelectInput'
@@ -16,7 +16,8 @@ import {
   Users as UsersIcon,
   MapPin,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Lock
 } from 'lucide-react'
 import {
   MeetingType,
@@ -27,6 +28,8 @@ import {
   UpdateMeetingMinuteRequest,
   MeetingMinute
 } from '@/types/meeting-minutes'
+import { TokenManager } from '@/lib/api-client'
+import { useMeetingPresence } from '@/hooks/useMeetingPresence'
 
 export default function EditMeetingMinutePage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -37,6 +40,31 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const dataLoadedRef = useRef(false)  // 데이터 로드 완료 여부
+
+  // 현재 로그인 사용자 정보 (Presence용)
+  const [currentUserId, setCurrentUserId] = useState('')
+  const [currentUserName, setCurrentUserName] = useState('')
+
+  // 섹션별 변경 추적
+  const [dirtySections, setDirtySections] = useState<Set<string>>(new Set())
+  const markDirty = useCallback((sectionId: string) => {
+    setDirtySections(prev => new Set([...prev, sectionId]))
+  }, [])
+
+  // Presence: 동시 편집자 감지 및 섹션 잠금
+  const {
+    otherEditors,
+    canLockSection,
+    getSectionLocker,
+    lockSection,
+    unlockSection,
+    isConnected: presenceConnected,
+  } = useMeetingPresence({
+    meetingId: params.id,
+    currentUserId,
+    currentUserName,
+    enabled: !!currentUserId,
+  })
 
   // 폼 데이터
   const [title, setTitle] = useState('')
@@ -57,6 +85,19 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   const [externalParticipants, setExternalParticipants] = useState<Array<{id: string, name: string, role: string, attended: boolean}>>([]) // 외부 참석자
   const [departments, setDepartments] = useState<string[]>([]) // 부서 목록 (localStorage)
 
+  // JWT 토큰에서 현재 사용자 정보 추출
+  useEffect(() => {
+    const token = TokenManager.getToken()
+    if (!token) return
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      setCurrentUserId(payload.userId || payload.id || '')
+      setCurrentUserName(payload.name || payload.email || '알 수 없음')
+    } catch {
+      // 토큰 파싱 실패 시 무시
+    }
+  }, [])
+
   useEffect(() => {
     setMounted(true)
     // API에서 부서 목록 로드
@@ -73,11 +114,11 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     initializeData()
   }, [refresh])  // refresh 파라미터 변경 시 재실행
 
-  // 폼 변경 감지: 데이터 로드 완료 후 사용자가 폼을 변경하면 isDirty = true
+  // 폼 변경 감지: dirtySections이 비어있지 않으면 isDirty = true
   useEffect(() => {
     if (!dataLoadedRef.current) return
-    setIsDirty(true)
-  }, [title, meetingDate, meetingType, location, locationType, participants, externalParticipants, agenda, summary, businessIssues])
+    setIsDirty(dirtySections.size > 0)
+  }, [dirtySections])
 
   const loadBusinessesAndEmployees = async () => {
     try {
@@ -263,6 +304,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       }
       setParticipants([...participants, newParticipant])
     }
+    markDirty('participants')
   }
 
   // 외부 참석자 관리
@@ -276,69 +318,87 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         attended: true
       }
     ])
+    markDirty('participants')
   }
 
   const removeExternalParticipant = (index: number) => {
     setExternalParticipants(externalParticipants.filter((_, i) => i !== index))
+    markDirty('participants')
   }
 
   const updateExternalParticipant = (index: number, field: 'name' | 'role' | 'attended', value: string | boolean) => {
     const updated = [...externalParticipants]
     updated[index] = { ...updated[index], [field]: value }
     setExternalParticipants(updated)
+    markDirty('participants')
   }
 
   // 안건 관리
   const handleAddAgenda = (department?: string) => {
-    setAgenda([
-      ...agenda,
-      {
-        id: crypto.randomUUID(),
-        title: '',
-        description: '',
-        department: department,
-        deadline: '',
-        progress: 0 as const,
-        assignee_id: undefined,    // undefined로 초기화 (AutocompleteSelectInput 안정성)
-        assignee_name: undefined   // undefined로 초기화
-      }
-    ])
+    const newItem: AgendaItem = {
+      id: crypto.randomUUID(),
+      title: '',
+      description: '',
+      department: department,
+      deadline: '',
+      progress: 0 as const,
+      assignee_id: undefined,
+      assignee_name: undefined
+    }
+    setAgenda([...agenda, newItem])
+    markDirty(`agenda-${newItem.id}`)
   }
 
   const handleRemoveAgenda = (index: number) => {
+    const item = agenda[index]
     setAgenda(agenda.filter((_, i) => i !== index))
+    // 삭제된 항목은 dirtySections에서 제거 후 별도 표시
+    setDirtySections(prev => {
+      const next = new Set(prev)
+      next.delete(`agenda-${item.id}`)
+      next.add(`agenda-delete-${item.id}`)
+      return next
+    })
   }
 
   const handleUpdateAgenda = (index: number, field: keyof AgendaItem, value: any) => {
     const updated = [...agenda]
     updated[index] = { ...updated[index], [field]: value }
     setAgenda(updated)
+    markDirty(`agenda-${agenda[index].id}`)
   }
 
   // 사업장별 이슈 관리
   const handleAddBusinessIssue = () => {
-    setBusinessIssues([
-      ...businessIssues,
-      {
-        id: crypto.randomUUID(),
-        business_id: '',
-        business_name: '',
-        issue_description: '',
-        assignee_id: '',
-        assignee_name: '',
-        is_completed: false
-      }
-    ])
+    const newIssue: BusinessIssue = {
+      id: crypto.randomUUID(),
+      business_id: '',
+      business_name: '',
+      issue_description: '',
+      assignee_id: '',
+      assignee_name: '',
+      is_completed: false
+    }
+    setBusinessIssues([...businessIssues, newIssue])
+    markDirty(`business-${newIssue.id}`)
   }
 
   const handleRemoveBusinessIssue = (index: number) => {
+    const issue = businessIssues[index]
     setBusinessIssues(businessIssues.filter((_, i) => i !== index))
+    setDirtySections(prev => {
+      const next = new Set(prev)
+      next.delete(`business-${issue.id}`)
+      next.add(`business-delete-${issue.id}`)
+      return next
+    })
   }
 
   const handleUpdateBusinessIssue = (index: number, field: keyof BusinessIssue, value: any) => {
     const updated = [...businessIssues]
     updated[index] = { ...updated[index], [field]: value }
     setBusinessIssues(updated)
+    markDirty(`business-${businessIssues[index].id}`)
   }
 
   const handleToggleComplete = (index: number) => {
@@ -350,6 +410,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       delete updated[index].completed_at
     }
     setBusinessIssues(updated)
+    markDirty(`business-${businessIssues[index].id}`)
   }
 
   const handleSave = async (newStatus?: 'draft' | 'completed' | 'archived') => {
@@ -366,9 +427,11 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     try {
       setSaving(true)
 
-      // 내부 + 외부 참석자 병합
+      const sectionUrl = `/api/meeting-minutes/${params.id}/sections`
+
+      // 내부 + 외부 참석자 병합 (participants 섹션용)
       const allParticipants = [
-        ...participants, // 내부 직원
+        ...participants,
         ...externalParticipants.map(ext => ({
           id: ext.id,
           name: ext.name,
@@ -379,46 +442,115 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         }))
       ]
 
-      const data: UpdateMeetingMinuteRequest = {
-        title,
-        meeting_date: new Date(meetingDate).toISOString(),
-        meeting_type: meetingType,
-        participants: allParticipants, // 병합된 참석자
-        location,
-        location_type: locationType,
-        agenda,
-        content: {
-          summary,
-          discussions: [], // 빈 배열로 유지 (하위 호환성)
-          business_issues: businessIssues
-        },
-        status: newStatus || status
+      // 변경된 섹션만 수집해서 병렬 PATCH
+      const patches: Promise<Response>[] = []
+
+      const patch = (body: object) =>
+        fetch(sectionUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          cache: 'no-store',
+        })
+
+      // meta 섹션 (제목, 날짜, 유형, 장소) — 항상 포함 (필수 필드 포함)
+      patches.push(patch({
+        section: 'meta',
+        data: {
+          title,
+          meeting_date: new Date(meetingDate).toISOString(),
+          meeting_type: meetingType,
+          location,
+          location_type: locationType,
+        }
+      }))
+
+      // participants: 변경됐거나 완료 저장 시 항상 전송
+      if (dirtySections.has('participants') || newStatus === 'completed') {
+        patches.push(patch({ section: 'participants', data: { participants: allParticipants } }))
       }
 
-      const response = await fetch(`/api/meeting-minutes/${params.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data),
-        cache: 'no-store'  // 캐시 비활성화로 항상 최신 데이터 반영
-      })
+      // summary: 변경됐거나 완료 저장 시
+      if (dirtySections.has('summary') || newStatus === 'completed') {
+        patches.push(patch({ section: 'summary', data: { summary } }))
+      }
 
-      const result = await response.json()
-
-      if (result.success) {
-        if (newStatus === 'draft') {
-          alert('임시 저장되었습니다.')
-          setIsDirty(false)
-          // 임시저장 시 현재 페이지에 머뭄 (이동 없음)
-        } else {
-          alert('회의록이 수정되었습니다.')
-          // 완료 저장 시 상세 페이지로 이동
-          const timestamp = Date.now()
-          router.push(`/admin/meeting-minutes/${params.id}?updated=${timestamp}`)
+      // 안건 항목: 변경된 것만
+      for (const item of agenda) {
+        if (dirtySections.has(`agenda-${item.id}`)) {
+          patches.push(patch({ section: 'agenda', itemId: item.id, data: item }))
         }
+      }
+      // 새로 추가된 안건 (add)
+      for (const item of agenda) {
+        if (dirtySections.has(`agenda-add-${item.id}`)) {
+          patches.push(patch({ section: 'agenda-add', data: item }))
+        }
+      }
+      // 삭제된 안건
+      for (const sectionId of dirtySections) {
+        if (sectionId.startsWith('agenda-delete-')) {
+          const itemId = sectionId.replace('agenda-delete-', '')
+          patches.push(patch({ section: 'agenda-delete', itemId }))
+        }
+      }
+
+      // 사업장 이슈: 변경된 것만
+      for (const issue of businessIssues) {
+        if (dirtySections.has(`business-${issue.id}`)) {
+          patches.push(patch({ section: 'business', itemId: issue.id, data: issue }))
+        }
+      }
+      // 삭제된 이슈
+      for (const sectionId of dirtySections) {
+        if (sectionId.startsWith('business-delete-')) {
+          const itemId = sectionId.replace('business-delete-', '')
+          patches.push(patch({ section: 'business-delete', itemId }))
+        }
+      }
+
+      // status 변경
+      if (newStatus && newStatus !== status) {
+        patches.push(patch({ section: 'status', data: { status: newStatus } }))
+      }
+
+      // 완료 저장 시 모든 섹션 강제 포함 (최종 상태 보장)
+      if (newStatus === 'completed') {
+        // 위에서 participants, summary 이미 포함됨
+        // agenda 전체도 포함 (변경 여부 무관)
+        for (const item of agenda) {
+          if (!dirtySections.has(`agenda-${item.id}`)) {
+            patches.push(patch({ section: 'agenda', itemId: item.id, data: item }))
+          }
+        }
+        // 사업장 이슈 전체 포함
+        for (const issue of businessIssues) {
+          if (!dirtySections.has(`business-${issue.id}`)) {
+            patches.push(patch({ section: 'business', itemId: issue.id, data: issue }))
+          }
+        }
+      }
+
+      // 병렬 전송
+      const results = await Promise.all(patches)
+      const responses = await Promise.all(results.map(r => r.json()))
+      const failed = responses.filter(r => !r.success)
+
+      if (failed.length > 0) {
+        console.error('[MEETING-MINUTE] Some patches failed:', failed)
+        alert(`저장 중 일부 오류가 발생했습니다: ${failed[0].error}`)
+        return
+      }
+
+      setDirtySections(new Set())
+
+      if (newStatus === 'draft' || !newStatus) {
+        alert('임시 저장되었습니다.')
+        setIsDirty(false)
       } else {
-        alert(`수정 실패: ${result.error}`)
+        alert('회의록이 수정되었습니다.')
+        const timestamp = Date.now()
+        router.push(`/admin/meeting-minutes/${params.id}?updated=${timestamp}`)
       }
     } catch (error) {
       console.error('[MEETING-MINUTE] Save error:', error)
@@ -454,7 +586,25 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       title="회의록 편집"
       description="회의록 내용을 수정합니다"
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* 동시 편집자 아바타 */}
+          {otherEditors.length > 0 && (
+            <div className="flex items-center gap-1 mr-2">
+              <span className="text-xs text-gray-500 hidden sm:inline">편집 중:</span>
+              <div className="flex -space-x-1">
+                {otherEditors.map(editor => (
+                  <div
+                    key={editor.userId}
+                    title={`${editor.userName} 편집 중`}
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium border-2 border-white"
+                    style={{ backgroundColor: editor.color }}
+                  >
+                    {editor.userName.slice(0, 1)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             onClick={handleCancel}
             disabled={saving}
@@ -488,10 +638,26 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
           {/* 왼쪽 열: 핵심 회의 정보 */}
           <div className="space-y-4">
             {/* 기본 정보 */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <h2 className="text-base font-semibold text-gray-900 mb-3">기본 정보</h2>
+            {(() => {
+              const metaLocker = getSectionLocker('meta')
+              const metaLocked = !!metaLocker
+              return (
+            <div
+              className={`bg-white p-4 rounded-lg shadow-sm border transition-colors ${metaLocked ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`}
+              onFocus={() => { if (!metaLocked) lockSection('meta') }}
+              onBlur={() => unlockSection('meta')}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-semibold text-gray-900">기본 정보</h2>
+                {metaLocked && (
+                  <span className="flex items-center gap-1 text-xs text-orange-600 font-medium">
+                    <Lock className="w-3 h-3" />
+                    {metaLocker.userName} 편집 중
+                  </span>
+                )}
+              </div>
 
-              <div className="space-y-3">
+              <fieldset disabled={metaLocked} className="space-y-3">
                 {/* 제목 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -500,9 +666,9 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                   <input
                     type="text"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => { setTitle(e.target.value); markDirty('meta') }}
                     placeholder="예: 2024년 1월 주간 정기 회의"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -517,8 +683,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                   <input
                     type="datetime-local"
                     value={meetingDate}
-                    onChange={(e) => setMeetingDate(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => { setMeetingDate(e.target.value); markDirty('meta') }}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -530,8 +696,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                 </label>
                 <select
                   value={meetingType}
-                  onChange={(e) => setMeetingType(e.target.value as MeetingType)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onChange={(e) => { setMeetingType(e.target.value as MeetingType); markDirty('meta') }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   <option value="정기회의">정기회의</option>
                   <option value="임시회의">임시회의</option>
@@ -552,9 +718,9 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                       <input
                         type="text"
                         value={location}
-                        onChange={(e) => setLocation(e.target.value)}
+                        onChange={(e) => { setLocation(e.target.value); markDirty('meta') }}
                         placeholder="예: 본사 회의실 A"
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -566,8 +732,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                     </label>
                     <select
                       value={locationType}
-                      onChange={(e) => setLocationType(e.target.value as LocationType)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      onChange={(e) => { setLocationType(e.target.value as LocationType); markDirty('meta') }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="offline">오프라인</option>
                       <option value="online">온라인</option>
@@ -575,12 +741,31 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                     </select>
                   </div>
                 </div>
-              </div>
+              </fieldset>
             </div>
+              )
+            })()}
 
             {/* 참석자 */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">참석자</h2>
+            {(() => {
+              const participantsLocker = getSectionLocker('participants')
+              const participantsLocked = !!participantsLocker
+              return (
+            <div
+              className={`bg-white p-4 rounded-lg shadow-sm border transition-colors ${participantsLocked ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`}
+              onFocus={() => { if (!participantsLocked) lockSection('participants') }}
+              onBlur={() => unlockSection('participants')}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-900">참석자</h2>
+                {participantsLocked && (
+                  <span className="flex items-center gap-1 text-xs text-orange-600 font-medium">
+                    <Lock className="w-3 h-3" />
+                    {participantsLocker.userName} 편집 중
+                  </span>
+                )}
+              </div>
+              <fieldset disabled={participantsLocked}>
 
               {/* 내부 직원 섹션 */}
               <div className="mb-4">
@@ -683,7 +868,10 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                   </div>
                 )}
               </div>
+              </fieldset>
             </div>
+              )
+            })()}
 
             {/* 안건 - 부서별 섹션 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -743,8 +931,23 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                 {sectionAgenda.map((item) => {
                                   const index = agenda.indexOf(item)
                                   const sectionIndex = sectionAgenda.indexOf(item)
+                                  const agendaSectionId = `agenda-${item.id}`
+                                  const agendaLocker = getSectionLocker(agendaSectionId)
+                                  const agendaLocked = !!agendaLocker
                                   return (
-                                    <div key={item.id} className="p-3 bg-gray-50 rounded-lg">
+                                    <div
+                                      key={item.id}
+                                      className={`p-3 rounded-lg border transition-colors ${agendaLocked ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-transparent'}`}
+                                      onFocus={() => { if (!agendaLocked) lockSection(agendaSectionId) }}
+                                      onBlur={() => unlockSection(agendaSectionId)}
+                                    >
+                                      {agendaLocked && (
+                                        <div className="flex items-center gap-1 text-xs text-orange-600 font-medium mb-2">
+                                          <Lock className="w-3 h-3" />
+                                          {agendaLocker.userName} 편집 중
+                                        </div>
+                                      )}
+                                      <fieldset disabled={agendaLocked}>
                                       <div className="flex items-start gap-2 mb-2">
                                         <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-sm">
                                           {sectionIndex + 1}
@@ -869,11 +1072,13 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                         {/* 삭제 버튼 */}
                                         <button
                                           onClick={() => handleRemoveAgenda(index)}
-                                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                          disabled={agendaLocked}
+                                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
                                           <Trash2 className="w-4 h-4" />
                                         </button>
                                       </div>
+                                      </fieldset>
                                     </div>
                                   )
                                 })}
@@ -892,16 +1097,35 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
           {/* 오른쪽 열: 요약 및 이슈 */}
           <div className="space-y-4">
             {/* 회의 요약 */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <h2 className="text-base font-semibold text-gray-900 mb-3">회의 요약</h2>
+            {(() => {
+              const summaryLocker = getSectionLocker('summary')
+              const summaryLocked = !!summaryLocker
+              return (
+            <div
+              className={`bg-white p-4 rounded-lg shadow-sm border transition-colors ${summaryLocked ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`}
+              onFocus={() => { if (!summaryLocked) lockSection('summary') }}
+              onBlur={() => unlockSection('summary')}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-semibold text-gray-900">회의 요약</h2>
+                {summaryLocked && (
+                  <span className="flex items-center gap-1 text-xs text-orange-600 font-medium">
+                    <Lock className="w-3 h-3" />
+                    {summaryLocker.userName} 편집 중
+                  </span>
+                )}
+              </div>
               <textarea
                 value={summary}
-                onChange={(e) => setSummary(e.target.value)}
+                onChange={(e) => { setSummary(e.target.value); markDirty('summary') }}
+                disabled={summaryLocked}
                 placeholder="회의 전반적인 내용을 요약하여 작성해주세요..."
                 rows={8}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
+              )
+            })()}
 
             {/* 사업장별 이슈 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -923,22 +1147,26 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
               ) : (
                 <div className="space-y-3">
                   {businessIssues.map((issue, index) => {
-                    // 🔍 디버깅: 사업장별 이슈 렌더링 시 데이터 확인
-                    if (index === 0) {
-                      console.log(`🏢 사업장별 이슈 #${index} 렌더링:`, {
-                        business_id: issue.business_id,
-                        business_name: issue.business_name,
-                        assignee_id: issue.assignee_id,
-                        assignee_name: issue.assignee_name,
-                        issue_description: issue.issue_description
-                      })
-                      console.log('사업장 options 개수:', businesses.length)
-                      console.log('직원 options 개수:', employees.length)
-                    }
+                    const businessSectionId = `business-${issue.id}`
+                    const businessLocker = getSectionLocker(businessSectionId)
+                    const businessLocked = !!businessLocker
 
                     return (
-                      <div key={issue.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div
+                        key={issue.id}
+                        className={`p-3 rounded-lg border transition-colors ${businessLocked ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}
+                        onFocus={() => { if (!businessLocked) lockSection(businessSectionId) }}
+                        onBlur={() => unlockSection(businessSectionId)}
+                      >
+                        {businessLocked && (
+                          <div className="flex items-center gap-1 text-xs text-orange-600 font-medium mb-2">
+                            <Lock className="w-3 h-3" />
+                            {businessLocker.userName} 편집 중
+                          </div>
+                        )}
+                        <fieldset disabled={businessLocked}>
                         <div className="space-y-2">
+                        {/* fieldset wraps all issue content */}
                           {/* 사업장 선택 */}
                           {!issue.business_id && issue.business_name ? (
                             <input
@@ -1072,14 +1300,16 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
 
                           <button
                             onClick={() => handleRemoveBusinessIssue(index)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            disabled={businessLocked}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             title="삭제"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
+                        </div>{/* space-y-2 */}
+                        </fieldset>
                       </div>
-                    </div>
                     )
                   })}
                 </div>
