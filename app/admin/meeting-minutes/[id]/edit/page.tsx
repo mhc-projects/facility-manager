@@ -357,11 +357,15 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   const handleRemoveAgenda = (index: number) => {
     const item = agenda[index]
     setAgenda(agenda.filter((_, i) => i !== index))
-    // 삭제된 항목은 dirtySections에서 제거 후 별도 표시
     setDirtySections(prev => {
       const next = new Set(prev)
+      const isNewItem = next.has(`agenda-add-${item.id}`)
       next.delete(`agenda-${item.id}`)
-      next.add(`agenda-delete-${item.id}`)
+      next.delete(`agenda-add-${item.id}`)
+      // 신규 추가 항목은 DB에 없으므로 delete 요청 불필요
+      if (!isNewItem) {
+        next.add(`agenda-delete-${item.id}`)
+      }
       return next
     })
   }
