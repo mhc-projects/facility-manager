@@ -351,7 +351,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       assignee_name: undefined
     }
     setAgenda([...agenda, newItem])
-    markDirty(`agenda-${newItem.id}`)
+    markDirty(`agenda-add-${newItem.id}`)
   }
 
   const handleRemoveAgenda = (index: number) => {
