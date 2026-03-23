@@ -152,6 +152,10 @@ interface UnifiedBusinessInfo {
   } | null
   representatives?: Array<{ name: string; birth_date: string | null }> | null
   contacts_list?: Array<{ name: string; position: string; phone: string; email: string }> | null
+  // 관리책임자 (JSONB 배열, 구버전 단일 필드 폴백 포함)
+  admin_managers?: Array<{ id: string; name: string; position?: string; department?: string }> | null
+  admin_manager_id?: string | null
+  admin_manager_name?: string | null
   additional_info?: Record<string, any>
   is_active: boolean
   is_deleted: boolean
@@ -518,11 +522,43 @@ export default function BusinessDetailModal({
 
                 {/* Contact Information Card */}
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 border border-green-200">
-                  <div className="flex items-center mb-2 sm:mb-3 md:mb-4">
-                    <div className="p-1.5 sm:p-2 bg-green-600 rounded-lg mr-2 sm:mr-3">
-                      <Contact className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                  <div className="flex items-center justify-between mb-2 sm:mb-3 md:mb-4">
+                    <div className="flex items-center">
+                      <div className="p-1.5 sm:p-2 bg-green-600 rounded-lg mr-2 sm:mr-3">
+                        <Contact className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      </div>
+                      <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">담당자 정보</h3>
                     </div>
-                    <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">담당자 정보</h3>
+                    {/* 관리책임자 뱃지 — 복수 지원, 헤더 우측 */}
+                    {(() => {
+                      // admin_managers 배열 우선, 구버전 단일 필드 폴백
+                      const managers = (() => {
+                        if (Array.isArray(business.admin_managers) && business.admin_managers.length > 0)
+                          return business.admin_managers;
+                        if (business.admin_manager_name)
+                          return [{ id: business.admin_manager_id || '', name: business.admin_manager_name }];
+                        return [];
+                      })();
+                      if (managers.length === 0) return null;
+                      return (
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          {managers.map((m, i) => (
+                            <div key={m.id || `${m.name}-${i}`} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full">
+                              <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[8px] font-bold text-white">{m.name.charAt(0)}</span>
+                              </div>
+                              <span className="text-[10px] sm:text-xs font-medium text-blue-700 whitespace-nowrap">{m.name}</span>
+                              {m.position && (
+                                <span className="text-[9px] text-blue-400 whitespace-nowrap hidden sm:inline">{m.position}</span>
+                              )}
+                              {!m.position && (
+                                <span className="text-[9px] text-blue-400 whitespace-nowrap hidden sm:inline">관리책임</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* 담당자 목록 */}

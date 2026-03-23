@@ -18,6 +18,7 @@ import { getManufacturerName } from '@/constants/manufacturers'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
 import DateInput from '@/components/ui/DateInput'
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown'
+import AdminManagerPicker from '@/components/ui/AdminManagerPicker'
 import { formatMobilePhone, formatLandlinePhone } from '@/utils/phone-formatter'
 import { useToast } from '@/contexts/ToastContext'
 import { CacheManager } from '@/utils/cache-manager'
@@ -101,6 +102,9 @@ interface UnifiedBusinessInfo {
   representative_name: string | null;
   business_registration_number: string | null;
   
+  // 관리책임자 (JSONB 배열)
+  admin_managers?: Array<{ id: string; name: string; position?: string; department?: string }> | null;
+
   // 프로젝트 관리 필드들
   row_number?: number | null;
   department?: string | null;
@@ -2691,6 +2695,16 @@ function BusinessManagementPage() {
           multiple_stack_cost: business.multiple_stack_cost,
           representative_birth_date: business.representative_birth_date,
 
+          // 관리책임자 (JSONB 배열)
+          admin_managers: (() => {
+            const list = business.admin_managers;
+            if (Array.isArray(list) && list.length > 0) return list;
+            if (business.admin_manager_name) {
+              return [{ id: business.admin_manager_id || '', name: business.admin_manager_name }];
+            }
+            return [];
+          })(),
+
           // 다중 대표자/담당자 (JSONB 배열)
           representatives: (() => {
             const list = business.representatives;
@@ -2947,6 +2961,7 @@ function BusinessManagementPage() {
       business_registration_number: '',
       representatives: [{ name: '', birth_date: null }],
       contacts_list: [],
+      admin_managers: [],
       manager_name: '',
       manager_position: '',
       manager_contact: '',
@@ -3095,6 +3110,14 @@ function BusinessManagementPage() {
         })() as Array<{ reason: string; amount: number }>,
 
         contacts: freshData.contacts || [],
+        admin_managers: (() => {
+          const list = freshData.admin_managers;
+          if (Array.isArray(list) && list.length > 0) return list;
+          if (freshData.admin_manager_name) {
+            return [{ id: freshData.admin_manager_id || '', name: freshData.admin_manager_name }];
+          }
+          return [];
+        })(),
 
         // 다중 대표자/담당자 (JSONB 배열, 단일 필드에서 폴백)
         representatives: (() => {
@@ -3489,6 +3512,8 @@ function BusinessManagementPage() {
         return {
         business_name: row['사업장명'] || '',
         address: row['주소'] || '',
+        // 엑셀 업로드: 이름만 있으므로 id는 빈 문자열, 추후 수정모달에서 직원 연결 가능
+        admin_managers: row['관리책임자'] ? [{ id: '', name: row['관리책임자'] }] : [],
         manager_name: row['사업장담당자'] || '',
         manager_position: row['담당자직급'] || '',
         manager_contact: row['연락처'] || '',
@@ -3999,6 +4024,14 @@ function BusinessManagementPage() {
               사업장전화번호: serverData.business_contact || '',
               사업장연락처: serverData.business_contact || '',
               business_contact: serverData.business_contact || '',
+              admin_managers: (() => {
+                const list = serverData.admin_managers;
+                if (Array.isArray(list) && list.length > 0) return list;
+                if (serverData.admin_manager_name) {
+                  return [{ id: serverData.admin_manager_id || '', name: serverData.admin_manager_name }];
+                }
+                return [];
+              })(),
               담당자명: serverData.manager_name || '',
               manager_name: serverData.manager_name || '',
               담당자연락처: serverData.manager_contact || '',
@@ -4105,6 +4138,7 @@ function BusinessManagementPage() {
               completion_survey_date: serverData.completion_survey_date || null,
               // 비용 정보
               additional_cost: serverData.additional_cost || null,
+              installation_extra_cost: serverData.installation_extra_cost || null,
               survey_fee_adjustment: serverData.survey_fee_adjustment || null,
               multiple_stack_cost: serverData.multiple_stack_cost || null,
               expansion_pack: serverData.expansion_pack || null,
@@ -5288,6 +5322,21 @@ function BusinessManagementPage() {
                     <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">담당자 정보</h3>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3 sm:p-3 md:p-4">
+                    {/* 관리책임자 (내부 직원) */}
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        관리책임자
+                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">내부 직원</span>
+                      </label>
+                      <AdminManagerPicker
+                        value={formData.admin_managers || []}
+                        onChange={(val) => setFormData(prev => ({
+                          ...prev,
+                          admin_managers: val,
+                        }))}
+                      />
+                    </div>
+                    <div className="border-t border-gray-200 mb-3" />
                     {/* 담당자 다중 입력 */}
                     <div className="mb-3">
                       <div className="flex items-center justify-between mb-1">

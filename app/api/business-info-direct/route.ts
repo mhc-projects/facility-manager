@@ -65,10 +65,12 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     installation_team: normalizeUTF8(business.installation_team || ''),
     business_category: normalizeUTF8(business.business_category || ''),
     manufacturer: business.manufacturer || null,
+    admin_managers: JSON.stringify(Array.isArray(business.admin_managers) ? business.admin_managers : []),
     sales_office: normalizeUTF8(business.sales_office || ''),
     greenlink_id: normalizeUTF8(business.greenlink_id || ''),
     greenlink_pw: normalizeUTF8(business.greenlink_pw || ''),
     additional_cost: business.additional_cost ? parseInt(business.additional_cost) : null,
+    installation_extra_cost: business.installation_extra_cost ? parseInt(business.installation_extra_cost) : null,
     negotiation: business.negotiation ? parseInt(business.negotiation) || null : null,
     order_manager: normalizeUTF8(business.order_manager || ''),
     order_request_date: normalizeDateField(business.order_request_date),
@@ -210,6 +212,7 @@ export async function GET(request: Request) {
       representative_birth_date,
       representatives,
       contacts_list,
+      admin_managers,
       greenlink_id,
       greenlink_pw,
       business_management_code,
@@ -318,6 +321,7 @@ export async function GET(request: Request) {
         bi.representative_birth_date,
         bi.representatives,
         bi.contacts_list,
+        bi.admin_managers,
         bi.greenlink_id,
         bi.greenlink_pw,
         bi.business_management_code,
@@ -797,6 +801,23 @@ export async function PUT(request: Request) {
       updateObject.is_active = Boolean(updateData.is_active);
     }
 
+    // 관리책임자 (JSONB 배열)
+    if (updateData.admin_managers !== undefined) {
+      if (Array.isArray(updateData.admin_managers)) {
+        const validatedManagers = updateData.admin_managers
+          .filter((m: any) => m && typeof m === 'object' && typeof m.name === 'string' && m.name.trim() !== '')
+          .map((m: any) => ({
+            id: m.id || '',
+            name: normalizeUTF8(m.name.trim()),
+            position: m.position ? normalizeUTF8(m.position) : undefined,
+            department: m.department ? normalizeUTF8(m.department) : undefined,
+          }));
+        updateObject.admin_managers = JSON.stringify(validatedManagers);
+      } else {
+        updateObject.admin_managers = '[]';
+      }
+    }
+
     // 다중 대표자/담당자 (JSONB 배열)
     if (updateData.representatives !== undefined) {
       if (Array.isArray(updateData.representatives)) {
@@ -1054,6 +1075,11 @@ export async function POST(request: Request) {
       subsidy_approval_date: businessData.subsidy_approval_date || null,
       contract_sent_date: businessData.contract_sent_date || null,
 
+      // 관리책임자 (JSONB 배열)
+      admin_managers: Array.isArray(businessData.admin_managers)
+        ? JSON.stringify(businessData.admin_managers)
+        : '[]',
+
       // System and additional fields
       manufacturer: businessData.manufacturer,
       vpn: businessData.vpn,
@@ -1309,7 +1335,7 @@ async function executeSingleBatch(
       'multiple_stack', 'explosion_proof_differential_pressure_meter_domestic',
       'explosion_proof_temperature_meter_domestic', 'expansion_device',
       'relay_8ch', 'relay_16ch', 'main_board_replacement', 'business_management_code',
-      'project_year', 'additional_cost', 'negotiation',
+      'project_year', 'additional_cost', 'installation_extra_cost', 'negotiation',
       'invoice_1st_amount', 'payment_1st_amount',
       'invoice_2nd_amount', 'payment_2nd_amount', 'payment_additional_amount',
       'invoice_advance_amount', 'payment_advance_amount', 'invoice_balance_amount',
@@ -1328,6 +1354,13 @@ async function executeSingleBatch(
             WHEN EXCLUDED.${field} IS NOT NULL AND EXCLUDED.${field}::integer != 0
             THEN EXCLUDED.${field}
             ELSE business_info.${field}
+          END`;
+        } else if (field === 'admin_managers') {
+          // JSONB 배열: 빈 배열 '[]'이면 기존 값 유지, 값이 있으면 업데이트
+          return `${field} = CASE
+            WHEN EXCLUDED.${field}::text = '[]' OR EXCLUDED.${field} IS NULL
+            THEN business_info.${field}
+            ELSE EXCLUDED.${field}
           END`;
         } else if (textFields.has(field)) {
           // VARCHAR/TEXT 필드: 빈 값이 아닌 경우만 업데이트

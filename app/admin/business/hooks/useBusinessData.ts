@@ -31,6 +31,16 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     email: business.email || '',
     local_government: business.local_government || '',
     representative_birth_date: business.representative_birth_date || '',
+    // 관리책임자 (JSONB 배열)
+    admin_managers: (() => {
+      const list = business.admin_managers;
+      if (Array.isArray(list) && list.length > 0) return list;
+      // 구버전 단일 필드 폴백
+      if (business.admin_manager_name) {
+        return [{ id: business.admin_manager_id || '', name: business.admin_manager_name }];
+      }
+      return [];
+    })(),
     // 다중 대표자/담당자 (JSONB 배열)
     representatives: (() => {
       const list = business.representatives;

@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
       '메인보드교체',
 
       // 기타 정보
+      '관리책임자',
       '담당부서',
       '지자체',
       '제조사',
@@ -164,6 +165,7 @@ export async function GET(request: NextRequest) {
       0, // 메인보드교체
 
       // 기타 정보
+      '김관리', // 관리책임자
       '영업1팀', // 담당부서
       '강남구', // 지자체
       '에코센스', // 제조사
