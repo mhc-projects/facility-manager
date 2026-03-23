@@ -1995,7 +1995,25 @@ function BusinessManagementPage() {
         (business as any).대표자명 || business.representative_name || '',
         business.사업자등록번호 || business.business_registration_number || '',
         business.팩스번호 || business.fax_number || '',
-        business.이메일 || business.email || ''
+        business.이메일 || business.email || '',
+
+        // contacts_list 배열 (복수 담당자) — 이름·전화번호 추출
+        ...(Array.isArray(business.contacts_list)
+          ? business.contacts_list.flatMap((c: { name?: string; phone?: string }) => [
+              c.name || '',
+              c.phone || '',
+              (c.phone || '').replace(/-/g, ''),
+            ])
+          : []),
+
+        // 관리책임자 (JSONB 배열 → 이름 추출)
+        ...(Array.isArray(business.admin_managers)
+          ? business.admin_managers.map((m: { name?: string }) => m.name || '')
+          : [business.admin_manager_name || '']),
+
+        // 전화번호 추가 검색 (하이픈 제거 버전도 포함)
+        (business.business_contact || '').replace(/-/g, ''),
+        (business.manager_contact || '').replace(/-/g, '')
       ].join(' ').toLowerCase()
 
       // 모든 검색어가 포함되어야 함 (AND 조건)
