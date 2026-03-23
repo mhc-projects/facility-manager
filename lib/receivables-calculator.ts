@@ -5,7 +5,8 @@
  *   미수금 = 전체 매출(부가세 포함) - 총 입금액
  *
  * 규칙:
- *   - 설치일(installation_date)이 없으면 미수금 = 0 (아직 매출 미발생)
+ *   - 설치일(installation_date)이 없고 입금도 없으면 미수금 = 0 (아직 매출 미발생)
+ *   - 설치일 없어도 입금이 있으면 실제 거래 발생으로 간주하여 미수금 계산
  *   - 계산서 발행 여부와 무관하게 전체 매출 기준으로 계산
  *   - 전체 매출 = calculateBusinessRevenue().total_revenue × 1.1 (부가세 포함)
  *   - 총 입금액 = 진행구분에 따라 다른 필드 합산
@@ -54,8 +55,9 @@ export function calculateReceivables(params: {
 }): number {
   const { installationDate, totalRevenueWithTax, totalPayments, revenueAdjustments = 0 } = params;
 
-  // 설치일 없으면 미수금 0 (아직 매출 미발생)
-  if (!installationDate) return 0;
+  // 설치일 없고 입금도 없으면 미수금 0 (아직 매출 미발생)
+  // 단, 설치일 없어도 입금이 있으면 실제 거래가 발생한 것이므로 미수금 계산
+  if (!installationDate && totalPayments === 0) return 0;
 
   const raw = totalRevenueWithTax + revenueAdjustments - totalPayments;
   // 10원 이하 양수는 부가세 반올림 오차로 간주하여 0 처리

@@ -256,95 +256,99 @@ export async function GET(request: NextRequest) {
       console.warn('⚠️ [BUSINESS-INVOICES] invoice_records 조회 실패 (테이블 없음?):', recordsError);
     }
 
-    // invoice_records 입금액 반영 재계산
-    // invoice_records에만 입금이 기록되고 business_info 필드는 0인 경우를 처리
+    // ── 미수금 계산 (새 로직) ────────────────────────────────────────────
+    // 원칙: 최종매출금액(부가세 포함) - 총 입금액 = 미수금
+    // - 계산서 발행 여부/발행일/입금일 무관하게, 입금액이 있으면 그대로 합산
+    // - 자비/보조금 구분 없이 동일한 규칙 적용
+    // - contractAmount(최종매출 부가세포함)는 query param으로 전달받음
+    //   (BusinessRevenueModal에서 계산된 값, 없으면 0으로 처리)
+
     const getStageRecordFinal = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
       invoiceRecordsByStage[stage].find(r => r.record_type === 'original') || null;
 
+    // invoice_records에 추가공사비가 있는데 business_info.additional_cost가 0/NULL인 경우 보완
+    const recAdditionalCheck = getStageRecordFinal('subsidy_additional');
+    if (recAdditionalCheck && (!business.additional_cost || Number(business.additional_cost) === 0)) {
+      business.additional_cost = recAdditionalCheck.supply_amount || 0;
+    }
+
+    // 총 입금액 집계 — 계산서/입금일 무관, payment_amount가 있으면 합산
     if (category === '보조금') {
       const rec1st = getStageRecordFinal('subsidy_1st');
       const rec2nd = getStageRecordFinal('subsidy_2nd');
       const recAdditional = getStageRecordFinal('subsidy_additional');
-
-        // invoice_records에 추가공사비가 있는데 business_info.additional_cost가 0/NULL인 경우 보완
-      // (invoice_records로 마이그레이션 후 business_info 필드가 초기화된 케이스)
-      if (recAdditional && (!business.additional_cost || Number(business.additional_cost) === 0)) {
-        business.additional_cost = recAdditional.supply_amount || 0;
-      }
-      // invoice_records 레코드 있으면 실입금액 그대로 사용 (total=0이어도 입금은 유효)
-      // 단, subsidy_additional은 total=0이면 bi 기반 청구금액을 쓰므로 입금도 bi 기반 사용
-      // invoice_records 없으면(null) business_info 입금 필드 사용
-      const pay1st = rec1st
+      const pay1st = rec1st !== null
         ? (rec1st.payment_amount || 0)
         : (Number(business.payment_1st_amount) || 0);
-      const pay2nd = rec2nd
+      const pay2nd = rec2nd !== null
         ? (rec2nd.payment_amount || 0)
         : (Number(business.payment_2nd_amount) || 0);
-      // 추가공사비: issue_date 없으면 미발행으로 간주 → 입금도 제외 (invAdditional과 동일 기준)
-      const payAdditional = recAdditional
-        ? (recAdditional.issue_date ? (recAdditional.payment_amount || 0) : 0)
-        : (business.invoice_additional_date ? (Number(business.payment_additional_amount) || 0) : 0);
+      const payAdditional = recAdditional !== null
+        ? (recAdditional.payment_amount || 0)
+        : (Number(business.payment_additional_amount) || 0);
       allPayments = pay1st + pay2nd + payAdditional;
     } else {
       const recAdvance = getStageRecordFinal('self_advance');
       const recBalance = getStageRecordFinal('self_balance');
-      const payAdvance = recAdvance
+      const payAdvance = recAdvance !== null
         ? (recAdvance.payment_amount || 0)
         : (Number(business.payment_advance_amount) || 0);
-      const payBalance = recBalance
+      const payBalance = recBalance !== null
         ? (recBalance.payment_amount || 0)
         : (Number(business.payment_balance_amount) || 0);
       allPayments = payAdvance + payBalance;
     }
 
-    // extra(추가 계산서) 입금도 반영
+    // extra(추가 계산서) 입금 포함
     const extraPayments = invoiceRecordsByStage.extra
       .filter(r => r.record_type !== 'cancelled')
       .reduce((sum, r) => sum + (r.payment_amount || 0), 0);
     allPayments += extraPayments;
 
+    // 최종매출금액(부가세 포함) — query param으로 전달받은 값 우선 사용
+    // 없으면 발행된 계산서 합계로 fallback (레거시 호환)
+    const contractAmountParam = searchParams.get('contract_amount');
+    const contractAmount = contractAmountParam ? Number(contractAmountParam) : 0;
 
-    // 전체 매출 계산 (부가세 포함) — invoice_records 기반 청구금액 합계
-    // revenue_adjustments는 내부 이익 조정 항목이므로 미수금 계산에서 제외
-    // 미수금은 실제 발행된 계산서 금액 기준으로 계산
-    let totalInvoicedAmount = 0;
+    // 실제 발행된 계산서 합계 (DB total_amount 기준) — 항상 계산
+    let invoicedFallback = 0;
     if (category === '보조금') {
-      const rec1stFinal = getStageRecordFinal('subsidy_1st');
-      const rec2ndFinal = getStageRecordFinal('subsidy_2nd');
-      const recAdditionalFinal = getStageRecordFinal('subsidy_additional');
-      // total_amount=0인 레코드는 무효 계산서 — business_info fallback 사용하지 않음 (마이너스 방지)
-      // invoice_records 없으면(null) business_info 필드 fallback
-      const inv1st = rec1stFinal ? (rec1stFinal.total_amount || 0) : (Number(business.invoice_1st_amount) || 0);
-      const inv2nd = rec2ndFinal ? (rec2ndFinal.total_amount || 0) : (Number(business.invoice_2nd_amount) || 0);
-      // 추가공사비: 발행일(issue_date) 있는 경우만 청구금액에 포함 (발행일 없으면 미발행으로 간주)
-      // invoice_records 있으면 issue_date 확인, 없으면 bi.invoice_additional_date 확인
-      const invAdditional = recAdditionalFinal
-        ? (recAdditionalFinal.issue_date ? (recAdditionalFinal.total_amount || 0) : 0)
+      const r1 = getStageRecordFinal('subsidy_1st');
+      const r2 = getStageRecordFinal('subsidy_2nd');
+      const rA = getStageRecordFinal('subsidy_additional');
+      invoicedFallback += r1 ? (r1.total_amount || 0) : (Number(business.invoice_1st_amount) || 0);
+      invoicedFallback += r2 ? (r2.total_amount || 0) : (Number(business.invoice_2nd_amount) || 0);
+      invoicedFallback += rA
+        ? (rA.issue_date ? (rA.total_amount || 0) : 0)
         : (business.invoice_additional_date ? Math.round((Number(business.additional_cost) || 0) * 1.1) : 0);
-      totalInvoicedAmount = inv1st + inv2nd + invAdditional;
     } else {
-      const recAdvanceFinal = getStageRecordFinal('self_advance');
-      const recBalanceFinal = getStageRecordFinal('self_balance');
-      const invAdvance = recAdvanceFinal ? (recAdvanceFinal.total_amount || 0) : (Number(business.invoice_advance_amount) || 0);
-      const invBalance = recBalanceFinal ? (recBalanceFinal.total_amount || 0) : (Number(business.invoice_balance_amount) || 0);
-      totalInvoicedAmount = invAdvance + invBalance;
+      const rAdv = getStageRecordFinal('self_advance');
+      const rBal = getStageRecordFinal('self_balance');
+      invoicedFallback += rAdv ? (rAdv.total_amount || 0) : (Number(business.invoice_advance_amount) || 0);
+      invoicedFallback += rBal ? (rBal.total_amount || 0) : (Number(business.invoice_balance_amount) || 0);
     }
-    // extra 계산서 포함
     const extraInvoiced = invoiceRecordsByStage.extra
       .filter(r => r.record_type !== 'cancelled')
       .reduce((sum, r) => sum + (r.total_amount || 0), 0);
-    totalInvoicedAmount += extraInvoiced;
+    invoicedFallback += extraInvoiced;
 
-    const totalRevenueWithTax = totalInvoicedAmount; // 청구금액 기반
+    // 미수금 기준금액: contract_amount와 실제 발행 계산서 중 큰 값 사용
+    // (부가세 반올림으로 contract_amount가 실제 계산서보다 1원 작을 수 있으므로)
+    // 계산서 발행이 없고 입금만 있는 경우: 입금액이 실질 기준 (마이너스 방지)
+    // 계산서 발행이 있는 경우: allPayments 비교 안 함 (초과입금 음수 허용)
+    const baseFromInvoice = Math.max(contractAmount, invoicedFallback);
+    const totalRevenueWithTax = baseFromInvoice > 0
+      ? baseFromInvoice
+      : allPayments; // 계산서 없고 입금만 있으면 입금액 기준
 
-    // 최종 미수금 계산 — 실제 발행된 계산서 금액 - 총 입금액
-    // 청구금액이 0이면 아직 계산서 미발행 상태 → 미수금 0 (선입금은 미수금으로 처리하지 않음)
-    if (totalInvoicedAmount === 0) {
+    // 최종 미수금 계산 — 최종매출(부가세포함) - 총 입금액
+    // 기준금액이 0이면 (contractAmount도 없고 입금도 없고 계산서도 없음) → 미수금 0
+    if (totalRevenueWithTax === 0) {
       totalReceivables = 0;
     } else {
       totalReceivables = calculateReceivables({
         installationDate: business.installation_date,
-        totalRevenueWithTax: totalInvoicedAmount,
+        totalRevenueWithTax,
         totalPayments: allPayments,
       });
     }

@@ -16,7 +16,7 @@ import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import TwoStageDropdown from '@/components/ui/TwoStageDropdown';
 import { MANUFACTURER_NAMES } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
-import { calculateReceivables, sumAllPayments } from '@/lib/receivables-calculator';
+import { sumAllPayments } from '@/lib/receivables-calculator';
 import { allSteps } from '@/lib/task-steps';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -192,6 +192,7 @@ function RevenueDashboard() {
   const [selectedCollectionManagers, setSelectedCollectionManagers] = useState<string[]>([]); // 필터용
   const [candidateEmployees, setCandidateEmployees] = useState<{ id: string; name: string; department: string; permission_level: number }[]>([]);
   const [openCollectionDropdown, setOpenCollectionDropdown] = useState<string | null>(null); // 현재 열린 드롭다운의 businessId
+  const [batchTrigger, setBatchTrigger] = useState(0); // batch 미수금 재계산 트리거
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null); // 드롭다운 위치
   const [isFilterExpanded, setIsFilterExpanded] = useState(false); // 필터 섹션 접기/펼치기 상태 (기본값: 접힌 상태)
   const [sortField, setSortField] = useState<string>('business_name');
@@ -959,6 +960,9 @@ function RevenueDashboard() {
         const endTime = performance.now();
         console.log(`✅ [LOAD-BUSINESSES] 사업장 로드 완료 (${(endTime - startTime).toFixed(0)}ms)`);
 
+        // 사업장 데이터 갱신 후 batch 미수금 재계산 트리거
+        setBatchTrigger(prev => prev + 1);
+
         // ⚠️ 자동 재계산 비활성화: 관리자가 수동으로 "전체 재계산" 버튼을 사용
         // 페이지 로드 시 DB에 저장된 기존 계산 결과만 표시
         console.log('ℹ️ [LOAD-BUSINESSES] 자동 재계산 비활성화 - 수동 재계산 버튼 사용 필요');
@@ -1391,6 +1395,16 @@ function RevenueDashboard() {
     calc.sales_office.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // 진행구분 필터 옵션: DB 실제 값 기준으로 동적 생성 (하드코딩 대신)
+  const categoryOptions = useMemo(() => {
+    const preferred = ['자비', '보조금', '보조금 동시진행', '보조금 추가승인', '대리점', 'AS', '외주설치'];
+    const fromDB = new Set(businesses.map(b => (b.progress_status || '').trim()).filter(Boolean));
+    // preferred 순서 유지, DB에만 있는 값은 뒤에 추가
+    const result = preferred.filter(v => fromDB.has(v));
+    fromDB.forEach(v => { if (!preferred.includes(v)) result.push(v); });
+    return result;
+  }, [businesses]);
+
   // 🎯 PricingData 안정화 (객체 참조 변경 방지)
   const pricingData = useMemo<PricingData>(() => ({
     officialPrices,
@@ -1405,6 +1419,63 @@ function RevenueDashboard() {
     surveyCostSettings,
     baseInstallationCosts
   ]);
+
+  // 🎯 단일화: 사업장 로드 완료 후 batch API로 모든 미수금을 계산 (모달과 동일한 로직)
+  // pricingData useMemo 이후에 선언해야 TDZ(Temporal Dead Zone) 오류 없이 참조 가능
+  useEffect(() => {
+    if (dataLoadingState !== 'ready' || !businesses.length) return;
+
+    const fetchBatchReceivables = async () => {
+      try {
+        // contract_amount = 최종매출(부가세 미포함) * 1.1 — pricingData 기반 실시간 계산
+        const payload = businesses.map(b => {
+          const calc = calculateBusinessRevenue(b, pricingData);
+          return {
+            id: b.id,
+            progress_status: (b as any).progress_status,
+            installation_date: (b as any).installation_date,
+            contract_amount: Math.round((calc.total_revenue || 0) * 1.1),
+            additional_cost: (b as any).additional_cost,
+            invoice_additional_date: (b as any).invoice_additional_date,
+            invoice_1st_amount: (b as any).invoice_1st_amount,
+            invoice_2nd_amount: (b as any).invoice_2nd_amount,
+            payment_1st_amount: (b as any).payment_1st_amount,
+            payment_2nd_amount: (b as any).payment_2nd_amount,
+            payment_additional_amount: (b as any).payment_additional_amount,
+            invoice_advance_amount: (b as any).invoice_advance_amount,
+            invoice_balance_amount: (b as any).invoice_balance_amount,
+            payment_advance_amount: (b as any).payment_advance_amount,
+            payment_balance_amount: (b as any).payment_balance_amount,
+          };
+        });
+
+        const response = await fetch('/api/business-invoices/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ businesses: payload }),
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          const receivablesMap: Record<string, number> = result.data;
+          setBusinesses(prev =>
+            prev.map(b => ({
+              ...b,
+              _api_receivables: receivablesMap[b.id] ?? (b as any)._api_receivables,
+            }))
+          );
+          console.log(`✅ [BATCH-RECEIVABLES] ${Object.keys(receivablesMap).length}개 사업장 미수금 계산 완료`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [BATCH-RECEIVABLES] 미수금 batch 계산 실패 (fallback 사용):', err);
+      }
+    };
+
+    fetchBatchReceivables();
+  // batchTrigger: loadBusinesses 완료(엑셀 업로드 등 데이터 갱신) 후 재계산
+  // pricingData: 가격 업데이트 반영
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoadingState, businesses.length, pricingData, batchTrigger]);
 
   // ✅ 실시간 매출 계산 (useMemo로 성능 최적화) — 위험도 필터 적용 전
   const preRiskFilteredBusinesses = useMemo(() => {
@@ -1535,40 +1606,15 @@ function RevenueDashboard() {
       const installationExtraCost = calculatedData.installation_extra_cost;
       const netProfit = calculatedData.net_profit;
 
-    // 미수금 계산 우선순위:
-    // 1) 모달에서 계산된 _api_receivables (가장 정확)
-    // 2) DB에서 계산된 ir_receivables (청구서 기반, 보조금/자비 구분)
-    // 3) bi 인보이스 필드 기반 fallback (invoice_records 없는 구형 데이터)
-    const irReceivables = (business as any).ir_receivables;
-    // ir_receivables는 invoice_records 데이터가 불완전한 사업장에서 마이너스가 나올 수 있음
-    // (예: business_info에만 입금 기록이 있고 invoice_records에 청구 기록이 없는 경우)
-    // 마이너스이거나 소수점 오류(0~10)인 경우 고시가 기반 fallback으로 처리
-    const irReceivablesNum = irReceivables !== null && irReceivables !== undefined ? Number(irReceivables) : null;
-    // ir_receivables 유효성: null 제외, 0~10 반올림 오차 제외, 음수(초과입금)는 유효
-    const isValidIrReceivables = irReceivablesNum !== null && !(irReceivablesNum > 0 && irReceivablesNum <= 10);
-    // ir_has_any_record=1이면 invoice_records가 존재 → ir_receivables=NULL은 청구서 미발행 의미 → 0
-    // ir_has_any_record=NULL이면 구형 데이터 → bi 인보이스 필드 기반 계산
-    const hasAnyRecord = (business as any).ir_has_any_record != null;
-    // 구형 데이터 fallback: bi 필드의 실제 계산서 금액 기준 (고시가 아닌 실제 발행 금액)
-    // business-invoices API와 동일하게: 계산서 없으면 0, 있으면 계산서 합계
+    // 미수금: batch API(_api_receivables)가 단일 진실 공급원
+    // 페이지 로드 후 백그라운드 batch 호출로 모든 사업장이 _api_receivables를 가짐
+    // batch 로드 전 잠깐의 공백기에는 ir_receivables fallback 사용
     const b = business as any;
-    const legacyInvoiced = b.progress_status?.includes('보조금')
-      ? (Number(b.invoice_1st_amount) || 0) + (Number(b.invoice_2nd_amount) || 0)
-        + (b.invoice_additional_date ? Math.round((Number(b.additional_cost) || 0) * 1.1) : 0)
-      : (Number(b.invoice_advance_amount) || 0) + (Number(b.invoice_balance_amount) || 0);
-    const totalReceivables = (business as any)._api_receivables !== undefined
-      ? (business as any)._api_receivables
-      : isValidIrReceivables
-        ? irReceivablesNum
-        : hasAnyRecord
-          ? 0  // invoice_records 있지만 청구서 미발행 → 미수금 없음
-          : legacyInvoiced === 0
-            ? 0  // legacy 데이터도 청구서 미발행이면 미수금 없음 (선입금은 미수금 아님)
-            : calculateReceivables({
-                installationDate: (business as any).installation_date,
-                totalRevenueWithTax: legacyInvoiced,
-                totalPayments: sumAllPayments(business as any),
-              });
+    const totalReceivables: number = b._api_receivables !== undefined
+      ? b._api_receivables
+      : (b.ir_receivables !== null && b.ir_receivables !== undefined
+          ? Number(b.ir_receivables)
+          : 0);
 
       return {
         ...business,
@@ -1774,6 +1820,13 @@ function RevenueDashboard() {
 
   // 정렬된 데이터
   const sortedBusinesses = [...filteredBusinesses].sort((a, b) => {
+    // 입금액은 sumAllPayments로 즉석 계산
+    if (sortField === 'total_payments') {
+      const aVal = sumAllPayments(a as any);
+      const bVal = sumAllPayments(b as any);
+      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    }
+
     const aValue = a[sortField as keyof typeof a] || '';
     const bValue = b[sortField as keyof typeof b] || '';
 
@@ -2224,7 +2277,7 @@ function RevenueDashboard() {
               <div className="flex-[1.5_1.5_0%] min-w-0">
                 <MultiSelectDropdown
                   label="진행구분"
-                  options={['자비', '보조금', '보조금 동시진행', '대리점', 'AS']}
+                  options={categoryOptions}
                   selectedValues={selectedCategories}
                   onChange={(values) => { setSelectedCategories(values); setCurrentPage(1); }}
                   placeholder="전체"
@@ -3025,8 +3078,11 @@ function VirtualizedTable({
             </div>
           )}
           {showReceivablesOnly && (
-            <div className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right bg-blue-50 text-blue-700 ${cellText} font-semibold`}>
-              입금액
+            <div
+              className={`border-r border-gray-300 ${cellPad} flex items-center justify-end text-right cursor-pointer hover:bg-blue-100 bg-blue-50 text-blue-700 ${cellText} font-semibold`}
+              onClick={() => handleSort('total_payments')}
+            >
+              입금액 {sortField === 'total_payments' && (sortOrder === 'asc' ? '↑' : '↓')}
             </div>
           )}
           {showReceivablesOnly && (

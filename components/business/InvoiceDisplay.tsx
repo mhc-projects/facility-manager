@@ -34,16 +34,19 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
 }) => {
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     loadInvoiceData();
-  }, [businessId, businessCategory, additionalCost]);
+  }, [businessId, businessCategory, additionalCost, totalRevenueOverride]);
 
   const loadInvoiceData = async () => {
     try {
       setLoading(true);
+      setError(false);
       console.log('📊 [InvoiceDisplay] 계산서 데이터 로딩 시작:', businessId);
-      const response = await fetch(`/api/business-invoices?business_id=${businessId}&_t=${Date.now()}`, { cache: 'no-store' });
+      const contractAmountParam = totalRevenueOverride ? `&contract_amount=${totalRevenueOverride}` : '';
+      const response = await fetch(`/api/business-invoices?business_id=${businessId}&_t=${Date.now()}${contractAmountParam}`, { cache: 'no-store' });
       const result = await response.json();
 
       console.log('📊 [InvoiceDisplay] API 응답:', {
@@ -60,9 +63,12 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
         setInvoiceData(result.data);
         const receivables = result.data?.grand_total_receivables ?? result.data?.total_receivables ?? 0;
         onReceivablesLoaded?.(receivables);
+      } else {
+        setError(true);
       }
     } catch (error) {
       console.error('❌ [InvoiceDisplay] Error loading invoice data:', error);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -77,17 +83,23 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
     );
   }
 
-  if (!invoiceData) {
+  if (error || !invoiceData) {
     return (
       <div className="text-center py-8 text-gray-400">
-        <p className="text-sm">계산서 정보를 불러올 수 없습니다</p>
+        <p className="text-sm mb-3">계산서 정보를 불러올 수 없습니다</p>
+        <button
+          onClick={loadInvoiceData}
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          다시 시도
+        </button>
       </div>
     );
   }
 
   const grandTotalReceivables = invoiceData.grand_total_receivables ?? invoiceData.total_receivables ?? 0;
-  // totalRevenueOverride: 모달 상위의 최종 매출금액(부가세 포함) 우선 사용, 없으면 API의 계산서 기반 금액
-  const totalRevenue = totalRevenueOverride != null ? totalRevenueOverride : (invoiceData.total_revenue ?? 0);
+  // API가 contract_amount param 기반으로 total_revenue를 이미 계산해 반환함
+  const totalRevenue = invoiceData.total_revenue ?? 0;
   const totalPaymentAmount = invoiceData.total_payment_amount ?? 0;
   const extraReceivables = invoiceData.extra_receivables || 0;
 

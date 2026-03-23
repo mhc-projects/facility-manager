@@ -35,13 +35,18 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
   const displayPaymentMemo = invoiceRecord?.payment_memo;
   const revisions = invoiceRecord?.revisions || [];
 
-  const receivable = (displayAmount || 0) - (displayPaymentAmount || 0);
+  // 계산서 미발행 + 입금 있는 경우: 이 구간의 미수금은 0 (총 미수금은 API에서 최종매출 기준으로 계산)
+  const noInvoiceWithPayment = !!(
+    !displayAmount && displayPaymentAmount && displayPaymentAmount > 0
+  );
+  const receivable = noInvoiceWithPayment ? 0 : (displayAmount || 0) - (displayPaymentAmount || 0);
   const hasInvoice = !!(displayAmount && displayAmount > 0);  // 날짜 없이 금액만 있어도 표시
-  const hasPayment = !!(displayPaymentDate && displayPaymentAmount && displayPaymentAmount > 0);
+  const hasPayment = !!(displayPaymentAmount && displayPaymentAmount > 0);  // 입금액만 있어도 인정
   const hasAnyData = hasInvoice || hasPayment;
-  const isFullyPaid = receivable === 0 && hasInvoice;
+  const isFullyPaid = (receivable === 0 && hasInvoice) || noInvoiceWithPayment;
 
   const getReceivableReason = () => {
+    if (noInvoiceWithPayment) return null; // 계산서 미발행 노티는 별도 표시
     if (!hasInvoice) return null;
     if (isFullyPaid) return null;
     if (receivable <= 0) return null;
@@ -108,8 +113,8 @@ export const InvoiceDisplayCard: React.FC<InvoiceDisplayCardProps> = ({
 
           {/* 계산서 없이 입금만 있을 때 안내 */}
           {!hasInvoice && hasPayment && (
-            <div className="bg-yellow-50 rounded p-2 border border-yellow-200">
-              <p className="text-xs text-yellow-800">ℹ️ 계산서 미발행 (입금만 처리됨)</p>
+            <div className="bg-amber-50 rounded p-2 border border-amber-300">
+              <p className="text-xs text-amber-800 font-semibold">⚠️ 계산서 미발행 — 입금 수령 후 계산서 발행이 필요합니다</p>
             </div>
           )}
 

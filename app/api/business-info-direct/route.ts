@@ -237,8 +237,8 @@ export async function GET(request: Request) {
           -- 단, subsidy_additional은 total=0이면 bi.additional_cost 기반으로 청구금액 계산되므로 입금도 bi 기반 사용 (ir_has_additional 플래그로 처리)
           MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_1st,
           MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_2nd,
-          -- 추가공사비 입금: 발행일(issue_date) 있는 경우만 포함 (ir_invoice_additional과 동일 기준)
-          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN CASE WHEN issue_date IS NOT NULL AND total_amount > 0 THEN COALESCE(payment_amount, 0) ELSE 0 END END) AS ir_payment_additional,
+          -- 추가공사비 입금: 계산서 발행 여부 무관, payment_amount 있으면 합산 (business-invoices API와 동일)
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_additional,
           MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_advance,
           MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_balance,
           -- 추가 계산서(extra) 입금 합계 (취소 제외)
