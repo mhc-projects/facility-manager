@@ -374,7 +374,10 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     const updated = [...agenda]
     updated[index] = { ...updated[index], [field]: value }
     setAgenda(updated)
-    markDirty(`agenda-${agenda[index].id}`)
+    // 신규 추가 항목이면 agenda-add- 키를 유지 (agenda- 키 추가하지 않음)
+    if (!dirtySections.has(`agenda-add-${agenda[index].id}`)) {
+      markDirty(`agenda-${agenda[index].id}`)
+    }
   }
 
   // 사업장별 이슈 관리
