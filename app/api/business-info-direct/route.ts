@@ -209,7 +209,12 @@ export async function GET(request: Request) {
       business_type,
       representative_birth_date,
       representatives,
-      contacts_list
+      contacts_list,
+      greenlink_id,
+      greenlink_pw,
+      business_management_code,
+      vpn,
+      department
     `;
 
     // invoice_records의 계산서·입금 데이터를 우선 사용 (legacy business_info 컬럼 override)
@@ -313,6 +318,11 @@ export async function GET(request: Request) {
         bi.representative_birth_date,
         bi.representatives,
         bi.contacts_list,
+        bi.greenlink_id,
+        bi.greenlink_pw,
+        bi.business_management_code,
+        bi.vpn,
+        bi.department,
         COALESCE(ir.ir_extra_payment_total, 0) AS ir_extra_payment_total,
         ir.ir_has_any_record,
         -- 미수금 = 청구금액 합계 - 입금액 합계

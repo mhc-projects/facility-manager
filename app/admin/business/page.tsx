@@ -3112,6 +3112,7 @@ function BusinessManagementPage() {
             : [];
         })(),
 
+        department: freshData.department || '',
         manufacturer: freshData.manufacturer || '',
         vpn: freshData.vpn || '',
         is_active: freshData.is_active,
