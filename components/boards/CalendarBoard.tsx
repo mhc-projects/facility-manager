@@ -991,42 +991,76 @@ export default function CalendarBoard() {
                   )}
                 </div>
 
-                {/* 모바일: 이벤트 도트 표시 */}
-                <div className="md:hidden flex flex-1 items-center justify-center gap-0.5">
-                  {dayEvents.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5 justify-center items-center">
-                      {dayEvents.slice(0, 3).map((event) => {
+                {/* 모바일: 이벤트 텍스트 표시 */}
+                {(() => {
+                  const hasHoliday = !!holiday && isCurrentMonth;
+                  const maxVisible = hasHoliday ? 1 : 2;
+                  return (
+                    <div className="md:hidden flex flex-col flex-1 overflow-hidden gap-px mt-0.5">
+                      {sortedDayEvents.slice(0, maxVisible).map((event) => {
                         const isPeriod = isPeriodEvent(event);
-                        const position = getPeriodPosition(event, day);
-
+                        const labelColors = event.labels?.length ? getLabelColor(event.labels[0]) : null;
                         return (
                           <div
                             key={event.id}
+                            onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
                             className={`
-                              ${isPeriod ? 'w-2 h-1.5 rounded-sm' : 'w-1.5 h-1.5 rounded-full'}
+                              flex items-center gap-[2px] px-0.5 rounded-[3px]
+                              py-[1.5px] cursor-pointer active:opacity-70 min-w-0
                               ${event.event_type === 'todo'
                                 ? event.is_completed
-                                  ? 'bg-gray-400'
-                                  : isPeriod && position === 'start'
-                                    ? 'bg-blue-500 ring-1 ring-orange-400'
-                                    : 'bg-blue-500'
-                                : isPeriod && position === 'start'
-                                  ? 'bg-purple-500 ring-1 ring-orange-400'
-                                  : 'bg-purple-500'
+                                  ? 'bg-gray-100'
+                                  : 'bg-blue-50'
+                                : 'bg-purple-50'
                               }
+                              ${isPeriod ? 'border-l-2 border-l-orange-400' : ''}
                             `}
-                            title={event.title}
-                          />
+                          >
+                            {/* 타입 도트 */}
+                            <span className={`
+                              flex-shrink-0 w-[5px] h-[5px] rounded-full
+                              ${event.event_type === 'todo'
+                                ? event.is_completed ? 'bg-gray-400' : 'bg-blue-500'
+                                : 'bg-purple-500'
+                              }
+                            `} />
+                            {/* 라벨 배지 */}
+                            {labelColors && (
+                              <span className={`
+                                flex-shrink-0 px-0.5 py-px rounded text-[7px] font-medium
+                                leading-none ${labelColors.bg} ${labelColors.text}
+                              `}>
+                                {event.labels![0]}
+                              </span>
+                            )}
+                            {/* 제목 */}
+                            <span className={`
+                              text-[9px] sm:text-[10px] font-medium truncate flex-1 min-w-0
+                              leading-tight
+                              ${event.event_type === 'todo'
+                                ? event.is_completed ? 'text-gray-400 line-through' : 'text-blue-700'
+                                : 'text-purple-700'
+                              }
+                            `}>
+                              {event.title}
+                            </span>
+                            {/* 사업장명 */}
+                            {event.business_name && (
+                              <span className="flex-shrink-0 text-[7px] text-gray-400 leading-tight max-w-[28px] truncate">
+                                {event.business_name}
+                              </span>
+                            )}
+                          </div>
                         );
                       })}
-                      {dayEvents.length > 3 && (
-                        <span className="text-[9px] sm:text-[10px] text-gray-600 ml-0.5">
-                          +{dayEvents.length - 3}
+                      {sortedDayEvents.length > maxVisible && (
+                        <span className="text-[8px] text-gray-400 pl-1 leading-none font-medium">
+                          +{sortedDayEvents.length - maxVisible}
                         </span>
                       )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             );
           })}
