@@ -168,6 +168,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
       <PresentationMode
         minute={minute}
         onClose={() => setPresentationMode(false)}
+        departments={departments}
       />
     )}
     <AdminLayout

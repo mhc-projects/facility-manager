@@ -30,7 +30,7 @@ type Slide =
   | { type: 'business_issues' }
   | { type: 'summary' }
 
-function buildSlides(minute: MeetingMinute): Slide[] {
+function buildSlides(minute: MeetingMinute, departments: string[] = []): Slide[] {
   const slides: Slide[] = []
 
   // 1. 표지
@@ -41,14 +41,32 @@ function buildSlides(minute: MeetingMinute): Slide[] {
     slides.push({ type: 'attendees' })
   }
 
-  // 3. 안건 (각 1슬라이드)
+  // 3. 안건 (각 1슬라이드) — 상세/편집 페이지와 동일한 부서 순서로 정렬
   if (minute.agenda.length > 0) {
-    minute.agenda.forEach((item, index) => {
+    // 부서별 그룹화
+    const grouped: Record<string, typeof minute.agenda> = {}
+    minute.agenda.forEach(item => {
+      const key = (item as any).department || ''
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(item)
+    })
+
+    // departments API 순서대로 정렬, 마지막에 부서 미지정('')
+    const orderedKeys = departments.length > 0
+      ? [...departments, ''].filter(key => grouped[key] && grouped[key].length > 0)
+      : Object.keys(grouped).filter(key => grouped[key] && grouped[key].length > 0)
+
+    // 부서 없는 경우 original 순서 유지
+    const sortedAgenda = orderedKeys.length > 0
+      ? orderedKeys.flatMap(key => grouped[key])
+      : minute.agenda
+
+    sortedAgenda.forEach((item, index) => {
       slides.push({
         type: 'agenda',
         item,
         index,
-        total: minute.agenda.length,
+        total: sortedAgenda.length,
         dept: (item as any).department
       })
     })
@@ -479,10 +497,11 @@ function slideIcon(slide: Slide) {
 interface PresentationModeProps {
   minute: MeetingMinute
   onClose: () => void
+  departments?: string[]
 }
 
-export default function PresentationMode({ minute, onClose }: PresentationModeProps) {
-  const slides = buildSlides(minute)
+export default function PresentationMode({ minute, onClose, departments = [] }: PresentationModeProps) {
+  const slides = buildSlides(minute, departments)
   const [current, setCurrent] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   const [animating, setAnimating] = useState(false)
