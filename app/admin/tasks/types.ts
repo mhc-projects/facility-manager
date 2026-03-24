@@ -21,7 +21,7 @@ export type TaskStatus =
   | 'completion_supplement_1st' | 'completion_supplement_2nd' | 'completion_supplement_3rd'
   | 'final_document_submit' | 'subsidy_payment'
   // AS 전용 단계
-  | 'as_customer_contact' | 'as_site_inspection' | 'as_quotation' | 'as_contract'
+  | 'as_customer_contact' | 'as_site_inspection' | 'as_quotation' | 'as_progress_confirm' | 'as_contract'
   | 'as_part_order' | 'as_completed'
   // 대리점 단계 (단순화)
   | 'dealer_order_received' | 'dealer_invoice_issued'

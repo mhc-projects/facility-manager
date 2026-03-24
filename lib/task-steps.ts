@@ -9,9 +9,9 @@ export type TaskStatus =
   // 확인필요 단계 (각 업무 타입별)
   | 'self_needs_check' | 'subsidy_needs_check' | 'as_needs_check' | 'dealer_needs_check' | 'outsourcing_needs_check' | 'etc_needs_check'
   // 자비 공통 단계
-  | 'self_customer_contact' | 'self_site_inspection' | 'self_quotation' | 'self_contract'
+  | 'self_customer_contact' | 'self_site_inspection' | 'self_quotation' | 'self_progress_confirm' | 'self_contract'
   // 보조금 공통 단계
-  | 'subsidy_customer_contact' | 'subsidy_site_inspection' | 'subsidy_quotation' | 'subsidy_contract'
+  | 'subsidy_customer_contact' | 'subsidy_site_inspection' | 'subsidy_quotation' | 'subsidy_progress_confirm' | 'subsidy_contract'
   // AS 공통 단계 (기존 as_ prefix와 통합)
   // dealer 공통 단계 (필요시 추가)
   // outsourcing 공통 단계 (필요시 추가)
@@ -27,7 +27,7 @@ export type TaskStatus =
   | 'subsidy_completion_supplement_1st' | 'subsidy_completion_supplement_2nd' | 'subsidy_completion_supplement_3rd'
   | 'subsidy_final_document_submit' | 'subsidy_payment'
   // AS 전용 단계 (as_ prefix)
-  | 'as_customer_contact' | 'as_site_inspection' | 'as_quotation' | 'as_contract'
+  | 'as_customer_contact' | 'as_site_inspection' | 'as_quotation' | 'as_progress_confirm' | 'as_contract'
   | 'as_part_order' | 'as_completed'
   // 대리점 단계 (dealer_ prefix)
   | 'dealer_order_received' | 'dealer_invoice_issued' | 'dealer_payment_confirmed' | 'dealer_product_ordered'
@@ -49,6 +49,7 @@ export const selfSteps: TaskStep[] = [
   { status: 'self_customer_contact', label: '고객 상담', color: 'blue' },
   { status: 'self_site_inspection', label: '현장 실사', color: 'yellow' },
   { status: 'self_quotation', label: '견적서 작성', color: 'orange' },
+  { status: 'self_progress_confirm', label: '진행확인필요', color: 'rose' },
   { status: 'self_contract', label: '계약 체결', color: 'purple' },
   { status: 'self_deposit_confirm', label: '계약금 확인', color: 'indigo' },
   { status: 'self_product_order', label: '제품 발주', color: 'cyan' },
@@ -65,6 +66,7 @@ export const subsidySteps: TaskStep[] = [
   { status: 'subsidy_customer_contact', label: '고객 상담', color: 'blue' },
   { status: 'subsidy_site_inspection', label: '현장 실사', color: 'yellow' },
   { status: 'subsidy_quotation', label: '견적서 작성', color: 'orange' },
+  { status: 'subsidy_progress_confirm', label: '진행확인필요', color: 'rose' },
   { status: 'subsidy_contract', label: '계약 체결', color: 'purple' },
   { status: 'subsidy_document_preparation', label: '신청서 작성 필요', color: 'amber' },
   { status: 'subsidy_application_submit', label: '신청서 제출', color: 'purple' },
@@ -101,6 +103,7 @@ export const asSteps: TaskStep[] = [
   { status: 'as_customer_contact', label: 'AS 고객 상담', color: 'blue' },
   { status: 'as_site_inspection', label: 'AS 현장 확인', color: 'yellow' },
   { status: 'as_quotation', label: 'AS 견적 작성', color: 'orange' },
+  { status: 'as_progress_confirm', label: '진행확인필요', color: 'rose' },
   { status: 'as_contract', label: 'AS 계약 체결', color: 'purple' },
   { status: 'as_part_order', label: 'AS 부품 발주', color: 'cyan' },
   { status: 'as_completed', label: 'AS 완료', color: 'green' }

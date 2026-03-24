@@ -22,6 +22,7 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
   'self_customer_contact': '고객 상담',
   'self_site_inspection': '현장 실사',
   'self_quotation': '견적서 작성',
+  'self_progress_confirm': '진행확인필요',
   'self_contract': '계약 체결',
 
   // 자비 전용 단계 (self_ prefix)
@@ -46,6 +47,7 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
   'subsidy_customer_contact': '고객 상담',
   'subsidy_site_inspection': '현장 실사',
   'subsidy_quotation': '견적서 작성',
+  'subsidy_progress_confirm': '진행확인필요',
   'subsidy_contract': '계약 체결',
 
   // 보조금 전용 단계 (subsidy_ prefix)
@@ -93,6 +95,7 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
   'as_customer_contact': 'AS 고객 상담',
   'as_site_inspection': 'AS 현장 확인',
   'as_quotation': 'AS 견적 작성',
+  'as_progress_confirm': '진행확인필요',
   'as_contract': 'AS 계약 체결',
   'as_part_order': 'AS 부품 발주',
   'as_completed': 'AS 완료',
