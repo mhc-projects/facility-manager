@@ -4274,14 +4274,26 @@ function BusinessManagementPage() {
       key: '사업장명' as string,
       title: '사업장명',
       width: '200px',
-      render: (item: any) => (
-        <button
-          onClick={() => openDetailModal(item)}
-          className="text-left text-blue-600 hover:text-blue-800 hover:underline font-medium"
-        >
-          {searchQuery ? highlightSearchTerm(item.사업장명 || '', searchQuery) : item.사업장명}
-        </button>
-      )
+      render: (item: any) => {
+        const managers = item.admin_managers;
+        const firstManager = Array.isArray(managers) && managers.length > 0 ? managers[0] : null;
+        const extraCount = firstManager ? managers.length - 1 : 0;
+        return (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button
+              onClick={() => openDetailModal(item)}
+              className="text-left text-blue-600 hover:text-blue-800 hover:underline font-medium truncate shrink-0"
+            >
+              {searchQuery ? highlightSearchTerm(item.사업장명 || '', searchQuery) : item.사업장명}
+            </button>
+            {firstManager && (
+              <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                👤 {firstManager.name}{extraCount > 0 ? ` +${extraCount}` : ''}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: '담당자명' as string,
