@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TokenManager } from '@/lib/api-client';
 import type { EquipmentBreakdownItem } from '@/types';
 
@@ -14,7 +14,7 @@ interface InstallationBreakdownModalProps {
   multipleStackInstallExtra: number;        // 현재 저장된 추가 수량
   multipleStackUnitInstallCost: number;     // 복수굴뚝 설치비 단가
   userPermission: number;
-  onSaved: () => void;                      // 저장 후 재계산 트리거
+  onSaved: (savedQty: number) => void;      // 저장 후 재계산 트리거 (저장된 수량 전달)
 }
 
 function formatCurrency(value: number) {
@@ -36,6 +36,11 @@ export default function InstallationBreakdownModal({
   const [isEditing, setIsEditing] = useState(false);
   const [extraQty, setExtraQty] = useState(multipleStackInstallExtra);
   const [isSaving, setIsSaving] = useState(false);
+
+  // prop이 바뀌면 (저장 후 부모에서 갱신) 로컬 상태 동기화
+  useEffect(() => {
+    setExtraQty(multipleStackInstallExtra);
+  }, [multipleStackInstallExtra]);
 
   if (!isOpen) return null;
 
@@ -75,7 +80,7 @@ export default function InstallationBreakdownModal({
       const data = await res.json();
       if (data.success) {
         setIsEditing(false);
-        onSaved();
+        onSaved(extraQty);
       } else {
         alert(data.message || '저장에 실패했습니다.');
       }

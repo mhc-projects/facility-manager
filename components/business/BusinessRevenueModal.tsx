@@ -1943,7 +1943,9 @@ export default function BusinessRevenueModal({
             )?.unit_installation_cost || 0
           }
           userPermission={userPermission}
-          onSaved={async () => {
+          onSaved={async (savedQty: number) => {
+            // 즉시 UI 반영 — prop 변경으로 모달 내 useEffect가 동기화
+            business.multiple_stack_install_extra = savedQty;
             try {
               const token = TokenManager.getToken();
               const calcResponse = await fetch('/api/revenue/calculate', {
@@ -1959,10 +1961,6 @@ export default function BusinessRevenueModal({
                 setCalculatedData(calcData.data.calculation);
                 invalidateRevenueCache(business.id);
                 setDataChanged(true);
-                // business 객체의 multiple_stack_install_extra도 갱신
-                business.multiple_stack_install_extra =
-                  calcData.data.calculation.multiple_stack_install_extra ??
-                  business.multiple_stack_install_extra;
               }
             } catch {
               alert('재계산에 실패했습니다. 페이지를 새로고침해주세요.');
