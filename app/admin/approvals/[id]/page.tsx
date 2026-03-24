@@ -99,6 +99,9 @@ export default function ApprovalDetailPage() {
   const [rejectComment, setRejectComment] = useState('')
   const [processing, setProcessing] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
+  // ref로 최신값 유지: 클로저 캡처 문제 없이 채널 재구독 방지
+  const editingRef = useRef(false)
+  const fetchDocRef = useRef<() => void>(() => {})
 
   const [expressModalOpen, setExpressModalOpen] = useState(false)
   const [expressComment, setExpressComment] = useState('')
@@ -125,9 +128,14 @@ export default function ApprovalDetailPage() {
     }
   }, [id])
 
+  // fetchDocRef 동기화: 채널 클로저가 항상 최신 fetchDoc 참조
+  useEffect(() => { fetchDocRef.current = fetchDoc }, [fetchDoc])
+  // editingRef 동기화
+  useEffect(() => { editingRef.current = editing }, [editing])
+
   useEffect(() => { fetchDoc() }, [fetchDoc])
 
-  // 문서 ID 기반 Broadcast 구독: 다른 사용자가 처리해도 즉시 갱신
+  // 문서 ID 기반 Broadcast 구독: id가 바뀔 때만 재구독 (editing/fetchDoc 변경 시 재구독 없음)
   useEffect(() => {
     if (!id) return
     const channel = supabase
@@ -138,8 +146,8 @@ export default function ApprovalDetailPage() {
           router.push('/admin/approvals')
           return
         }
-        // 편집 중이 아닐 때만 자동 갱신 (편집 내용 덮어쓰기 방지)
-        if (!editing) fetchDoc()
+        // ref로 최신 editing 상태 확인 — 편집 중이 아닐 때만 갱신
+        if (!editingRef.current) fetchDocRef.current()
       })
       .subscribe()
     channelRef.current = channel
@@ -147,7 +155,7 @@ export default function ApprovalDetailPage() {
       supabase.removeChannel(channel)
       channelRef.current = null
     }
-  }, [id, editing, fetchDoc])
+  }, [id, router])
 
   const isMyDoc = doc?.requester_id === user?.id
   const isSuperAdmin = (user?.role ?? 0) >= 4
