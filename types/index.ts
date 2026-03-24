@@ -611,6 +611,13 @@ export interface CalculatedData {
   // 실사비 조정 관련
   survey_fee_adjustment?: number;
   adjusted_survey_costs?: number;
+
+  // 영업비용 산출 근거
+  cost_breakdown?: {
+    sales_commission_type: 'percentage' | 'per_unit';
+    sales_commission_rate: number;
+    sales_commission_amount: number;
+  };
 }
 
 export interface BusinessSummaryResponse {

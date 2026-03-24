@@ -9,6 +9,7 @@ import type { CalculatedData, OperatingCostAdjustment } from '@/types';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileTabs } from '@/components/ui/MobileTabs';
 import { useCostChangeLogger } from '@/hooks/useCostChangeLogger';
+import InstallationBreakdownModal from './InstallationBreakdownModal';
 
 interface BusinessRevenueModalProps {
   business: any;
@@ -49,6 +50,8 @@ export default function BusinessRevenueModal({
   // 🔧 이전 businessId 추적 (불필요한 재조회 방지)
   const prevBusinessIdRef = React.useRef<string | undefined>();
   const prevIsOpenRef = React.useRef<boolean>(false);
+
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   // 영업비용 조정 상태
   const [isEditingAdjustment, setIsEditingAdjustment] = useState(false);
@@ -851,7 +854,10 @@ export default function BusinessRevenueModal({
     survey_fee_adjustment: Math.round(Number(business.survey_fee_adjustment) || 0),
     operating_cost_adjustment: null,
     adjusted_sales_commission: null,
-    equipment_breakdown: undefined
+    equipment_breakdown: undefined,
+    as_cost: 0,
+    custom_additional_costs: undefined,
+    cost_breakdown: undefined,
   };
 
   return (
@@ -1277,6 +1283,22 @@ export default function BusinessRevenueModal({
                       {calculatedData ? '최신 계산 적용' : '저장된 값'}
                     </p>
                   )}
+                  {/* 수수료율 & 기준매출 인라인 표시 */}
+                  {calculatedData?.cost_breakdown && (
+                    <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400 space-y-0.5">
+                      {calculatedData.cost_breakdown.sales_commission_type === 'percentage' ? (
+                        <div>수수료율 {calculatedData.cost_breakdown.sales_commission_rate}% × 기준매출 {formatCurrency(
+                          (() => {
+                            const rate = calculatedData.cost_breakdown!.sales_commission_rate;
+                            const amount = calculatedData.cost_breakdown!.sales_commission_amount;
+                            return rate > 0 ? Math.round(amount / (rate / 100)) : 0;
+                          })()
+                        )}</div>
+                      ) : (
+                        <div>기기당 {formatCurrency(calculatedData.cost_breakdown.sales_commission_rate)} × 수량</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 오른쪽 컬럼 - 조정 및 추가 비용 항목들 */}
@@ -1529,18 +1551,21 @@ export default function BusinessRevenueModal({
                 </div>
 
                 {/* 설치비 */}
-                <div className="bg-white rounded-lg p-3 md:p-4 shadow-sm order-3 md:order-5">
+                <div
+                  className={`bg-white rounded-lg p-3 md:p-4 shadow-sm order-3 md:order-5 ${calculatedData?.equipment_breakdown?.length ? 'cursor-pointer hover:shadow-md hover:bg-cyan-50 transition-all' : ''}`}
+                  onClick={() => {
+                    if (calculatedData?.equipment_breakdown?.length) setShowInstallModal(true);
+                  }}
+                >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">🔧 총 설치비</span>
+                    {calculatedData?.equipment_breakdown?.length ? (
+                      <span className="text-xs text-cyan-600 font-medium">상세 ›</span>
+                    ) : null}
                   </div>
                   <p className="text-xl font-bold text-cyan-700">
                     {(() => {
                       const total = Number(displayData.installation_costs || 0) + Number(displayData.additional_installation_revenue || 0);
-                      console.log('🔧 총 설치비 계산:', {
-                        installation_costs: displayData.installation_costs,
-                        additional_installation_revenue: displayData.additional_installation_revenue,
-                        total: total
-                      });
                       return formatCurrency(total);
                     })()}
                   </p>
@@ -1899,6 +1924,19 @@ export default function BusinessRevenueModal({
           </button>
         </div>
       </div>
+      {/* 총 설치비 산출 근거 모달 */}
+      {showInstallModal && calculatedData?.equipment_breakdown && (
+        <InstallationBreakdownModal
+          isOpen={showInstallModal}
+          onClose={() => setShowInstallModal(false)}
+          equipmentBreakdown={calculatedData.equipment_breakdown}
+          installationExtraCost={Number(calculatedData.installation_extra_cost || 0)}
+          totalInstallationCost={
+            Number(displayData.installation_costs || 0) +
+            Number(displayData.additional_installation_revenue || 0)
+          }
+        />
+      )}
     </div>
   );
 }
