@@ -139,7 +139,7 @@ function ApprovalsContent() {
       // 채널명 서버와 일치: approve/reject/submit/express-approve 모두 approval-notify:{userId} 로 broadcast
       .on('broadcast', { event: 'new_notification' }, (payload) => {
         const cat = payload.payload?.category
-        if (['report_submitted', 'report_approved', 'report_rejected'].includes(cat)) {
+        if (['report_submitted', 'report_approved', 'report_rejected', 'doc_deleted'].includes(cat)) {
           fetchPendingCount()
           fetchDocs()
         }

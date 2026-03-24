@@ -132,7 +132,12 @@ export default function ApprovalDetailPage() {
     if (!id) return
     const channel = supabase
       .channel(`approval-doc:${id}`)
-      .on('broadcast', { event: 'doc_updated' }, () => {
+      .on('broadcast', { event: 'doc_updated' }, (payload) => {
+        // 삭제된 문서면 목록으로 이동
+        if (payload.payload?.status === 'deleted') {
+          router.push('/admin/approvals')
+          return
+        }
         // 편집 중이 아닐 때만 자동 갱신 (편집 내용 덮어쓰기 방지)
         if (!editing) fetchDoc()
       })

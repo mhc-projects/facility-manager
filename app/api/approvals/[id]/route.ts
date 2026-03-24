@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,6 +174,18 @@ export async function DELETE(
       `UPDATE approval_documents SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1`,
       [params.id]
     );
+
+    // 문서 소유자 목록 실시간 갱신 (내 문서 탭 즉시 반영)
+    await supabaseAdmin.channel(`approval-notify:${doc.requester_id}`)
+      .send({
+        type: 'broadcast',
+        event: 'new_notification',
+        payload: { category: 'doc_deleted', silent: true },
+      });
+
+    // 상세 페이지가 열려있는 경우 처리 (삭제됨 이벤트 수신 후 목록으로 redirect)
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'deleted' } });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
