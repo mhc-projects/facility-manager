@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, CheckCheck, Clock, User, FolderOpen, AlertCircle, X, Wifi, WifiOff, RefreshCw, Trash2 } from 'lucide-react';
+import { Bell, Check, Clock, User, FolderOpen, AlertCircle, X, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -25,8 +25,6 @@ export default function NotificationBell() {
     lastEventTime,
     markAsRead,
     markAllAsRead,
-    deleteAllNotifications,
-    deleteReadNotifications,
     reconnectRealtime
   } = useNotification();
 
@@ -250,18 +248,6 @@ export default function NotificationBell() {
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
                   모두 읽음
-                </button>
-              )}
-
-              {/* 모든 알림 제거 버튼 */}
-              {notifications.filter(n => !n.isRead).length > 0 && (
-                <button
-                  onClick={deleteAllNotifications}
-                  className="text-sm text-red-600 hover:text-red-800 font-medium flex items-center space-x-1"
-                  title="모든 알림을 완전히 삭제합니다"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  <span>모든 알림 제거</span>
                 </button>
               )}
 
