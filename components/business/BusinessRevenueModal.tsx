@@ -1935,6 +1935,39 @@ export default function BusinessRevenueModal({
             Number(displayData.installation_costs || 0) +
             Number(displayData.additional_installation_revenue || 0)
           }
+          businessId={business.id}
+          multipleStackInstallExtra={Number(business.multiple_stack_install_extra || 0)}
+          multipleStackUnitInstallCost={
+            calculatedData.equipment_breakdown.find(
+              (item) => item.equipment_type === 'multiple_stack'
+            )?.unit_installation_cost || 0
+          }
+          userPermission={userPermission}
+          onSaved={async () => {
+            try {
+              const token = TokenManager.getToken();
+              const calcResponse = await fetch('/api/revenue/calculate', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ business_id: business.id, save_result: true }),
+              });
+              const calcData = await calcResponse.json();
+              if (calcData.success && calcData.data?.calculation) {
+                setCalculatedData(calcData.data.calculation);
+                invalidateRevenueCache(business.id);
+                setDataChanged(true);
+                // business 객체의 multiple_stack_install_extra도 갱신
+                business.multiple_stack_install_extra =
+                  calcData.data.calculation.multiple_stack_install_extra ??
+                  business.multiple_stack_install_extra;
+              }
+            } catch {
+              alert('재계산에 실패했습니다. 페이지를 새로고침해주세요.');
+            }
+          }}
         />
       )}
     </div>

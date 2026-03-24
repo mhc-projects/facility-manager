@@ -472,6 +472,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 6-1. 복수굴뚝 설치비 전용 추가 수량 반영 (매출에 영향 없음)
+    const multipleStackInstallExtra = Number(businessInfo.multiple_stack_install_extra) || 0;
+    if (multipleStackInstallExtra > 0) {
+      const unitInstallationExtra = installationCostMap['multiple_stack'] || 0;
+      const extraInstallTotal = unitInstallationExtra * multipleStackInstallExtra;
+      totalInstallationCosts += extraInstallTotal;
+
+      equipmentBreakdown.push({
+        equipment_type: 'multiple_stack_install_extra',
+        equipment_name: '복수굴뚝 (추가 수량)',
+        quantity: multipleStackInstallExtra,
+        unit_official_price: 0,
+        unit_manufacturer_price: 0,
+        unit_installation_cost: unitInstallationExtra,
+        total_revenue: 0,
+        total_cost: 0,
+        total_installation: extraInstallTotal,
+        profit: -extraInstallTotal
+      });
+    }
+
     // 7. 실사비용 계산 (실사일이 있는 경우에만 비용 추가)
     let baseSurveyCosts = 0;
 

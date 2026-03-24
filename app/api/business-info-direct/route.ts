@@ -159,7 +159,7 @@ export async function GET(request: Request) {
       explosion_proof_temperature_meter_domestic,
       expansion_device, relay_8ch, relay_16ch,
       main_board_replacement, multiple_stack,
-      additional_cost, installation_extra_cost, negotiation,
+      additional_cost, installation_extra_cost, multiple_stack_install_extra, negotiation,
       receivable_risk,
       risk_is_manual,
       collection_manager_ids,
@@ -268,7 +268,7 @@ export async function GET(request: Request) {
         bi.explosion_proof_temperature_meter_domestic,
         bi.expansion_device, bi.relay_8ch, bi.relay_16ch,
         bi.main_board_replacement, bi.multiple_stack,
-        bi.additional_cost, bi.installation_extra_cost, bi.negotiation,
+        bi.additional_cost, bi.installation_extra_cost, bi.multiple_stack_install_extra, bi.negotiation,
         bi.receivable_risk, bi.risk_is_manual,
         bi.collection_manager_ids,
         bi.payment_scheduled_date::text AS payment_scheduled_date,
@@ -700,6 +700,9 @@ export async function PUT(request: Request) {
     if (updateData.installation_extra_cost !== undefined) {
       updateObject.installation_extra_cost = parseInt(updateData.installation_extra_cost) || null;
     }
+    if (updateData.multiple_stack_install_extra !== undefined) {
+      updateObject.multiple_stack_install_extra = parseInt(updateData.multiple_stack_install_extra) || 0;
+    }
     if (updateData.survey_fee_adjustment !== undefined) {
       // null, undefined, 빈 문자열이면 null로, 그 외에는 parseInt
       if (updateData.survey_fee_adjustment === null || updateData.survey_fee_adjustment === '' || updateData.survey_fee_adjustment === undefined) {
@@ -1091,6 +1094,7 @@ export async function POST(request: Request) {
       additional_cost: businessData.additional_cost ? parseInt(businessData.additional_cost) : null,
       negotiation: businessData.negotiation ? parseInt(businessData.negotiation) || null : null,
       multiple_stack_cost: businessData.multiple_stack_cost ? parseInt(businessData.multiple_stack_cost) : null,
+      multiple_stack_install_extra: businessData.multiple_stack_install_extra ? parseInt(businessData.multiple_stack_install_extra) || 0 : 0,
       representative_birth_date: businessData.representative_birth_date || null,
 
       // 실사 관리 필드

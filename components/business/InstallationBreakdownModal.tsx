@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { TokenManager } from '@/lib/api-client';
 import type { EquipmentBreakdownItem } from '@/types';
 
 interface InstallationBreakdownModalProps {
@@ -9,6 +10,11 @@ interface InstallationBreakdownModalProps {
   equipmentBreakdown: EquipmentBreakdownItem[];
   installationExtraCost: number;
   totalInstallationCost: number;
+  businessId: string;
+  multipleStackInstallExtra: number;        // 현재 저장된 추가 수량
+  multipleStackUnitInstallCost: number;     // 복수굴뚝 설치비 단가
+  userPermission: number;
+  onSaved: () => void;                      // 저장 후 재계산 트리거
 }
 
 function formatCurrency(value: number) {
@@ -21,16 +27,64 @@ export default function InstallationBreakdownModal({
   equipmentBreakdown,
   installationExtraCost,
   totalInstallationCost,
+  businessId,
+  multipleStackInstallExtra,
+  multipleStackUnitInstallCost,
+  userPermission,
+  onSaved,
 }: InstallationBreakdownModalProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [extraQty, setExtraQty] = useState(multipleStackInstallExtra);
+  const [isSaving, setIsSaving] = useState(false);
+
   if (!isOpen) return null;
 
+  // 기기별 설치비 — multiple_stack_install_extra는 별도 섹션에서 처리하므로 제외
   const itemsWithInstall = equipmentBreakdown.filter(
     (item) => item.quantity > 0 && item.unit_installation_cost > 0
+      && item.equipment_type !== 'multiple_stack_install_extra'
   );
   const baseInstallTotal = itemsWithInstall.reduce(
     (sum, item) => sum + item.total_installation,
     0
   );
+
+  // 복수굴뚝이 존재하는지 여부 (편집 섹션 표시 조건)
+  const hasMultipleStack = equipmentBreakdown.some(
+    (item) => item.equipment_type === 'multiple_stack' && item.quantity > 0
+  );
+
+  const extraInstallCost = extraQty * multipleStackUnitInstallCost;
+  const computedTotal = baseInstallTotal + extraInstallCost + installationExtraCost;
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const token = TokenManager.getToken();
+      const res = await fetch('/api/business-info-direct', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: businessId,
+          multiple_stack_install_extra: extraQty,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsEditing(false);
+        onSaved();
+      } else {
+        alert(data.message || '저장에 실패했습니다.');
+      }
+    } catch {
+      alert('저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div
@@ -39,7 +93,7 @@ export default function InstallationBreakdownModal({
     >
       <div className="absolute inset-0 bg-black/50" />
       <div
-        className="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
+        className="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -105,6 +159,88 @@ export default function InstallationBreakdownModal({
             )}
           </div>
 
+          {/* 복수굴뚝 추가 설치 수량 */}
+          {hasMultipleStack && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  복수굴뚝 추가 설치 수량
+                </p>
+                {!isEditing && userPermission >= 2 && (
+                  <button
+                    onClick={() => { setExtraQty(multipleStackInstallExtra); setIsEditing(true); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    {multipleStackInstallExtra > 0 ? '수정' : '추가'}
+                  </button>
+                )}
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 space-y-2">
+                <p className="text-xs text-blue-600">
+                  ℹ️ 채널 수 기준 추가분 — 매출에 영향 없음
+                </p>
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 w-12">단가</span>
+                      <span className="text-xs font-medium text-gray-800">
+                        {formatCurrency(multipleStackUnitInstallCost)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 w-12">추가 수량</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={extraQty}
+                        onChange={(e) => setExtraQty(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-gray-500">개</span>
+                    </div>
+                    {extraQty > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600 w-12">소계</span>
+                        <span className="text-xs font-bold text-blue-700">
+                          {formatCurrency(extraQty * multipleStackUnitInstallCost)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50 font-medium"
+                      >
+                        {isSaving ? '저장 중...' : '저장'}
+                      </button>
+                      <button
+                        onClick={() => { setIsEditing(false); setExtraQty(multipleStackInstallExtra); }}
+                        disabled={isSaving}
+                        className="flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300 disabled:opacity-50 font-medium"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">
+                      {multipleStackInstallExtra > 0
+                        ? `단가 ${formatCurrency(multipleStackUnitInstallCost)} × 추가 ${multipleStackInstallExtra}개`
+                        : '추가 수량 없음'}
+                    </span>
+                    <span className="text-sm font-bold text-blue-700">
+                      {multipleStackInstallExtra > 0
+                        ? formatCurrency(multipleStackInstallExtra * multipleStackUnitInstallCost)
+                        : '₩0'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 추가 설치비 */}
           {installationExtraCost > 0 && (
             <div>
@@ -127,6 +263,14 @@ export default function InstallationBreakdownModal({
             <span>기본 설치비</span>
             <span>{formatCurrency(baseInstallTotal)}</span>
           </div>
+          {(multipleStackInstallExtra > 0 || (isEditing && extraQty > 0)) && (
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>복수굴뚝 추가 ({isEditing ? extraQty : multipleStackInstallExtra}개)</span>
+              <span className="text-blue-600">
+                + {formatCurrency((isEditing ? extraQty : multipleStackInstallExtra) * multipleStackUnitInstallCost)}
+              </span>
+            </div>
+          )}
           {installationExtraCost > 0 && (
             <div className="flex justify-between text-sm text-gray-600">
               <span>추가 설치비</span>
@@ -135,7 +279,11 @@ export default function InstallationBreakdownModal({
           )}
           <div className="flex justify-between text-base font-bold text-gray-800 pt-1.5 border-t border-gray-200">
             <span>총 설치비</span>
-            <span className="text-cyan-700">{formatCurrency(totalInstallationCost)}</span>
+            <span className="text-cyan-700">
+              {isEditing
+                ? formatCurrency(computedTotal)
+                : formatCurrency(totalInstallationCost)}
+            </span>
           </div>
         </div>
       </div>
