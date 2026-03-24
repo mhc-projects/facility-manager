@@ -569,24 +569,34 @@ export default function CalendarBoard() {
 
   /**
    * 이벤트를 날짜별로 인덱싱 (메모이제이션으로 성능 최적화)
-   * 각 날짜마다 해당하는 이벤트 배열을 미리 계산하여 Map으로 저장
-   * 이를 통해 42개 셀에서 매번 필터링하는 대신 O(1) 조회 가능
+   * 단일 이벤트(1일짜리)와 기간 이벤트 분리 처리:
+   * - 단일 이벤트: 해당 날짜에만 인덱싱
+   * - 기간 이벤트: 시작일에만 인덱싱 (멀티데이 레이어에서 별도 렌더링)
    */
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
 
     filteredEvents.forEach(event => {
-      const startDate = new Date(event.event_date);
-      const endDate = new Date(event.end_date || event.event_date);
+      const isMultiDay = event.end_date && event.end_date !== event.event_date;
 
-      // 이벤트 기간의 모든 날짜에 대해 매핑
-      const current = new Date(startDate);
-      while (current <= endDate) {
-        const dateKey = formatLocalDate(current);
+      if (isMultiDay) {
+        // 기간 이벤트는 시작일에만 인덱싱 (DayEventsModal용 - 모든 날짜에 매핑)
+        const startDate = new Date(event.event_date);
+        const endDate = new Date(event.end_date!);
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          const dateKey = formatLocalDate(current);
+          const existing = map.get(dateKey) || [];
+          existing.push(event);
+          map.set(dateKey, existing);
+          current.setDate(current.getDate() + 1);
+        }
+      } else {
+        // 단일 이벤트는 해당 날짜에만 인덱싱
+        const dateKey = event.event_date;
         const existing = map.get(dateKey) || [];
         existing.push(event);
         map.set(dateKey, existing);
-        current.setDate(current.getDate() + 1);
       }
     });
 
@@ -594,44 +604,32 @@ export default function CalendarBoard() {
   }, [filteredEvents]);
 
   /**
-   * 특정 날짜의 이벤트 가져오기 (O(1) 조회)
+   * 단일 이벤트(1일짜리)만 날짜별로 인덱싱 (셀 내부 렌더링용)
+   */
+  const singleEventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+
+    filteredEvents.forEach(event => {
+      const isMultiDay = event.end_date && event.end_date !== event.event_date;
+      if (!isMultiDay) {
+        const dateKey = event.event_date;
+        const existing = map.get(dateKey) || [];
+        existing.push(event);
+        map.set(dateKey, existing);
+      }
+    });
+
+    return map;
+  }, [filteredEvents]);
+
+  /**
+   * 특정 날짜의 이벤트 가져오기 (O(1) 조회) - DayEventsModal용
    */
   const getEventsForDate = (date: Date): CalendarEvent[] => {
     const dateString = formatLocalDate(date);
     return eventsByDate.get(dateString) || [];
   };
 
-  /**
-   * 기간 이벤트인지 확인
-   */
-  const isPeriodEvent = (event: CalendarEvent) => {
-    return event.end_date && event.end_date !== event.event_date;
-  };
-
-  /**
-   * 해당 날짜가 기간 이벤트의 어느 위치인지 확인
-   */
-  const getPeriodPosition = (event: CalendarEvent, date: Date): 'start' | 'middle' | 'end' | 'single' => {
-    if (!isPeriodEvent(event)) return 'single';
-
-    const dateString = formatLocalDate(date);
-    if (dateString === event.event_date) return 'start';
-    if (dateString === event.end_date) return 'end';
-    return 'middle';
-  };
-
-  /**
-   * 기간 이벤트의 총 일수 계산
-   */
-  const getPeriodDays = (event: CalendarEvent): number => {
-    if (!isPeriodEvent(event)) return 1;
-
-    const start = new Date(event.event_date);
-    const end = new Date(event.end_date!);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
-  };
 
   /**
    * 공휴일을 날짜별로 인덱싱 (O(1) 조회)
@@ -666,6 +664,105 @@ export default function CalendarBoard() {
 
     return days;
   }, [currentDate]);
+
+  /**
+   * 멀티데이 이벤트 레이아웃 계산 (absolute positioning용)
+   * - 주(week) 경계에서 분할
+   * - lane 충돌 처리 (같은 행에서 겹치는 이벤트)
+   */
+  interface MultiDayLayout {
+    event: CalendarEvent;
+    startCellIndex: number;
+    spanWidth: number;
+    rowIndex: number;
+    lane: number;
+    isContinuation: boolean;
+    isContinued: boolean;
+  }
+
+  const multiDayLayouts = useMemo((): MultiDayLayout[] => {
+    const CELLS_PER_ROW = 7;
+    const multiDayEvents = filteredEvents.filter(
+      event => event.end_date && event.end_date !== event.event_date
+    );
+
+    const segments: MultiDayLayout[] = [];
+
+    multiDayEvents.forEach(event => {
+      const startIdx = calendarDays.findIndex(
+        d => formatLocalDate(d) === event.event_date
+      );
+      const endIdx = calendarDays.findIndex(
+        d => formatLocalDate(d) === event.end_date
+      );
+
+      const effectiveStart = startIdx === -1 ? 0 : startIdx;
+      const effectiveEnd = endIdx === -1 ? calendarDays.length - 1 : endIdx;
+
+      if (startIdx === -1 && endIdx === -1) return;
+      if (effectiveStart > calendarDays.length - 1) return;
+      if (effectiveEnd < 0) return;
+
+      let currentStart = effectiveStart;
+      while (currentStart <= effectiveEnd) {
+        const rowIndex = Math.floor(currentStart / CELLS_PER_ROW);
+        const rowEnd = (rowIndex + 1) * CELLS_PER_ROW - 1;
+        const segmentEnd = Math.min(effectiveEnd, rowEnd);
+
+        segments.push({
+          event,
+          startCellIndex: currentStart,
+          spanWidth: segmentEnd - currentStart + 1,
+          rowIndex,
+          lane: 0,
+          isContinuation: currentStart !== effectiveStart || startIdx === -1,
+          isContinued: segmentEnd !== effectiveEnd || endIdx === -1,
+        });
+
+        currentStart = rowEnd + 1;
+      }
+    });
+
+    // Lane 충돌 처리
+    const rowSegments = new Map<number, MultiDayLayout[]>();
+    segments.forEach(seg => {
+      const arr = rowSegments.get(seg.rowIndex) || [];
+      arr.push(seg);
+      rowSegments.set(seg.rowIndex, arr);
+    });
+
+    rowSegments.forEach(rowSegs => {
+      rowSegs.sort((a, b) => a.startCellIndex - b.startCellIndex);
+      rowSegs.forEach(seg => {
+        const usedLanes = rowSegs
+          .filter(other => other !== seg)
+          .filter(other => {
+            const aEnd = other.startCellIndex + other.spanWidth - 1;
+            const bEnd = seg.startCellIndex + seg.spanWidth - 1;
+            return other.startCellIndex <= bEnd && aEnd >= seg.startCellIndex;
+          })
+          .map(other => other.lane);
+
+        let lane = 0;
+        while (usedLanes.includes(lane)) lane++;
+        seg.lane = lane;
+      });
+    });
+
+    return segments;
+  }, [filteredEvents, calendarDays]);
+
+  /**
+   * 행별 최대 lane 수 계산 (단일 이벤트 push-down용)
+   */
+  const maxLanesByRow = useMemo(() => {
+    const map = new Map<number, number>();
+    multiDayLayouts.forEach(layout => {
+      const current = map.get(layout.rowIndex) || 0;
+      map.set(layout.rowIndex, Math.max(current, layout.lane + 1));
+    });
+    return map;
+  }, [multiDayLayouts]);
 
   if (loading) {
     return (
@@ -862,208 +959,378 @@ export default function CalendarBoard() {
         </div>
 
         {/* 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-0 border-t border-l">
-          {calendarDays.map((day, index) => {
-            const dateString = formatLocalDate(day);
-            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-            const isToday = dateString === today;
-            const dayEvents = getEventsForDate(day);
-            const holiday = holidaysByDate.get(dateString);
+        {/* 멀티데이 이벤트 absolute 오버레이를 위해 relative 컨테이너 필요 */}
+        <div className="relative">
+          {/* 워터마크: 연도 + 월 숫자 */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
+            <span className="font-black text-gray-400 leading-none tracking-tight"
+              style={{ fontSize: 'clamp(5rem, 18vw, 14rem)', opacity: 0.055 }}>
+              {currentDate.getMonth() + 1}
+            </span>
+            <span className="font-black text-gray-400 leading-none tracking-widest"
+              style={{ fontSize: 'clamp(1.5rem, 5vw, 4rem)', opacity: 0.05 }}>
+              {currentDate.getFullYear()}
+            </span>
+          </div>
+          {/* 날짜 셀 레이어 */}
+          <div className="grid grid-cols-7 gap-0 border-t border-l">
+            {calendarDays.map((day, index) => {
+              const dateString = formatLocalDate(day);
+              const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+              const isToday = dateString === today;
+              const holiday = holidaysByDate.get(dateString);
+              const rowIndex = Math.floor(index / 7);
 
-            // 기간 이벤트 우선 정렬 (기간 이벤트를 먼저 표시)
-            const sortedDayEvents = [...dayEvents].sort((a, b) => {
-              const aPeriod = isPeriodEvent(a) ? 1 : 0;
-              const bPeriod = isPeriodEvent(b) ? 1 : 0;
-              return bPeriod - aPeriod;
-            });
+              // 단일 이벤트만 셀 내부에 표시
+              const cellSingleEvents = singleEventsByDate.get(dateString) || [];
 
-            return (
-              <div
-                key={index}
-                onClick={() => handleDayClick(day)}
-                className={`
-                  h-[65px] sm:h-[70px] md:h-[110px] p-0.5 sm:p-1 md:p-2 border-b border-r cursor-pointer flex flex-col touch-manipulation
-                  ${isCurrentMonth
-                    ? holiday ? 'bg-red-50 hover:bg-red-100' : 'bg-white hover:bg-gray-50'
-                    : 'bg-gray-50 hover:bg-gray-100'}
-                  ${isToday ? 'ring-2 ring-purple-500 z-10 relative' : ''}
-                  transition-colors
-                `}
-              >
-                <div className={`text-[10px] sm:text-xs md:text-sm font-medium mb-0.5 flex-shrink-0 ${
-                  !isCurrentMonth ? 'text-gray-400' :
-                  holiday || index % 7 === 0 ? 'text-red-600' :
-                  index % 7 === 6 ? 'text-blue-600' :
-                  'text-gray-900'
-                }`}>
-                  {day.getDate()}
-                </div>
-                {/* 공휴일명 (데스크톱) */}
-                {holiday && isCurrentMonth && (
-                  <div className="hidden md:block text-[9px] leading-tight text-red-500 font-medium truncate mb-0.5" title={holiday.name}>
-                    {holiday.name}
+              // 데스크톱에서 해당 행의 멀티데이 lane 수 (단일 이벤트 push-down용)
+              const rowMultiDayLanes = maxLanesByRow.get(rowIndex) || 0;
+
+              return (
+                <div
+                  key={index}
+                  onClick={() => handleDayClick(day)}
+                  className={`
+                    h-[65px] sm:h-[70px] md:h-[110px] p-0.5 sm:p-1 md:p-2 border-b border-r cursor-pointer flex flex-col touch-manipulation
+                    ${isCurrentMonth
+                      ? holiday ? 'bg-red-50 hover:bg-red-100' : 'bg-white hover:bg-gray-50'
+                      : 'bg-gray-50 hover:bg-gray-100'}
+                    ${isToday ? 'ring-2 ring-purple-500 z-10 relative' : ''}
+                    transition-colors
+                  `}
+                >
+                  <div className={`text-[10px] sm:text-xs md:text-sm font-medium mb-0.5 flex-shrink-0 ${
+                    !isCurrentMonth ? 'text-gray-400' :
+                    holiday || index % 7 === 0 ? 'text-red-600' :
+                    index % 7 === 6 ? 'text-blue-600' :
+                    'text-gray-900'
+                  }`}>
+                    {day.getDate()}
                   </div>
-                )}
-                {/* 공휴일명 배지 (모바일) */}
-                {holiday && isCurrentMonth && (
-                  <div className="md:hidden text-[8px] leading-tight text-red-500 font-medium truncate mb-0.5 w-full">
-                    {holiday.name}
-                  </div>
-                )}
-
-                {/* 데스크톱: 이벤트 박스 표시 */}
-                <div className="hidden md:flex flex-1 flex-col overflow-hidden space-y-0">
-                  {sortedDayEvents.slice(0, 2).map(event => {
-                    const position = getPeriodPosition(event, day);
-                    const periodDays = getPeriodDays(event);
-                    const isPeriod = isPeriodEvent(event);
-
-                    return (
-                      <div
-                        key={event.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEventClick(event);
-                        }}
-                        className={`
-                          text-xs px-1 py-px rounded cursor-pointer relative
-                          ${event.event_type === 'todo'
-                            ? event.is_completed
-                              ? 'bg-gray-100 text-gray-500 line-through'
-                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                            : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                          }
-                          ${isPeriod && position === 'start' ? 'border-l-2 border-l-orange-400' : ''}
-                          ${isPeriod && position === 'middle' ? 'border-l-2 border-l-orange-300 opacity-75' : ''}
-                          ${isPeriod && position === 'end' ? 'border-l-2 border-l-orange-400 opacity-75' : ''}
-                        `}
-                      >
-                        <div className="flex items-center gap-1">
-                          {event.event_type === 'todo' && (
-                            <span
-                              onClick={(e) => handleToggleComplete(e, event.id, event.is_completed)}
-                              className="inline-block flex-shrink-0"
-                            >
-                              {event.is_completed ? (
-                                <CheckSquare className="w-3 h-3 inline" />
-                              ) : (
-                                <Square className="w-3 h-3 inline" />
-                              )}
-                            </span>
-                          )}
-                          <span className="truncate flex-1" title={event.business_name ? `${event.business_name}` : undefined}>
-                            {event.start_time && (
-                              <span className="text-[10px] font-medium text-gray-700 mr-1">
-                                {event.start_time.substring(0, 5)}
-                              </span>
-                            )}
-                            {event.business_name && (
-                              <span className="text-[10px] mr-0.5" title={event.business_name}>
-                                🏢
-                              </span>
-                            )}
-                            {event.title}
-                            {isPeriod && position === 'start' && (
-                              <span className="ml-1 text-[10px] text-orange-600 font-semibold">
-                                📅{periodDays}일
-                              </span>
-                            )}
-                          </span>
-                          {event.labels && event.labels.length > 0 && (() => {
-                            const labelColors = getLabelColor(event.labels[0]);
-                            return (
-                              <span className={`
-                                flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium
-                                ${labelColors.bg} ${labelColors.text}
-                              `}>
-                                {event.labels[0]}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {sortedDayEvents.length > 2 && (
-                    <div className="text-[10px] sm:text-xs text-gray-600 font-semibold pl-0.5 sm:pl-1">
-                      +{sortedDayEvents.length - 2}
+                  {/* 공휴일명 (데스크톱) */}
+                  {holiday && isCurrentMonth && (
+                    <div className="hidden md:block text-[9px] leading-tight text-red-500 font-medium truncate mb-0.5" title={holiday.name}>
+                      {holiday.name}
                     </div>
                   )}
-                </div>
-
-                {/* 모바일: 이벤트 텍스트 표시 */}
-                {(() => {
-                  const hasHoliday = !!holiday && isCurrentMonth;
-                  const maxVisible = hasHoliday ? 1 : 2;
-                  return (
-                    <div className="md:hidden flex flex-col flex-1 overflow-hidden gap-px mt-0.5">
-                      {sortedDayEvents.slice(0, maxVisible).map((event) => {
-                        const isPeriod = isPeriodEvent(event);
-                        const labelColors = event.labels?.length ? getLabelColor(event.labels[0]) : null;
-                        return (
-                          <div
-                            key={event.id}
-                            onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                            className={`
-                              flex items-center gap-[2px] px-0.5 rounded-[3px]
-                              py-[1.5px] cursor-pointer active:opacity-70 min-w-0
-                              ${event.event_type === 'todo'
-                                ? event.is_completed
-                                  ? 'bg-gray-100'
-                                  : 'bg-blue-50'
-                                : 'bg-purple-50'
-                              }
-                              ${isPeriod ? 'border-l-2 border-l-orange-400' : ''}
-                            `}
-                          >
-                            {/* 타입 도트 */}
-                            <span className={`
-                              flex-shrink-0 w-[5px] h-[5px] rounded-full
-                              ${event.event_type === 'todo'
-                                ? event.is_completed ? 'bg-gray-400' : 'bg-blue-500'
-                                : 'bg-purple-500'
-                              }
-                            `} />
-                            {/* 라벨 배지 */}
-                            {labelColors && (
-                              <span className={`
-                                flex-shrink-0 px-0.5 py-px rounded text-[7px] font-medium
-                                leading-none ${labelColors.bg} ${labelColors.text}
-                              `}>
-                                {event.labels![0]}
-                              </span>
-                            )}
-                            {/* 제목 */}
-                            <span className={`
-                              text-[9px] sm:text-[10px] font-medium truncate flex-1 min-w-0
-                              leading-tight
-                              ${event.event_type === 'todo'
-                                ? event.is_completed ? 'text-gray-400 line-through' : 'text-blue-700'
-                                : 'text-purple-700'
-                              }
-                            `}>
-                              {event.title}
-                            </span>
-                            {/* 사업장명 */}
-                            {event.business_name && (
-                              <span className="flex-shrink-0 text-[7px] text-gray-400 leading-tight max-w-[28px] truncate">
-                                {event.business_name}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {sortedDayEvents.length > maxVisible && (
-                        <span className="text-[8px] text-gray-400 pl-1 leading-none font-medium">
-                          +{sortedDayEvents.length - maxVisible}
-                        </span>
-                      )}
+                  {/* 공휴일명 배지 (모바일) */}
+                  {holiday && isCurrentMonth && (
+                    <div className="md:hidden text-[8px] leading-tight text-red-500 font-medium truncate mb-0.5 w-full">
+                      {holiday.name}
                     </div>
-                  );
-                })()}
-              </div>
-            );
-          })}
+                  )}
+
+                  {/* 데스크톱: 단일 이벤트 박스 표시 (멀티데이 lane 아래) */}
+                  {(() => {
+                    const hasCoveringMultiDay = multiDayLayouts.some(l => {
+                      const segStart = formatLocalDate(calendarDays[l.startCellIndex]);
+                      const segEnd = formatLocalDate(calendarDays[Math.min(l.startCellIndex + l.spanWidth - 1, calendarDays.length - 1)]);
+                      return dateString >= segStart && dateString <= segEnd;
+                    });
+                    const spacerHeight = hasCoveringMultiDay ? rowMultiDayLanes * 20 : 0;
+                    // 가용 높이에서 표시 가능한 이벤트 수 계산 (이벤트 1개 ≈ 20px)
+                    const availableHeight = 72 - spacerHeight;
+                    const maxVisible = Math.max(0, Math.floor(availableHeight / 20));
+                    const hiddenCount = cellSingleEvents.length - maxVisible;
+                    return (
+                      <div className="hidden md:flex flex-1 flex-col min-h-0">
+                        {/* 이벤트 목록 - overflow-hidden으로 클립 */}
+                        <div className="flex flex-col overflow-hidden flex-1 space-y-0">
+                          {hasCoveringMultiDay && (
+                            <div className="flex-shrink-0" style={{ height: `${spacerHeight}px` }} />
+                          )}
+                          {cellSingleEvents.slice(0, maxVisible).map(event => (
+                            <div
+                              key={event.id}
+                              onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                              className={`
+                                text-xs px-1 py-px rounded cursor-pointer flex-shrink-0
+                                ${event.event_type === 'todo'
+                                  ? event.is_completed
+                                    ? 'bg-gray-100 text-gray-500 line-through'
+                                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                }
+                              `}
+                            >
+                              <div className="flex items-center gap-1">
+                                {event.event_type === 'todo' && (
+                                  <span
+                                    onClick={(e) => handleToggleComplete(e, event.id, event.is_completed)}
+                                    className="inline-block flex-shrink-0"
+                                  >
+                                    {event.is_completed ? (
+                                      <CheckSquare className="w-3 h-3 inline" />
+                                    ) : (
+                                      <Square className="w-3 h-3 inline" />
+                                    )}
+                                  </span>
+                                )}
+                                <span className="truncate flex-1" title={event.business_name ?? undefined}>
+                                  {event.start_time && (
+                                    <span className="text-[10px] font-medium text-gray-700 mr-1">
+                                      {event.start_time.substring(0, 5)}
+                                    </span>
+                                  )}
+                                  {event.business_name && (
+                                    <span className="text-[10px] mr-0.5" title={event.business_name}>
+                                      🏢
+                                    </span>
+                                  )}
+                                  {event.title}
+                                </span>
+                                {event.labels && event.labels.length > 0 && (() => {
+                                  const labelColors = getLabelColor(event.labels[0]);
+                                  return (
+                                    <span className={`
+                                      flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium
+                                      ${labelColors.bg} ${labelColors.text}
+                                    `}>
+                                      {event.labels[0]}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* +N은 overflow 컨테이너 밖에 배치하여 항상 표시 */}
+                        {hiddenCount > 0 && (
+                          <div className="text-[10px] sm:text-xs text-gray-600 font-semibold pl-0.5 sm:pl-1 flex-shrink-0 leading-tight">
+                            +{hiddenCount}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* 모바일: 단일 이벤트만 표시 (기간 이벤트는 오버레이 레이어에서 처리) */}
+                  {(() => {
+                    const mobileSingleEvents = (singleEventsByDate.get(dateString) || []);
+                    const hasMobileMultiDay = multiDayLayouts.some(l => {
+                      const segStart = formatLocalDate(calendarDays[l.startCellIndex]);
+                      const segEnd = formatLocalDate(calendarDays[Math.min(l.startCellIndex + l.spanWidth - 1, calendarDays.length - 1)]);
+                      return dateString >= segStart && dateString <= segEnd;
+                    });
+                    // 모바일 lane 높이: 13px/lane (LANE_HEIGHT 12 + LANE_GAP 1)
+                    const mobileRowLanes = maxLanesByRow.get(rowIndex) || 0;
+                    const mobileSpacerHeight = hasMobileMultiDay ? mobileRowLanes * 13 : 0;
+                    // 셀 가용 높이: 65 - p-0.5(4) - 날짜헤더(20) = 41px
+                    const mobileAvailable = 41 - mobileSpacerHeight;
+                    const mobileMaxVisible = Math.max(0, Math.floor(mobileAvailable / 13));
+                    const hasHoliday = !!holiday && isCurrentMonth;
+                    const finalMaxVisible = hasHoliday ? Math.min(mobileMaxVisible, 1) : mobileMaxVisible;
+                    const finalHiddenCount = mobileSingleEvents.length - finalMaxVisible;
+                    return (
+                      <div className="md:hidden flex flex-col flex-1 min-h-0 gap-px mt-0.5">
+                        <div className="flex flex-col overflow-hidden flex-1 gap-px">
+                          {hasMobileMultiDay && (
+                            <div className="flex-shrink-0" style={{ height: `${mobileSpacerHeight}px` }} />
+                          )}
+                          {mobileSingleEvents.slice(0, finalMaxVisible).map((event) => {
+                            const labelColors = event.labels?.length ? getLabelColor(event.labels[0]) : null;
+                            return (
+                              <div
+                                key={event.id}
+                                onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                                className={`
+                                  flex items-center gap-[2px] px-0.5 rounded-[3px]
+                                  py-[1px] cursor-pointer active:opacity-70 min-w-0 flex-shrink-0
+                                  ${event.event_type === 'todo'
+                                    ? event.is_completed ? 'bg-gray-100' : 'bg-blue-50'
+                                    : 'bg-purple-50'
+                                  }
+                                `}
+                              >
+                                <span className={`
+                                  flex-shrink-0 w-[4px] h-[4px] rounded-full
+                                  ${event.event_type === 'todo'
+                                    ? event.is_completed ? 'bg-gray-400' : 'bg-blue-500'
+                                    : 'bg-purple-500'
+                                  }
+                                `} />
+                                {labelColors && (
+                                  <span className={`flex-shrink-0 px-0.5 rounded text-[6px] font-medium leading-none ${labelColors.bg} ${labelColors.text}`}>
+                                    {event.labels![0]}
+                                  </span>
+                                )}
+                                <span className={`
+                                  text-[8px] sm:text-[9px] font-medium truncate flex-1 min-w-0 leading-tight
+                                  ${event.event_type === 'todo'
+                                    ? event.is_completed ? 'text-gray-400 line-through' : 'text-blue-700'
+                                    : 'text-purple-700'
+                                  }
+                                `}>
+                                  {event.title}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {finalHiddenCount > 0 && (
+                          <span className="text-[7px] text-gray-400 pl-0.5 leading-none font-medium flex-shrink-0">
+                            +{finalHiddenCount}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 멀티데이 이벤트 absolute 오버레이 (모바일) */}
+          <div className="md:hidden pointer-events-none absolute inset-0">
+            {multiDayLayouts.map((layout, layoutIdx) => {
+              const CELL_WIDTH_PCT = 100 / 7;
+              const CELL_HEIGHT = 65; // h-[65px]
+              // p-0.5(2) + text-[10px] 날짜숫자(16) + mb-0.5(2) = 20px
+              const DATE_HEADER_HEIGHT = 20;
+              // 단일 이벤트 한 줄과 동일: py-[1px] + text-[8px] ≈ 12px
+              const LANE_HEIGHT = 12;
+              const LANE_GAP = 1; // 13px/lane
+
+              const left = (layout.startCellIndex % 7) * CELL_WIDTH_PCT;
+              const width = layout.spanWidth * CELL_WIDTH_PCT;
+              const top = layout.rowIndex * CELL_HEIGHT + DATE_HEADER_HEIGHT + layout.lane * (LANE_HEIGHT + LANE_GAP);
+
+              const event = layout.event;
+              const eventColor = event.event_type === 'todo'
+                ? event.is_completed
+                  ? 'bg-gray-200 text-gray-400'
+                  : 'bg-blue-200 text-blue-800'
+                : 'bg-purple-200 text-purple-800';
+
+              return (
+                <div
+                  key={`mobile-${event.id}-${layoutIdx}`}
+                  className="pointer-events-auto"
+                  style={{
+                    position: 'absolute',
+                    left: `${left}%`,
+                    width: `calc(${width}% - 2px)`,
+                    top: `${top}px`,
+                    height: `${LANE_HEIGHT}px`,
+                    marginLeft: '1px',
+                    zIndex: 5,
+                  }}
+                >
+                  <div
+                    onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                    title={event.title}
+                    className={`
+                      w-full h-full flex items-center px-1 cursor-pointer text-[8px] font-medium
+                      ${eventColor}
+                      ${layout.isContinuation ? 'rounded-l-none' : 'rounded-l'}
+                      ${layout.isContinued ? 'rounded-r-none' : 'rounded-r'}
+                      overflow-hidden
+                    `}
+                  >
+                    {layout.isContinuation && (
+                      <span className="mr-0.5 opacity-60 flex-shrink-0">◀</span>
+                    )}
+                    <span className="truncate flex-1">{event.title}</span>
+                    {layout.isContinued && (
+                      <span className="ml-0.5 opacity-60 flex-shrink-0">▶</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 멀티데이 이벤트 absolute 오버레이 (데스크톱) */}
+          <div className="hidden md:block pointer-events-none absolute inset-0">
+            {multiDayLayouts.map((layout, layoutIdx) => {
+              const CELL_WIDTH_PCT = 100 / 7;
+              // 셀 높이: md:h-[110px]
+              const CELL_HEIGHT = 110;
+              // 셀 상단 padding(8px) + 날짜숫자 높이(약 20px) + mb-0.5(2px) = 30px
+              const DATE_HEADER_HEIGHT = 30;
+              // spacer와 동일: lane당 20px
+              const LANE_HEIGHT = 18;
+              const LANE_GAP = 2; // 20px = 18 + 2
+
+              const left = (layout.startCellIndex % 7) * CELL_WIDTH_PCT;
+              const width = layout.spanWidth * CELL_WIDTH_PCT;
+              // 행 오프셋 + 날짜 헤더 + lane 위치
+              const top = layout.rowIndex * CELL_HEIGHT + DATE_HEADER_HEIGHT + layout.lane * (LANE_HEIGHT + LANE_GAP);
+
+              const event = layout.event;
+              const eventColor = event.event_type === 'todo'
+                ? event.is_completed
+                  ? 'bg-gray-200 text-gray-400'
+                  : 'bg-blue-200 text-blue-800 hover:bg-blue-300'
+                : 'bg-purple-200 text-purple-800 hover:bg-purple-300';
+
+              return (
+                <div
+                  key={`${event.id}-${layoutIdx}`}
+                  className="pointer-events-auto"
+                  style={{
+                    position: 'absolute',
+                    left: `${left}%`,
+                    width: `calc(${width}% - 2px)`,
+                    top: `${top}px`,
+                    height: `${LANE_HEIGHT}px`,
+                    marginLeft: '1px',
+                    zIndex: 5,
+                  }}
+                >
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEventClick(event);
+                    }}
+                    title={event.title}
+                    className={`
+                      w-full h-full flex items-center px-1.5 cursor-pointer text-[11px] font-medium
+                      ${eventColor}
+                      ${layout.isContinuation ? 'rounded-l-none' : 'rounded-l'}
+                      ${layout.isContinued ? 'rounded-r-none' : 'rounded-r'}
+                      ${event.is_completed ? 'line-through' : ''}
+                      overflow-hidden
+                    `}
+                  >
+                    {/* 이전 주에서 이어지는 경우 화살표 표시 */}
+                    {layout.isContinuation && (
+                      <span className="mr-0.5 text-[9px] opacity-70">◀</span>
+                    )}
+                    {/* 제목은 시작 세그먼트 또는 주 시작에서만 표시 */}
+                    {(!layout.isContinuation) && (
+                      <span className="truncate flex-1">
+                        {event.business_name && (
+                          <span className="mr-0.5 opacity-80">🏢</span>
+                        )}
+                        {event.title}
+                      </span>
+                    )}
+                    {layout.isContinuation && (
+                      <span className="truncate flex-1 opacity-80">{event.title}</span>
+                    )}
+                    {/* 다음 주로 이어지는 경우 화살표 표시 */}
+                    {layout.isContinued && (
+                      <span className="ml-0.5 text-[9px] opacity-70 flex-shrink-0">▶</span>
+                    )}
+                    {/* 라벨 배지 */}
+                    {!layout.isContinuation && event.labels && event.labels.length > 0 && (() => {
+                      const labelColors = getLabelColor(event.labels[0]);
+                      return (
+                        <span className={`
+                          flex-shrink-0 ml-1 px-1 py-px rounded text-[9px] font-medium
+                          ${labelColors.bg} ${labelColors.text}
+                        `}>
+                          {event.labels[0]}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* 범례 */}
@@ -1086,7 +1353,7 @@ export default function CalendarBoard() {
             <span>완료</span>
           </div>
           <div className="hidden md:flex items-center gap-1">
-            <div className="w-3 h-3 bg-blue-100 rounded border-l-2 border-l-orange-400"></div>
+            <div className="w-3 h-3 bg-purple-200 rounded"></div>
             <span>기간 이벤트</span>
           </div>
 
@@ -1108,7 +1375,7 @@ export default function CalendarBoard() {
             <span>완료</span>
           </div>
           <div className="md:hidden flex items-center gap-1">
-            <div className="w-2 h-1.5 bg-blue-500 rounded-sm ring-1 ring-orange-400"></div>
+            <div className="w-2 h-1.5 bg-purple-200 rounded-sm"></div>
             <span>기간</span>
           </div>
         </div>
