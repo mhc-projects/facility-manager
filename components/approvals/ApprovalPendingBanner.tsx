@@ -122,14 +122,14 @@ export default function ApprovalPendingBanner() {
   if (!visible) return null
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-lg shadow-blue-900/20 animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-2xl shadow-lg shadow-blue-900/20 animate-in slide-in-from-bottom-4 duration-300 whitespace-nowrap">
       <Bell className="w-4 h-4 flex-shrink-0 animate-pulse" />
       <span className="text-sm font-medium">
         결재 대기 <span className="font-bold text-yellow-300">{count}건</span>
       </span>
       <button
         onClick={handleGoTo}
-        className="text-sm font-semibold bg-white text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+        className="text-sm font-semibold bg-white text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
       >
         확인하기
       </button>
