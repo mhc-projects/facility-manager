@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { BusinessInfo } from '@/lib/database-service'
 import type { BusinessMemo, CreateBusinessMemoInput, UpdateBusinessMemoInput } from '@/types/database'
 import { getBusinessTaskStatus, getBatchBusinessTaskStatuses, getTaskSummary } from '@/lib/business-task-utils'
+import { TASK_STATUS_KR, TASK_TYPE_KR } from '@/lib/task-status-utils'
 import { supabase } from '@/lib/supabase'
 // Lazy load heavy modals for better initial load performance
 const BusinessRevenueModal = lazy(() => import('@/components/business/BusinessRevenueModal'))
@@ -1762,61 +1763,8 @@ function BusinessManagementPage() {
   const calculateBusinessCurrentSteps = useMemo(() => {
     const statusMap: Record<string, string> = {}
 
-    // task-status-utils.ts의 한글 매핑 사용
-    const statusLabels: Record<string, string> = {
-      customer_contact: '고객 상담',
-      site_inspection: '현장 실사',
-      quotation: '견적서 작성',
-      contract: '계약 체결',
-      deposit_confirm: '계약금 확인',
-      product_order: '제품 발주',
-      product_shipment: '제품 출고',
-      installation_schedule: '설치 협의',
-      installation: '제품 설치',
-      balance_payment: '잔금 입금',
-      document_complete: '서류 발송 완료',
-      application_submit: '신청서 제출',
-      document_supplement: '서류 보완',
-      pre_construction_inspection: '착공 전 실사',
-      pre_construction_supplement: '착공 보완',
-      pre_construction_supplement_1st: '착공 보완 1차',
-      pre_construction_supplement_2nd: '착공 보완 2차',
-      pre_construction_supplement_3rd: '착공 보완 3차',
-      completion_inspection: '준공 실사',
-      completion_supplement: '준공 보완',
-      completion_supplement_1st: '완공 보완 1차',
-      completion_supplement_2nd: '완공 보완 2차',
-      completion_supplement_3rd: '완공 보완 3차',
-      final_document_submit: '서류 제출',
-      subsidy_payment: '보조금 입금',
-      etc_status: '기타',
-
-      // 보조금 관련 추가 상태
-      subsidy_site_inspection: '보조금 현장 실사',
-      subsidy_rejected: '보조금 반려',
-      subsidy_product_order: '보조금 제품 발주',
-      subsidy_pre_completion_document_submit: '보조금 사전 서류 제출',
-      subsidy_needs_check: '보조금 확인 필요',
-      subsidy_installation_schedule: '보조금 설치 협의',
-      subsidy_final_document_submit: '보조금 최종 서류 제출',
-      subsidy_document_preparation: '보조금 서류 준비',
-      subsidy_completion_supplement_2nd: '보조금 준공 보완 2차',
-      subsidy_completion_supplement_1st: '보조금 준공 보완 1차',
-      subsidy_approval_pending: '보조금 승인 대기',
-
-      // 자비 관련 추가 상태
-      self_quotation: '자비 견적서 작성',
-      self_needs_check: '자비 확인 필요',
-      self_installation_schedule: '자비 설치 협의',
-      self_document_complete: '자비 서류 발송 완료',
-
-      // 외주 관련 추가 상태
-      outsourcing_needs_check: '외주 확인 필요',
-
-      // 대리점 관련 추가 상태
-      dealer_product_ordered: '대리점 제품 발주',
-      dealer_needs_check: '대리점 확인 필요'
-    }
+    // task-status-utils.ts의 TASK_STATUS_KR을 직접 사용 (중복 관리 방지)
+    const statusLabels = TASK_STATUS_KR
 
     // 사업장별로 업무 그룹화
     const businessTasksMap: Record<string, any[]> = {}
@@ -1845,7 +1793,12 @@ function BusinessManagementPage() {
         })
 
         const topTask = sortedTasks[0]
-        const statusLabel = statusLabels[topTask.status] || topTask.status
+        const rawLabel = statusLabels[topTask.status] || topTask.status
+        // status key의 타입 prefix 감지 (subsidy_, self_, as_, dealer_, outsourcing_, etc_)
+        const knownPrefixes = ['subsidy', 'self', 'as', 'dealer', 'outsourcing', 'etc']
+        const detectedPrefix = knownPrefixes.find(p => topTask.status.startsWith(p + '_'))
+        const typeKR = detectedPrefix ? TASK_TYPE_KR[detectedPrefix] || null : null
+        const statusLabel = typeKR ? `[${typeKR}] ${rawLabel}` : rawLabel
         statusMap[businessName] = activeTasks.length === 1 ? statusLabel : `${statusLabel} 외 ${activeTasks.length - 1}건`
       }
     })

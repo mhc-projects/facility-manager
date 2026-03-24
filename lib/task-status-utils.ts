@@ -125,7 +125,7 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
 
 // 업무 타입 한글 매핑
 export const TASK_TYPE_KR: { [key: string]: string } = {
-  'self': '자가시설',
+  'self': '자비',
   'subsidy': '보조금',
   'as': 'A/S',
   'dealer': '대리점'
