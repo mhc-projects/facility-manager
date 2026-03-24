@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
                       request.headers.get('x-real-ip') ||
                       'unknown';
 
-    // endpoint 기준 upsert
+    // 기존 구독 확인 후 upsert (UNIQUE: employee_id + endpoint)
     const { error: upsertError } = await supabaseAdmin
       .from('push_subscriptions')
       .upsert({
@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
         user_agent: userAgent,
         ip_address: ipAddress,
         is_active: true,
-        updated_at: new Date().toISOString(),
+        last_used_at: new Date().toISOString(),
       }, {
-        onConflict: 'endpoint',
+        onConflict: 'employee_id,endpoint',
       });
 
     if (upsertError) {

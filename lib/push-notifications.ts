@@ -316,6 +316,6 @@ export function usePushNotifications() {
     requestPermission,
     unsubscribe,
     showTestNotification,
-    isSupported: 'Notification' in window && 'serviceWorker' in navigator
+    isSupported: 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
   };
 }
