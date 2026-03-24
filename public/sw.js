@@ -1,8 +1,8 @@
 // Service Worker for PWA and caching
-// 🔄 버전 업데이트: 91becd5 (Realtime 무한 재연결 루프 수정, 제조사 한글 표시)
-const CACHE_NAME = 'facility-manager-v1.5';
-const STATIC_CACHE_NAME = 'facility-static-v1.5';
-const DYNAMIC_CACHE_NAME = 'facility-dynamic-v1.5';
+// 🔄 버전 업데이트: f7e256b (iOS 알림 아이콘 수정 - favicon.png, 미지원 옵션 제거)
+const CACHE_NAME = 'facility-manager-v1.6';
+const STATIC_CACHE_NAME = 'facility-static-v1.6';
+const DYNAMIC_CACHE_NAME = 'facility-dynamic-v1.6';
 
 // 캐시할 정적 리소스
 const STATIC_ASSETS = [
