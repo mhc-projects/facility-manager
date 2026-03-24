@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { sendWebPushToUser } from '@/lib/send-push';
+import { sendTelegramToUser } from '@/lib/send-telegram';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -215,47 +217,62 @@ export async function POST(request: NextRequest) {
       name: newEmployee.name
     });
 
-    // 🔔 관리자에게 실시간 알림 전송 (permission_level >= 3)
+    // 🔔 권한 4 관리자에게 알림 전송 (회원가입 승인은 최고 관리자만)
     try {
-      // 관리자 목록 조회
       const { data: admins } = await supabaseAdmin
         .from('employees')
         .select('id, name, email, permission_level')
-        .gte('permission_level', 3)
+        .eq('permission_level', 4)
         .eq('is_active', true);
 
       if (admins && admins.length > 0) {
-        // 전역 알림 생성 (Supabase Realtime으로 실시간 전송)
-        await supabaseAdmin
-          .from('notifications')
-          .insert({
-            title: '🔔 새로운 사용자 가입 승인 요청',
-            message: `${newEmployee.name}님(${newEmployee.email})이 회원가입을 요청했습니다. 승인이 필요합니다.`,
+        const notifTitle = '[회원가입 승인 요청]';
+        const notifMessage = `${newEmployee.name}님(${newEmployee.email})이 회원가입을 요청했습니다. 승인이 필요합니다.`;
+
+        // DB 알림 생성
+        await Promise.all(admins.map(admin =>
+          supabaseAdmin.from('notifications').insert({
+            title: notifTitle,
+            message: notifMessage,
             category: 'user_created',
             priority: 'high',
+            notification_tier: 'personal',
+            target_user_id: admin.id,
             related_resource_type: 'user',
             related_resource_id: newEmployee.id,
             related_url: '/admin/users',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             metadata: {
               user_id: newEmployee.id,
               user_name: newEmployee.name,
               user_email: newEmployee.email,
               department: newEmployee.department,
               position: newEmployee.position,
-              admin_count: admins.length,
               requires_approval: true
             },
             created_by_name: 'System',
             is_system_notification: true
-          });
+          })
+        ));
 
-        console.log('📢 [SIGNUP] 관리자 알림 전송 완료:', {
-          admin_count: admins.length,
-          admins: admins.map(a => ({ name: a.name, level: a.permission_level }))
-        });
+        // Web Push + 텔레그램 병렬 발송
+        await Promise.all(admins.flatMap(admin => [
+          sendWebPushToUser(admin.id, {
+            title: notifTitle,
+            body: notifMessage,
+            url: '/admin/users',
+            category: 'user_created',
+          }),
+          sendTelegramToUser(admin.id, {
+            title: notifTitle,
+            body: notifMessage,
+            url: '/admin/users',
+          }),
+        ]));
+
+        console.log('📢 [SIGNUP] 권한4 관리자 알림 전송 완료:', admins.length, '명');
       }
     } catch (notificationError) {
-      // 알림 전송 실패는 회원가입 성공에 영향 없음
       console.error('⚠️ [SIGNUP] 관리자 알림 전송 실패 (회원가입은 성공):', notificationError);
     }
 

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendWebPushToUser } from '@/lib/send-push';
+import { sendTelegramToUser } from '@/lib/send-telegram';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -51,11 +53,13 @@ async function notifyTaskAssignmentChange(
     if (tableExists) {
       // 1. 이전 담당자에게 알림 (재할당/해제 시)
       if (oldAssigneeId && changeType !== 'assigned') {
+        const oldTitle = changeType === 'reassigned' ? '담당 업무 변경 알림' : '담당 업무 해제 알림';
+        const oldMessage = changeType === 'reassigned'
+          ? `'${taskTitle}' 업무가 다른 담당자에게 재할당되었습니다.`
+          : `'${taskTitle}' 업무 담당이 해제되었습니다.`;
         await supabase.from('notifications').insert({
-          title: changeType === 'reassigned' ? '담당 업무 변경 알림' : '담당 업무 해제 알림',
-          message: changeType === 'reassigned'
-            ? `'${taskTitle}' 업무가 다른 담당자에게 재할당되었습니다.`
-            : `'${taskTitle}' 업무 담당이 해제되었습니다.`,
+          title: oldTitle,
+          message: oldMessage,
           notification_tier: 'personal',
           target_user_id: oldAssigneeId,
           type: 'task_assignment_change',
@@ -68,13 +72,18 @@ async function notifyTaskAssignmentChange(
             new_assignee: newAssignee?.name
           }
         });
+        const pushPayload = { title: oldTitle, body: oldMessage, url: `/tasks/${taskId}`, category: 'task_assignment' };
+        sendWebPushToUser(oldAssigneeId, pushPayload).catch(() => {});
+        sendTelegramToUser(oldAssigneeId, pushPayload).catch(() => {});
       }
 
       // 2. 새 담당자에게 알림 (할당/재할당 시)
       if (newAssigneeId && changeType !== 'unassigned') {
+        const newTitle = changeType === 'assigned' ? '새 업무 할당 알림' : '업무 재할당 알림';
+        const newMessage = `'${taskTitle}' 업무가 회원님에게 ${changeType === 'assigned' ? '할당' : '재할당'}되었습니다.`;
         await supabase.from('notifications').insert({
-          title: changeType === 'assigned' ? '새 업무 할당 알림' : '업무 재할당 알림',
-          message: `'${taskTitle}' 업무가 회원님에게 ${changeType === 'assigned' ? '할당' : '재할당'}되었습니다.`,
+          title: newTitle,
+          message: newMessage,
           notification_tier: 'personal',
           target_user_id: newAssigneeId,
           type: 'task_assignment_change',
@@ -87,6 +96,9 @@ async function notifyTaskAssignmentChange(
             new_assignee: newAssignee?.name
           }
         });
+        const pushPayload = { title: newTitle, body: newMessage, url: `/tasks/${taskId}`, category: 'task_assignment' };
+        sendWebPushToUser(newAssigneeId, pushPayload).catch(() => {});
+        sendTelegramToUser(newAssigneeId, pushPayload).catch(() => {});
       }
 
       // 3. 관련 팀에 알림 (선택사항)

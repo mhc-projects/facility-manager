@@ -4,6 +4,7 @@ import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/li
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { sendWebPushToUser, sendWebPushToUsers } from '@/lib/send-push';
+import { sendTelegramToUser } from '@/lib/send-telegram';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -639,6 +640,7 @@ async function createTierNotification(notificationData: any) {
 
   if (notification_tier === 'personal' && target_user_id) {
     sendWebPushToUser(target_user_id, pushPayload).catch(() => {});
+    sendTelegramToUser(target_user_id, pushPayload).catch(() => {});
   } else if (notification_tier === 'team') {
     // 팀/부서 소속 사용자 조회 후 발송
     const teamQuery = target_team_id
@@ -646,7 +648,9 @@ async function createTierNotification(notificationData: any) {
       : supabaseAdmin.from('employees').select('id').eq('department_id', target_department_id).eq('is_active', true);
     teamQuery.then(({ data }) => {
       if (data && data.length > 0) {
-        sendWebPushToUsers(data.map((u: any) => u.id), pushPayload).catch(() => {});
+        const userIds = data.map((u: any) => u.id);
+        sendWebPushToUsers(userIds, pushPayload).catch(() => {});
+        userIds.forEach((id: string) => sendTelegramToUser(id, pushPayload).catch(() => {}));
       }
     }).catch(() => {});
   } else if (notification_tier === 'company') {
@@ -654,7 +658,9 @@ async function createTierNotification(notificationData: any) {
     supabaseAdmin.from('employees').select('id').eq('is_active', true).eq('is_deleted', false)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          sendWebPushToUsers(data.map((u: any) => u.id), pushPayload).catch(() => {});
+          const userIds = data.map((u: any) => u.id);
+          sendWebPushToUsers(userIds, pushPayload).catch(() => {});
+          userIds.forEach((id: string) => sendTelegramToUser(id, pushPayload).catch(() => {}));
         }
       }).catch(() => {});
   }
