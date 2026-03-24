@@ -13,14 +13,10 @@ import {
   AlertTriangle,
   CheckCircle,
   Bell,
-  Users,
   Building,
-  User,
   Sliders,
   Plug,
   Send,
-  Trash2,
-  Edit3,
   Eye,
   ShieldCheck,
   MessageCircle,
@@ -74,15 +70,6 @@ function AdminSettingsContent() {
   const [isLoadingCriteria, setIsLoadingCriteria] = useState(true);
   const [isSavingCriteria, setIsSavingCriteria] = useState(false);
 
-  // 알림 설정 상태
-  const [notificationStats, setNotificationStats] = useState({
-    departments: 0,
-    teams: 0,
-    notifications: 0,
-    user_notifications: 0
-  });
-  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
-
   // 공통 메시지 상태
   const [message, setMessage] = useState<{ type: 'success' | 'error' | null; text: string }>({ type: null, text: '' });
 
@@ -119,7 +106,6 @@ function AdminSettingsContent() {
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     loadCriteria();
-    loadNotificationStats();
     loadTelegramStatus();
   }, []);
 
@@ -210,28 +196,6 @@ function AdminSettingsContent() {
       console.error('Failed to load criteria:', error);
     } finally {
       setIsLoadingCriteria(false);
-    }
-  };
-
-  // 알림 통계 로드
-  const loadNotificationStats = async () => {
-    try {
-      setIsLoadingNotifications(true);
-      const response = await fetch('/api/migrate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify-migration' })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setNotificationStats(data.counts);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load notification stats:', error);
-    } finally {
-      setIsLoadingNotifications(false);
     }
   };
 
@@ -386,7 +350,7 @@ function AdminSettingsContent() {
       id: 'notifications' as const,
       name: '알림 관리',
       icon: Bell,
-      description: '3-tier 알림 시스템 관리'
+      description: '알림 채널 설정'
     },
     {
       id: 'organization' as const,
@@ -597,96 +561,8 @@ function AdminSettingsContent() {
           {/* 알림 관리 탭 */}
           {activeTab === 'notifications' && (
             <div className="p-3 md:p-4 lg:p-6">
-              {/* 3-tier 알림 시스템 현황 */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 lg:gap-6 mb-4 md:mb-6">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 md:p-3 lg:p-4">
-                  <div className="flex items-center gap-1 md:gap-2 lg:gap-3">
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Building className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] md:text-xs lg:text-sm font-medium text-blue-900">부서</p>
-                      <p className="text-lg md:text-xl lg:text-2xl font-bold text-blue-700">{notificationStats.departments}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-green-50 border border-green-200 rounded-lg p-2 md:p-3 lg:p-4">
-                  <div className="flex items-center gap-1 md:gap-2 lg:gap-3">
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Users className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] md:text-xs lg:text-sm font-medium text-green-900">팀</p>
-                      <p className="text-lg md:text-xl lg:text-2xl font-bold text-green-700">{notificationStats.teams}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 md:p-3 lg:p-4">
-                  <div className="flex items-center gap-1 md:gap-2 lg:gap-3">
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Bell className="w-4 h-4 md:w-5 md:h-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] md:text-xs lg:text-sm font-medium text-purple-900">알림</p>
-                      <p className="text-lg md:text-xl lg:text-2xl font-bold text-purple-700">{notificationStats.notifications}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 md:p-3 lg:p-4">
-                  <div className="flex items-center gap-1 md:gap-2 lg:gap-3">
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <User className="w-4 h-4 md:w-5 md:h-5 text-orange-600" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] md:text-xs lg:text-sm font-medium text-orange-900">사용자 알림</p>
-                      <p className="text-lg md:text-xl lg:text-2xl font-bold text-orange-700">{notificationStats.user_notifications}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 알림 관리 기능들 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {/* 알림 생성 */}
-                <div className="border border-gray-200 rounded-lg p-4 md:p-5 lg:p-6">
-                  <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4 flex items-center gap-2">
-                    <Bell className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
-                    알림 생성
-                  </h3>
-                  <p className="text-xs md:text-sm text-gray-600 mb-3 md:mb-4">
-                    개인, 팀, 전사 알림을 생성하고 관리할 수 있습니다.
-                  </p>
-                  <button
-                    onClick={() => router.push('/admin/notifications')}
-                    className="w-full px-3 md:px-4 py-2 text-sm md:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    알림 관리 페이지 열기
-                  </button>
-                </div>
-
-                {/* 마이그레이션 도구 */}
-                <div className="border border-gray-200 rounded-lg p-4 md:p-5 lg:p-6">
-                  <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4 flex items-center gap-2">
-                    <Settings className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
-                    시스템 관리
-                  </h3>
-                  <p className="text-xs md:text-sm text-gray-600 mb-3 md:mb-4">
-                    3-tier 알림 시스템의 데이터베이스 상태를 확인하고 관리할 수 있습니다.
-                  </p>
-                  <button
-                    onClick={() => router.push('/admin/migrate')}
-                    className="w-full px-3 md:px-4 py-2 text-sm md:text-base bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    시스템 관리 도구 열기
-                  </button>
-                </div>
-              </div>
-
               {/* 텔레그램 알림 연결 */}
-              <div className="mt-4 md:mt-6 border border-blue-200 rounded-lg p-4 md:p-5 bg-blue-50/30">
+              <div className="border border-blue-200 rounded-lg p-4 md:p-5 bg-blue-50/30">
                 <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
                   <MessageCircle className="w-5 h-5 text-blue-500" />
                   텔레그램 알림 연결
@@ -762,16 +638,6 @@ function AdminSettingsContent() {
                 )}
               </div>
 
-              {/* 3-tier 시스템 정보 */}
-              <div className="mt-4 md:mt-6 p-3 md:p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <h4 className="text-xs md:text-sm font-medium text-gray-900 mb-2">📢 3-Tier 알림 시스템</h4>
-                <ul className="text-[10px] md:text-xs text-gray-700 space-y-0.5 md:space-y-1">
-                  <li>• <strong>개인 알림</strong>: 특정 사용자에게만 전달되는 개인적인 알림</li>
-                  <li>• <strong>팀 알림</strong>: 특정 팀 또는 부서 구성원에게 전달되는 그룹 알림</li>
-                  <li>• <strong>전사 알림</strong>: 모든 직원에게 전달되는 공지사항 및 중요 알림</li>
-                  <li>• 각 알림은 우선순위와 만료일을 설정할 수 있으며, 읽음 상태를 추적합니다.</li>
-                </ul>
-              </div>
             </div>
           )}
 
