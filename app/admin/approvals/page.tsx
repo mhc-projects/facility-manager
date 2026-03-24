@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import ApprovalStatusBadge, { DOC_TYPE_LABEL } from '@/components/approvals/ApprovalStatusBadge'
@@ -53,7 +53,7 @@ const STATUS_BORDER: Record<string, string> = {
   cancelled: 'border-l-gray-300',
 }
 
-export default function ApprovalsPage() {
+function ApprovalsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
@@ -329,5 +329,13 @@ export default function ApprovalsPage() {
         </div>
       </div>
     </AdminLayout>
+  )
+}
+
+export default function ApprovalsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ApprovalsContent />
+    </Suspense>
   )
 }
