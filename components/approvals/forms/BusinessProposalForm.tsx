@@ -39,7 +39,7 @@ export default function BusinessProposalForm({ data, onChange, disabled = false 
       .then(r => r.json())
       .then(res => {
         if (res.success && Array.isArray(res.data)) {
-          setDepartments(res.data.map((d: any) => ({ id: d.id, name: d.name })))
+          setDepartments(res.data.map((d: any) => ({ id: String(d.id), name: d.name })))
         }
       })
       .catch(() => {})
