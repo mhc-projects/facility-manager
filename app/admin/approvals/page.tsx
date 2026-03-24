@@ -127,7 +127,7 @@ function ApprovalsContent() {
     if (!user?.id) return
 
     const channel = supabase
-      .channel(`approvals-page-badge:${user.id}`)
+      .channel(`approval-notify:${user.id}`)
       // postgres_changes: 본인 문서 변경 감지 (RLS 허용 범위 내)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'approval_documents' },
         () => { fetchPendingCount(); fetchDocs() })
@@ -136,6 +136,7 @@ function ApprovalsContent() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_steps' },
         () => { fetchPendingCount(); fetchDocs() })
       // Broadcast: 서버 API가 직접 push — RLS 제약 없이 크로스 유저 변경 반영
+      // 채널명 서버와 일치: approve/reject/submit/express-approve 모두 approval-notify:{userId} 로 broadcast
       .on('broadcast', { event: 'new_notification' }, (payload) => {
         const cat = payload.payload?.category
         if (['report_submitted', 'report_approved', 'report_rejected'].includes(cat)) {

@@ -386,6 +386,16 @@ export async function POST(
       documentType: doc.document_type,
     });
 
+    // 상신자에게 진행 단계 변경 알림 (목록 실시간 갱신용 silent broadcast)
+    if (doc.requester_id !== nextPendingStep.approver_id) {
+      await supabaseAdmin.channel(`approval-notify:${doc.requester_id}`)
+        .send({
+          type: 'broadcast',
+          event: 'new_notification',
+          payload: { category: 'report_submitted', silent: true },
+        });
+    }
+
     // 문서 상세 페이지 실시간 갱신 트리거
     await supabaseAdmin.channel(`approval-doc:${params.id}`)
       .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'pending' } });
