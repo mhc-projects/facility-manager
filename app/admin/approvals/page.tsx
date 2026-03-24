@@ -67,6 +67,8 @@ function ApprovalsContent() {
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const channelRef = useRef<RealtimeChannel | null>(null)
+  // tabRef: Realtime 클로저에서 최신 tab 값 참조용
+  const tabRef = useRef<TabType>(tab)
 
   const fetchDocs = useCallback(async () => {
     const token = TokenManager.getToken()
@@ -107,6 +109,9 @@ function ApprovalsContent() {
     } catch {}
   }, [])
 
+  // tabRef 동기화: Realtime 클로저가 항상 최신 tab을 볼 수 있도록
+  useEffect(() => { tabRef.current = tab }, [tab])
+
   // URL ?tab= 파라미터 변경 감지 (배너에서 이동 시)
   useEffect(() => {
     const t = searchParams?.get('tab')
@@ -130,18 +135,22 @@ function ApprovalsContent() {
       .channel(`approval-notify:${user.id}`)
       // postgres_changes: 본인 문서 변경 감지 (RLS 허용 범위 내)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'approval_documents' },
-        () => { fetchPendingCount(); fetchDocs() })
+        () => { fetchPendingCount(); if (tabRef.current === 'pending') fetchDocs() })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_documents' },
-        () => { fetchPendingCount(); fetchDocs() })
+        () => { fetchPendingCount(); if (tabRef.current === 'pending') fetchDocs() })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_steps' },
-        () => { fetchPendingCount(); fetchDocs() })
+        () => { fetchPendingCount(); if (tabRef.current === 'pending') fetchDocs() })
       // Broadcast: 서버 API가 직접 push — RLS 제약 없이 크로스 유저 변경 반영
       // 채널명 서버와 일치: approve/reject/submit/express-approve 모두 approval-notify:{userId} 로 broadcast
       .on('broadcast', { event: 'new_notification' }, (payload) => {
         const cat = payload.payload?.category
         if (['report_submitted', 'report_approved', 'report_rejected', 'doc_deleted'].includes(cat)) {
           fetchPendingCount()
-          fetchDocs()
+          // tabRef로 현재 탭 확인: pending 탭이면 fetchDocs도 즉시 실행
+          // (fetchDocs는 tab 클로저를 캡처하므로 tabRef 없이는 갱신 타이밍이 어긋남)
+          if (tabRef.current === 'pending') {
+            fetchDocs()
+          }
         }
       })
       .subscribe()
