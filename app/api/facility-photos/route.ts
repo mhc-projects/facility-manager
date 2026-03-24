@@ -9,7 +9,6 @@ import { createHash } from 'crypto';
 import { createFacilityPhotoTracker } from '@/utils/facility-photo-tracker';
 import { generateFacilityFileName, generateBasicFileName } from '@/utils/filename-generator';
 import { generateBusinessId, convertLegacyPath } from '@/utils/business-id-generator';
-import imageCompression from 'browser-image-compression';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -51,29 +50,11 @@ async function calculateFileHash(file: File): Promise<string> {
   return hash.digest('hex');
 }
 
-// 이미지 압축
+// 이미지 압축 - 클라이언트(supabase-direct-upload)에서 이미 압축 완료 후 업로드하므로
+// 서버에서 재압축 불필요. browser-image-compression은 브라우저 전용 라이브러리라
+// 서버 번들에 포함되지 않도록 no-op으로 대체.
 async function compressImageFile(file: File): Promise<File> {
-  if (!file.type.startsWith('image/') || file.size <= 5 * 1024 * 1024) {
-    return file;
-  }
-
-  try {
-    const compressedFile = await imageCompression(file, {
-      maxSizeMB: 4,
-      maxWidthOrHeight: 1600,
-      useWebWorker: true,
-      initialQuality: 0.9,
-      fileType: 'image/webp'
-    });
-
-    return new File([compressedFile], file.name, {
-      type: compressedFile.type,
-      lastModified: Date.now()
-    });
-  } catch (error) {
-    console.warn('이미지 압축 실패, 원본 사용:', error);
-    return file;
-  }
+  return file;
 }
 
 // 사업장 ID 가져오기 또는 생성 - ✅ business_info 테이블 사용 (Direct PostgreSQL)

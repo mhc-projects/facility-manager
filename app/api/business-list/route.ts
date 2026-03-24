@@ -61,13 +61,12 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       console.log('🔍 [BUSINESS-LIST-ALL] 사진 개수 조회 시작 (Direct PostgreSQL 사용)');
 
       // Direct PostgreSQL 쿼리로 사진 개수 조회
-      const placeholdersAll = businessIdsForPhotos.map((_: any, i: number) => `$${i + 1}`).join(', ');
       const photoCountsAll = await queryAll(
         `SELECT business_id, COUNT(*) as photo_count
          FROM uploaded_files
-         WHERE business_id IN (${placeholdersAll})
+         WHERE business_id = ANY($1::uuid[])
          GROUP BY business_id`,
-        businessIdsForPhotos
+        [businessIdsForPhotos]
       );
 
       const photoCountMapAll = new Map<string, number>();

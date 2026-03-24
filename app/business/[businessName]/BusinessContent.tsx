@@ -392,14 +392,6 @@ export default function BusinessContent() {
     loadData();
   }, [loadData]);
 
-
-  // Reload data when system type changes
-  useEffect(() => {
-    if (businessName) {
-      loadData();
-    }
-  }, [systemType, businessName]);
-
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

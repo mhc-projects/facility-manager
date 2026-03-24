@@ -53,6 +53,7 @@ export function useSupabaseRealtime(options: UseSupabaseRealtimeOptions = {}) {
   const maxReconnectAttempts = 5;
   const isComponentMountedRef = useRef(true);
   const isSubscribingRef = useRef(false); // 중복 구독 방지 플래그
+  const subscriptionCountRef = useRef(0); // stale closure 방지: 항상 최신 카운트 유지
 
   // 콜백 함수들을 ref로 저장하여 의존성 문제 해결
   const onNotificationRef = useRef(onNotification);
@@ -122,9 +123,10 @@ export function useSupabaseRealtime(options: UseSupabaseRealtimeOptions = {}) {
               });
             }
 
+            subscriptionCountRef.current += 1;
             updateState({
               lastEvent: new Date(),
-              subscriptionCount: state.subscriptionCount + 1
+              subscriptionCount: subscriptionCountRef.current
             });
 
             onNotificationRef.current?.(payload);

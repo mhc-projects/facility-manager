@@ -325,22 +325,6 @@ export function useOptimisticUpload(options: UseOptimisticUploadOptions = {}) {
             console.warn('⚠️ [BACKGROUND-SYNC] 백그라운드 동기화 실패:', error);
           }
 
-          // 3단계: 안전을 위한 지연된 재동기화 (UI는 이미 업데이트됨)
-          setTimeout(() => {
-            try {
-              const retryEvent = new CustomEvent('progressiveUploadComplete', {
-                detail: {
-                  uploadedFiles: compatibleResponse.files,
-                  photoId: photo.id,
-                  retry: true
-                }
-              });
-              window.dispatchEvent(retryEvent);
-              console.log(`🔄 [DELAYED-SYNC] ${photo.file.name} 지연 동기화 보장`);
-            } catch (retryError) {
-              console.warn('⚠️ [DELAYED-SYNC] 지연 동기화 실패:', retryError);
-            }
-          }, 1000); // 3초에서 1초로 단축
         }
 
         return { photo, response: compatibleResponse, error: null };
