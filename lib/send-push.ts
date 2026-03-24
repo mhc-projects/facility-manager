@@ -46,8 +46,8 @@ export async function sendWebPushToUser(
     const notificationPayload = JSON.stringify({
       title: payload.title,
       body: payload.body,
-      icon: payload.icon || '/icon-192.svg',
-      badge: payload.badge || '/icon-192.svg',
+      icon: payload.icon || '/favicon.png',
+      badge: payload.badge || '/favicon.png',
       tag: payload.tag || 'facility-notification',
       data: {
         url: payload.url || '/',

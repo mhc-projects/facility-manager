@@ -264,11 +264,10 @@ self.addEventListener('push', (event) => {
   let notificationData = {
     title: '시설 관리 시스템',
     body: '새로운 알림이 도착했습니다.',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: '/favicon.png',
+    badge: '/favicon.png',
     tag: 'facility-notification',
     data: {},
-    actions: []
   };
 
   // 푸시 데이터 파싱
@@ -287,17 +286,15 @@ self.addEventListener('push', (event) => {
   }
 
   // 알림 유형별 설정
+  // iOS는 actions, vibrate, renotify 미지원 — 포함 시 알림 드롭될 수 있어 제거
   const notificationOptions = {
     body: notificationData.body,
     icon: notificationData.icon,
     badge: notificationData.badge,
     tag: notificationData.tag,
     data: notificationData.data,
-    actions: getNotificationActions(notificationData.data?.type),
-    requireInteraction: true,
-    renotify: true,
+    requireInteraction: false,
     timestamp: Date.now(),
-    vibrate: [200, 100, 200]
   };
 
   event.waitUntil(
