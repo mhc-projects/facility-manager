@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import ApprovalStatusBadge, { DOC_TYPE_LABEL } from '@/components/approvals/ApprovalStatusBadge'
 import { TokenManager } from '@/lib/api-client'
@@ -55,8 +55,12 @@ const STATUS_BORDER: Record<string, string> = {
 
 export default function ApprovalsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
-  const [tab, setTab] = useState<TabType>('my')
+  const [tab, setTab] = useState<TabType>(() => {
+    const t = searchParams?.get('tab')
+    return (t === 'pending' || t === 'my' || t === 'all') ? t : 'my'
+  })
   const [docs, setDocs] = useState<ApprovalDoc[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -102,6 +106,12 @@ export default function ApprovalsPage() {
       if (data.success) setPendingCount(data.count || 0)
     } catch {}
   }, [])
+
+  // URL ?tab= 파라미터 변경 감지 (배너에서 이동 시)
+  useEffect(() => {
+    const t = searchParams?.get('tab')
+    if (t === 'pending' || t === 'my' || t === 'all') setTab(t)
+  }, [searchParams])
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
   useEffect(() => { fetchPendingCount() }, [fetchPendingCount])

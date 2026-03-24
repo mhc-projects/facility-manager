@@ -124,12 +124,14 @@ export default function ApprovalPendingBanner() {
   }
 
   const handleGoTo = () => {
-    router.push('/admin/approvals?tab=pending')
     handleDismiss()
+    router.push('/admin/approvals?tab=pending')
+    // 이미 결재 페이지에 있을 때도 최신 데이터 반영
+    router.refresh()
   }
 
   // 결재 관련 페이지(상세, 작성)에서는 숨김
-  const isApprovalPage = /^\/admin\/approvals(\/|$)/.test(pathname)
+  const isApprovalPage = /^\/admin\/approvals(\/|$)/.test(pathname ?? '')
   if (!visible || isApprovalPage) return null
 
   return (
