@@ -34,7 +34,12 @@ export default function ApprovalPendingBanner() {
       if (data.success) {
         const newCount = data.count || 0
         setCount(prev => {
-          // Reappear if count increased since dismissal
+          // count가 줄었으면 dismissed 초기화 (결재 완료 반영)
+          if (newCount < prev && dismissedRef.current) {
+            setDismissed(false)
+            sessionStorage.removeItem(STORAGE_KEY)
+          }
+          // count가 늘었으면 dismissed 해제 (새 결재 도착)
           if (newCount > prev && dismissedRef.current) {
             const dismissedAt = sessionStorage.getItem(STORAGE_KEY)
             if (dismissedAt && newCount > Number(dismissedAt)) {
@@ -49,10 +54,10 @@ export default function ApprovalPendingBanner() {
     }
   }, [])
 
-  // 초기 로드 + 60초 폴링 (fallback)
+  // 초기 로드 + 15초 폴링 (Realtime 미수신 보완)
   useEffect(() => {
     fetchCount()
-    const interval = setInterval(fetchCount, 60_000)
+    const interval = setInterval(fetchCount, 15_000)
     return () => clearInterval(interval)
   }, [fetchCount])
 
@@ -103,10 +108,13 @@ export default function ApprovalPendingBanner() {
   }, [user?.id, fetchCount])
 
   useEffect(() => {
-    if (count > 0 && !dismissed) {
-      setVisible(true)
-    } else {
+    if (count === 0) {
+      // 결재 건수가 0이면 dismissed 상태와 무관하게 즉시 숨김
       setVisible(false)
+      setDismissed(false)
+      sessionStorage.removeItem(STORAGE_KEY)
+    } else if (!dismissed) {
+      setVisible(true)
     }
   }, [count, dismissed])
 
