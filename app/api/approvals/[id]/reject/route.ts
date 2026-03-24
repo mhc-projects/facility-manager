@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { sendWebPushToUser } from '@/lib/send-push';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,14 @@ async function sendNotification({
       });
 
     console.log('[APPROVAL] 반려 알림 broadcast 발송 완료 → user:', targetUserId);
+
+    // Web Push (앱이 닫혀있어도 네이티브 알림)
+    await sendWebPushToUser(targetUserId, {
+      title,
+      body: message,
+      url: `/admin/approvals/${documentId}`,
+      category: 'report_rejected',
+    });
   } catch (e) { console.warn('[APPROVAL] 반려 알림 발송 예외:', e); }
 }
 

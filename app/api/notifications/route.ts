@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
+import { sendWebPushToUser, sendWebPushToUsers } from '@/lib/send-push';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -627,6 +628,36 @@ async function createTierNotification(notificationData: any) {
 
   // 대상 사용자 결정 및 user_notifications 생성은 트리거에서 자동 처리됨
   console.log('✅ [TIER-NOTIFICATIONS] 생성 성공:', newNotification.id, '- Tier:', notification_tier);
+
+  // Web Push 발송 (비동기 - 실패해도 응답에 영향 없음)
+  const pushPayload = {
+    title,
+    body: message,
+    url: related_url,
+    category,
+  };
+
+  if (notification_tier === 'personal' && target_user_id) {
+    sendWebPushToUser(target_user_id, pushPayload).catch(() => {});
+  } else if (notification_tier === 'team') {
+    // 팀/부서 소속 사용자 조회 후 발송
+    const teamQuery = target_team_id
+      ? supabaseAdmin.from('employees').select('id').eq('team_id', target_team_id).eq('is_active', true)
+      : supabaseAdmin.from('employees').select('id').eq('department_id', target_department_id).eq('is_active', true);
+    teamQuery.then(({ data }) => {
+      if (data && data.length > 0) {
+        sendWebPushToUsers(data.map((u: any) => u.id), pushPayload).catch(() => {});
+      }
+    }).catch(() => {});
+  } else if (notification_tier === 'company') {
+    // 전체 활성 사용자에게 발송
+    supabaseAdmin.from('employees').select('id').eq('is_active', true).eq('is_deleted', false)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          sendWebPushToUsers(data.map((u: any) => u.id), pushPayload).catch(() => {});
+        }
+      }).catch(() => {});
+  }
 
   return createSuccessResponse({
     notification: newNotification,

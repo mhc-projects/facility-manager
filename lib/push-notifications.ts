@@ -18,8 +18,8 @@ class PushNotificationManager {
   private registration: ServiceWorkerRegistration | null = null;
   private subscription: PushSubscription | null = null;
 
-  // VAPID 공개 키 (실제 운영 시에는 환경변수로 관리)
-  private readonly VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa40HI5hmsteaHc9l8';
+  // VAPID 공개 키 (환경변수에서 읽음)
+  private readonly VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 
   private constructor() {}
 
