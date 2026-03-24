@@ -328,6 +328,10 @@ export async function POST(
 
     console.log(`[EXPRESS-APPROVE] 전결 완료: doc=${params.id}, executive=${currentUser.name}(${userId})`);
 
+    // 문서 상세 페이지 실시간 갱신 트리거
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'approved' } });
+
     return NextResponse.json({ success: true, message: '전결 처리 완료' });
   } catch (error: any) {
     console.error('[API] POST /approvals/[id]/express-approve error:', error);

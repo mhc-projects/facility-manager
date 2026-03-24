@@ -67,6 +67,10 @@ export async function sendWebPushToUser(
             },
           },
           notificationPayload,
+          {
+            urgency: 'high',  // Android Doze 모드 우회 (FCM 높은 우선순위)
+            TTL: 86400,       // 24시간 내 미수신 시 재시도 (iOS/Android 공통)
+          },
         ),
       ),
     );

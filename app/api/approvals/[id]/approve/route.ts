@@ -361,6 +361,10 @@ export async function POST(
         await createLeaveCalendarEvent(doc, requesterEmployee?.name || '담당자');
       }
 
+      // 문서 상세 페이지 실시간 갱신 트리거
+      await supabaseAdmin.channel(`approval-doc:${params.id}`)
+        .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'approved' } });
+
       return NextResponse.json({ success: true, message: '최종 승인 완료', finalApproved: true });
     }
 
@@ -381,6 +385,10 @@ export async function POST(
       documentId: params.id, documentNumber: doc.document_number,
       documentType: doc.document_type,
     });
+
+    // 문서 상세 페이지 실시간 갱신 트리거
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'pending' } });
 
     return NextResponse.json({ success: true, message: '승인 완료', nextStep });
   } catch (error: any) {

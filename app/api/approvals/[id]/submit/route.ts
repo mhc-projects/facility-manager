@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -214,6 +215,10 @@ export async function POST(
         documentType: doc.document_type,
       });
     }
+
+    // 문서 상세 페이지 실시간 갱신 트리거
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: newStatus } });
 
     return NextResponse.json({ success: true, message: isResubmit ? '재상신 완료' : '상신 완료' });
   } catch (error: any) {

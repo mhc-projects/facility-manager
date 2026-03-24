@@ -174,6 +174,10 @@ export async function POST(
       documentType: doc.document_type,
     });
 
+    // 문서 상세 페이지 실시간 갱신 트리거
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'rejected' } });
+
     return NextResponse.json({ success: true, message: '반려 완료' });
   } catch (error: any) {
     console.error('[API] POST /approvals/[id]/reject error:', error);

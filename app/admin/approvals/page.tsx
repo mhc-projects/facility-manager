@@ -122,18 +122,27 @@ function ApprovalsContent() {
     return () => clearInterval(interval)
   }, [fetchPendingCount])
 
-  // Realtime: approval_documents/steps 변경 시 배지 즉시 갱신
+  // Realtime: postgres_changes(RLS 허용 범위) + Broadcast(서버에서 직접 push) 이중 구독
   useEffect(() => {
     if (!user?.id) return
 
     const channel = supabase
       .channel(`approvals-page-badge:${user.id}`)
+      // postgres_changes: 본인 문서 변경 감지 (RLS 허용 범위 내)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'approval_documents' },
         () => { fetchPendingCount(); fetchDocs() })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_documents' },
         () => { fetchPendingCount(); fetchDocs() })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_steps' },
         () => { fetchPendingCount(); fetchDocs() })
+      // Broadcast: 서버 API가 직접 push — RLS 제약 없이 크로스 유저 변경 반영
+      .on('broadcast', { event: 'new_notification' }, (payload) => {
+        const cat = payload.payload?.category
+        if (['report_submitted', 'report_approved', 'report_rejected'].includes(cat)) {
+          fetchPendingCount()
+          fetchDocs()
+        }
+      })
       .subscribe()
 
     channelRef.current = channel

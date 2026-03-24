@@ -18,6 +18,12 @@ export default function ClientProviders({
 
   useEffect(() => {
     setMounted(true);
+
+    // Push 구독 자동 갱신: 세션/로그인 여부와 무관하게 실행
+    // iOS APNs endpoint 만료 대응 + Android FCM 구독 유지
+    import('@/lib/push-notifications').then(({ pushNotificationManager }) => {
+      pushNotificationManager.ensureSubscription();
+    }).catch(() => {/* 무시 */});
   }, []);
 
   return (

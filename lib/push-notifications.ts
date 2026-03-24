@@ -86,25 +86,25 @@ class PushNotificationManager {
     }
   }
 
-  // 서버에 구독 정보 전송
-  private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
+  // 서버에 구독 정보 전송 (JWT 있으면 함께, 없어도 device_token으로 갱신 가능)
+  private async sendSubscriptionToServer(subscription: PushSubscription, deviceToken?: string): Promise<void> {
     try {
       const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch('/api/push-subscription', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
-          subscription: subscription.toJSON()
-        })
+          subscription: subscription.toJSON(),
+          device_token: deviceToken || this.getOrCreateDeviceToken(),
+        }),
       });
 
       if (!response.ok) {
         throw new Error('구독 정보 전송 실패');
       }
-
     } catch (error) {
       console.error('서버 구독 정보 전송 실패:', error);
       throw error;
@@ -235,6 +235,51 @@ class PushNotificationManager {
   // 알림 권한 상태 확인
   getPermissionStatus(): NotificationPermission {
     return Notification.permission;
+  }
+
+  // device_token: localStorage에 저장된 디바이스 고유 식별자 (세션 독립)
+  private getOrCreateDeviceToken(): string {
+    const key = 'push_device_token';
+    let token = localStorage.getItem(key);
+    if (!token) {
+      // 랜덤 16바이트 hex 문자열 생성
+      const arr = new Uint8Array(16);
+      crypto.getRandomValues(arr);
+      token = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem(key, token);
+    }
+    return token;
+  }
+
+  /**
+   * 앱 시작 시 세션 유무와 무관하게 Push 구독을 서버에 등록/갱신합니다.
+   * iOS APNs endpoint 만료, Android 구독 갱신 모두 처리합니다.
+   */
+  async ensureSubscription(): Promise<void> {
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      if (!this.VAPID_PUBLIC_KEY) return;
+
+      // SW ready 대기 후 구독 획득 (없으면 신규 생성)
+      const reg = await navigator.serviceWorker.ready;
+      this.registration = reg;
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: this.urlBase64ToUint8Array(this.VAPID_PUBLIC_KEY) as BufferSource,
+        });
+      }
+      this.subscription = sub;
+
+      const deviceToken = this.getOrCreateDeviceToken();
+      await this.sendSubscriptionToServer(sub, deviceToken);
+    } catch (error) {
+      // 조용히 실패 — 메인 앱 흐름에 영향 없음
+      console.warn('[PUSH] ensureSubscription 실패 (무시):', error);
+    }
   }
 
   // VAPID 키 변환 유틸리티

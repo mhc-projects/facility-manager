@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import AdminLayout from '@/components/ui/AdminLayout'
 import ApprovalLineHeader, { ApprovalStep } from '@/components/approvals/ApprovalLineHeader'
 import ApprovalStatusBadge, { DOC_TYPE_LABEL } from '@/components/approvals/ApprovalStatusBadge'
@@ -96,6 +98,7 @@ export default function ApprovalDetailPage() {
   const [rejectSheetOpen, setRejectSheetOpen] = useState(false)
   const [rejectComment, setRejectComment] = useState('')
   const [processing, setProcessing] = useState(false)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [expressModalOpen, setExpressModalOpen] = useState(false)
   const [expressComment, setExpressComment] = useState('')
@@ -123,6 +126,23 @@ export default function ApprovalDetailPage() {
   }, [id])
 
   useEffect(() => { fetchDoc() }, [fetchDoc])
+
+  // 문서 ID 기반 Broadcast 구독: 다른 사용자가 처리해도 즉시 갱신
+  useEffect(() => {
+    if (!id) return
+    const channel = supabase
+      .channel(`approval-doc:${id}`)
+      .on('broadcast', { event: 'doc_updated' }, () => {
+        // 편집 중이 아닐 때만 자동 갱신 (편집 내용 덮어쓰기 방지)
+        if (!editing) fetchDoc()
+      })
+      .subscribe()
+    channelRef.current = channel
+    return () => {
+      supabase.removeChannel(channel)
+      channelRef.current = null
+    }
+  }, [id, editing, fetchDoc])
 
   const isMyDoc = doc?.requester_id === user?.id
   const isSuperAdmin = (user?.role ?? 0) >= 4
