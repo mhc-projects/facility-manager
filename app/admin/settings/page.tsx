@@ -23,6 +23,10 @@ import {
   Edit3,
   Eye,
   ShieldCheck,
+  MessageCircle,
+  Link2,
+  Link2Off,
+  ExternalLink,
 } from 'lucide-react';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
@@ -105,10 +109,18 @@ function AdminSettingsContent() {
     work_content: '작업 완료'
   }, null, 2));
 
+  // 텔레그램 연결 상태
+  const [telegramConnected, setTelegramConnected] = useState(false);
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramDeepLink, setTelegramDeepLink] = useState('');
+  const [telegramBotUsername, setTelegramBotUsername] = useState('');
+  const [telegramLoading, setTelegramLoading] = useState(false);
+
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     loadCriteria();
     loadNotificationStats();
+    loadTelegramStatus();
   }, []);
 
   // 탭 변경 시 메시지 초기화
@@ -271,6 +283,59 @@ function AdminSettingsContent() {
     } finally {
       setSavingMgmt(false);
     }
+  };
+
+  // 텔레그램 연결 상태 조회
+  const loadTelegramStatus = async () => {
+    const token = TokenManager.getToken();
+    if (!token) return;
+    try {
+      const res = await fetch('/api/telegram/connect', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setTelegramConnected(data.connected);
+    } catch {}
+  };
+
+  // 텔레그램 연결 토큰 발급
+  const handleTelegramConnect = async () => {
+    const token = TokenManager.getToken();
+    if (!token) return;
+    setTelegramLoading(true);
+    try {
+      const res = await fetch('/api/telegram/connect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramToken(data.token);
+        setTelegramDeepLink(data.deepLink || '');
+        setTelegramBotUsername(data.botUsername || '');
+      }
+    } catch {}
+    setTelegramLoading(false);
+  };
+
+  // 텔레그램 연결 해제
+  const handleTelegramDisconnect = async () => {
+    const token = TokenManager.getToken();
+    if (!token) return;
+    setTelegramLoading(true);
+    try {
+      const res = await fetch('/api/telegram/connect', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramConnected(false);
+        setTelegramToken('');
+        setTelegramDeepLink('');
+      }
+    } catch {}
+    setTelegramLoading(false);
   };
 
   // 기본값으로 리셋
@@ -608,6 +673,83 @@ function AdminSettingsContent() {
                     시스템 관리 도구 열기
                   </button>
                 </div>
+              </div>
+
+              {/* 텔레그램 알림 연결 */}
+              <div className="mt-4 md:mt-6 border border-blue-200 rounded-lg p-4 md:p-5 bg-blue-50/30">
+                <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <MessageCircle className="w-5 h-5 text-blue-500" />
+                  텔레그램 알림 연결
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  iOS에서 PWA 알림이 불안정할 경우 텔레그램으로 결재 알림을 받을 수 있습니다.
+                  연결 후 상신·승인·반려 이벤트 발생 시 텔레그램 메시지가 즉시 전송됩니다.
+                </p>
+
+                {telegramConnected ? (
+                  <div className="flex items-center justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium">텔레그램 연결됨</span>
+                    </div>
+                    <button
+                      onClick={handleTelegramDisconnect}
+                      disabled={telegramLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      <Link2Off className="w-3.5 h-3.5" />
+                      연결 해제
+                    </button>
+                  </div>
+                ) : telegramToken ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-2">① 아래 버튼을 눌러 텔레그램 봇을 열거나, 봇에서 아래 명령어를 입력하세요:</p>
+                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded font-mono text-sm">
+                        <code className="flex-1 text-blue-700">/start {telegramToken}</code>
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(`/start ${telegramToken}`)}
+                          className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                        >
+                          복사
+                        </button>
+                      </div>
+                    </div>
+                    {telegramDeepLink && (
+                      <a
+                        href={telegramDeepLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        텔레그램 봇 열기
+                      </a>
+                    )}
+                    <p className="text-[10px] text-gray-400">
+                      봇에서 명령어 입력 후 이 페이지를 새로고침하면 연결 상태가 업데이트됩니다.
+                    </p>
+                    <button
+                      onClick={loadTelegramStatus}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      연결 상태 확인
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleTelegramConnect}
+                    disabled={telegramLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                  >
+                    {telegramLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Link2 className="w-4 h-4" />
+                    )}
+                    텔레그램 연결하기
+                  </button>
+                )}
               </div>
 
               {/* 3-tier 시스템 정보 */}

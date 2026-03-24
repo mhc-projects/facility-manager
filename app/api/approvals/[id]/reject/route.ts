@@ -3,6 +3,7 @@ import { queryOne } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendWebPushToUser } from '@/lib/send-push';
+import { sendTelegramToUser } from '@/lib/send-telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +64,13 @@ async function sendNotification({
       body: message,
       url: `/admin/approvals/${documentId}`,
       category: 'report_rejected',
+    });
+
+    // 텔레그램 알림 (iOS 네이티브 알림 대안)
+    await sendTelegramToUser(targetUserId, {
+      title,
+      body: message,
+      url: `/admin/approvals/${documentId}`,
     });
   } catch (e) { console.warn('[APPROVAL] 반려 알림 발송 예외:', e); }
 }
