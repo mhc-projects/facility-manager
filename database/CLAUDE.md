@@ -22,4 +22,11 @@
 |----|------|---|-------|------|
 | #3943 | 11:34 AM | 🔵 | meeting_departments Table Designed as Shared Reference Data Without RLS | ~408 |
 | #3942 | " | 🔵 | Found meeting_departments Table with Explicitly Disabled RLS | ~395 |
+
+### Mar 23, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #6068 | 1:10 PM | 🔵 | Comprehensive data pipeline audit reveals additional field mapping gaps | ~471 |
+| #6066 | 12:51 PM | 🔴 | Fixed greenlink ID/PW fields not saving in business edit modal | ~422 |
 </claude-mem-context>

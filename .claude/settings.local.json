@@ -248,7 +248,17 @@
       "Bash(mkdir -p /Users/mh.c/claude/facility-manager/app/api/approvals/[id]/approve)",
       "Bash(mkdir -p /Users/mh.c/claude/facility-manager/app/api/approvals/[id]/reject)",
       "Bash(mkdir -p \"/Users/mh.c/claude/facility-manager/app/admin/approvals/[id]\")",
-      "Bash(/Users/mh.c/claude/facility-manager/sql/add_realtime_for_approval_tables.sql:*)"
+      "Bash(/Users/mh.c/claude/facility-manager/sql/add_realtime_for_approval_tables.sql:*)",
+      "Bash(git show:*)",
+      "WebFetch(domain:www.nicepayments.co.kr)",
+      "WebFetch(domain:www.nicepay.co.kr)",
+      "WebFetch(domain:blog.oncard.or.kr)",
+      "WebFetch(domain:www.oncard.or.kr)",
+      "WebFetch(domain:www.thebill.co.kr)",
+      "WebFetch(domain:namu.wiki)",
+      "Bash(npx dotenv -e .env -- node -e \":*)",
+      "Bash(SVC=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2ZHZmc2pla3FzaHh0eHRoeGVxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzE1NDA3NywiZXhwIjoyMDgyNzMwMDc3fQ.yk5uwhcA3lHAJDp7LGfcMwIpX5k04qS1glNBILRwvPo\" __NEW_LINE_300b55f2395299e8__ echo \"=== 연차 라벨 일정 최신 항목 확인 ===\" curl -s \"https://uvdvfsjekqshxtxthxeq.supabase.co/rest/v1/calendar_events?select=id,title,description,event_date,end_date,labels,author_name,author_id,created_at&labels=cs.%7B%EC%97%B0%EC%B0%A8%7D&order=created_at.desc&limit=3\" -H \"apikey: $SVC\" -H \"Authorization: Bearer $SVC\")",
+      "Bash(head -20 grep -n \"contacts_list\\\\|admin_manager\" /Users/mh.c/claude/facility-manager/database/extended-schema.sql)"
     ],
     "deny": [],
     "ask": [],

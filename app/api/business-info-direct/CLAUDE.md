@@ -21,4 +21,13 @@
 | #2353 | 12:06 PM | 🔴 | calendar_events Foreign Key Constraint Resolved by Adding NULL Processing | ~443 |
 | #2352 | " | 🟣 | Calendar Events FK Nullification Added to Replace-All Flow | ~386 |
 | #2351 | 12:05 PM | 🟣 | Replace-All Mode Implemented with Foreign Key Cleanup | ~420 |
+
+### Mar 23, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #6114 | 5:15 PM | 🟣 | API Batch Upload Admin Managers JSONB Serialization | ~419 |
+| #6102 | 5:07 PM | ⚖️ | Multiple Admin Managers Design - JSONB Array Approach Selected | ~520 |
+| #6068 | 1:10 PM | 🔵 | Comprehensive data pipeline audit reveals additional field mapping gaps | ~471 |
+| #6066 | 12:51 PM | 🔴 | Fixed greenlink ID/PW fields not saving in business edit modal | ~422 |
 </claude-mem-context>
