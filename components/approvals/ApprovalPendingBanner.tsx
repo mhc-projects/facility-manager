@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { TokenManager } from '@/lib/api-client'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,6 +12,7 @@ const STORAGE_KEY = 'approval_banner_dismissed_count'
 
 export default function ApprovalPendingBanner() {
   const router = useRouter()
+  const pathname = usePathname()
   const { user } = useAuth()
   const [count, setCount] = useState(0)
   const [visible, setVisible] = useState(false)
@@ -119,7 +120,9 @@ export default function ApprovalPendingBanner() {
     handleDismiss()
   }
 
-  if (!visible) return null
+  // 결재 관련 페이지(상세, 작성)에서는 숨김
+  const isApprovalPage = /^\/admin\/approvals(\/|$)/.test(pathname)
+  if (!visible || isApprovalPage) return null
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-2xl shadow-lg shadow-blue-900/20 animate-in slide-in-from-bottom-4 duration-300 whitespace-nowrap">
