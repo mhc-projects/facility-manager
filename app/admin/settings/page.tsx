@@ -313,9 +313,14 @@ function AdminSettingsContent() {
         setTelegramToken(data.token);
         setTelegramDeepLink(data.deepLink || '');
         setTelegramBotUsername(data.botUsername || '');
+      } else {
+        alert(data.error || '코드 발급에 실패했습니다. 다시 시도해 주세요.');
       }
-    } catch {}
-    setTelegramLoading(false);
+    } catch (e) {
+      alert('네트워크 오류가 발생했습니다.');
+    } finally {
+      setTelegramLoading(false);
+    }
   };
 
   // 텔레그램 연결 해제
@@ -333,9 +338,14 @@ function AdminSettingsContent() {
         setTelegramConnected(false);
         setTelegramToken('');
         setTelegramDeepLink('');
+      } else {
+        alert(data.error || '연결 해제에 실패했습니다.');
       }
-    } catch {}
-    setTelegramLoading(false);
+    } catch (e) {
+      alert('네트워크 오류가 발생했습니다.');
+    } finally {
+      setTelegramLoading(false);
+    }
   };
 
   // 기본값으로 리셋
