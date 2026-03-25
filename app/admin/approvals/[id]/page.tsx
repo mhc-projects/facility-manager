@@ -15,7 +15,7 @@ import BusinessProposalForm from '@/components/approvals/forms/BusinessProposalF
 import OvertimeLogForm from '@/components/approvals/forms/OvertimeLogForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
-import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap } from 'lucide-react'
+import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap, Clock, CheckSquare } from 'lucide-react'
 
 interface ApprovalDoc {
   id: string
@@ -41,6 +41,11 @@ interface ApprovalDoc {
   is_express_approved: boolean
   express_approved_by: string | null
   steps: (ApprovalStep & { approver_id?: string | null })[]
+  // 처리확인 필드
+  is_processed?: boolean
+  processed_at?: string | null
+  processed_by_name?: string | null
+  process_note?: string | null
 }
 
 function formatDate(d?: string | null) {
@@ -106,6 +111,11 @@ export default function ApprovalDetailPage() {
   const [expressModalOpen, setExpressModalOpen] = useState(false)
   const [expressComment, setExpressComment] = useState('')
 
+  // 처리확인 상태
+  const [processModalOpen, setProcessModalOpen] = useState(false)
+  const [processNote, setProcessNote] = useState('')
+  const [isManagementSupport, setIsManagementSupport] = useState(false)
+
   const token = () => TokenManager.getToken()
 
   const fetchDoc = useCallback(async () => {
@@ -159,6 +169,17 @@ export default function ApprovalDetailPage() {
 
   const isMyDoc = doc?.requester_id === user?.id
   const isSuperAdmin = (user?.role ?? 0) >= 4
+
+  // 경영지원부 여부 확인 (최초 1회, isSuperAdmin 선언 이후)
+  useEffect(() => {
+    if (isSuperAdmin) return
+    const t = TokenManager.getToken()
+    if (!t) return
+    fetch('/api/employees/me/department-info', { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setIsManagementSupport(d.data.is_management_support) })
+      .catch(() => {})
+  }, [isSuperAdmin])
   const canEdit = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
   const canDelete = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
   const canForceCancel = isSuperAdmin && !['draft', 'returned', 'rejected'].includes(doc?.status || '') && doc?.status !== undefined
@@ -295,6 +316,29 @@ export default function ApprovalDetailPage() {
         fetchDoc()
       } else {
         alert(data.error || '전결 처리 실패')
+      }
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleProcess = async () => {
+    if (!doc) return
+    setProcessing(true)
+    try {
+      const t = token()
+      const res = await fetch(`/api/approvals/${id}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ process_note: processNote.trim() || undefined }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setProcessModalOpen(false)
+        setProcessNote('')
+        fetchDoc()
+      } else {
+        alert(data.error || '처리확인 실패')
       }
     } finally {
       setProcessing(false)
@@ -450,6 +494,44 @@ export default function ApprovalDetailPage() {
           />
         </div>
 
+        {/* 처리확인 섹션 (경영지원부 또는 권한4, approved 상태에서만) */}
+        {(isManagementSupport || isSuperAdmin) && doc?.status === 'approved' && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+              <CheckSquare className="w-4 h-4 text-blue-600" />
+              처리확인
+            </h3>
+            {doc.is_processed ? (
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-green-700">처리완료</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {doc.processed_by_name} · {formatDate(doc.processed_at)}
+                  </p>
+                  {doc.process_note && (
+                    <p className="text-sm text-gray-700 mt-2 bg-gray-50 rounded-lg px-3 py-2">{doc.process_note}</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-orange-600">
+                  <Clock className="w-4 h-4" />
+                  <span className="text-sm">미처리</span>
+                </div>
+                <button
+                  onClick={() => setProcessModalOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  처리확인
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 결재 처리 영역 — 데스크탑만 (모바일은 하단 고정 버튼) */}
         {(canApprove || canExpressApprove) && (
           <div className="hidden md:block bg-white rounded-xl border border-blue-200 shadow-sm p-6">
@@ -556,6 +638,96 @@ export default function ApprovalDetailPage() {
             {processing ? '처리 중...' : isResubmit ? '재상신' : '결재 상신'}
           </button>
         </div>
+      )}
+
+      {/* ── 처리확인 모달 ── */}
+      {processModalOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-30" onClick={() => { setProcessModalOpen(false); setProcessNote('') }} />
+
+          {/* 모바일: Bottom Sheet */}
+          <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom,16px)]">
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-gray-300" />
+            </div>
+            <div className="px-5 pb-2">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <h3 className="text-base font-semibold text-gray-900">처리확인</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                이 결재 문서를 처리완료 상태로 변경합니다.
+              </p>
+              <textarea
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[100px]"
+                value={processNote}
+                onChange={e => setProcessNote(e.target.value)}
+                placeholder="처리 메모 (선택사항)"
+                autoFocus
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => { setProcessModalOpen(false); setProcessNote('') }}
+                  className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-700 font-medium text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleProcess}
+                  disabled={processing}
+                  className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 disabled:opacity-50"
+                >
+                  {processing ? '처리 중...' : '처리확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 데스크탑: Center Modal */}
+          <div className="hidden md:flex fixed inset-0 items-center justify-center z-40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-gray-900">처리확인</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-1">
+                이 결재 문서를 처리완료 상태로 변경합니다.
+              </p>
+              <p className="text-xs text-gray-400 mb-4">
+                문서번호: {doc.document_number}
+              </p>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  처리 메모 <span className="text-gray-400 font-normal">(선택)</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  rows={3}
+                  value={processNote}
+                  onChange={e => setProcessNote(e.target.value)}
+                  placeholder="처리 메모를 입력해 주세요..."
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => { setProcessModalOpen(false); setProcessNote('') }}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleProcess}
+                  disabled={processing}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  {processing ? '처리 중...' : '처리확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── 전결 확인 모달 ── */}

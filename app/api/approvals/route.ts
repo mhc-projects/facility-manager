@@ -12,6 +12,12 @@ export const dynamic = 'force-dynamic';
  *   - status: 상태 필터 (comma separated)
  *   - mine: 'true' → 내가 작성한 문서
  *   - pending_mine: 'true' → 내가 결재해야 할 문서
+ *   - completed_tab: 'true' → 결재완료 탭 (경영지원부/권한4 전용)
+ *   - search: 검색어 (문서번호, 제목, 작성자명)
+ *   - date_from: 완료일 범위 시작 (YYYY-MM-DD)
+ *   - date_to: 완료일 범위 끝 (YYYY-MM-DD)
+ *   - processed: 'true'|'false' → 처리확인 여부 필터
+ *   - department: 부서 필터
  *   - limit, offset
  */
 export async function GET(request: NextRequest) {
@@ -30,13 +36,112 @@ export async function GET(request: NextRequest) {
     const isSuperAdmin = permissionLevel >= 4;
 
     const { searchParams } = new URL(request.url);
-    const typeFilter    = searchParams.get('type');
-    const statusFilter  = searchParams.get('status');
-    const mine          = searchParams.get('mine') === 'true';
-    const pendingMine   = searchParams.get('pending_mine') === 'true';
-    const limit         = parseInt(searchParams.get('limit') || '50');
-    const offset        = parseInt(searchParams.get('offset') || '0');
+    const typeFilter      = searchParams.get('type');
+    const statusFilter    = searchParams.get('status');
+    const mine            = searchParams.get('mine') === 'true';
+    const pendingMine     = searchParams.get('pending_mine') === 'true';
+    const completedTab    = searchParams.get('completed_tab') === 'true';
+    const searchQuery     = searchParams.get('search')?.trim() || null;
+    const dateFrom        = searchParams.get('date_from') || null;
+    const dateTo          = searchParams.get('date_to') || null;
+    const processedFilter = searchParams.get('processed'); // 'true' | 'false' | null
+    const departmentFilter= searchParams.get('department') || null;
+    const limit           = parseInt(searchParams.get('limit') || '50');
+    const offset          = parseInt(searchParams.get('offset') || '0');
 
+    // ── 결재완료 탭: 경영지원부 또는 권한4 전용 ──
+    if (completedTab) {
+      let isManagementSupport = false;
+      if (!isSuperAdmin) {
+        const emp = await queryOne(
+          `SELECT d.is_management_support
+           FROM employees e
+           LEFT JOIN departments d ON d.id = e.department_id::uuid
+           WHERE e.id = $1 AND e.is_deleted = FALSE`,
+          [userId]
+        );
+        isManagementSupport = emp?.is_management_support === true;
+      }
+
+      if (!isSuperAdmin && !isManagementSupport) {
+        return NextResponse.json({ success: false, error: '결재완료 탭 접근 권한이 없습니다' }, { status: 403 });
+      }
+
+      const conds: string[] = ["d.status = 'approved'", 'd.is_deleted = FALSE'];
+      const vals: any[] = [];
+      let ci = 1;
+
+      if (searchQuery) {
+        conds.push(`(
+          d.document_number ILIKE $${ci} OR
+          d.title ILIKE $${ci} OR
+          e.name ILIKE $${ci}
+        )`);
+        vals.push(`%${searchQuery}%`);
+        ci++;
+      }
+
+      if (typeFilter) {
+        conds.push(`d.document_type = $${ci++}`);
+        vals.push(typeFilter);
+      }
+
+      if (dateFrom) {
+        conds.push(`d.completed_at >= $${ci++}::TIMESTAMPTZ`);
+        vals.push(dateFrom);
+      }
+
+      if (dateTo) {
+        conds.push(`d.completed_at < ($${ci++}::DATE + INTERVAL '1 day')::TIMESTAMPTZ`);
+        vals.push(dateTo);
+      }
+
+      if (processedFilter === 'true') {
+        conds.push('d.is_processed = TRUE');
+      } else if (processedFilter === 'false') {
+        conds.push('(d.is_processed = FALSE OR d.is_processed IS NULL)');
+      }
+
+      if (departmentFilter) {
+        conds.push(`d.department = $${ci++}`);
+        vals.push(departmentFilter);
+      }
+
+      const whereClause = conds.join(' AND ');
+
+      const countResult = await queryOne(
+        `SELECT COUNT(*) AS total
+         FROM approval_documents d
+         LEFT JOIN employees e ON e.id = d.requester_id
+         WHERE ${whereClause}`,
+        vals
+      );
+
+      vals.push(limit, offset);
+      const rows = await queryAll(
+        `SELECT
+          d.id, d.document_number, d.document_type, d.title,
+          d.status, d.current_step, d.department,
+          d.requester_id,
+          d.created_at, d.submitted_at, d.completed_at, d.updated_at,
+          d.is_processed, d.processed_at, d.processed_by_name, d.process_note,
+          e.name AS requester_name
+         FROM approval_documents d
+         LEFT JOIN employees e ON e.id = d.requester_id
+         WHERE ${whereClause}
+         ORDER BY d.is_processed ASC NULLS FIRST, d.completed_at DESC
+         LIMIT $${ci++} OFFSET $${ci++}`,
+        vals
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: rows || [],
+        total: parseInt(countResult?.total || '0', 10),
+      });
+    }
+
+    // ── 일반 탭 (기존 로직) ──
     const conditions: string[] = ['d.is_deleted = FALSE'];
     const values: any[] = [];
     let idx = 1;
@@ -60,14 +165,30 @@ export async function GET(request: NextRequest) {
     } else if (isSuperAdmin) {
       // 권한 4(슈퍼 관리자): 모든 문서 열람 가능
     } else {
-      // 전체 탭: 작성자 본인 OR 결재선에 결재권자로 지정된 문서만
+      // 전체 탭: 작성자 본인 OR 결재선에 포함된 문서
+      // + 업무품의서의 경우 현재 사용자 부서가 작성팀/협조팀이면 추가 조회
       conditions.push(`(
         d.requester_id = $${idx++}
         OR d.id IN (
           SELECT document_id FROM approval_steps WHERE approver_id = $${idx++}
         )
+        OR (
+          d.document_type = 'business_proposal'
+          AND d.id IN (
+            SELECT id FROM approval_documents bp
+            WHERE bp.is_deleted = FALSE
+              AND (
+                (bp.form_data->>'department_id') IN (
+                  SELECT department_id::TEXT FROM employees WHERE id = $${idx++} AND is_deleted = FALSE
+                )
+                OR (bp.form_data->>'cooperative_team_id') IN (
+                  SELECT department_id::TEXT FROM employees WHERE id = $${idx++} AND is_deleted = FALSE
+                )
+              )
+          )
+        )
       )`);
-      values.push(userId, userId);
+      values.push(userId, userId, userId, userId);
     }
 
     if (typeFilter) {
