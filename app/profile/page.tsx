@@ -80,6 +80,10 @@ export default function ProfilePage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // 부서 목록
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+
   // 텔레그램 연결 상태
   const [telegramConnected, setTelegramConnected] = useState(false);
   const [telegramToken, setTelegramToken] = useState('');
@@ -87,10 +91,29 @@ export default function ProfilePage() {
   const [telegramBotUsername, setTelegramBotUsername] = useState('');
   const [telegramLoading, setTelegramLoading] = useState(false);
 
+  const loadDepartments = async () => {
+    setLoadingDepartments(true);
+    try {
+      const token = TokenManager.getToken();
+      const response = await fetch('/api/organization/departments', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setDepartments(data.data);
+      }
+    } catch (error) {
+      console.error('부서 목록 로드 오류:', error);
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       loadProfile();
       loadTelegramStatus();
+      loadDepartments();
     }
   }, [user]);
 
@@ -546,13 +569,19 @@ export default function ProfilePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">부서</label>
-                <input
-                  type="text"
+                <select
                   value={editForm.department}
                   onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="부서명을 입력하세요"
-                />
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  disabled={loadingDepartments}
+                >
+                  <option value="">부서를 선택하세요</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.name}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
