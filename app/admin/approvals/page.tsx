@@ -480,7 +480,7 @@ function ApprovalsContent() {
                 >
                   <button
                     className="w-full text-left"
-                    onClick={() => router.push(`/admin/approvals/${doc.id}`)}
+                    onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0 flex-1">
@@ -552,7 +552,7 @@ function ApprovalsContent() {
                     <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
                       <td
                         className="px-4 py-3 text-xs text-gray-500 font-mono cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/admin/approvals/${doc.id}`)}
+                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
                       >
                         {doc.document_number}
                       </td>
@@ -563,7 +563,7 @@ function ApprovalsContent() {
                       </td>
                       <td
                         className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[180px] truncate cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/admin/approvals/${doc.id}`)}
+                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
                       >
                         {doc.title}
                       </td>
@@ -634,6 +634,7 @@ function ApprovalsContent() {
                   setTab(t)
                   setTypeFilter('')
                   setStatusFilter('')
+                  router.push(`/admin/approvals?tab=${t}`)
                 }}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                   tab === t ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
@@ -697,7 +698,7 @@ function ApprovalsContent() {
                   {docs.map(doc => (
                     <button
                       key={doc.id}
-                      onClick={() => router.push(`/admin/approvals/${doc.id}`)}
+                      onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
                       className={`w-full text-left bg-white rounded-xl border border-gray-200 border-l-4 ${STATUS_BORDER[doc.status] || 'border-l-gray-300'} px-4 py-3.5 active:bg-gray-50 transition-colors`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -757,7 +758,7 @@ function ApprovalsContent() {
                       {docs.map(doc => (
                         <tr
                           key={doc.id}
-                          onClick={() => router.push(`/admin/approvals/${doc.id}`)}
+                          onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
                           className="hover:bg-blue-50 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3 text-xs text-gray-500 font-mono">{doc.document_number}</td>

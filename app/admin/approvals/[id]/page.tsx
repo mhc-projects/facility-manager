@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import AdminLayout from '@/components/ui/AdminLayout'
@@ -91,11 +91,13 @@ function FormViewer({
   }
 }
 
-export default function ApprovalDetailPage() {
+function ApprovalDetailContent() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const id = params?.id as string
+  const fromTab = searchParams?.get('from') || 'my'
 
   const [doc, setDoc] = useState<ApprovalDoc | null>(null)
   const [loading, setLoading] = useState(true)
@@ -163,7 +165,7 @@ export default function ApprovalDetailPage() {
       .on('broadcast', { event: 'doc_updated' }, (payload) => {
         // 삭제된 문서면 목록으로 이동
         if (payload.payload?.status === 'deleted') {
-          router.push('/admin/approvals')
+          router.push(`/admin/approvals?tab=${fromTab}`)
           return
         }
         // ref로 최신 editing 상태 확인 — 편집 중이 아닐 때만 갱신
@@ -405,7 +407,7 @@ export default function ApprovalDetailPage() {
     const t = token()
     const res = await fetch(`/api/approvals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } })
     const data = await res.json()
-    if (data.success) router.push('/admin/approvals')
+    if (data.success) router.push(`/admin/approvals?tab=${fromTab}`)
     else alert(data.error || '삭제 실패')
   }
 
@@ -433,7 +435,7 @@ export default function ApprovalDetailPage() {
       description={doc.document_number}
       actions={
         <div className="flex items-center gap-2">
-          <button onClick={() => router.push('/admin/approvals')} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
+          <button onClick={() => router.back()} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
             <ChevronLeft className="w-4 h-4" />목록
           </button>
           {canEdit && !editing && (
@@ -1108,5 +1110,13 @@ export default function ApprovalDetailPage() {
         </>
       )}
     </AdminLayout>
+  )
+}
+
+export default function ApprovalDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <ApprovalDetailContent />
+    </Suspense>
   )
 }
