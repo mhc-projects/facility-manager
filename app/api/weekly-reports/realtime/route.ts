@@ -4,6 +4,7 @@ import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/li
 import { queryAll } from '@/lib/supabase-direct';
 import { verifyToken } from '@/lib/secure-jwt';
 import { getStepInfo, type TaskType, type TaskStatus } from '@/app/admin/tasks/types';
+import { allSteps } from '@/lib/task-steps';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -83,6 +84,13 @@ function isTaskOverdue(task: any): boolean {
   return today > dueDate && !isTaskCompleted(task);
 }
 
+// 단계 한글 라벨 조회 (types + allSteps 모두 검색)
+function resolveStepInfo(taskType: string, status: string) {
+  return getStepInfo(taskType as TaskType, status as TaskStatus)
+    || allSteps.find(s => s.status === status)
+    || { label: status, color: 'gray' };
+}
+
 // GET: 실시간 주간 리포트 집계 (권한별 필터링)
 export const GET = withApiHandler(async (request: NextRequest) => {
   try {
@@ -126,38 +134,85 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       end: end.split('T')[0]
     });
 
-    // facility_tasks에서 해당 주간의 모든 업무 조회 - Direct PostgreSQL
+    // facility_tasks + 주간 내 단계 이력을 한 번에 조회
     let tasks: any[] = [];
+    let statusHistories: any[] = [];
 
     try {
       const searchCondition = searchQuery
-        ? `AND (title ILIKE $4 OR business_name ILIKE $4 OR description ILIKE $4)`
+        ? `AND (title ILIKE $3 OR business_name ILIKE $3 OR description ILIKE $3)`
         : '';
-      const params = searchQuery
+      const taskParams = searchQuery
         ? [start, end, `%${searchQuery}%`]
         : [start, end];
 
+      // 이번 주 생성된 업무 조회
       tasks = await queryAll(
         `SELECT * FROM facility_tasks
          WHERE is_deleted = false
          AND created_at >= $1
          AND created_at <= $2
          ${searchCondition}`,
-        params
+        taskParams
+      );
+
+      // 이번 주에 단계가 변경된 이력 조회 (task_status_history)
+      // 이번 주 생성된 업무 외에, 이전에 생성되었지만 이번 주에 단계가 변경된 업무도 포함
+      statusHistories = await queryAll(
+        `SELECT tsh.*, ft.task_type, ft.business_name as ft_business_name,
+                ft.assignee, ft.assignees, ft.priority, ft.due_date,
+                ft.completed_at, ft.is_deleted, ft.title as ft_title
+         FROM task_status_history tsh
+         JOIN facility_tasks ft ON ft.id = tsh.task_id
+         WHERE ft.is_deleted = false
+         AND tsh.started_at >= $1
+         AND tsh.started_at <= $2
+         ORDER BY tsh.started_at ASC`,
+        [start, end]
       );
     } catch (error: any) {
       console.error('❌ [REALTIME-REPORTS] 업무 조회 오류:', error);
-      throw error;
+      // task_status_history 테이블이 없을 경우 graceful fallback
+      statusHistories = [];
     }
 
-    console.log('📊 [REALTIME-REPORTS] 업무 조회 성공:', tasks?.length || 0, '건');
+    console.log('📊 [REALTIME-REPORTS] 업무 조회 성공:', tasks?.length || 0, '건, 이력:', statusHistories?.length || 0, '건');
+
+    // task_id별 주간 이력 그룹화 (이력이 있는 업무)
+    const historyByTaskId = new Map<string, any[]>();
+    statusHistories?.forEach(h => {
+      if (!historyByTaskId.has(h.task_id)) historyByTaskId.set(h.task_id, []);
+      historyByTaskId.get(h.task_id)!.push(h);
+    });
+
+    // 이력에 있는 업무 중 tasks에 없는 것 추가 (이전 주에 생성, 이번 주에 단계 변경)
+    const taskIds = new Set(tasks.map((t: any) => t.id));
+    statusHistories?.forEach(h => {
+      if (!taskIds.has(h.task_id) && !h.is_deleted) {
+        taskIds.add(h.task_id);
+        tasks.push({
+          id: h.task_id,
+          title: h.ft_title,
+          business_name: h.ft_business_name,
+          task_type: h.task_type,
+          status: h.status, // 이력의 마지막 status
+          assignee: h.assignee,
+          assignees: h.assignees,
+          priority: h.priority,
+          due_date: h.due_date,
+          completed_at: h.completed_at,
+          created_at: h.started_at,
+          is_deleted: false
+        });
+      }
+    });
 
     // 담당자별로 업무 그룹화
     const userTasksMap = new Map<string, any[]>();
 
     tasks?.forEach(task => {
       const assigneeInfo = extractAssigneeInfo(task);
-      if (!assigneeInfo) return; // 담당자 없는 업무는 제외
+      if (!assigneeInfo) return;
 
       const { userId: taskUserId, userName: taskUserName } = assigneeInfo;
 
@@ -195,9 +250,24 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ? Math.round((completedTasks / totalTasks) * 100)
         : 0;
 
-      // 업무 상세 정보 (단계 정보 포함)
+      // 업무 상세 정보 (단계 이동 이력 포함)
       const taskDetails = userTasks.map(task => {
-        const stepInfo = getStepInfo(task.task_type as TaskType, task.status as TaskStatus);
+        const stepInfo = resolveStepInfo(task.task_type, task.status);
+
+        // 이번 주 단계 이동 이력
+        const weekHistory = historyByTaskId.get(task.id) || [];
+        const statusTransitions = weekHistory.map(h => {
+          const hStepInfo = resolveStepInfo(task.task_type, h.status);
+          return {
+            status: h.status,
+            label: hStepInfo.label,
+            color: hStepInfo.color,
+            started_at: h.started_at,
+            completed_at: h.completed_at,
+            is_completed: !!h.completed_at
+          };
+        });
+
         return {
           id: task.id,
           title: task.title,
@@ -211,7 +281,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
           completed_at: task.completed_at,
           created_at: task.created_at,
           is_completed: isTaskCompleted(task),
-          is_overdue: isTaskOverdue(task)
+          is_overdue: isTaskOverdue(task),
+          // 이번 주 단계 이동 이력 (없으면 빈 배열)
+          status_transitions: statusTransitions
         };
       });
 

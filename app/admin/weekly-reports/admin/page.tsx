@@ -9,25 +9,32 @@ import { TokenManager } from '@/lib/api-client'
 import {
   Calendar,
   Users,
-  TrendingUp,
-  CheckCircle,
   AlertTriangle,
   BarChart3,
   Clock,
   RefreshCw,
-  Eye,
   Search,
   X,
-  Filter,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
+
+interface StatusTransition {
+  status: string
+  label: string
+  color: string
+  started_at: string
+  completed_at: string | null
+  is_completed: boolean
+}
 
 interface TaskDetail {
   id: string
   title: string
   business_name: string
-  task_type: 'self' | 'subsidy' | 'etc' | 'as'
+  task_type: 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing'
   status: string
   status_label: string
   status_color: string
@@ -37,6 +44,7 @@ interface TaskDetail {
   created_at: string
   is_completed: boolean
   is_overdue: boolean
+  status_transitions?: StatusTransition[]
 }
 
 interface WeeklyReport {
@@ -72,6 +80,49 @@ interface AdminSummary {
   total_pending: number
 }
 
+// 업무 타입 한글 매핑
+const taskTypeConfig: Record<string, { label: string; color: string }> = {
+  self: { label: '자비', color: 'bg-blue-100 text-blue-700' },
+  subsidy: { label: '보조금', color: 'bg-green-100 text-green-700' },
+  as: { label: 'AS', color: 'bg-orange-100 text-orange-700' },
+  dealer: { label: '대리점', color: 'bg-purple-100 text-purple-700' },
+  etc: { label: '기타', color: 'bg-gray-100 text-gray-600' },
+  outsourcing: { label: '외주', color: 'bg-pink-100 text-pink-700' },
+}
+
+
+function getStatusBadgeColor(color: string): string {
+  const colors: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-800',
+    yellow: 'bg-yellow-100 text-yellow-800',
+    orange: 'bg-orange-100 text-orange-800',
+    purple: 'bg-purple-100 text-purple-800',
+    indigo: 'bg-indigo-100 text-indigo-800',
+    cyan: 'bg-cyan-100 text-cyan-800',
+    emerald: 'bg-emerald-100 text-emerald-800',
+    teal: 'bg-teal-100 text-teal-800',
+    green: 'bg-green-100 text-green-800',
+    lime: 'bg-lime-100 text-lime-800',
+    red: 'bg-red-100 text-red-800',
+    pink: 'bg-pink-100 text-pink-800',
+    gray: 'bg-gray-100 text-gray-800'
+  }
+  return colors[color] || 'bg-gray-100 text-gray-800'
+}
+
+function getPerformanceColor(rate: number): string {
+  if (rate >= 80) return 'text-green-700 bg-green-100'
+  if (rate >= 60) return 'text-yellow-700 bg-yellow-100'
+  return 'text-red-700 bg-red-100'
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('ko-KR', {
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
 function AdminWeeklyReportsPageV2() {
   const { user, permissions } = useAuth()
   const router = useRouter()
@@ -91,7 +142,6 @@ function AdminWeeklyReportsPageV2() {
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set())
 
-  // 이번 주 날짜 계산
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search)
@@ -142,7 +192,8 @@ function AdminWeeklyReportsPageV2() {
         setReports(data.data.reports)
         setSummary(data.data.summary)
         setWeekPeriod(data.data.week_period)
-        console.log('✅ 실시간 리포트 조회 성공:', data.data.reports.length, '건')
+        // 기본으로 모든 담당자 펼침
+        setExpandedReports(new Set(data.data.reports.map((r: WeeklyReport) => r.id)))
       } else {
         alert(data.message || '리포트 조회에 실패했습니다')
       }
@@ -160,10 +211,8 @@ function AdminWeeklyReportsPageV2() {
     }
   }, [selectedWeek])
 
-  // 주간 변경 함수
   const changeWeek = (direction: 'prev' | 'next') => {
     if (!selectedWeek) return
-
     const currentDate = new Date(selectedWeek)
     const newDate = new Date(currentDate)
     newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7))
@@ -182,312 +231,300 @@ function AdminWeeklyReportsPageV2() {
     })
   }
 
-  const getPerformanceColor = (rate: number) => {
-    if (rate >= 80) return 'text-green-600 bg-green-100'
-    if (rate >= 60) return 'text-yellow-600 bg-yellow-100'
-    return 'text-red-600 bg-red-100'
-  }
-
-  const getStatusBadgeColor = (color: string) => {
-    const colors: Record<string, string> = {
-      blue: 'bg-blue-100 text-blue-800',
-      yellow: 'bg-yellow-100 text-yellow-800',
-      orange: 'bg-orange-100 text-orange-800',
-      purple: 'bg-purple-100 text-purple-800',
-      indigo: 'bg-indigo-100 text-indigo-800',
-      cyan: 'bg-cyan-100 text-cyan-800',
-      emerald: 'bg-emerald-100 text-emerald-800',
-      teal: 'bg-teal-100 text-teal-800',
-      green: 'bg-green-100 text-green-800',
-      lime: 'bg-lime-100 text-lime-800',
-      red: 'bg-red-100 text-red-800',
-      pink: 'bg-pink-100 text-pink-800',
-      gray: 'bg-gray-100 text-gray-800'
-    }
-    return colors[color] || 'bg-gray-100 text-gray-800'
-  }
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('ko-KR', {
-      month: 'short',
-      day: 'numeric'
-    })
-  }
-
   return (
     <AdminLayout
       title="실시간 주간 리포트"
       description="담당자별 주간 업무 현황 실시간 조회"
     >
-      <div className="space-y-6">
-        {/* 컨트롤 영역 */}
-        <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-2 sm:p-3 md:p-4">
-          <div className="space-y-2 sm:space-y-3 md:space-y-4">
-            {/* 주간 선택 */}
-            <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <button
-                onClick={() => changeWeek('prev')}
-                className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-1">
-                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
-                <input
-                  type="date"
-                  value={selectedWeek}
-                  onChange={(e) => setSelectedWeek(e.target.value)}
-                  className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {weekPeriod && (
-                  <div className="text-xs sm:text-sm text-gray-600 hidden md:block">
-                    {weekPeriod.display}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => changeWeek('next')}
-                className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+      <div className="space-y-4 md:space-y-6">
+
+        {/* 컨트롤 영역 — 한 줄 */}
+        <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 px-3 py-2">
+          <div className="flex items-center gap-2">
+            {/* 주간 날짜 선택 (최소 너비) */}
+            <button onClick={() => changeWeek('prev')} className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0">
+              <ChevronLeft className="w-4 h-4 text-gray-500" />
+            </button>
+            <input
+              type="date"
+              value={selectedWeek}
+              onChange={(e) => setSelectedWeek(e.target.value)}
+              className="w-36 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-shrink-0"
+            />
+            {weekPeriod && (
+              <span className="text-xs text-gray-400 hidden sm:block whitespace-nowrap flex-shrink-0">
+                {weekPeriod.display}
+              </span>
+            )}
+            <button onClick={() => changeWeek('next')} className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0">
+              <ChevronRight className="w-4 h-4 text-gray-500" />
+            </button>
+
+            <div className="w-px h-5 bg-gray-200 flex-shrink-0" />
+
+            {/* 업무/사업장 검색 */}
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="업무명, 사업장명 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && fetchRealtimeReports()}
+                className="w-full pl-9 pr-7 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setTimeout(fetchRealtimeReports, 0) }} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="w-3 h-3 text-gray-400 hover:text-gray-600" />
+                </button>
+              )}
             </div>
 
-            {/* 검색 및 필터 */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="업무명, 사업장명 검색..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && fetchRealtimeReports()}
-                  className="w-full pl-8 sm:pl-10 pr-8 sm:pr-10 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => {
-                      setSearchQuery('')
-                      setTimeout(fetchRealtimeReports, 0)
-                    }}
-                    className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2"
-                  >
-                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 hover:text-gray-600" />
-                  </button>
-                )}
-              </div>
-
-              <div className="relative flex-1 sm:flex-initial sm:w-48">
-                <Filter className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="담당자 필터..."
-                  value={assigneeFilter}
-                  onChange={(e) => setAssigneeFilter(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && fetchRealtimeReports()}
-                  className="w-full pl-8 sm:pl-10 pr-8 sm:pr-10 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {assigneeFilter && (
-                  <button
-                    onClick={() => {
-                      setAssigneeFilter('')
-                      setTimeout(fetchRealtimeReports, 0)
-                    }}
-                    className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2"
-                  >
-                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 hover:text-gray-600" />
-                  </button>
-                )}
-              </div>
-
-              <button
-                onClick={fetchRealtimeReports}
-                disabled={loading}
-                className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? '조회중...' : '조회'}
-              </button>
+            {/* 담당자 검색 */}
+            <div className="relative w-32 sm:w-40 flex-shrink-0">
+              <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="담당자 검색"
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && fetchRealtimeReports()}
+                className="w-full pl-8 pr-7 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {assigneeFilter && (
+                <button onClick={() => { setAssigneeFilter(''); setTimeout(fetchRealtimeReports, 0) }} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="w-3 h-3 text-gray-400 hover:text-gray-600" />
+                </button>
+              )}
             </div>
+
+            <button
+              onClick={fetchRealtimeReports}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? '조회중' : '조회'}
+            </button>
           </div>
         </div>
 
         {/* 전체 통계 카드 */}
         {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
-            <StatCard icon={Users} label="사용자" value={summary.total_users} color="blue" />
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <StatCard icon={Users} label="담당자" value={summary.total_users} color="blue" />
             <StatCard icon={BarChart3} label="총 업무" value={summary.total_tasks} color="purple" />
-            <StatCard icon={CheckCircle} label="완료" value={summary.total_completed} color="green" />
-            <StatCard icon={Clock} label="진행중" value={summary.total_in_progress} color="blue" />
-            <StatCard icon={Clock} label="대기" value={summary.total_pending} color="gray" />
-            <StatCard icon={TrendingUp} label="평균율" value={`${summary.average_completion_rate}%`} color="indigo" />
-            <StatCard icon={AlertTriangle} label="연체" value={summary.total_overdue} color="red" />
           </div>
         )}
 
-        {/* 사용자별 리포트 목록 */}
-        <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200">
-          <div className="p-2 sm:p-3 md:p-4 border-b border-gray-200">
-            <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">담당자별 주간 업무</h3>
-            <p className="text-[10px] sm:text-xs md:text-sm text-gray-600 mt-0.5 sm:mt-1">
-              {reports.length}명의 담당자 • 실시간 업데이트
-            </p>
-          </div>
-
-          <div className="divide-y divide-gray-200">
-            {reports.map((report) => (
-              <ReportCard
+        {/* 담당자별 리포트 */}
+        <div className="space-y-3 md:space-y-4">
+          {reports.length === 0 && !loading ? (
+            <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-10 text-center">
+              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">해당 주간의 업무가 없습니다</p>
+              <p className="text-xs text-gray-400 mt-1">다른 주간을 선택하거나 검색 조건을 변경해보세요</p>
+            </div>
+          ) : (
+            reports.map((report) => (
+              <AssigneeCard
                 key={report.id}
                 report={report}
                 isExpanded={expandedReports.has(report.id)}
-                onToggleExpand={() => toggleReportExpansion(report.id)}
-                getPerformanceColor={getPerformanceColor}
-                getStatusBadgeColor={getStatusBadgeColor}
-                formatDate={formatDate}
+                onToggle={() => toggleReportExpansion(report.id)}
               />
-            ))}
-
-            {reports.length === 0 && !loading && (
-              <div className="p-6 sm:p-8 md:p-12 text-center">
-                <Calendar className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 text-gray-300 mx-auto mb-2 sm:mb-3 md:mb-4" />
-                <p className="text-xs sm:text-sm md:text-base text-gray-500">해당 주간의 업무가 없습니다</p>
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mt-1 sm:mt-2">
-                  다른 주간을 선택하거나 검색 조건을 변경해보세요
-                </p>
-              </div>
-            )}
-          </div>
+            ))
+          )}
         </div>
+
       </div>
     </AdminLayout>
   )
 }
 
-// 통계 카드 컴포넌트
-function StatCard({ icon: Icon, label, value, color }: any) {
-  const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-100 text-blue-600',
-    purple: 'bg-purple-100 text-purple-600',
-    green: 'bg-green-100 text-green-600',
-    indigo: 'bg-indigo-100 text-indigo-600',
-    red: 'bg-red-100 text-red-600',
-    gray: 'bg-gray-100 text-gray-600'
+// 통계 카드
+function StatCard({ icon: Icon, label, value, color }: {
+  icon: any
+  label: string
+  value: number | string
+  color: string
+}) {
+  const colorMap: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-600',
+    purple: 'bg-purple-50 text-purple-600',
+    green: 'bg-green-50 text-green-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
+    red: 'bg-red-50 text-red-600',
+    gray: 'bg-gray-50 text-gray-500'
   }
-
   return (
-    <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-2 sm:p-3 md:p-4">
-      <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
-        <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 ${colorClasses[color]} rounded-md flex items-center justify-center flex-shrink-0`}>
-          <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-6 md:h-6" />
+    <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-2.5 sm:p-3 md:p-4">
+      <div className="flex items-center gap-2 md:gap-3">
+        <div className={`w-8 h-8 md:w-10 md:h-10 ${colorMap[color] || 'bg-gray-50 text-gray-500'} rounded-md flex items-center justify-center flex-shrink-0`}>
+          <Icon className="w-4 h-4 md:w-5 md:h-5" />
         </div>
-        <div>
-          <div className="text-sm sm:text-base md:text-xl font-bold text-gray-900">{value}</div>
-          <div className="text-[10px] sm:text-xs text-gray-600">{label}</div>
+        <div className="min-w-0">
+          <div className="text-base sm:text-lg md:text-xl font-bold text-gray-900 leading-none">{value}</div>
+          <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 truncate">{label}</div>
         </div>
       </div>
     </div>
   )
 }
 
-// 리포트 카드 컴포넌트
-function ReportCard({ report, isExpanded, onToggleExpand, getPerformanceColor, getStatusBadgeColor, formatDate }: any) {
+// 담당자 카드
+function AssigneeCard({ report, isExpanded, onToggle }: {
+  report: WeeklyReport
+  isExpanded: boolean
+  onToggle: () => void
+}) {
   return (
-    <div
-      className="p-2 sm:p-3 md:p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-      onClick={onToggleExpand}
-    >
-      <div className="space-y-2 sm:space-y-2.5 md:space-y-3">
-        {/* 헤더 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3">
-            <h4 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">{report.user_name}</h4>
-            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${getPerformanceColor(report.completion_rate)}`}>
-              {report.completion_rate}%
+    <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* 헤더 */}
+      <div
+        className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={onToggle}
+      >
+        {/* 이름 */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0 text-xs sm:text-sm font-bold">
+            {report.user_name.charAt(0)}
+          </div>
+          <span className="text-sm sm:text-base font-semibold text-gray-900 truncate">{report.user_name}</span>
+        </div>
+
+        {/* 총 업무 건수 + 연체 + 토글 */}
+        <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="font-medium text-gray-700">{report.total_tasks}</span>건
+          </span>
+          {report.overdue_tasks > 0 && (
+            <span className="flex items-center gap-1 text-red-600">
+              <AlertTriangle className="w-3 h-3" />
+              <span className="font-medium">{report.overdue_tasks}</span>
             </span>
-          </div>
-          <div className="text-xs sm:text-sm text-blue-600 font-medium flex items-center gap-1">
-            {isExpanded ? (
-              <>
-                <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>접기</span>
-              </>
-            ) : (
-              <>
-                <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>상세보기</span>
-              </>
-            )}
-          </div>
+          )}
+          {isExpanded
+            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+            : <ChevronDown className="w-4 h-4 text-gray-400" />
+          }
         </div>
+      </div>
 
-        {/* 통계 */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-2.5 md:gap-3 text-sm">
-          <div>
-            <div className="text-[10px] sm:text-xs text-gray-500">총 업무</div>
-            <div className="text-base sm:text-lg md:text-xl font-bold text-gray-900">{report.total_tasks}</div>
-          </div>
-          <div>
-            <div className="text-[10px] sm:text-xs text-gray-500">완료</div>
-            <div className="text-base sm:text-lg md:text-xl font-bold text-green-600">{report.completed_tasks}</div>
-          </div>
-          <div>
-            <div className="text-[10px] sm:text-xs text-gray-500">진행중</div>
-            <div className="text-base sm:text-lg md:text-xl font-bold text-blue-600">{report.in_progress_tasks}</div>
-          </div>
-          <div>
-            <div className="text-[10px] sm:text-xs text-gray-500">대기</div>
-            <div className="text-base sm:text-lg md:text-xl font-bold text-gray-600">{report.pending_tasks}</div>
-          </div>
-          <div>
-            <div className="text-[10px] sm:text-xs text-gray-500">연체</div>
-            <div className={`text-base sm:text-lg md:text-xl font-bold ${report.overdue_tasks > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-              {report.overdue_tasks}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] sm:text-xs text-gray-500">평균시간</div>
-            <div className="text-base sm:text-lg md:text-xl font-bold text-gray-900">{report.average_completion_time_days}일</div>
-          </div>
-        </div>
+      {/* 업무 목록 */}
+      {isExpanded && (
+        <div className="border-t border-gray-200">
+          {report.all_task_details.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6">업무가 없습니다</p>
+          ) : (
+            <>
+              {/* 데스크탑: 테이블 */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full table-fixed text-xs sm:text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-20">유형</th>
+                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-[28%]">사업장</th>
+                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">이번 주 단계</th>
+                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-28">날짜</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {report.all_task_details.map((task) => {
+                      const typeInfo = taskTypeConfig[task.task_type] || taskTypeConfig.etc
+                      return (
+                        <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${typeInfo.color}`}>
+                              {typeInfo.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="font-medium text-gray-900 text-sm">{task.business_name}</span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {task.status_transitions && task.status_transitions.length > 1 ? (
+                              // 이번 주 단계 이동 이력이 2개 이상일 때 화살표로 표시
+                              <div className="flex flex-wrap items-center gap-1">
+                                {task.status_transitions.map((t, i) => (
+                                  <span key={i} className="flex items-center gap-1">
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                      t.is_completed ? 'bg-gray-100 text-gray-500 line-through' : getStatusBadgeColor(t.color)
+                                    }`}>
+                                      {t.label}
+                                    </span>
+                                    {i < task.status_transitions!.length - 1 && (
+                                      <span className="text-gray-300 text-[10px]">→</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              // 이력 없거나 1개 — 현재 단계만 표시
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${getStatusBadgeColor(task.status_color)}`}>
+                                {task.status_label}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">
+                            {formatDate(task.completed_at || task.due_date || task.created_at)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-        {/* 상세 업무 목록 */}
-        {isExpanded && (
-          <div className="mt-2 sm:mt-3 md:mt-4 space-y-2 sm:space-y-3 md:space-y-4 border-t pt-2 sm:pt-3 md:pt-4">
-            {report.all_task_details.length > 0 ? (
-              <div className="space-y-1.5 sm:space-y-2">
-                {report.all_task_details.map((task: TaskDetail) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center justify-between p-2 sm:p-2.5 md:p-3 bg-gray-50 rounded-md text-sm"
-                  >
-                    <div className="flex-1">
-                      <div className="text-xs sm:text-sm font-medium text-gray-900">{task.title}</div>
-                      <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
-                        {task.business_name} • {formatDate(task.created_at)}
+              {/* 모바일: 카드 목록 */}
+              <div className="md:hidden divide-y divide-gray-100">
+                {report.all_task_details.map((task) => {
+                  const typeInfo = taskTypeConfig[task.task_type] || taskTypeConfig.etc
+                  return (
+                    <div key={task.id} className="px-3 py-2.5 flex items-start gap-2.5">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 mt-0.5 ${typeInfo.color}`}>
+                        {typeInfo.label}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-gray-900 block truncate">{task.business_name}</span>
+                          </div>
+                        </div>
+                        {/* 이번 주 단계 이동 */}
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {task.status_transitions && task.status_transitions.length > 1 ? (
+                            task.status_transitions.map((t, i) => (
+                              <span key={i} className="flex items-center gap-0.5">
+                                <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium ${
+                                  t.is_completed ? 'bg-gray-100 text-gray-400 line-through' : getStatusBadgeColor(t.color)
+                                }`}>{t.label}</span>
+                                {i < task.status_transitions!.length - 1 && (
+                                  <span className="text-gray-300 text-[9px]">→</span>
+                                )}
+                              </span>
+                            ))
+                          ) : (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${getStatusBadgeColor(task.status_color)}`}>
+                              {task.status_label}
+                            </span>
+                          )}
+                          {task.is_overdue && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">연체</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          {formatDate(task.completed_at || task.due_date || task.created_at)}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs ${getStatusBadgeColor(task.status_color)}`}>
-                        {task.status_label}
-                      </span>
-                      {task.is_overdue && (
-                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs bg-red-100 text-red-800">
-                          연체
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
-            ) : (
-              <p className="text-xs sm:text-sm text-gray-500 text-center py-2 sm:py-3 md:py-4">
-                업무가 없습니다
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
