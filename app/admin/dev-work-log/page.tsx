@@ -537,9 +537,9 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
   const handleSubmit = async () => {
     await onSave({
       ...form,
-      expected_date: form.expected_date || undefined,
-      completed_date: form.completed_date || undefined,
-      assignee_id: form.assignee_id || undefined,
+      expected_date: form.expected_date || null,
+      completed_date: form.completed_date || null,
+      assignee_id: form.assignee_id || null,
       new_note: newNote.trim() || undefined,
     })
     setNewNote('')

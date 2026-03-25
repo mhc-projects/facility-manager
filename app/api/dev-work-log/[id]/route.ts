@@ -162,11 +162,11 @@ export async function PUT(
     if (status !== undefined) { setClauses.push(`status = $${idx++}`); values.push(status) }
     if (description !== undefined) { setClauses.push(`description = $${idx++}`); values.push(description || null) }
     if (received_date !== undefined) { setClauses.push(`received_date = $${idx++}`); values.push(received_date) }
-    if (expected_date !== undefined) { setClauses.push(`expected_date = $${idx++}`); values.push(expected_date || null) }
-    if (completed_date !== undefined) { setClauses.push(`completed_date = $${idx++}`); values.push(completed_date || null) }
-    if (assignee_id !== undefined) { setClauses.push(`assignee_id = $${idx++}`); values.push(assignee_id || null) }
+    if (expected_date !== undefined) { setClauses.push(`expected_date = $${idx++}`); values.push(expected_date ?? null) }
+    if (completed_date !== undefined) { setClauses.push(`completed_date = $${idx++}`); values.push(completed_date ?? null) }
+    if (assignee_id !== undefined) { setClauses.push(`assignee_id = $${idx++}`); values.push(assignee_id ?? null) }
     if (progress_percent !== undefined) { setClauses.push(`progress_percent = $${idx++}`); values.push(progress_percent) }
-    if (target_location !== undefined) { setClauses.push(`target_location = $${idx++}`); values.push(target_location || null) }
+    if (target_location !== undefined) { setClauses.push(`target_location = $${idx++}`); values.push(target_location ?? null) }
 
     setClauses.push(`progress_notes = $${idx++}`)
     values.push(JSON.stringify(progressNotes))
