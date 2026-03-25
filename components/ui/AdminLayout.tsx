@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { isPathHiddenForAccount } from '@/lib/auth/special-accounts'
+import { TokenManager } from '@/lib/api-client'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import ApprovalPendingBanner from '@/components/approvals/ApprovalPendingBanner'
 import {
@@ -30,7 +31,8 @@ import {
   Calendar,
   FileEdit,
   Wrench,
-  FileCheck
+  FileCheck,
+  Code2
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -46,6 +48,7 @@ interface NavigationItem {
   icon: any
   description: string
   requiredLevel?: number
+  departmentOnly?: string  // 특정 부서명 포함 시에만 표시 (예: '개발')
 }
 
 const navigationItems: NavigationItem[] = [
@@ -182,18 +185,51 @@ const navigationItems: NavigationItem[] = [
     description: '지연 기준, 알림 관리 등 시스템 설정',
     requiredLevel: 3
   },
+  {
+    name: '개발 업무 일지',
+    href: '/admin/dev-work-log',
+    icon: Code2,
+    description: '개발팀 업무 접수 및 일지 관리',
+    requiredLevel: 1,
+    departmentOnly: '개발',
+  },
 ]
 
 function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: string, onItemClick: () => void, collapsed: boolean }) {
   const router = useRouter()
   const { user, permissions } = useAuth()
+  const [userDeptName, setUserDeptName] = useState<string | null>(null)
+
+  // 부서명 비동기 로드 (departmentOnly 항목이 있을 때만)
+  useEffect(() => {
+    const hasDeptOnlyItem = navigationItems.some(i => i.departmentOnly)
+    if (!user || !hasDeptOnlyItem) return
+    const token = TokenManager.getToken()
+    if (!token) return
+    fetch('/api/employees/me/department-info', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        setUserDeptName(data?.data?.department_name || data?.department?.name || '')
+      })
+      .catch(() => setUserDeptName(''))
+  }, [user])
 
   // 사용자 권한에 따라 네비게이션 아이템 필터링
   const filteredItems = navigationItems.filter(item => {
     if (!user) return false;
     // 특별 계정 경로 숨김 (permission_level과 무관하게 항상 적용)
     if (permissions?.isSpecialAccount && user.email && isPathHiddenForAccount(user.email, item.href)) return false;
-    return user.permission_level >= (item.requiredLevel || 1);
+    const permLevel = (user as any).permission_level ?? (user as any).role ?? 1;
+    if (permLevel < (item.requiredLevel || 1)) return false;
+    // 특정 부서 전용 메뉴: 부서명이 로드되기 전엔 숨김, 로드 후 부서 일치 여부로 판단
+    if (item.departmentOnly) {
+      if (userDeptName === null) return false; // 로딩 중엔 숨김
+      if (permLevel >= 4) return true; // 시스템관리자는 항상 표시
+      return userDeptName.includes(item.departmentOnly);
+    }
+    return true;
   });
 
   return (

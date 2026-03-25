@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: '인증이 필요합니다' }, { status: 401 });
     }
 
-    const authResult = await verifyToken(token);
-    if (!authResult.success) {
-      return NextResponse.json(authResult, { status: 401 });
+    const authResult = verifyToken(token);
+    if (!authResult) {
+      return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);

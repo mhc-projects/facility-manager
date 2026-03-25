@@ -23,22 +23,19 @@ export async function GET(request: NextRequest) {
     const userId = decoded.userId || decoded.id;
 
     const result = await queryOne(
-      `SELECT
-        e.department_id,
-        d.name AS department_name,
-        d.is_management_support
+      `SELECT e.department AS department_name
        FROM employees e
-       LEFT JOIN departments d ON d.id = e.department_id::uuid
        WHERE e.id = $1 AND e.is_deleted = FALSE`,
       [userId]
     );
 
+    const deptName: string = (result as { department_name?: string })?.department_name || '';
+
     return NextResponse.json({
       success: true,
       data: {
-        department_id: result?.department_id || null,
-        department_name: result?.department_name || null,
-        is_management_support: result?.is_management_support === true,
+        department_name: deptName || null,
+        is_management_support: deptName.includes('경영지원'),
       }
     });
   } catch (error: any) {

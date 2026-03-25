@@ -102,6 +102,7 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/as-materials',     // AS 자재 API (Bearer 토큰 인증)
     '/api/external/',        // 외부 시스템 연동 API (API 키 인증)
     '/api/telegram/',        // 텔레그램 API (Webhook + 연결 관리, Bearer 토큰 인증)
+    '/api/dev-work-log',     // 개발 업무 일지 API (Bearer 토큰 인증)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }
