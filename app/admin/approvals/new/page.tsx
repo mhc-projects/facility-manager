@@ -259,7 +259,12 @@ export default function NewApprovalPage() {
               <LeaveRequestForm data={formData} onChange={setFormData} />
             )}
             {docType === 'business_proposal' && (
-              <BusinessProposalForm data={formData} onChange={setFormData} />
+              <BusinessProposalForm
+                data={formData}
+                onChange={setFormData}
+                onFileUpload={handleFileUpload}
+                onFileDelete={handleFileDelete}
+              />
             )}
             {docType === 'overtime_log' && (
               <OvertimeLogForm data={formData} onChange={setFormData} />

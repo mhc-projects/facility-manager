@@ -79,7 +79,13 @@ function FormViewer({
       />
     )
     case 'leave_request':     return <LeaveRequestForm {...props} />
-    case 'business_proposal': return <BusinessProposalForm {...props} />
+    case 'business_proposal': return (
+      <BusinessProposalForm
+        {...props}
+        onFileUpload={editing ? onFileUpload : undefined}
+        onFileDelete={editing ? onFileDelete : undefined}
+      />
+    )
     case 'overtime_log':      return <OvertimeLogForm {...props} />
     default: return <div className="text-gray-400 text-sm">알 수 없는 문서 유형</div>
   }

@@ -242,21 +242,19 @@ export async function POST(
       const coopTeamId      = formData?.cooperative_team_id;
       const coopTeamName    = formData?.cooperative_team;
 
-      // 부서 ID/name으로 직원 목록 조회
+      // 부서 ID/name으로 직원 목록 조회 (employees 테이블은 department text 컬럼만 존재)
       const fetchDeptStaff = async (deptId?: string, deptName?: string): Promise<string[]> => {
         if (!deptId && !deptName) return [];
-        let rows: any[];
+        let resolvedName = deptName;
         if (deptId) {
-          rows = await queryAll(
-            `SELECT id FROM employees WHERE department_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-            [deptId]
-          );
-        } else {
-          rows = await queryAll(
-            `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-            [deptName]
-          );
+          const dept = await queryOne(`SELECT name FROM departments WHERE id = $1`, [deptId]);
+          if (dept?.name) resolvedName = dept.name;
         }
+        if (!resolvedName) return [];
+        const rows = await queryAll(
+          `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+          [resolvedName]
+        );
         return (rows || []).map((r: any) => r.id);
       };
 
