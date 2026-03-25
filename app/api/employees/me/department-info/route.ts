@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     // department_id가 없거나 JOIN 실패 시 텍스트 컬럼으로 폴백
     if (!departmentId && !isManagementSupport && deptName) {
       const deptByName = await queryOne(
-        `SELECT is_management_support FROM departments WHERE name = $1 AND is_active = TRUE LIMIT 1`,
+        `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
         [deptName]
       );
       isManagementSupport = deptByName?.is_management_support === true;

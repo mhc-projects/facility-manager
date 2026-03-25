@@ -200,7 +200,7 @@ export async function PUT(
     // department 이름으로 department_id 조회하여 함께 업데이트
     if (department?.trim()) {
       const deptRow = await queryOne(
-        `SELECT id FROM departments WHERE name = $1 AND is_active = TRUE LIMIT 1`,
+        `SELECT id FROM departments WHERE name = $1 LIMIT 1`,
         [department.trim()]
       );
       updateFields.push(`department_id = $${paramIndex}`);
