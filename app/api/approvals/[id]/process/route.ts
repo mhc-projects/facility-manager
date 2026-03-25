@@ -97,8 +97,80 @@ export async function POST(
 }
 
 /**
+ * PATCH /api/approvals/[id]/process
+ * 처리확인 수정 (경영지원부 또는 권한 4)
+ * - process_note 수정, processed_at 현재 시간으로 갱신
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: '인증 토큰이 필요합니다' }, { status: 401 });
+    }
+    const token = authHeader.substring(7);
+    const decoded = verifyTokenString(token);
+    if (!decoded) {
+      return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
+    }
+
+    const userId = decoded.userId || decoded.id;
+    const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
+    const isSuperAdmin = permissionLevel >= 4;
+
+    let isManagementSupport = false;
+    if (!isSuperAdmin) {
+      const emp = await queryOne(
+        `SELECT d.is_management_support
+         FROM employees e
+         LEFT JOIN departments d ON d.id = e.department_id::uuid
+         WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        [userId]
+      );
+      isManagementSupport = emp?.is_management_support === true;
+    }
+
+    if (!isSuperAdmin && !isManagementSupport) {
+      return NextResponse.json({ success: false, error: '처리확인 수정 권한이 없습니다 (경영지원부 또는 관리자 권한 필요)' }, { status: 403 });
+    }
+
+    const doc = await queryOne(
+      `SELECT id, is_processed FROM approval_documents WHERE id = $1 AND is_deleted = FALSE`,
+      [params.id]
+    );
+
+    if (!doc) {
+      return NextResponse.json({ success: false, error: '문서를 찾을 수 없습니다' }, { status: 404 });
+    }
+
+    if (!doc.is_processed) {
+      return NextResponse.json({ success: false, error: '처리확인된 문서만 수정할 수 있습니다' }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const processNote = body.process_note?.trim() || null;
+
+    const updated = await queryOne(
+      `UPDATE approval_documents
+       SET process_note = $2,
+           processed_at = NOW()
+       WHERE id = $1
+       RETURNING id, is_processed, processed_at, processed_by_name, process_note`,
+      [params.id, processNote]
+    );
+
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('[API] PATCH /approvals/[id]/process error:', error);
+    return NextResponse.json({ success: false, error: error.message || '서버 오류' }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/approvals/[id]/process
- * 처리확인 취소 (권한 4만 가능)
+ * 처리확인 취소 (경영지원부 또는 권한 4)
  */
 export async function DELETE(
   request: NextRequest,
@@ -115,9 +187,24 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
     }
 
+    const userId = decoded.userId || decoded.id;
     const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
-    if (permissionLevel < 4) {
-      return NextResponse.json({ success: false, error: '처리확인 취소는 관리자만 가능합니다' }, { status: 403 });
+    const isSuperAdmin = permissionLevel >= 4;
+
+    let isManagementSupport = false;
+    if (!isSuperAdmin) {
+      const emp = await queryOne(
+        `SELECT d.is_management_support
+         FROM employees e
+         LEFT JOIN departments d ON d.id = e.department_id::uuid
+         WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        [userId]
+      );
+      isManagementSupport = emp?.is_management_support === true;
+    }
+
+    if (!isSuperAdmin && !isManagementSupport) {
+      return NextResponse.json({ success: false, error: '처리확인 취소는 경영지원부 또는 관리자만 가능합니다' }, { status: 403 });
     }
 
     const updated = await queryOne(

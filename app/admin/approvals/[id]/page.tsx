@@ -123,6 +123,8 @@ export default function ApprovalDetailPage() {
   const [processModalOpen, setProcessModalOpen] = useState(false)
   const [processNote, setProcessNote] = useState('')
   const [isManagementSupport, setIsManagementSupport] = useState(false)
+  const [processEditMode, setProcessEditMode] = useState(false)
+  const [processDeleteConfirmOpen, setProcessDeleteConfirmOpen] = useState(false)
 
   const token = () => TokenManager.getToken()
 
@@ -353,6 +355,51 @@ export default function ApprovalDetailPage() {
     }
   }
 
+  const handleProcessEdit = async () => {
+    if (!doc) return
+    setProcessing(true)
+    try {
+      const t = token()
+      const res = await fetch(`/api/approvals/${id}/process`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ process_note: processNote.trim() || null }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setProcessModalOpen(false)
+        setProcessEditMode(false)
+        setProcessNote('')
+        fetchDoc()
+      } else {
+        alert(data.error || '수정 실패')
+      }
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleProcessDelete = async () => {
+    if (!doc) return
+    setProcessing(true)
+    try {
+      const t = token()
+      const res = await fetch(`/api/approvals/${id}/process`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${t}` },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setProcessDeleteConfirmOpen(false)
+        fetchDoc()
+      } else {
+        alert(data.error || '삭제 실패')
+      }
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!confirm('문서를 삭제하시겠습니까?')) return
     const t = token()
@@ -530,16 +577,38 @@ export default function ApprovalDetailPage() {
               처리확인
             </h3>
             {doc.is_processed ? (
-              <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-green-700">처리완료</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {doc.processed_by_name} · {formatDate(doc.processed_at)}
-                  </p>
-                  {doc.process_note && (
-                    <p className="text-sm text-gray-700 mt-2 bg-gray-50 rounded-lg px-3 py-2">{doc.process_note}</p>
-                  )}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-green-700">처리완료</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {doc.processed_by_name} · {formatDate(doc.processed_at)}
+                    </p>
+                    {doc.process_note && (
+                      <p className="text-sm text-gray-700 mt-2 bg-gray-50 rounded-lg px-3 py-2">{doc.process_note}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      setProcessEditMode(true)
+                      setProcessNote(doc.process_note || '')
+                      setProcessModalOpen(true)
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    수정
+                  </button>
+                  <button
+                    onClick={() => setProcessDeleteConfirmOpen(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    삭제
+                  </button>
                 </div>
               </div>
             ) : (
@@ -549,7 +618,7 @@ export default function ApprovalDetailPage() {
                   <span className="text-sm">미처리</span>
                 </div>
                 <button
-                  onClick={() => setProcessModalOpen(true)}
+                  onClick={() => { setProcessEditMode(false); setProcessNote(''); setProcessModalOpen(true) }}
                   className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                 >
                   <CheckSquare className="w-4 h-4" />
@@ -668,10 +737,10 @@ export default function ApprovalDetailPage() {
         </div>
       )}
 
-      {/* ── 처리확인 모달 ── */}
+      {/* ── 처리확인 모달 (신규 + 수정 공용) ── */}
       {processModalOpen && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-30" onClick={() => { setProcessModalOpen(false); setProcessNote('') }} />
+          <div className="fixed inset-0 bg-black/40 z-30" onClick={() => { setProcessModalOpen(false); setProcessEditMode(false); setProcessNote('') }} />
 
           {/* 모바일: Bottom Sheet */}
           <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom,16px)]">
@@ -681,10 +750,10 @@ export default function ApprovalDetailPage() {
             <div className="px-5 pb-2">
               <div className="flex items-center gap-2 mb-1">
                 <CheckSquare className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-semibold text-gray-900">처리확인</h3>
+                <h3 className="text-base font-semibold text-gray-900">{processEditMode ? '처리확인 수정' : '처리확인'}</h3>
               </div>
               <p className="text-sm text-gray-500 mb-4">
-                이 결재 문서를 처리완료 상태로 변경합니다.
+                {processEditMode ? '처리 메모를 수정합니다. 처리일시가 현재 시간으로 갱신됩니다.' : '이 결재 문서를 처리완료 상태로 변경합니다.'}
               </p>
               <textarea
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[100px]"
@@ -695,17 +764,17 @@ export default function ApprovalDetailPage() {
               />
               <div className="flex gap-3 mt-4">
                 <button
-                  onClick={() => { setProcessModalOpen(false); setProcessNote('') }}
+                  onClick={() => { setProcessModalOpen(false); setProcessEditMode(false); setProcessNote('') }}
                   className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-700 font-medium text-sm"
                 >
                   취소
                 </button>
                 <button
-                  onClick={handleProcess}
+                  onClick={processEditMode ? handleProcessEdit : handleProcess}
                   disabled={processing}
                   className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 disabled:opacity-50"
                 >
-                  {processing ? '처리 중...' : '처리확인'}
+                  {processing ? '처리 중...' : processEditMode ? '저장' : '처리확인'}
                 </button>
               </div>
             </div>
@@ -716,10 +785,10 @@ export default function ApprovalDetailPage() {
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
               <div className="flex items-center gap-2 mb-2">
                 <CheckSquare className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">처리확인</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{processEditMode ? '처리확인 수정' : '처리확인'}</h3>
               </div>
               <p className="text-sm text-gray-500 mb-1">
-                이 결재 문서를 처리완료 상태로 변경합니다.
+                {processEditMode ? '처리 메모를 수정합니다. 처리일시가 현재 시간으로 갱신됩니다.' : '이 결재 문서를 처리완료 상태로 변경합니다.'}
               </p>
               <p className="text-xs text-gray-400 mb-4">
                 문서번호: {doc.document_number}
@@ -739,18 +808,51 @@ export default function ApprovalDetailPage() {
               </div>
               <div className="flex justify-end gap-3">
                 <button
-                  onClick={() => { setProcessModalOpen(false); setProcessNote('') }}
+                  onClick={() => { setProcessModalOpen(false); setProcessEditMode(false); setProcessNote('') }}
                   className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   취소
                 </button>
                 <button
-                  onClick={handleProcess}
+                  onClick={processEditMode ? handleProcessEdit : handleProcess}
                   disabled={processing}
                   className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
-                  {processing ? '처리 중...' : '처리확인'}
+                  {processing ? '처리 중...' : processEditMode ? '저장' : '처리확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 처리확인 삭제 확인 다이얼로그 ── */}
+      {processDeleteConfirmOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-30" onClick={() => setProcessDeleteConfirmOpen(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-40 px-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Trash2 className="w-5 h-5 text-red-500" />
+                <h3 className="text-base font-semibold text-gray-900">처리확인 취소</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-1">처리확인을 취소하시겠습니까?</p>
+              <p className="text-xs text-gray-400 mb-6">처리 상태가 <span className="font-medium text-orange-600">미처리</span>로 변경됩니다.</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setProcessDeleteConfirmOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleProcessDelete}
+                  disabled={processing}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {processing ? '처리 중...' : '확인'}
                 </button>
               </div>
             </div>

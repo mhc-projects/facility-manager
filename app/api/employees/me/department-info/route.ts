@@ -23,19 +23,21 @@ export async function GET(request: NextRequest) {
     const userId = decoded.userId || decoded.id;
 
     const result = await queryOne(
-      `SELECT e.department AS department_name
+      `SELECT e.department AS department_name, d.is_management_support
        FROM employees e
+       LEFT JOIN departments d ON d.id = e.department_id::uuid
        WHERE e.id = $1 AND e.is_deleted = FALSE`,
       [userId]
     );
 
-    const deptName: string = (result as { department_name?: string })?.department_name || '';
+    const deptName: string = (result as any)?.department_name || '';
+    const isManagementSupport: boolean = (result as any)?.is_management_support === true;
 
     return NextResponse.json({
       success: true,
       data: {
         department_name: deptName || null,
-        is_management_support: deptName.includes('경영지원'),
+        is_management_support: isManagementSupport,
       }
     });
   } catch (error: any) {
