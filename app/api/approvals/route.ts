@@ -186,8 +186,8 @@ export async function GET(request: NextRequest) {
     } else if (isSuperAdmin) {
       // 권한 4(슈퍼 관리자): 모든 문서 열람 가능
     } else if (isManagementSupportGeneral) {
-      // 경영지원부: 승인완료 문서만 열람 가능
-      conditions.push(`d.status = 'approved'`);
+      // 경영지원부: 승인완료 + 결재중 문서 열람 가능
+      conditions.push(`d.status IN ('approved', 'pending')`);
     } else {
       // 전체 탭: 작성자 본인 OR 결재선에 포함된 문서
       // + 업무품의서의 경우 현재 사용자 부서가 작성팀/협조팀이면 추가 조회
