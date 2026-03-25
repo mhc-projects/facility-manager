@@ -488,6 +488,26 @@ export default function ApprovalDetailPage() {
           </div>
         )}
 
+        {/* 결재 의견 */}
+        {doc.steps && doc.steps.filter(s => s.status === 'approved' && s.comment).length > 0 && (
+          <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 md:p-5">
+            <h3 className="text-sm font-semibold text-blue-700 mb-3">결재 의견</h3>
+            <div className="space-y-3">
+              {doc.steps
+                .filter(s => s.status === 'approved' && s.comment)
+                .map((s, i) => (
+                  <div key={i} className="bg-white rounded-lg p-3 border border-blue-100">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-sm font-medium text-blue-700">{s.approver_name_live || s.approver_name} ({s.role_label})</span>
+                      <span className="text-xs text-gray-400">{formatDate(s.approved_at)}</span>
+                    </div>
+                    <p className="text-sm text-gray-700">{s.comment}</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* 양식 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 md:mb-6">
