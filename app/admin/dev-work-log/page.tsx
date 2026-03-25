@@ -48,6 +48,7 @@ interface WorkLog {
   priority: 'high' | 'medium' | 'low'
   status: 'in_progress' | 'completed' | 'on_hold' | 'cancelled'
   description: string | null
+  target_location: string | null
   received_date: string
   expected_date: string | null
   completed_date: string | null
@@ -201,9 +202,7 @@ interface ReportModalProps {
 
 function ReportModal({ items, onClose }: ReportModalProps) {
   const [startDate, setStartDate] = useState(() => {
-    const d = new Date()
-    d.setDate(1)
-    return d.toISOString().slice(0, 10)
+    const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
   })
   const [endDate, setEndDate] = useState(today)
   const [completedOnly, setCompletedOnly] = useState(false)
@@ -211,170 +210,278 @@ function ReportModal({ items, onClose }: ReportModalProps) {
   const printRef = useRef<HTMLDivElement>(null)
 
   const filtered = items.filter(item => {
-    const date = item.received_date
-    const inRange = date >= startDate && date <= endDate
+    const inRange = item.received_date >= startDate && item.received_date <= endDate
     if (!inRange) return false
     if (completedOnly && item.status !== 'completed') return false
     return true
   })
 
+  // 통계
+  const stats = {
+    total: filtered.length,
+    completed: filtered.filter(i => i.status === 'completed').length,
+    inProgress: filtered.filter(i => i.status === 'in_progress').length,
+    onHold: filtered.filter(i => i.status === 'on_hold').length,
+    avgProgress: filtered.length
+      ? Math.round(filtered.reduce((s, i) => s + i.progress_percent, 0) / filtered.length)
+      : 0,
+  }
+
   const handlePrint = () => {
-    if (!printRef.current) return
-    const html = printRef.current.innerHTML
-    const win = window.open('', '_blank', 'width=900,height=700')
+    const win = window.open('', '_blank', 'width=1000,height=750')
     if (!win) return
-    win.document.write(`
-      <html><head>
-        <title>개발 업무 보고서 ${startDate} ~ ${endDate}</title>
-        <style>
-          body { font-family: 'Malgun Gothic', sans-serif; font-size: 12px; padding: 20px; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-          th { background: #f5f5f5; font-weight: bold; }
-          h2 { font-size: 16px; margin-bottom: 12px; }
-          .meta { color: #666; margin-bottom: 16px; font-size: 11px; }
-        </style>
-      </head><body>${html}</body></html>
-    `)
+    const now = new Date().toLocaleString('ko-KR')
+    const rows = filtered.map((item, i) => `
+      <tr>
+        <td class="num">${i + 1}</td>
+        <td class="title">${item.title}</td>
+        <td><span class="badge type-${item.type}">${TYPE_LABELS[item.type]}</span></td>
+        <td><span class="priority p-${item.priority}">● ${PRIORITY_LABELS[item.priority]}</span></td>
+        <td>${formatDate(item.received_date)}</td>
+        <td>${formatDate(item.expected_date)}</td>
+        <td>${formatDate(item.completed_date)}</td>
+        <td>${item.assignee_name || '—'}</td>
+        <td>
+          <div class="prog-wrap"><div class="prog-bar" style="width:${item.progress_percent}%"></div></div>
+          <span class="prog-num">${item.progress_percent}%</span>
+        </td>
+        <td><span class="badge status-${item.status}">${STATUS_LABELS[item.status]}</span></td>
+      </tr>`).join('')
+
+    win.document.write(`<!DOCTYPE html><html lang="ko"><head>
+      <meta charset="UTF-8">
+      <title>개발 업무 보고서 ${startDate} ~ ${endDate}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; background: #fff; color: #1e293b; padding: 40px; font-size: 11px; }
+        .report-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #6366f1; }
+        .report-title { font-size: 20px; font-weight: 700; color: #1e293b; letter-spacing: -0.5px; }
+        .report-title span { color: #6366f1; }
+        .report-meta { font-size: 10px; color: #64748b; text-align: right; line-height: 1.6; }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px; }
+        .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; }
+        .stat-label { font-size: 9px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #1e293b; }
+        .stat-value.blue { color: #6366f1; }
+        .stat-value.green { color: #10b981; }
+        .stat-value.amber { color: #f59e0b; }
+        table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        thead tr { background: linear-gradient(135deg, #6366f1, #818cf8); color: white; }
+        thead th { padding: 9px 10px; text-align: left; font-weight: 600; font-size: 10px; letter-spacing: 0.3px; white-space: nowrap; }
+        tbody tr { border-bottom: 1px solid #f1f5f9; }
+        tbody tr:nth-child(even) { background: #fafbff; }
+        tbody tr:hover { background: #f0f4ff; }
+        td { padding: 8px 10px; vertical-align: middle; }
+        td.num { text-align: center; color: #94a3b8; font-size: 10px; width: 30px; }
+        td.title { font-weight: 500; color: #1e293b; max-width: 200px; }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 9.5px; font-weight: 600; white-space: nowrap; }
+        .type-feature { background: #ede9fe; color: #7c3aed; }
+        .type-bugfix  { background: #fee2e2; color: #dc2626; }
+        .type-infra   { background: #f1f5f9; color: #475569; }
+        .type-other   { background: #f3f4f6; color: #6b7280; }
+        .status-in_progress { background: #dbeafe; color: #1d4ed8; }
+        .status-completed   { background: #d1fae5; color: #065f46; }
+        .status-on_hold     { background: #fef3c7; color: #92400e; }
+        .status-cancelled   { background: #f3f4f6; color: #6b7280; }
+        .priority { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .p-high   { color: #dc2626; }
+        .p-medium { color: #d97706; }
+        .p-low    { color: #059669; }
+        .prog-wrap { background: #e2e8f0; border-radius: 99px; height: 5px; width: 60px; display: inline-block; vertical-align: middle; margin-right: 5px; overflow: hidden; }
+        .prog-bar  { background: linear-gradient(90deg, #6366f1, #818cf8); height: 100%; border-radius: 99px; }
+        .prog-num  { font-size: 10px; color: #64748b; vertical-align: middle; }
+        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; color: #94a3b8; font-size: 9px; }
+        @media print {
+          body { padding: 20px; }
+          .stats { break-inside: avoid; }
+        }
+      </style>
+    </head><body>
+      <div class="report-header">
+        <div>
+          <div class="report-title">개발 업무 <span>보고서</span></div>
+          <div style="font-size:11px;color:#64748b;margin-top:4px;">${startDate} ~ ${endDate}</div>
+        </div>
+        <div class="report-meta">
+          생성일시: ${now}<br>
+          ${completedOnly ? '완료 업무만 포함' : '전체 업무 포함'}
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat-card"><div class="stat-label">전체 업무</div><div class="stat-value blue">${stats.total}</div></div>
+        <div class="stat-card"><div class="stat-label">완료</div><div class="stat-value green">${stats.completed}</div></div>
+        <div class="stat-card"><div class="stat-label">진행중</div><div class="stat-value blue">${stats.inProgress}</div></div>
+        <div class="stat-card"><div class="stat-label">보류</div><div class="stat-value amber">${stats.onHold}</div></div>
+        <div class="stat-card"><div class="stat-label">평균 진행률</div><div class="stat-value">${stats.avgProgress}%</div></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>업무명</th><th>유형</th><th>우선순위</th>
+          <th>접수일</th><th>예상완료</th><th>실제완료</th><th>담당자</th><th>진행률</th><th>상태</th>
+        </tr></thead>
+        <tbody>${rows || `<tr><td colspan="10" style="text-align:center;padding:20px;color:#94a3b8;">해당 기간에 업무가 없습니다</td></tr>`}</tbody>
+      </table>
+      <div class="footer">
+        <span>개발부서 업무 일지 시스템</span>
+        <span>총 ${stats.total}건 · 완료율 ${stats.total ? Math.round(stats.completed / stats.total * 100) : 0}%</span>
+      </div>
+    </body></html>`)
     win.document.close()
     win.focus()
-    win.print()
+    setTimeout(() => win.print(), 400)
   }
 
   const handleCopy = async () => {
-    const lines: string[] = [
+    const lines = [
       `개발 업무 보고서 (${startDate} ~ ${endDate})`,
-      `생성일시: ${new Date().toLocaleString('ko-KR')}`,
-      `총 ${filtered.length}건${completedOnly ? ' (완료 건만)' : ''}`,
+      `생성: ${new Date().toLocaleString('ko-KR')} | 총 ${filtered.length}건`,
       '',
-      ['번호', '업무명', '유형', '우선순위', '접수일', '예상완료', '실제완료', '담당자', '진행률', '상태'].join('\t'),
-      ...filtered.map((item, i) =>
-        [
-          String(i + 1),
-          item.title,
-          TYPE_LABELS[item.type],
-          PRIORITY_LABELS[item.priority],
-          formatDate(item.received_date),
-          formatDate(item.expected_date),
-          formatDate(item.completed_date),
-          item.assignee_name || '-',
-          `${item.progress_percent}%`,
-          STATUS_LABELS[item.status],
-        ].join('\t')
-      ),
+      ['#', '업무명', '유형', '우선순위', '접수일', '예상완료', '실제완료', '담당자', '진행률', '상태'].join('\t'),
+      ...filtered.map((item, i) => [
+        i + 1, item.title, TYPE_LABELS[item.type], PRIORITY_LABELS[item.priority],
+        formatDate(item.received_date), formatDate(item.expected_date),
+        formatDate(item.completed_date), item.assignee_name || '-',
+        `${item.progress_percent}%`, STATUS_LABELS[item.status],
+      ].join('\t')),
     ]
-
     try {
       await navigator.clipboard.writeText(lines.join('\n'))
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // clipboard API 미지원 환경 처리
-    }
+      setCopied(true); setTimeout(() => setCopied(false), 2000)
+    } catch {}
   }
 
+  const completionRate = stats.total ? Math.round(stats.completed / stats.total * 100) : 0
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
-        {/* 모달 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">보고서 생성</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X size={18} className="text-gray-500" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[92vh] flex flex-col overflow-hidden">
+
+        {/* ── 헤더 ── */}
+        <div className="relative bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 px-7 py-5 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <FileText size={18} className="text-white/80" />
+              <h2 className="text-lg font-bold text-white tracking-tight">개발 업무 보고서</h2>
+              <span className="px-2 py-0.5 bg-white/20 rounded-full text-white/90 text-xs font-medium">미리보기</span>
+            </div>
+            <p className="text-indigo-200 text-xs mt-1">{startDate} ~ {endDate} · {filtered.length}건</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors">
+            <X size={17} className="text-white" />
           </button>
         </div>
 
-        {/* 옵션 */}
-        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">시작일</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+        {/* ── 필터 바 ── */}
+        <div className="px-7 py-4 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-3 items-end">
+          <div className="flex items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">시작일</label>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <span className="text-gray-400 pb-2">—</span>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">종료일</label>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">종료일</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={completedOnly}
-              onChange={e => setCompletedOnly(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            완료된 업무만 포함
+          <label className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 cursor-pointer hover:border-indigo-300 transition-colors">
+            <input type="checkbox" checked={completedOnly} onChange={e => setCompletedOnly(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+            완료 업무만
           </label>
           <div className="ml-auto flex gap-2">
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              {copied ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
-              {copied ? '복사됨' : '텍스트 복사'}
+            <button onClick={handleCopy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all font-medium">
+              {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+              {copied ? '복사됨!' : '탭 복사'}
             </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700 transition-colors"
-            >
-              <Printer size={15} />
-              인쇄
+            <button onClick={handlePrint}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700 transition-colors font-medium shadow-sm shadow-indigo-200">
+              <Printer size={14} />
+              인쇄 / PDF
             </button>
           </div>
         </div>
 
-        {/* 미리보기 */}
-        <div className="flex-1 overflow-auto p-6">
-          <div ref={printRef}>
-            <h2>개발 업무 보고서 ({startDate} ~ {endDate})</h2>
-            <p className="meta">
-              생성일시: {new Date().toLocaleString('ko-KR')} &nbsp;|&nbsp;
-              총 {filtered.length}건{completedOnly ? ' (완료 건만)' : ''}
-            </p>
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-50">
-                  {['#', '업무명', '유형', '우선순위', '접수일', '예상완료', '실제완료', '담당자', '진행률', '상태'].map(h => (
-                    <th key={h} className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-700">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="border border-gray-200 px-3 py-6 text-center text-gray-400 text-sm">
-                      해당 기간에 업무가 없습니다
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((item, i) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="border border-gray-200 px-3 py-2 text-center text-xs text-gray-500">{i + 1}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-sm font-medium text-gray-900">{item.title}</td>
-                      <td className="border border-gray-200 px-3 py-2">{TYPE_LABELS[item.type]}</td>
-                      <td className="border border-gray-200 px-3 py-2">{PRIORITY_LABELS[item.priority]}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-xs">{formatDate(item.received_date)}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-xs">{formatDate(item.expected_date)}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-xs">{formatDate(item.completed_date)}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-xs">{item.assignee_name || '-'}</td>
-                      <td className="border border-gray-200 px-3 py-2 text-xs">{item.progress_percent}%</td>
-                      <td className="border border-gray-200 px-3 py-2 text-xs">{STATUS_LABELS[item.status]}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+        {/* ── 미리보기 본문 ── */}
+        <div className="flex-1 overflow-auto px-7 py-6 space-y-5" ref={printRef}>
+
+          {/* 통계 카드 */}
+          <div className="grid grid-cols-5 gap-3">
+            {[
+              { label: '전체', value: stats.total, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100' },
+              { label: '완료', value: stats.completed, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+              { label: '진행중', value: stats.inProgress, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+              { label: '보류', value: stats.onHold, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
+              { label: '완료율', value: `${completionRate}%`, color: 'text-violet-600', bg: 'bg-violet-50 border-violet-100' },
+            ].map(s => (
+              <div key={s.label} className={`${s.bg} border rounded-xl px-4 py-3`}>
+                <div className="text-xs text-gray-500 font-medium mb-1">{s.label}</div>
+                <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+              </div>
+            ))}
           </div>
+
+          {/* 평균 진행률 바 */}
+          <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 rounded-xl px-5 py-3 flex items-center gap-4">
+            <span className="text-xs font-semibold text-indigo-700 whitespace-nowrap">평균 진행률</span>
+            <div className="flex-1 h-2 bg-indigo-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                style={{ width: `${stats.avgProgress}%` }} />
+            </div>
+            <span className="text-sm font-bold text-indigo-700 w-10 text-right">{stats.avgProgress}%</span>
+          </div>
+
+          {/* 업무 테이블 */}
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+              <FileText size={36} className="mb-3 opacity-30" />
+              <p className="text-sm">해당 기간에 업무가 없습니다</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gradient-to-r from-slate-700 to-slate-800 text-white">
+                    {['#', '업무명', '유형', '우선순위', '접수일', '예상완료', '실제완료', '담당자', '진행률', '상태'].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold whitespace-nowrap first:w-10 first:text-center">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item, i) => (
+                    <tr key={item.id} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-indigo-50/40 transition-colors`}>
+                      <td className="px-3 py-2.5 text-center text-xs text-gray-400 font-mono">{i + 1}</td>
+                      <td className="px-3 py-2.5 font-medium text-gray-900 max-w-[200px]">
+                        <div className="truncate" title={item.title}>{item.title}</div>
+                      </td>
+                      <td className="px-3 py-2.5"><TypeBadge type={item.type} /></td>
+                      <td className="px-3 py-2.5"><PriorityDot priority={item.priority} /></td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{formatDate(item.received_date)}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{formatDate(item.expected_date)}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{formatDate(item.completed_date)}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-700 whitespace-nowrap">{item.assignee_name || '—'}</td>
+                      <td className="px-3 py-2.5"><ProgressBar percent={item.progress_percent} /></td>
+                      <td className="px-3 py-2.5"><StatusBadge status={item.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="bg-slate-50 border-t border-gray-100 px-4 py-2.5 flex justify-between items-center">
+                <span className="text-xs text-gray-400">
+                  생성: {new Date().toLocaleString('ko-KR')}
+                </span>
+                <span className="text-xs font-medium text-gray-600">
+                  총 {stats.total}건 · 완료 {stats.completed}건 ({completionRate}%)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -402,6 +509,7 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
     priority: (src?.priority || 'medium') as WorkLog['priority'],
     status: (src?.status || 'in_progress') as WorkLog['status'],
     description: src?.description || '',
+    target_location: src?.target_location || '',
     received_date: src?.received_date || today(),
     expected_date: src?.expected_date || '',
     completed_date: src?.completed_date || '',
@@ -549,6 +657,34 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
               <option key={emp.id} value={emp.id}>{emp.name}</option>
             ))}
           </select>
+        </div>
+
+        {/* 진행 위치 */}
+        <div>
+          <label className={labelClass}>
+            진행 위치
+            <span className="ml-1.5 text-gray-400 font-normal">(파일 경로 · 페이지 · URL)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none select-none font-mono text-xs">/</span>
+            <input
+              type="text"
+              value={form.target_location}
+              onChange={e => set('target_location', e.target.value)}
+              placeholder="예: app/admin/tasks/page.tsx · /admin/business · components/ui/Modal"
+              className={`${inputClass} pl-5 font-mono text-xs`}
+            />
+          </div>
+          {form.target_location && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {form.target_location.split(/[\n,;]+/).map(p => p.trim()).filter(Boolean).map((p, i) => (
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 설명 */}
@@ -932,7 +1068,19 @@ export default function DevWorkLogPage() {
 
       <div className="flex h-full">
         {/* 메인 영역 */}
-        <div className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ${panelOpen ? 'mr-0' : ''}`}>
+        <div
+          className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ${panelOpen ? 'mr-0' : ''}`}
+          onClick={panelOpen ? (e) => {
+            // 클릭된 요소가 인터랙티브 요소(버튼, 입력, 링크, 테이블 행)가 아닐 때만 패널 닫기
+            const target = e.target as HTMLElement
+            const interactive = target.closest('button, a, input, select, textarea, tr, label')
+            if (!interactive) {
+              setPanelOpen(false)
+              setSelectedItem(null)
+              setIsNew(false)
+            }
+          } : undefined}
+        >
           {/* 헤더 */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -1093,6 +1241,14 @@ export default function DevWorkLogPage() {
                         <span className="font-medium text-gray-900 group-hover:text-indigo-700 transition-colors line-clamp-1">
                           {item.title}
                         </span>
+                        {item.target_location && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
+                            <span className="text-xs text-indigo-500 font-mono truncate max-w-[220px]">
+                              {item.target_location.split(/[\n,;]+/)[0].trim()}
+                            </span>
+                          </div>
+                        )}
                         {/* 모바일: 부가 정보 */}
                         <div className="flex items-center gap-2 mt-1 md:hidden">
                           <TypeBadge type={item.type} />

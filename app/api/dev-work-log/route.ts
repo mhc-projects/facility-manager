@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
          ae.name AS assignee_name,
          w.progress_notes,
          w.progress_percent,
+         w.target_location,
          w.created_by,
          ce.name AS creator_name,
          w.created_at,
@@ -181,6 +182,7 @@ export async function POST(request: NextRequest) {
       completed_date,
       assignee_id,
       progress_percent = 0,
+      target_location,
     } = body
 
     if (!title?.trim()) {
@@ -194,8 +196,8 @@ export async function POST(request: NextRequest) {
       `INSERT INTO dev_work_log
          (title, type, priority, status, description,
           received_date, expected_date, completed_date,
-          assignee_id, progress_percent, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          assignee_id, progress_percent, target_location, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING id`,
       [
         title.trim(),
@@ -208,6 +210,7 @@ export async function POST(request: NextRequest) {
         completed_date || null,
         assignee_id || null,
         progress_percent,
+        target_location || null,
         userId,
       ]
     )

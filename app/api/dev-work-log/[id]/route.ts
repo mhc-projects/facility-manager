@@ -54,6 +54,7 @@ export async function GET(
          w.description, w.received_date, w.expected_date, w.completed_date,
          w.assignee_id, ae.name AS assignee_name,
          w.progress_notes, w.progress_percent,
+         w.target_location,
          w.created_by, ce.name AS creator_name,
          w.created_at, w.updated_at
        FROM dev_work_log w
@@ -126,6 +127,7 @@ export async function PUT(
       completed_date,
       assignee_id,
       progress_percent,
+      target_location,
       new_note,
     } = body
 
@@ -164,6 +166,7 @@ export async function PUT(
     if (completed_date !== undefined) { setClauses.push(`completed_date = $${idx++}`); values.push(completed_date || null) }
     if (assignee_id !== undefined) { setClauses.push(`assignee_id = $${idx++}`); values.push(assignee_id || null) }
     if (progress_percent !== undefined) { setClauses.push(`progress_percent = $${idx++}`); values.push(progress_percent) }
+    if (target_location !== undefined) { setClauses.push(`target_location = $${idx++}`); values.push(target_location || null) }
 
     setClauses.push(`progress_notes = $${idx++}`)
     values.push(JSON.stringify(progressNotes))
