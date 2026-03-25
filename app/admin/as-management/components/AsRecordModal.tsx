@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Send, Clock, FileText, Wrench, MessageSquare, ChevronRight, DollarSign } from 'lucide-react';
-import { AsRecord, ProgressNote, PriceLists } from '../page';
+import { AsRecord, ProgressNote, PriceLists, MANUFACTURER_OPTIONS } from '../page';
 import { STATUS_CONFIG } from './AsStatusBadge';
 import { TokenManager } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
@@ -28,9 +28,11 @@ interface BusinessSuggestion {
   business_name: string;
   business_management_code: number | null;
   delivery_date: string | null;
+  installation_date: string | null;
   address: string | null;
   manager_name: string | null;
   manager_contact: string | null;
+  manufacturer: string | null;
 }
 
 interface AsRecordModalProps {
@@ -98,6 +100,7 @@ export default function AsRecordModal({
     : record?.is_paid_override === false ? 'free'
     : 'auto'
   );
+  const [manufacturer, setManufacturer] = useState(record?.manufacturer || '');
   const [status, setStatus] = useState(record?.status || 'scheduled');
   // 타업체 사업장 직접 입력 필드
   const [siteAddress, setSiteAddress] = useState(record?.site_address || '');
@@ -231,6 +234,10 @@ export default function AsRecordModal({
     setSiteAddress('');
     setSiteManager('');
     setSiteContact('');
+    // 사업장의 제조사 정보 자동 채움
+    if (biz.manufacturer) {
+      setManufacturer(biz.manufacturer);
+    }
   };
 
   // 유상/무상 자동 계산
@@ -385,6 +392,7 @@ export default function AsRecordModal({
         dispatch_count: dispatchCount,
         dispatch_cost_price_id: dispatchCostPriceId || null,
         dispatch_revenue_price_id: dispatchRevenuePriceId || null,
+        manufacturer: manufacturer || null,
       };
 
       const url = isEdit ? `/api/as-records/${record!.id}` : '/api/as-records';
@@ -606,6 +614,13 @@ export default function AsRecordModal({
                     </>
                   )}
                   <div className="text-xs text-gray-500">
+                    <span className="text-gray-400">설치일</span>
+                    <span className="ml-1.5 font-medium text-gray-700">
+                      {(selectedBusiness?.installation_date || record?.installation_date)?.slice(0, 10) || '미등록'}
+                    </span>
+                  </div>
+                  <div className="w-px h-3 bg-gray-200" />
+                  <div className="text-xs text-gray-500">
                     <span className="text-gray-400">출고일</span>
                     <span className="ml-1.5 font-medium text-gray-700">
                       {(selectedBusiness?.delivery_date || record?.delivery_date)?.slice(0, 10) || '미등록'}
@@ -700,6 +715,21 @@ export default function AsRecordModal({
                   );
                 })()
               ) : null}
+
+              {/* 제조사 */}
+              <div>
+                <label className={LABEL_CLS}>제조사</label>
+                <select
+                  value={manufacturer}
+                  onChange={e => setManufacturer(e.target.value)}
+                  className={INPUT_CLS}
+                >
+                  <option value="">선택 안 함</option>
+                  {MANUFACTURER_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
 
               {/* 날짜 행 */}
               <div className="grid grid-cols-2 gap-4">

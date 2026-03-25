@@ -110,8 +110,9 @@ export async function POST(request: NextRequest) {
         receipt_date, work_date,
         receipt_content, work_content,
         as_manager_name, chimney_number,
-        dispatch_count, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        dispatch_count, status,
+        manufacturer
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ecosense')
       RETURNING id, business_name_raw, receipt_date, work_date, status, created_at`,
       [
         businessId,

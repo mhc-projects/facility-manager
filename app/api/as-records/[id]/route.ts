@@ -53,6 +53,8 @@ export async function GET(
           ar.dispatch_count,
           ar.dispatch_cost_price_id,
           ar.dispatch_revenue_price_id,
+          ar.manufacturer,
+          bi.installation_date,
           ar.created_at,
           ar.updated_at,
           CASE
@@ -133,6 +135,7 @@ export async function PATCH(
       dispatch_count,
       dispatch_cost_price_id,
       dispatch_revenue_price_id,
+      manufacturer,
     } = body;
 
     if (status) {
@@ -141,6 +144,11 @@ export async function PATCH(
         return NextResponse.json({ success: false, error: '유효하지 않은 상태값입니다' }, { status: 400 });
       }
     }
+
+    const validManufacturers = ['ecosense', 'cleanearth', 'gaia_cns', 'evs'];
+    const safeManufacturer = manufacturer !== undefined
+      ? (manufacturer && validManufacturers.includes(manufacturer) ? manufacturer : null)
+      : undefined;
 
     const result = await pgQuery(
       `UPDATE as_records SET
@@ -161,8 +169,9 @@ export async function PATCH(
         dispatch_count = COALESCE($15, dispatch_count),
         dispatch_cost_price_id = $16,
         dispatch_revenue_price_id = $17,
+        manufacturer = COALESCE($18, manufacturer),
         updated_at = NOW()
-      WHERE id = $18 AND is_deleted = false
+      WHERE id = $19 AND is_deleted = false
       RETURNING *`,
       [
         receipt_date ?? null,
@@ -182,6 +191,7 @@ export async function PATCH(
         dispatch_count !== undefined ? Number(dispatch_count) : null,
         dispatch_cost_price_id !== undefined ? (dispatch_cost_price_id || null) : null,
         dispatch_revenue_price_id !== undefined ? (dispatch_revenue_price_id || null) : null,
+        safeManufacturer !== undefined ? safeManufacturer : null,
         id,
       ]
     );

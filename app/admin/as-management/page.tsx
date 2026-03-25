@@ -35,6 +35,8 @@ export interface AsRecord {
   as_manager_affiliation: string | null;
   is_paid_override: boolean | null;
   is_paid: boolean | null;
+  manufacturer: string | null;
+  installation_date: string | null;
   status: string;
   progress_notes: ProgressNote[];
   material_count: number;
@@ -70,6 +72,13 @@ const PAID_OPTIONS = [
   { value: 'free',    label: '무상' },
   { value: 'paid',    label: '유상' },
   { value: 'unknown', label: '미확인' },
+];
+
+export const MANUFACTURER_OPTIONS = [
+  { value: 'ecosense',   label: '에코센스' },
+  { value: 'cleanearth', label: '크린어스' },
+  { value: 'gaia_cns',   label: '가이아씨앤에스' },
+  { value: 'evs',        label: '이브이에스' },
 ];
 
 export interface PriceItem {
@@ -112,6 +121,8 @@ export default function AsManagementPage() {
   const statusButtonRef = useRef<HTMLButtonElement>(null);
   const [statusDropdownPos, setStatusDropdownPos] = useState({ top: 0, left: 0 });
 
+  const [manufacturerFilter, setManufacturerFilter] = useState('all');
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AsRecord | null>(null);
 
@@ -142,9 +153,10 @@ export default function AsManagementPage() {
     if (workDateTo) params.set('work_date_to', workDateTo);
     if (paidStatus !== 'all') params.set('paid_status', paidStatus);
     if (selectedStatuses.length > 0) params.set('status', selectedStatuses.join(','));
+    if (manufacturerFilter !== 'all') params.set('manufacturer', manufacturerFilter);
     params.set('limit', '200');
     return params.toString();
-  }, [debouncedSearchQuery, workDateFrom, workDateTo, paidStatus, selectedStatuses]);
+  }, [debouncedSearchQuery, workDateFrom, workDateTo, paidStatus, selectedStatuses, manufacturerFilter]);
 
   const fetchRecords = useCallback(async (signal?: AbortSignal) => {
     if (!signal) setLoading(true);
@@ -237,6 +249,7 @@ export default function AsManagementPage() {
     setWorkDateTo('');
     setPaidStatus('all');
     setSelectedStatuses([]);
+    setManufacturerFilter('all');
     setDaysFilter('all');
   };
 
@@ -253,7 +266,8 @@ export default function AsManagementPage() {
   const [daysFilter, setDaysFilter] = useState<'all' | 'fast' | 'normal' | 'delayed' | 'unworked'>('all');
 
   const hasActiveFilters = searchQuery || workDateFrom || workDateTo
-    || paidStatus !== 'all' || selectedStatuses.length > 0 || daysFilter !== 'all';
+    || paidStatus !== 'all' || selectedStatuses.length > 0 || daysFilter !== 'all'
+    || manufacturerFilter !== 'all';
 
   // 날짜 경과일수 계산
   const calcDays = (from: string | null, to: string | null): number | null => {
@@ -469,6 +483,24 @@ export default function AsManagementPage() {
               </button>
             </div>
 
+            {/* 제조사 필터 */}
+            <div className="flex-shrink-0">
+              <select
+                value={manufacturerFilter}
+                onChange={e => setManufacturerFilter(e.target.value)}
+                className={`px-3 py-2 border rounded-lg text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  manufacturerFilter !== 'all'
+                    ? 'border-blue-400 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white hover:border-gray-300'
+                }`}
+              >
+                <option value="all">제조사 전체</option>
+                {MANUFACTURER_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
             {/* 오른쪽 끝: 건수 + 초기화 */}
             <div className="flex items-center gap-2 ml-auto flex-shrink-0">
               {hasActiveFilters ? (
@@ -560,8 +592,9 @@ export default function AsManagementPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/70">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">사업장</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[10%]">일정</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[13%]">사업장</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[7%]">제조사</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[9%]">일정</th>
                     <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[6%]">소요</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[18%]">접수내용</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">배출구</th>
@@ -612,6 +645,16 @@ export default function AsManagementPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        {/* 제조사 */}
+                        <td className="px-4 py-3.5">
+                          {record.manufacturer ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+                              {MANUFACTURER_OPTIONS.find(m => m.value === record.manufacturer)?.label ?? record.manufacturer}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
                         </td>
                         {/* 일정: 접수일 + 작업일 2줄 */}
                         <td className="px-4 py-3.5">

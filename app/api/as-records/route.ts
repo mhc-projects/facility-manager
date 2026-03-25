@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     const paidStatus = searchParams.get('paid_status') || 'all';
     const statusParam = searchParams.get('status');
     const businessName = searchParams.get('business_name');
+    const manufacturerParam = searchParams.get('manufacturer');
     const limitParam = parseInt(searchParams.get('limit') || '100');
     const offsetParam = parseInt(searchParams.get('offset') || '0');
 
@@ -91,6 +92,10 @@ export async function GET(request: NextRequest) {
     } else if (paidStatus === 'unknown') {
       conditions.push(`(ar.is_paid_override IS NULL AND (bi.delivery_date IS NULL OR ar.business_id IS NULL))`);
     }
+    if (manufacturerParam && manufacturerParam !== 'all') {
+      conditions.push(`ar.manufacturer = $${paramIdx++}`);
+      values.push(manufacturerParam);
+    }
 
     const whereClause = conditions.join(' AND ');
 
@@ -124,6 +129,8 @@ export async function GET(request: NextRequest) {
         ar.dispatch_count,
         ar.dispatch_cost_price_id,
         ar.dispatch_revenue_price_id,
+        ar.manufacturer,
+        bi.installation_date,
         ar.created_at,
         ar.updated_at,
         -- 유상/무상 자동 계산 컬럼 (business_info 연결된 경우에만)
@@ -210,6 +217,7 @@ export async function POST(request: NextRequest) {
       dispatch_count = 1,
       dispatch_cost_price_id,
       dispatch_revenue_price_id,
+      manufacturer,
     } = body;
 
     if (!business_id && !business_name_raw) {
@@ -221,14 +229,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '유효하지 않은 상태값입니다' }, { status: 400 });
     }
 
+    const validManufacturers = ['ecosense', 'cleanearth', 'gaia_cns', 'evs'];
+    const safeManufacturer = manufacturer && validManufacturers.includes(manufacturer) ? manufacturer : null;
+
     const result = await pgQuery(
       `INSERT INTO as_records (
         business_id, business_name_raw, receipt_date, work_date, receipt_content, work_content,
         outlet_description, as_manager_name, as_manager_contact, as_manager_affiliation,
         site_address, site_manager, site_contact,
         is_paid_override, status, chimney_number,
-        dispatch_count, dispatch_cost_price_id, dispatch_revenue_price_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        dispatch_count, dispatch_cost_price_id, dispatch_revenue_price_id,
+        manufacturer
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *`,
       [
         business_id || null,
@@ -250,6 +262,7 @@ export async function POST(request: NextRequest) {
         Number(dispatch_count) || 1,
         dispatch_cost_price_id || null,
         dispatch_revenue_price_id || null,
+        safeManufacturer,
       ]
     );
 
