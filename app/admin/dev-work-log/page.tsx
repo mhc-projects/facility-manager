@@ -955,6 +955,16 @@ export default function DevWorkLogPage() {
         })
         const result = await res.json()
         if (!result.success) throw new Error(result.error)
+        // 생성된 항목을 즉시 목록 맨 앞에 추가
+        if (result.data?.id) {
+          const fresh = await fetch(`/api/dev-work-log/${result.data.id}`, {
+            headers: authHeader() as HeadersInit,
+          }).then(r => r.json())
+          if (fresh.success) {
+            setItems(prev => [fresh.data, ...prev])
+            setTotal(prev => prev + 1)
+          }
+        }
         showToast('업무가 추가되었습니다')
         setPanelOpen(false)
         setIsNew(false)
