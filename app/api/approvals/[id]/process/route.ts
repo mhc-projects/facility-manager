@@ -33,13 +33,16 @@ export async function POST(
     let isManagementSupport = false;
     if (!isSuperAdmin) {
       const emp = await queryOne(
-        `SELECT e.department_id, d.is_management_support
-         FROM employees e
-         LEFT JOIN departments d ON d.id = e.department_id::uuid
-         WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        `SELECT e.department FROM employees e WHERE e.id = $1 AND e.is_deleted = FALSE`,
         [userId]
       );
-      isManagementSupport = emp?.is_management_support === true;
+      if (emp?.department) {
+        const dept = await queryOne(
+          `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
+          [emp.department]
+        );
+        isManagementSupport = dept?.is_management_support === true;
+      }
     }
 
     if (!isSuperAdmin && !isManagementSupport) {
@@ -123,13 +126,16 @@ export async function PATCH(
     let isManagementSupport = false;
     if (!isSuperAdmin) {
       const emp = await queryOne(
-        `SELECT d.is_management_support
-         FROM employees e
-         LEFT JOIN departments d ON d.id = e.department_id::uuid
-         WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        `SELECT department FROM employees WHERE id = $1 AND is_deleted = FALSE`,
         [userId]
       );
-      isManagementSupport = emp?.is_management_support === true;
+      if (emp?.department) {
+        const dept = await queryOne(
+          `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
+          [emp.department]
+        );
+        isManagementSupport = dept?.is_management_support === true;
+      }
     }
 
     if (!isSuperAdmin && !isManagementSupport) {
@@ -194,13 +200,16 @@ export async function DELETE(
     let isManagementSupport = false;
     if (!isSuperAdmin) {
       const emp = await queryOne(
-        `SELECT d.is_management_support
-         FROM employees e
-         LEFT JOIN departments d ON d.id = e.department_id::uuid
-         WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        `SELECT department FROM employees WHERE id = $1 AND is_deleted = FALSE`,
         [userId]
       );
-      isManagementSupport = emp?.is_management_support === true;
+      if (emp?.department) {
+        const dept = await queryOne(
+          `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
+          [emp.department]
+        );
+        isManagementSupport = dept?.is_management_support === true;
+      }
     }
 
     if (!isSuperAdmin && !isManagementSupport) {
