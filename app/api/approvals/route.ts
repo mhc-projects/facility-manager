@@ -256,7 +256,7 @@ export async function GET(request: NextRequest) {
        LEFT JOIN employees ex  ON ex.id = d.executive_id
        LEFT JOIN employees ceo ON ceo.id = d.ceo_id
        WHERE ${whereClause}
-       ORDER BY d.created_at DESC
+       ORDER BY d.submitted_at DESC NULLS LAST, d.created_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,
       values
     );

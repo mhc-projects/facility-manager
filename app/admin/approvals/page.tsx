@@ -720,7 +720,9 @@ function ApprovalsContent() {
                               {DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
                             </span>
                             <span className="text-xs text-gray-300">·</span>
-                            <span className="text-xs text-gray-400">{formatDate(doc.created_at)}</span>
+                            <span className="text-xs text-gray-400">
+                              {tab === 'all' ? (doc.submitted_at ? formatDate(doc.submitted_at) : '-') : formatDate(doc.created_at)}
+                            </span>
                           </div>
                           <p className="text-sm font-semibold text-gray-900 truncate">{doc.title}</p>
                           <div className="flex items-center gap-2 mt-1.5">
@@ -763,7 +765,7 @@ function ApprovalsContent() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">작성자</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">상태</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">진행단계</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">작성일</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">제출일</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -787,7 +789,7 @@ function ApprovalsContent() {
                           <td className="px-4 py-3 text-xs text-gray-500">
                             {doc.status === 'pending' ? STEP_LABEL[doc.current_step] || '' : ''}
                           </td>
-                          <td className="px-4 py-3 text-xs text-gray-400">{formatDate(doc.created_at)}</td>
+                          <td className="px-4 py-3 text-xs text-gray-400">{doc.submitted_at ? formatDate(doc.submitted_at) : '-'}</td>
                         </tr>
                       ))}
                     </tbody>
