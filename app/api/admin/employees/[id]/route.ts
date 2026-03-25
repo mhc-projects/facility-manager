@@ -229,15 +229,8 @@ export async function PUT(
     paramIndex++;
 
     // 권한 레벨 수정 요청이 있는지 확인 (0도 유효한 값이므로 !== null 체크)
-    if (permission_level !== undefined && permission_level !== null) {
-      // 자신의 권한은 수정 불가
-      if (isSelfUpdate) {
-        console.warn('⚠️ [PERMISSION-UPDATE] 자신의 권한 수정 시도 차단:', userId);
-        return NextResponse.json(
-          { success: false, message: '자신의 권한 레벨은 변경할 수 없습니다.' },
-          { status: 403 }
-        );
-      }
+    // 자신의 프로필 수정 시 permission_level 필드는 무시 (기존 값 유지)
+    if (permission_level !== undefined && permission_level !== null && !isSelfUpdate) {
 
       // 권한 수정 권한 확인 (레벨 3 이상 필요)
       if (permissionLevel < 3) {
