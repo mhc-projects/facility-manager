@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const userId = decoded.userId || decoded.id;
 
     const result = await queryOne(
-      `SELECT e.department AS department_name, d.is_management_support
+      `SELECT e.department AS department_name, e.department_id, d.is_management_support
        FROM employees e
        LEFT JOIN departments d ON d.id = e.department_id::uuid
        WHERE e.id = $1 AND e.is_deleted = FALSE`,
@@ -31,7 +31,18 @@ export async function GET(request: NextRequest) {
     );
 
     const deptName: string = (result as any)?.department_name || '';
-    const isManagementSupport: boolean = (result as any)?.is_management_support === true;
+    const departmentId = (result as any)?.department_id;
+
+    let isManagementSupport: boolean = (result as any)?.is_management_support === true;
+
+    // department_id가 없거나 JOIN 실패 시 텍스트 컬럼으로 폴백
+    if (!departmentId && !isManagementSupport && deptName) {
+      const deptByName = await queryOne(
+        `SELECT is_management_support FROM departments WHERE name = $1 AND is_active = TRUE LIMIT 1`,
+        [deptName]
+      );
+      isManagementSupport = deptByName?.is_management_support === true;
+    }
 
     return NextResponse.json({
       success: true,
