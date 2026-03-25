@@ -291,8 +291,13 @@ function ApprovalDetailContent() {
         body: JSON.stringify({ comment: approveComment.trim() })
       })
       const data = await res.json()
-      if (data.success) { setApproveSheetOpen(false); setApproveComment(''); fetchDoc() }
-      else alert(data.error || '승인 실패')
+      if (data.success) {
+        setApproveSheetOpen(false)
+        setApproveComment('')
+        router.push(`/admin/approvals?tab=${fromTab}`)
+      } else {
+        alert(data.error || '승인 실패')
+      }
     } finally { setProcessing(false) }
   }
 
@@ -307,8 +312,13 @@ function ApprovalDetailContent() {
         body: JSON.stringify({ comment: rejectComment })
       })
       const data = await res.json()
-      if (data.success) { setRejectSheetOpen(false); setRejectComment(''); fetchDoc() }
-      else alert(data.error || '반려 실패')
+      if (data.success) {
+        setRejectSheetOpen(false)
+        setRejectComment('')
+        router.push(`/admin/approvals?tab=${fromTab}`)
+      } else {
+        alert(data.error || '반려 실패')
+      }
     } finally { setProcessing(false) }
   }
 
@@ -325,7 +335,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setExpressModalOpen(false)
         setExpressComment('')
-        fetchDoc()
+        router.push(`/admin/approvals?tab=${fromTab}`)
       } else {
         alert(data.error || '전결 처리 실패')
       }

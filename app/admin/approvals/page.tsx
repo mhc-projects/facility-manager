@@ -271,6 +271,18 @@ function ApprovalsContent() {
   useEffect(() => { fetchDocs() }, [fetchDocs])
   useEffect(() => { fetchPendingCount() }, [fetchPendingCount])
 
+  // 상세 페이지에서 결재/반려 후 목록으로 복귀 시 즉시 갱신
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDocs()
+        fetchPendingCount()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [fetchDocs, fetchPendingCount])
+
   useEffect(() => {
     const interval = setInterval(() => { fetchPendingCount() }, 30000)
     return () => clearInterval(interval)
