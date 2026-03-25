@@ -108,6 +108,8 @@ export default function ApprovalDetailPage() {
 
   const [rejectSheetOpen, setRejectSheetOpen] = useState(false)
   const [rejectComment, setRejectComment] = useState('')
+  const [approveSheetOpen, setApproveSheetOpen] = useState(false)
+  const [approveComment, setApproveComment] = useState('')
   const [processing, setProcessing] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   // ref로 최신값 유지: 클로저 캡처 문제 없이 채널 재구독 방지
@@ -282,10 +284,10 @@ export default function ApprovalDetailPage() {
       const res = await fetch(`/api/approvals/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-        body: JSON.stringify({})
+        body: JSON.stringify({ comment: approveComment.trim() })
       })
       const data = await res.json()
-      if (data.success) { fetchDoc() }
+      if (data.success) { setApproveSheetOpen(false); setApproveComment(''); fetchDoc() }
       else alert(data.error || '승인 실패')
     } finally { setProcessing(false) }
   }
@@ -548,11 +550,11 @@ export default function ApprovalDetailPage() {
               {canApprove && (
                 <>
                   <button
-                    onClick={handleApprove}
+                    onClick={() => setApproveSheetOpen(true)}
                     disabled={processing}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
                   >
-                    <CheckCircle className="w-4 h-4" />{processing ? '처리 중...' : '승인'}
+                    <CheckCircle className="w-4 h-4" />승인
                   </button>
                   <button
                     onClick={() => setRejectSheetOpen(true)}
@@ -611,11 +613,11 @@ export default function ApprovalDetailPage() {
                   반려
                 </button>
                 <button
-                  onClick={handleApprove}
+                  onClick={() => setApproveSheetOpen(true)}
                   disabled={processing}
                   className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 disabled:opacity-50"
                 >
-                  {processing ? '처리 중...' : '✓ 승인'}
+                  ✓ 승인
                 </button>
               </>
             )}
@@ -822,6 +824,83 @@ export default function ApprovalDetailPage() {
                 >
                   <Zap className="w-3.5 h-3.5" />
                   {processing ? '처리 중...' : '전결 처리 확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 승인 UI: 모바일=Bottom Sheet / 데스크탑=Modal ── */}
+      {approveSheetOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-30"
+            onClick={() => { setApproveSheetOpen(false); setApproveComment('') }}
+          />
+
+          {/* 모바일: Bottom Sheet */}
+          <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom,16px)]">
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-gray-300" />
+            </div>
+            <div className="px-5 pb-2">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">결재 승인</h3>
+              <textarea
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[100px]"
+                value={approveComment}
+                onChange={e => setApproveComment(e.target.value)}
+                placeholder="승인 의견을 남길 수 있습니다 (선택사항)"
+                autoFocus
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => { setApproveSheetOpen(false); setApproveComment('') }}
+                  className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-700 font-medium text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={processing}
+                  className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 disabled:opacity-50"
+                >
+                  {processing ? '처리 중...' : '✓ 승인 확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 데스크탑: Center Modal */}
+          <div className="hidden md:flex fixed inset-0 items-center justify-center z-40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">결재 승인</h3>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  코멘트 <span className="text-gray-400 font-normal normal-case">(선택사항)</span>
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  rows={4}
+                  value={approveComment}
+                  onChange={e => setApproveComment(e.target.value)}
+                  placeholder="승인 의견을 남길 수 있습니다 (선택사항)"
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => { setApproveSheetOpen(false); setApproveComment('') }}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={processing}
+                  className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
+                >
+                  {processing ? '처리 중...' : '✓ 승인 확인'}
                 </button>
               </div>
             </div>
