@@ -77,6 +77,68 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   leave_request: '휴가원', business_proposal: '업무품의서', overtime_log: '연장근무일지',
 };
 
+async function notifyWritingTeam({
+  doc, documentId,
+}: {
+  doc: any; documentId: string;
+}) {
+  try {
+    const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+    const teamId = formData?.department_id;
+    const teamName = formData?.department;
+    if (!teamId && !teamName) return;
+
+    let staffList;
+    if (teamId) {
+      staffList = await queryAll(
+        `SELECT id FROM employees WHERE department_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+        [teamId]
+      );
+    } else {
+      staffList = await queryAll(
+        `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+        [teamName]
+      );
+    }
+    if (!staffList || staffList.length === 0) return;
+
+    const targets = staffList.filter((s: any) => s.id !== doc.requester_id);
+    if (targets.length === 0) return;
+
+    const typeLabel = DOC_TYPE_LABEL[doc.document_type] || doc.document_type;
+    const label = teamName || '작성팀';
+    const title = '[업무품의서 승인 완료]';
+    const message = `${doc.document_number} ${typeLabel}\n작성팀(${label}) 문서가 최종 승인되었습니다.`;
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const rows = targets.map((staff: any) => ({
+      title,
+      message,
+      category: 'report_approved',
+      priority: 'normal',
+      notification_tier: 'personal',
+      target_user_id: staff.id,
+      related_resource_type: 'approval',
+      related_resource_id: documentId,
+      related_url: `/admin/approvals/${documentId}`,
+      expires_at: expiresAt,
+      metadata: { document_number: doc.document_number, document_type: doc.document_type },
+    }));
+
+    const { error } = await supabaseAdmin.from('notifications').insert(rows);
+    if (error) console.error('[EXPRESS-APPROVE] 작성팀 알림 DB 저장 실패:', error);
+
+    await Promise.all(
+      targets.map((staff: any) => Promise.all([
+        sendWebPushToUser(staff.id, { title, body: message, url: `/admin/approvals/${documentId}`, category: 'report_approved' }),
+        sendTelegramToUser(staff.id, { title, body: message, url: `/admin/approvals/${documentId}` }),
+      ]))
+    );
+  } catch (e) {
+    console.warn('[EXPRESS-APPROVE] 작성팀 통보 처리 실패:', e);
+  }
+}
+
 async function notifyCooperativeTeam({
   doc, documentId,
 }: {
@@ -106,9 +168,11 @@ async function notifyCooperativeTeam({
     const teamLabel = cooperativeTeamName || '협조팀';
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+    const coopTitle = '[협조 요청 완료]';
+    const coopMessage = `${doc.document_number} ${typeLabel}\n협조팀(${teamLabel})으로 지정된 문서가 최종 승인되었습니다.`;
     const rows = staffList.map((staff: any) => ({
-      title: '[협조 요청 완료]',
-      message: `${doc.document_number} ${typeLabel}\n협조팀(${teamLabel})으로 지정된 문서가 최종 승인되었습니다.`,
+      title: coopTitle,
+      message: coopMessage,
       category: 'report_approved',
       priority: 'normal',
       notification_tier: 'personal',
@@ -122,6 +186,14 @@ async function notifyCooperativeTeam({
 
     const { error } = await supabaseAdmin.from('notifications').insert(rows);
     if (error) console.error('[EXPRESS-APPROVE] 협조팀 알림 DB 저장 실패:', error);
+
+    // WebPush + 텔레그램 발송
+    await Promise.all(
+      staffList.map((staff: any) => Promise.all([
+        sendWebPushToUser(staff.id, { title: coopTitle, body: coopMessage, url: `/admin/approvals/${documentId}`, category: 'report_approved' }),
+        sendTelegramToUser(staff.id, { title: coopTitle, body: coopMessage, url: `/admin/approvals/${documentId}` }),
+      ]))
+    );
   } catch (e) {
     console.warn('[EXPRESS-APPROVE] 협조팀 통보 처리 실패:', e);
   }
@@ -162,8 +234,9 @@ async function notifyManagementSupportDept({
       `결재선: ${stepSummary} [전결]\n` +
       `완료일시: ${completedAt}`;
 
+    const mgmtTitle = '[결재 완료 통보]';
     const rows = staffList.map((staff: any) => ({
-      title: '[결재 완료 통보]',
+      title: mgmtTitle,
       message,
       category: 'report_approved',
       priority: 'normal',
@@ -178,6 +251,14 @@ async function notifyManagementSupportDept({
 
     const { error } = await supabaseAdmin.from('notifications').insert(rows);
     if (error) console.error('[EXPRESS-APPROVE] 경영지원부 알림 DB 저장 실패:', error);
+
+    // WebPush + 텔레그램 발송
+    await Promise.all(
+      staffList.map((staff: any) => Promise.all([
+        sendWebPushToUser(staff.id, { title: mgmtTitle, body: message, url: `/admin/approvals/${documentId}`, category: 'report_approved' }),
+        sendTelegramToUser(staff.id, { title: mgmtTitle, body: message, url: `/admin/approvals/${documentId}` }),
+      ]))
+    );
   } catch (e) {
     console.warn('[EXPRESS-APPROVE] 경영지원부 통보 처리 실패:', e);
   }
@@ -329,9 +410,12 @@ export async function POST(
       requesterName: requesterEmployee?.name || '담당자',
     });
 
-    // 업무품의서인 경우 협조팀에 알림 발송
+    // 업무품의서인 경우 작성팀 + 협조팀에 알림 발송
     if (doc.document_type === 'business_proposal') {
-      await notifyCooperativeTeam({ doc, documentId: params.id });
+      await Promise.all([
+        notifyWritingTeam({ doc, documentId: params.id }),
+        notifyCooperativeTeam({ doc, documentId: params.id }),
+      ]);
     }
 
     console.log(`[EXPRESS-APPROVE] 전결 완료: doc=${params.id}, executive=${currentUser.name}(${userId})`);
