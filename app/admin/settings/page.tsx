@@ -12,23 +12,15 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle,
-  Bell,
   Building,
   Sliders,
-  Plug,
-  Send,
-  Eye,
   ShieldCheck,
-  MessageCircle,
-  Link2,
-  Link2Off,
-  ExternalLink,
 } from 'lucide-react';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
 
 // 탭 타입 정의
-type SettingsTab = 'delay-criteria' | 'notifications' | 'organization' | 'api-test';
+type SettingsTab = 'delay-criteria' | 'organization';
 
 // 지연/위험 기준 타입 정의
 interface DelayCriteria {
@@ -60,7 +52,7 @@ function AdminSettingsContent() {
 
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    tabFromUrl && ['delay-criteria', 'notifications', 'organization', 'api-test'].includes(tabFromUrl)
+    tabFromUrl && ['delay-criteria', 'organization'].includes(tabFromUrl)
       ? tabFromUrl
       : 'delay-criteria'
   );
@@ -77,36 +69,9 @@ function AdminSettingsContent() {
   const [deptList, setDeptList] = useState<{ id: number; name: string; is_management_support: boolean }[]>([]);
   const [savingMgmt, setSavingMgmt] = useState(false);
 
-  // API 테스트 상태
-  const [apiTestKey, setApiTestKey] = useState('');
-  const [apiBaseUrl, setApiBaseUrl] = useState('');
-  const [apiTestResult, setApiTestResult] = useState<{ status: number; body: unknown } | null>(null);
-  const [apiTestLoading, setApiTestLoading] = useState(false);
-  const [apiTestMethod, setApiTestMethod] = useState<'POST' | 'PATCH' | 'DELETE' | 'GET'>('POST');
-  const [apiRecordId, setApiRecordId] = useState('');
-  const [apiPostBody, setApiPostBody] = useState(JSON.stringify({
-    business_name_raw: '테스트 사업장',
-    receipt_date: new Date().toISOString().slice(0, 10),
-    work_date: new Date().toISOString().slice(0, 10),
-    receipt_content: 'API 연동 테스트',
-    status: 'scheduled'
-  }, null, 2));
-  const [apiPatchBody, setApiPatchBody] = useState(JSON.stringify({
-    status: 'completed',
-    work_content: '작업 완료'
-  }, null, 2));
-
-  // 텔레그램 연결 상태
-  const [telegramConnected, setTelegramConnected] = useState(false);
-  const [telegramToken, setTelegramToken] = useState('');
-  const [telegramDeepLink, setTelegramDeepLink] = useState('');
-  const [telegramBotUsername, setTelegramBotUsername] = useState('');
-  const [telegramLoading, setTelegramLoading] = useState(false);
-
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     loadCriteria();
-    loadTelegramStatus();
   }, []);
 
   // 탭 변경 시 메시지 초기화
@@ -131,55 +96,6 @@ function AdminSettingsContent() {
         .catch(console.error);
     }
   }, [activeTab, isSystemAdmin]);
-
-  // 현재 URL을 기반으로 기본 API URL 설정
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setApiBaseUrl(window.location.origin);
-    }
-  }, []);
-
-  // API 테스트 실행
-  const handleApiTest = async () => {
-    if (!apiTestKey.trim()) {
-      setApiTestResult({ status: 0, body: { error: 'API 키를 입력해주세요.' } });
-      return;
-    }
-    const base = apiBaseUrl.trim() || window.location.origin;
-    const endpoint = (apiTestMethod === 'PATCH' || apiTestMethod === 'DELETE' || apiTestMethod === 'GET')
-      ? `${base}/api/external/as-records/${apiRecordId.trim()}`
-      : `${base}/api/external/as-records`;
-
-    if ((apiTestMethod === 'PATCH' || apiTestMethod === 'DELETE' || apiTestMethod === 'GET') && !apiRecordId.trim()) {
-      setApiTestResult({ status: 0, body: { error: 'Record ID를 입력해주세요.' } });
-      return;
-    }
-
-    setApiTestLoading(true);
-    setApiTestResult(null);
-    try {
-      const options: RequestInit = {
-        method: apiTestMethod,
-        headers: {
-          'Authorization': `Bearer ${apiTestKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
-      };
-      if (apiTestMethod === 'POST') {
-        options.body = apiPostBody;
-      } else if (apiTestMethod === 'PATCH') {
-        options.body = apiPatchBody;
-      }
-
-      const res = await fetch(endpoint, options);
-      const body = await res.json().catch(() => ({}));
-      setApiTestResult({ status: res.status, body });
-    } catch (e: any) {
-      setApiTestResult({ status: 0, body: { error: e.message } });
-    } finally {
-      setApiTestLoading(false);
-    }
-  };
 
   // 지연 기준 설정 로드
   const loadCriteria = async () => {
@@ -249,69 +165,6 @@ function AdminSettingsContent() {
     }
   };
 
-  // 텔레그램 연결 상태 조회
-  const loadTelegramStatus = async () => {
-    const token = TokenManager.getToken();
-    if (!token) return;
-    try {
-      const res = await fetch('/api/telegram/connect', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) setTelegramConnected(data.connected);
-    } catch {}
-  };
-
-  // 텔레그램 연결 토큰 발급
-  const handleTelegramConnect = async () => {
-    const token = TokenManager.getToken();
-    if (!token) return;
-    setTelegramLoading(true);
-    try {
-      const res = await fetch('/api/telegram/connect', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTelegramToken(data.token);
-        setTelegramDeepLink(data.deepLink || '');
-        setTelegramBotUsername(data.botUsername || '');
-      } else {
-        alert(data.error || '코드 발급에 실패했습니다. 다시 시도해 주세요.');
-      }
-    } catch (e) {
-      alert('네트워크 오류가 발생했습니다.');
-    } finally {
-      setTelegramLoading(false);
-    }
-  };
-
-  // 텔레그램 연결 해제
-  const handleTelegramDisconnect = async () => {
-    const token = TokenManager.getToken();
-    if (!token) return;
-    setTelegramLoading(true);
-    try {
-      const res = await fetch('/api/telegram/connect', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTelegramConnected(false);
-        setTelegramToken('');
-        setTelegramDeepLink('');
-      } else {
-        alert(data.error || '연결 해제에 실패했습니다.');
-      }
-    } catch (e) {
-      alert('네트워크 오류가 발생했습니다.');
-    } finally {
-      setTelegramLoading(false);
-    }
-  };
-
   // 기본값으로 리셋
   const handleResetCriteria = () => {
     setCriteria(DEFAULT_CRITERIA);
@@ -347,23 +200,11 @@ function AdminSettingsContent() {
       description: '업무 타입별 지연 및 위험 판단 기준'
     },
     {
-      id: 'notifications' as const,
-      name: '알림 관리',
-      icon: Bell,
-      description: '알림 채널 설정'
-    },
-    {
       id: 'organization' as const,
       name: '조직 관리',
       icon: Building,
       description: '부서 및 팀 구조 관리'
     },
-    {
-      id: 'api-test' as const,
-      name: '외부 API',
-      icon: Plug,
-      description: '외부 시스템 API 연동 테스트 (에코센스 등)'
-    }
   ];
 
   // 탭별 액션 버튼 렌더링
@@ -558,88 +399,6 @@ function AdminSettingsContent() {
             </div>
           )}
 
-          {/* 알림 관리 탭 */}
-          {activeTab === 'notifications' && (
-            <div className="p-3 md:p-4 lg:p-6">
-              {/* 텔레그램 알림 연결 */}
-              <div className="border border-blue-200 rounded-lg p-4 md:p-5 bg-blue-50/30">
-                <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                  <MessageCircle className="w-5 h-5 text-blue-500" />
-                  텔레그램 알림 연결
-                </h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  iOS에서 PWA 알림이 불안정할 경우 텔레그램으로 결재 알림을 받을 수 있습니다.
-                  연결 후 상신·승인·반려 이벤트 발생 시 텔레그램 메시지가 즉시 전송됩니다.
-                </p>
-
-                {telegramConnected ? (
-                  <div className="flex items-center justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-700">
-                      <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium">텔레그램 연결됨</span>
-                    </div>
-                    <button
-                      onClick={handleTelegramDisconnect}
-                      disabled={telegramLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
-                    >
-                      <Link2Off className="w-3.5 h-3.5" />
-                      연결 해제
-                    </button>
-                  </div>
-                ) : telegramToken ? (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-white border border-gray-200 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-2">① 아래 버튼을 눌러 텔레그램 봇을 열거나, 봇에서 아래 명령어를 입력하세요:</p>
-                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded font-mono text-sm">
-                        <code className="flex-1 text-blue-700">/start {telegramToken}</code>
-                        <button
-                          onClick={() => navigator.clipboard?.writeText(`/start ${telegramToken}`)}
-                          className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                        >
-                          복사
-                        </button>
-                      </div>
-                    </div>
-                    {telegramDeepLink && (
-                      <a
-                        href={telegramDeepLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        텔레그램 봇 열기
-                      </a>
-                    )}
-                    <p className="text-[10px] text-gray-400">
-                      봇에서 명령어 입력 후 이 페이지를 새로고침하면 연결 상태가 업데이트됩니다.
-                    </p>
-                    <button
-                      onClick={loadTelegramStatus}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      연결 상태 확인
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleTelegramConnect}
-                    disabled={telegramLoading}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
-                  >
-                    {telegramLoading ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Link2 className="w-4 h-4" />
-                    )}
-                    텔레그램 연결하기
-                  </button>
-                )}
-              </div>
-
-            </div>
-          )}
 
           {/* 조직 관리 탭 */}
           {activeTab === 'organization' && (
@@ -697,218 +456,6 @@ function AdminSettingsContent() {
             </div>
           )}
 
-          {/* 외부 API 테스트 탭 */}
-          {activeTab === 'api-test' && (
-            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-              {/* API 기본 설정 */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Plug className="w-4 h-4 text-blue-600" />
-                  연결 설정
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">API 베이스 URL</label>
-                    <input
-                      type="text"
-                      value={apiBaseUrl}
-                      onChange={e => setApiBaseUrl(e.target.value)}
-                      placeholder="https://your-domain.com"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">API 키</label>
-                    <input
-                      type="text"
-                      value={apiTestKey}
-                      onChange={e => setApiTestKey(e.target.value)}
-                      placeholder="ek_xxxxxxxxxxxx"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 메서드 선택 */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">요청 설정</h3>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {(['POST', 'GET', 'PATCH', 'DELETE'] as const).map(method => (
-                    <button
-                      key={method}
-                      onClick={() => setApiTestMethod(method)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                        apiTestMethod === method
-                          ? method === 'POST' ? 'bg-green-600 text-white border-green-600'
-                          : method === 'GET' ? 'bg-blue-600 text-white border-blue-600'
-                          : method === 'PATCH' ? 'bg-yellow-500 text-white border-yellow-500'
-                          : 'bg-red-600 text-white border-red-600'
-                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {method}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 엔드포인트 미리보기 */}
-                <div className="mb-4 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                  <span className={`text-xs font-bold mr-2 ${
-                    apiTestMethod === 'POST' ? 'text-green-600'
-                    : apiTestMethod === 'GET' ? 'text-blue-600'
-                    : apiTestMethod === 'PATCH' ? 'text-yellow-600'
-                    : 'text-red-600'
-                  }`}>{apiTestMethod}</span>
-                  <span className="text-xs font-mono text-gray-700">
-                    {(apiBaseUrl || 'https://your-domain.com')}/api/external/as-records
-                    {(apiTestMethod !== 'POST') && (
-                      <span className="text-blue-600">/{apiRecordId || '{id}'}</span>
-                    )}
-                  </span>
-                </div>
-
-                {/* Record ID (PATCH/DELETE/GET) */}
-                {apiTestMethod !== 'POST' && (
-                  <div className="mb-4">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Record ID (UUID)</label>
-                    <input
-                      type="text"
-                      value={apiRecordId}
-                      onChange={e => setApiRecordId(e.target.value)}
-                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">AS 레코드 생성 시 반환된 id 값을 입력하세요.</p>
-                  </div>
-                )}
-
-                {/* POST Body */}
-                {apiTestMethod === 'POST' && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Request Body (JSON)</label>
-                    <textarea
-                      value={apiPostBody}
-                      onChange={e => setApiPostBody(e.target.value)}
-                      rows={8}
-                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono resize-y"
-                    />
-                  </div>
-                )}
-
-                {/* PATCH Body */}
-                {apiTestMethod === 'PATCH' && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Request Body (JSON) - 변경할 필드만 입력</label>
-                    <textarea
-                      value={apiPatchBody}
-                      onChange={e => setApiPatchBody(e.target.value)}
-                      rows={5}
-                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono resize-y"
-                    />
-                  </div>
-                )}
-
-                <button
-                  onClick={handleApiTest}
-                  disabled={apiTestLoading}
-                  className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {apiTestLoading ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                  {apiTestLoading ? '요청 중...' : '요청 전송'}
-                </button>
-              </div>
-
-              {/* 응답 결과 */}
-              {apiTestResult && (
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-gray-600" />
-                    응답 결과
-                  </h3>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                      apiTestResult.status >= 200 && apiTestResult.status < 300
-                        ? 'bg-green-100 text-green-700'
-                        : apiTestResult.status >= 400
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {apiTestResult.status === 0 ? 'ERROR' : `HTTP ${apiTestResult.status}`}
-                    </span>
-                    {apiTestResult.status >= 200 && apiTestResult.status < 300 && (
-                      <span className="text-xs text-green-600 font-medium">성공</span>
-                    )}
-                    {apiTestResult.status >= 400 && (
-                      <span className="text-xs text-red-600 font-medium">실패</span>
-                    )}
-                  </div>
-                  <pre className="bg-gray-900 text-green-400 text-xs p-3 rounded-lg overflow-auto max-h-64 font-mono">
-                    {JSON.stringify(apiTestResult.body, null, 2)}
-                  </pre>
-                  {/* POST 성공 시 ID 자동 복사 안내 */}
-                  {apiTestMethod === 'POST' && apiTestResult.status === 201 && (apiTestResult.body as any)?.data?.id && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-xs text-blue-800 font-medium mb-1">생성된 레코드 ID:</p>
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs font-mono text-blue-700 bg-blue-100 px-2 py-1 rounded">
-                          {(apiTestResult.body as any).data.id}
-                        </code>
-                        <button
-                          onClick={() => {
-                            setApiRecordId((apiTestResult.body as any).data.id);
-                            setApiTestMethod('PATCH');
-                          }}
-                          className="text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          PATCH에 사용
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* API 사용 가이드 */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">API 엔드포인트 가이드</h3>
-                <div className="space-y-2 text-xs text-gray-700">
-                  <div className="flex items-start gap-2">
-                    <span className="font-bold text-green-600 w-12 flex-shrink-0">POST</span>
-                    <span className="font-mono">/api/external/as-records</span>
-                    <span className="text-gray-500">— 새 AS 레코드 생성</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-bold text-blue-600 w-12 flex-shrink-0">GET</span>
-                    <span className="font-mono">/api/external/as-records/{'{id}'}</span>
-                    <span className="text-gray-500">— 특정 레코드 조회</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-bold text-yellow-600 w-12 flex-shrink-0">PATCH</span>
-                    <span className="font-mono">/api/external/as-records/{'{id}'}</span>
-                    <span className="text-gray-500">— 레코드 수정 (변경 필드만)</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-bold text-red-600 w-12 flex-shrink-0">DELETE</span>
-                    <span className="font-mono">/api/external/as-records/{'{id}'}</span>
-                    <span className="text-gray-500">— 레코드 삭제</span>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-xs text-gray-600 font-medium mb-1">수정 가능한 status 값:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {['scheduled', 'site_check', 'installation', 'completion_fix', 'modem_check', 'on_hold', 'finished', 'completed'].map(s => (
-                      <span key={s} className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600">{s}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
         </div>
       </div>
