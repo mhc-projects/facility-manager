@@ -101,6 +101,7 @@ export default function AsRecordModal({
     : 'auto'
   );
   const [manufacturer, setManufacturer] = useState(record?.manufacturer || '');
+  const [deliveryDateOverride, setDeliveryDateOverride] = useState(record?.delivery_date_override?.slice(0, 10) || '');
   const [status, setStatus] = useState(record?.status || 'scheduled');
   // 타업체 사업장 직접 입력 필드
   const [siteAddress, setSiteAddress] = useState(record?.site_address || '');
@@ -240,9 +241,9 @@ export default function AsRecordModal({
     }
   };
 
-  // 유상/무상 자동 계산
+  // 유상/무상 자동 계산: delivery_date_override > business_info.delivery_date
   const calcPaidStatus = () => {
-    const deliveryDate = selectedBusiness?.delivery_date || record?.delivery_date;
+    const deliveryDate = deliveryDateOverride || selectedBusiness?.delivery_date || record?.delivery_date;
     if (!deliveryDate) return null;
     const warrantyEnd = new Date(deliveryDate);
     warrantyEnd.setMonth(warrantyEnd.getMonth() + 26);
@@ -393,6 +394,7 @@ export default function AsRecordModal({
         dispatch_cost_price_id: dispatchCostPriceId || null,
         dispatch_revenue_price_id: dispatchRevenuePriceId || null,
         manufacturer: manufacturer || null,
+        delivery_date_override: deliveryDateOverride || null,
       };
 
       const url = isEdit ? `/api/as-records/${record!.id}` : '/api/as-records';
@@ -620,11 +622,21 @@ export default function AsRecordModal({
                     </span>
                   </div>
                   <div className="w-px h-3 bg-gray-200" />
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 flex items-center gap-1.5">
                     <span className="text-gray-400">출고일</span>
-                    <span className="ml-1.5 font-medium text-gray-700">
-                      {(selectedBusiness?.delivery_date || record?.delivery_date)?.slice(0, 10) || '미등록'}
-                    </span>
+                    {(selectedBusiness?.delivery_date || record?.delivery_date) ? (
+                      <span className="font-medium text-gray-700">
+                        {(selectedBusiness?.delivery_date || record?.delivery_date)?.slice(0, 10)}
+                      </span>
+                    ) : (
+                      <input
+                        type="date"
+                        value={deliveryDateOverride}
+                        onChange={e => setDeliveryDateOverride(e.target.value)}
+                        placeholder="직접 입력"
+                        className="px-2 py-0.5 border border-amber-300 rounded bg-amber-50 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      />
+                    )}
                   </div>
                   <div className="w-px h-3 bg-gray-200" />
                   <div className="text-xs text-gray-500">
@@ -715,6 +727,19 @@ export default function AsRecordModal({
                   );
                 })()
               ) : null}
+
+              {/* 출고일 직접 입력 (미등록 사업장 or 블루온 사업장이지만 delivery_date 없는 경우는 위에서 처리) */}
+              {unregisteredMode && (
+                <div>
+                  <label className={LABEL_CLS}>출고일 <span className="text-gray-400 font-normal normal-case">(유상/무상 판단 기준)</span></label>
+                  <input
+                    type="date"
+                    value={deliveryDateOverride}
+                    onChange={e => setDeliveryDateOverride(e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </div>
+              )}
 
               {/* 제조사 */}
               <div>

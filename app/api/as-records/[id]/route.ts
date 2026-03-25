@@ -53,14 +53,22 @@ export async function GET(
           ar.dispatch_count,
           ar.dispatch_cost_price_id,
           ar.dispatch_revenue_price_id,
-          ar.manufacturer,
+          COALESCE(ar.manufacturer, CASE bi.manufacturer
+            WHEN '에코센스' THEN 'ecosense'
+            WHEN '크린어스' THEN 'cleanearth'
+            WHEN '가이아씨앤에스' THEN 'gaia_cns'
+            WHEN '이브이에스' THEN 'evs'
+            ELSE NULL
+          END) AS manufacturer,
+          ar.delivery_date_override,
           bi.installation_date,
           ar.created_at,
           ar.updated_at,
           CASE
             WHEN ar.is_paid_override IS NOT NULL THEN ar.is_paid_override
-            WHEN bi.delivery_date IS NULL THEN NULL
-            ELSE (bi.delivery_date + INTERVAL '26 months' <= NOW())
+            WHEN ar.delivery_date_override IS NOT NULL THEN (ar.delivery_date_override + INTERVAL '26 months' <= NOW())
+            WHEN bi.delivery_date IS NOT NULL THEN (bi.delivery_date + INTERVAL '26 months' <= NOW())
+            ELSE NULL
           END AS is_paid
         FROM as_records ar
         LEFT JOIN business_info bi ON ar.business_id = bi.id
@@ -136,6 +144,7 @@ export async function PATCH(
       dispatch_cost_price_id,
       dispatch_revenue_price_id,
       manufacturer,
+      delivery_date_override,
     } = body;
 
     if (status) {
@@ -170,8 +179,9 @@ export async function PATCH(
         dispatch_cost_price_id = $16,
         dispatch_revenue_price_id = $17,
         manufacturer = COALESCE($18, manufacturer),
+        delivery_date_override = $19,
         updated_at = NOW()
-      WHERE id = $19 AND is_deleted = false
+      WHERE id = $20 AND is_deleted = false
       RETURNING *`,
       [
         receipt_date ?? null,
@@ -192,6 +202,7 @@ export async function PATCH(
         dispatch_cost_price_id !== undefined ? (dispatch_cost_price_id || null) : null,
         dispatch_revenue_price_id !== undefined ? (dispatch_revenue_price_id || null) : null,
         safeManufacturer !== undefined ? safeManufacturer : null,
+        delivery_date_override !== undefined ? (delivery_date_override || null) : null,
         id,
       ]
     );

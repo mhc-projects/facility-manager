@@ -129,15 +129,23 @@ export async function GET(request: NextRequest) {
         ar.dispatch_count,
         ar.dispatch_cost_price_id,
         ar.dispatch_revenue_price_id,
-        ar.manufacturer,
+        COALESCE(ar.manufacturer, CASE bi.manufacturer
+          WHEN '에코센스' THEN 'ecosense'
+          WHEN '크린어스' THEN 'cleanearth'
+          WHEN '가이아씨앤에스' THEN 'gaia_cns'
+          WHEN '이브이에스' THEN 'evs'
+          ELSE NULL
+        END) AS manufacturer,
+        ar.delivery_date_override,
         bi.installation_date,
         ar.created_at,
         ar.updated_at,
-        -- 유상/무상 자동 계산 컬럼 (business_info 연결된 경우에만)
+        -- 유상/무상 자동 계산: is_paid_override > delivery_date_override > business_info.delivery_date
         CASE
           WHEN ar.is_paid_override IS NOT NULL THEN ar.is_paid_override
-          WHEN bi.delivery_date IS NULL THEN NULL
-          ELSE (bi.delivery_date + INTERVAL '26 months' <= NOW())
+          WHEN ar.delivery_date_override IS NOT NULL THEN (ar.delivery_date_override + INTERVAL '26 months' <= NOW())
+          WHEN bi.delivery_date IS NOT NULL THEN (bi.delivery_date + INTERVAL '26 months' <= NOW())
+          ELSE NULL
         END AS is_paid,
         -- 사용자재 집계 (서브쿼리 → JOIN으로 최적화)
         COALESCE(amu_agg.material_count, 0) AS material_count,
@@ -218,6 +226,7 @@ export async function POST(request: NextRequest) {
       dispatch_cost_price_id,
       dispatch_revenue_price_id,
       manufacturer,
+      delivery_date_override,
     } = body;
 
     if (!business_id && !business_name_raw) {
@@ -239,8 +248,8 @@ export async function POST(request: NextRequest) {
         site_address, site_manager, site_contact,
         is_paid_override, status, chimney_number,
         dispatch_count, dispatch_cost_price_id, dispatch_revenue_price_id,
-        manufacturer
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        manufacturer, delivery_date_override
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING *`,
       [
         business_id || null,
@@ -263,6 +272,7 @@ export async function POST(request: NextRequest) {
         dispatch_cost_price_id || null,
         dispatch_revenue_price_id || null,
         safeManufacturer,
+        delivery_date_override || null,
       ]
     );
 

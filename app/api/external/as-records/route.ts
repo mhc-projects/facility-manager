@@ -21,10 +21,12 @@ function parseDate(val: unknown): string | null {
  * 외부 시스템(에코센스 등)에서 AS 데이터를 직접 전송하는 엔드포인트
  * JWT 토큰 대신 API 키 인증을 사용
  *
- * 필수: business_name_raw (사업장명)
+ * 필수: business_name_raw (사업장명) 또는 business_management_code (사업장관리코드)
  * 선택: receipt_date, work_date, receipt_content, work_content,
  *        as_manager_name, site_address, site_manager, site_contact,
- *        chimney_number, dispatch_count, status
+ *        chimney_number, dispatch_count, status,
+ *        delivery_date (출고일 - 유상/무상 판단 기준. YYYY-MM-DD 또는 YYYY/MM/DD)
+ * 자동: manufacturer = 'ecosense' (에코센스 API를 통한 등록은 항상 에코센스)
  */
 export async function POST(request: NextRequest) {
   // API 키 인증
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
       chimney_number,
       dispatch_count = 1,
       status = 'scheduled',
+      delivery_date,
     } = body;
 
     // 필수 필드 검증: 사업장명 또는 사업장관리코드 중 하나 필수
@@ -102,6 +105,7 @@ export async function POST(request: NextRequest) {
 
     const parsedReceiptDate = parseDate(receipt_date);
     const parsedWorkDate = parseDate(work_date);
+    const parsedDeliveryDate = parseDate(delivery_date);
 
     const result = await pgQuery(
       `INSERT INTO as_records (
@@ -111,9 +115,9 @@ export async function POST(request: NextRequest) {
         receipt_content, work_content,
         as_manager_name, chimney_number,
         dispatch_count, status,
-        manufacturer
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ecosense')
-      RETURNING id, business_name_raw, receipt_date, work_date, status, created_at`,
+        manufacturer, delivery_date_override
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ecosense', $14)
+      RETURNING id, business_name_raw, receipt_date, work_date, status, manufacturer, delivery_date_override, created_at`,
       [
         businessId,
         businessId ? null : (business_name_raw ? String(business_name_raw).trim() : null),
@@ -128,6 +132,7 @@ export async function POST(request: NextRequest) {
         chimney_number || null,
         Math.max(1, Number(dispatch_count) || 1),
         status,
+        parsedDeliveryDate,
       ]
     );
 

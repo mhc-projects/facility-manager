@@ -36,6 +36,7 @@ export interface AsRecord {
   is_paid_override: boolean | null;
   is_paid: boolean | null;
   manufacturer: string | null;
+  delivery_date_override: string | null;
   installation_date: string | null;
   status: string;
   progress_notes: ProgressNote[];

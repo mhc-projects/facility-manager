@@ -20,7 +20,8 @@ function parseDate(val: unknown): string | null {
  * PATCH /api/external/as-records/[id]
  * 외부 시스템에서 AS 레코드 수정
  * 수정 가능 필드: status, receipt_content, work_content, as_manager_name,
- *               receipt_date, work_date, chimney_number, dispatch_count
+ *               receipt_date, work_date, chimney_number, dispatch_count,
+ *               delivery_date (출고일 - 유상/무상 판단 기준)
  */
 export async function PATCH(
   request: NextRequest,
@@ -71,6 +72,7 @@ export async function PATCH(
       work_date,
       chimney_number,
       dispatch_count,
+      delivery_date,
     } = body;
 
     // 상태값 검증
@@ -94,6 +96,7 @@ export async function PATCH(
     if (work_date !== undefined) { updates.push(`work_date = $${idx++}`); values.push(parseDate(work_date)); }
     if (chimney_number !== undefined) { updates.push(`chimney_number = $${idx++}`); values.push(chimney_number || null); }
     if (dispatch_count !== undefined) { updates.push(`dispatch_count = $${idx++}`); values.push(Math.max(1, Number(dispatch_count) || 1)); }
+    if (delivery_date !== undefined) { updates.push(`delivery_date_override = $${idx++}`); values.push(parseDate(delivery_date)); }
 
     if (updates.length === 0) {
       return NextResponse.json(
@@ -240,7 +243,9 @@ export async function GET(
     const result = await pgQuery(
       `SELECT id, business_id, business_name_raw, site_address, site_manager, site_contact,
               receipt_date, work_date, receipt_content, work_content,
-              as_manager_name, chimney_number, dispatch_count, status, created_at, updated_at
+              as_manager_name, chimney_number, dispatch_count, status,
+              manufacturer, delivery_date_override,
+              created_at, updated_at
        FROM as_records WHERE id = $1`,
       [recordId]
     );
