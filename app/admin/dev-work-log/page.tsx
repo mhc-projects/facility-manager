@@ -926,6 +926,7 @@ export default function DevWorkLogPage() {
       })
       const res = await fetch(`/api/dev-work-log?${params}`, {
         headers: authHeader() as HeadersInit,
+        cache: 'no-store',
       })
       const data = await res.json()
       if (data.success) {
@@ -959,6 +960,7 @@ export default function DevWorkLogPage() {
         if (result.data?.id) {
           const fresh = await fetch(`/api/dev-work-log/${result.data.id}`, {
             headers: authHeader() as HeadersInit,
+            cache: 'no-store',
           }).then(r => r.json())
           if (fresh.success) {
             setItems(prev => [fresh.data, ...prev])
@@ -980,10 +982,11 @@ export default function DevWorkLogPage() {
         // 패널 내 최신 데이터로 갱신
         const fresh = await fetch(`/api/dev-work-log/${selectedItem.id}`, {
           headers: authHeader() as HeadersInit,
+          cache: 'no-store',
         }).then(r => r.json())
         if (fresh.success) setSelectedItem(fresh.data)
       }
-      loadItems()
+      await loadItems()
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : '저장에 실패했습니다', 'error')
     } finally {
@@ -1004,7 +1007,7 @@ export default function DevWorkLogPage() {
       showToast('삭제되었습니다')
       setPanelOpen(false)
       setSelectedItem(null)
-      loadItems()
+      await loadItems()
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error')
     } finally {
