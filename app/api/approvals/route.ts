@@ -54,13 +54,18 @@ export async function GET(request: NextRequest) {
       let isManagementSupport = false;
       if (!isSuperAdmin) {
         const emp = await queryOne(
-          `SELECT d.is_management_support
+          `SELECT e.department
            FROM employees e
-           LEFT JOIN departments d ON d.id = e.department_id::uuid
            WHERE e.id = $1 AND e.is_deleted = FALSE`,
           [userId]
         );
-        isManagementSupport = emp?.is_management_support === true;
+        if (emp?.department) {
+          const dept = await queryOne(
+            `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
+            [emp.department]
+          );
+          isManagementSupport = dept?.is_management_support === true;
+        }
       }
 
       if (!isSuperAdmin && !isManagementSupport) {
