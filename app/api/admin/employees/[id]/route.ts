@@ -197,21 +197,6 @@ export async function PUT(
     updateValues.push(department?.trim() || null);
     paramIndex++;
 
-    // department 이름으로 department_id 조회하여 함께 업데이트
-    if (department?.trim()) {
-      const deptRow = await queryOne(
-        `SELECT id FROM departments WHERE name = $1 LIMIT 1`,
-        [department.trim()]
-      );
-      updateFields.push(`department_id = $${paramIndex}`);
-      updateValues.push(deptRow?.id || null);
-      paramIndex++;
-    } else {
-      updateFields.push(`department_id = $${paramIndex}`);
-      updateValues.push(null);
-      paramIndex++;
-    }
-
     updateFields.push(`team = $${paramIndex}`);
     updateValues.push(team?.trim() || null);
     paramIndex++;
