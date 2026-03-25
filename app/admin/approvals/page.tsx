@@ -627,7 +627,11 @@ function ApprovalsContent() {
             .map(t => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => {
+                  setTab(t)
+                  setTypeFilter('')
+                  setStatusFilter('')
+                }}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                   tab === t ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}
