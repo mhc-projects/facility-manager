@@ -147,6 +147,22 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 일반 탭 (기존 로직) ──
+    // 경영지원부 여부 확인 (슈퍼어드민이 아닌 경우)
+    let isManagementSupportGeneral = false;
+    if (!isSuperAdmin) {
+      const empGeneral = await queryOne(
+        `SELECT e.department FROM employees e WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        [userId]
+      );
+      if (empGeneral?.department) {
+        const deptGeneral = await queryOne(
+          `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
+          [empGeneral.department]
+        );
+        isManagementSupportGeneral = deptGeneral?.is_management_support === true;
+      }
+    }
+
     const conditions: string[] = ['d.is_deleted = FALSE'];
     const values: any[] = [];
     let idx = 1;
@@ -167,8 +183,8 @@ export async function GET(request: NextRequest) {
     } else if (mine) {
       conditions.push(`d.requester_id = $${idx++}`);
       values.push(userId);
-    } else if (isSuperAdmin) {
-      // 권한 4(슈퍼 관리자): 모든 문서 열람 가능
+    } else if (isSuperAdmin || isManagementSupportGeneral) {
+      // 권한 4(슈퍼 관리자) 또는 경영지원부: 모든 문서 열람 가능
     } else {
       // 전체 탭: 작성자 본인 OR 결재선에 포함된 문서
       // + 업무품의서의 경우 현재 사용자 부서가 작성팀/협조팀이면 추가 조회
