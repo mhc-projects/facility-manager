@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Save, AlertTriangle } from 'lucide-react';
+import { FileText, Save } from 'lucide-react';
 
 interface SpecialNotesSectionProps {
   notes: string;
@@ -50,7 +50,7 @@ export default function SpecialNotesSection({ notes, onUpdate, onSave, isSaving 
         <textarea
           value={editNotes}
           onChange={(e) => setEditNotes(e.target.value)}
-          className="w-full h-40 px-4 py-3 text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none transition-all"
+          className="w-full min-h-40 px-4 py-3 text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-y transition-all"
           placeholder="특이사항을 입력하세요. 예: 시설 위치 변경, 추가 점검 필요 사항, 안전 주의사항 등"
           lang="ko"
           autoComplete="off"
