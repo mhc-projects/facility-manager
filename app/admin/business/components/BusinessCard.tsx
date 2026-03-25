@@ -118,6 +118,9 @@ export default function BusinessCard({
   const normalizedManufacturer = typeof manufacturer === 'string' ? manufacturer.trim() : manufacturer
   const projectYear = business.project_year || business.사업진행연도
   const businessName = business.사업장명 || business.business_name || ''
+  const adminManagers = business.admin_managers
+  const firstAdminManager = Array.isArray(adminManagers) && adminManagers.length > 0 ? adminManagers[0] : null
+  const extraAdminCount = firstAdminManager ? adminManagers.length - 1 : 0
   const managerName = business.담당자명 || '-'
   const contact = business.담당자연락처 || '-'
   const address = business.주소 || business.local_government || '-'
@@ -149,10 +152,17 @@ export default function BusinessCard({
         </span>
       </div>
 
-      {/* 사업장명 */}
-      <h3 className="font-semibold text-sm sm:text-sm text-gray-900 mb-2 line-clamp-2 leading-tight">
-        {renderText(businessName)}
-      </h3>
+      {/* 사업장명 + 관리책임자 */}
+      <div className="flex items-start gap-1.5 mb-2 min-w-0">
+        <h3 className="font-semibold text-sm text-gray-900 line-clamp-2 leading-tight shrink-0">
+          {renderText(businessName)}
+        </h3>
+        {firstAdminManager && (
+          <span className="text-xs text-gray-400 whitespace-nowrap shrink-0 mt-0.5">
+            👤 {firstAdminManager.name}{extraAdminCount > 0 ? ` +${extraAdminCount}` : ''}
+          </span>
+        )}
+      </div>
 
       {/* 정보 그리드 */}
       <div className="space-y-1.5">
