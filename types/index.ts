@@ -480,9 +480,18 @@ export interface Employee {
   id: string;
   name: string;
   email: string;
-  role: number;  // Actual DB column: 1=regular, 2=manager, 3=admin, 4=super admin
-  department_id: string;
+  employee_id: string;
+  department?: string;
+  department_id?: string;
+  team?: string;
+  position?: string;
+  permission_level: number;
+  role?: string;
   is_active: boolean;
+  is_deleted: boolean;
+  created_at: string;
+  last_login_at?: string;
+  password_changed_at?: string;
 }
 
 export interface Department {

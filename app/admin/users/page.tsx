@@ -517,7 +517,15 @@ function UsersManagementPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // ✅ Realtime이 자동으로 사용자 정보 업데이트 - loadEmployees() 불필요
+          const updatedEmployee = data.data?.employee;
+          if (updatedEmployee) {
+            setEmployees(prev =>
+              prev.map(emp => emp.id === editingUser.id ? { ...emp, ...updatedEmployee } : emp)
+            );
+            if (selectedUser?.id === editingUser.id) {
+              setSelectedUser(prev => prev ? { ...prev, ...updatedEmployee } : null);
+            }
+          }
           setShowEditModal(false);
           setEditingUser(null);
           setEditDept('');
