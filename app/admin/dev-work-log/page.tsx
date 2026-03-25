@@ -521,13 +521,13 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
   const [newNote, setNewNote] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // item 또는 isNew 변경 시 폼 전체 리셋
+  // item 또는 isNew 변경 시 폼 전체 리셋 (updated_at 포함하여 저장 후 갱신도 반영)
   useEffect(() => {
     setForm(buildForm(item))
     setNewNote('')
     setConfirmDelete(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.id, isNew])
+  }, [item?.id, item?.updated_at, isNew])
 
   const notes: ProgressNote[] = item?.progress_notes || []
 

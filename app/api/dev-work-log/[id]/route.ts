@@ -2,7 +2,7 @@
 // 개발 업무 일지 단건 조회(GET), 수정(PUT), 삭제(DELETE)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { queryOne, queryAll } from '@/lib/supabase-direct'
+import { queryOne } from '@/lib/supabase-direct'
 import { verifyTokenString } from '@/utils/auth'
 
 export const dynamic = 'force-dynamic'
@@ -161,9 +161,9 @@ export async function PUT(
     if (priority !== undefined) { setClauses.push(`priority = $${idx++}`); values.push(priority) }
     if (status !== undefined) { setClauses.push(`status = $${idx++}`); values.push(status) }
     if (description !== undefined) { setClauses.push(`description = $${idx++}`); values.push(description || null) }
-    if (received_date !== undefined) { setClauses.push(`received_date = $${idx++}`); values.push(received_date) }
-    if (expected_date !== undefined) { setClauses.push(`expected_date = $${idx++}`); values.push(expected_date ?? null) }
-    if (completed_date !== undefined) { setClauses.push(`completed_date = $${idx++}`); values.push(completed_date ?? null) }
+    if (received_date !== undefined) { setClauses.push(`received_date = $${idx++}`); values.push(received_date || null) }
+    if (expected_date !== undefined) { setClauses.push(`expected_date = $${idx++}`); values.push(expected_date || null) }
+    if (completed_date !== undefined) { setClauses.push(`completed_date = $${idx++}`); values.push(completed_date || null) }
     if (assignee_id !== undefined) { setClauses.push(`assignee_id = $${idx++}`); values.push(assignee_id ?? null) }
     if (progress_percent !== undefined) { setClauses.push(`progress_percent = $${idx++}`); values.push(progress_percent) }
     if (target_location !== undefined) { setClauses.push(`target_location = $${idx++}`); values.push(target_location ?? null) }

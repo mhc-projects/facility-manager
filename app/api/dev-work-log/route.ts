@@ -81,11 +81,11 @@ export async function GET(request: NextRequest) {
     }
 
     const orderMap: Record<string, string> = {
-      received: 'w.received_date DESC',
-      completed: 'w.completed_date DESC NULLS LAST',
-      priority: `CASE w.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END ASC`,
+      received: 'w.received_date DESC, w.created_at DESC',
+      completed: 'w.completed_date DESC NULLS LAST, w.created_at DESC',
+      priority: `CASE w.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END ASC, w.received_date DESC, w.created_at DESC`,
     }
-    const orderBy = orderMap[sort] || 'w.received_date DESC'
+    const orderBy = orderMap[sort] || 'w.received_date DESC, w.created_at DESC'
 
     const whereClause = conditions.join(' AND ')
 
