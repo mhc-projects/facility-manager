@@ -239,6 +239,9 @@ function ApprovalsContent() {
       if (data.success) {
         setDocs(data.data || [])
         setTotal(data.total || 0)
+      } else {
+        setDocs([])
+        setTotal(0)
       }
     } finally {
       setLoading(false)

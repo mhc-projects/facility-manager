@@ -184,10 +184,12 @@ export async function GET(request: NextRequest) {
             WHERE bp.is_deleted = FALSE
               AND (
                 (bp.form_data->>'department_id') IN (
-                  SELECT department_id::TEXT FROM employees WHERE id = $${idx++} AND is_deleted = FALSE
+                  SELECT id::TEXT FROM departments
+                  WHERE name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
                 )
                 OR (bp.form_data->>'cooperative_team_id') IN (
-                  SELECT department_id::TEXT FROM employees WHERE id = $${idx++} AND is_deleted = FALSE
+                  SELECT id::TEXT FROM departments
+                  WHERE name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
                 )
               )
           )
