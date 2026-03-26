@@ -287,6 +287,7 @@ interface BusinessDetailModalProps {
   setSelectedRevenueBusiness: (business: UnifiedBusinessInfo) => void
   setShowRevenueModal: (show: boolean) => void
   mapCategoryToInvoiceType: (category: string) => string
+  totalRevenueOverride?: number
   // 실시간 업데이트 핸들러
   onFacilityUpdate?: (businessName: string) => void
 }
@@ -319,6 +320,7 @@ export default function BusinessDetailModal({
   setSelectedRevenueBusiness,
   setShowRevenueModal,
   mapCategoryToInvoiceType,
+  totalRevenueOverride,
   onFacilityUpdate,
 }: BusinessDetailModalProps) {
   // Ref for auto-scrolling to memo add form
@@ -1586,12 +1588,20 @@ export default function BusinessDetailModal({
 
                     const mappedCategory = mapCategoryToInvoiceType(category);
 
+                    // 매출 계산 완료 전: 로딩 표시 (잘못된 미수금값 노출 방지)
+                    if (totalRevenueOverride === undefined) {
+                      return (
+                        <div className="text-xs text-gray-400 text-center py-8">매출 계산 중...</div>
+                      );
+                    }
+
                     return (
                       <InvoiceDisplay
                         key={`invoice-${business.id}-${business.수정일 || business.생성일}`}
                         businessId={business.id}
                         businessCategory={mappedCategory}
-                        additionalCost={business.additional_cost}
+                        additionalCost={business.additional_cost ?? undefined}
+                        totalRevenueOverride={totalRevenueOverride}
                       />
                     );
                   })()}

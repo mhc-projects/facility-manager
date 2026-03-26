@@ -17,6 +17,7 @@ interface InvoiceTabSectionProps {
   userPermission?: number; // 권한 레벨 (삭제 등 제어용)
   refreshTrigger?: number; // 외부에서 강제 리로드 요청 시 증가
   onRefresh?: () => void;  // 내부 저장 완료 후 외부(ReceivablesBanner 등)에 갱신 요청
+  totalRevenueOverride?: number; // 매출관리 기준 총 매출(부가세포함) - 전체 미수금 계산용
 }
 
 type TabId = InvoiceStage | 'extra';
@@ -27,6 +28,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   userPermission = 0,
   refreshTrigger = 0,
   onRefresh,
+  totalRevenueOverride,
 }: InvoiceTabSectionProps, ref) {
   const [data, setData] = useState<BusinessInvoicesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +53,8 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
     try {
       setLoading(true);
       const timestamp = Date.now();
-      const res = await fetch(`/api/business-invoices?business_id=${businessId}&_t=${timestamp}`, {
+      const contractAmountParam = totalRevenueOverride ? `&contract_amount=${totalRevenueOverride}` : '';
+      const res = await fetch(`/api/business-invoices?business_id=${businessId}${contractAmountParam}&_t=${timestamp}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
@@ -69,7 +72,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId, refreshTrigger]);
+  }, [businessId, refreshTrigger, totalRevenueOverride]);
 
   useEffect(() => {
     loadData();

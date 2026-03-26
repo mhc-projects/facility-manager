@@ -380,15 +380,18 @@ function ReceivablesBanner({
   businessId,
   refreshTrigger,
   revenueAdjustments,
+  totalRevenueOverride,
 }: {
   businessId: string;
   refreshTrigger: number;
   revenueAdjustments?: Array<{ reason: string; amount: number }>;
+  totalRevenueOverride?: number;
 }) {
   const [data, setData] = useState<{ total_revenue: number; total_payment_amount: number; total_receivables: number } | null>(null);
 
   useEffect(() => {
-    fetch(`/api/business-invoices?business_id=${businessId}&_t=${Date.now()}`, { cache: 'no-store' })
+    const contractAmountParam = totalRevenueOverride ? `&contract_amount=${totalRevenueOverride}` : '';
+    fetch(`/api/business-invoices?business_id=${businessId}${contractAmountParam}&_t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(result => {
         if (result.success && result.data) {
@@ -400,7 +403,7 @@ function ReceivablesBanner({
         }
       })
       .catch(() => {});
-  }, [businessId, refreshTrigger]);
+  }, [businessId, refreshTrigger, totalRevenueOverride]);
 
   if (!data) return null;
 
@@ -410,7 +413,8 @@ function ReceivablesBanner({
   const total_revenue = data.total_revenue;
   const total_payment_amount = data.total_payment_amount;
   const raw_receivables = data.total_receivables;
-  const total_receivables = raw_receivables <= 10 ? 0 : raw_receivables;
+  // VAT 반올림 오차(1~10원) 처리: 양수일 때만 적용, 음수(과납)는 그대로 표시
+  const total_receivables = (raw_receivables > 0 && raw_receivables <= 10) ? 0 : raw_receivables;
 
   return (
     <div className={`rounded-lg p-3 mb-3 border ${
@@ -520,6 +524,9 @@ function BusinessManagementPage() {
     survey_costs?: number; // 실사비용
   } | null>(null)
   const [revenueLoading, setRevenueLoading] = useState(false)
+  const [detailModalRevenueCache, setDetailModalRevenueCache] = useState<{ businessId: string; value: number } | null>(null)
+  // { businessId, value } 쌍으로 관리 — 다른 사업장의 값이 잠깐 표시되는 현상 방지
+  const [editModalRevenueCache, setEditModalRevenueCache] = useState<{ businessId: string; value: number } | null>(null)
 
   // ⚡ 매출 및 원가 데이터 관리 훅 (Phase 2.1 성능 최적화)
   const {
@@ -2841,6 +2848,7 @@ function BusinessManagementPage() {
       // 기본 데이터로 먼저 모달 열기
       setSelectedBusiness(business)
       setIsDetailModalOpen(true)
+      setDetailModalRevenueCache(null)
       // 메모 추가 상태 초기화 (이전 사업장에서 열려있을 수 있음)
       setIsAddingMemo(false)
       setEditingMemo(null)
@@ -2895,6 +2903,26 @@ function BusinessManagementPage() {
 
       // 매출 정보 계산 (클라이언트 측 직접 계산)
       loadRevenueData(business)
+
+      // 매출관리와 동일한 API로 총 매출 계산 (InvoiceDisplay totalRevenueOverride용)
+      if (business.id) {
+        const targetBusinessId = business.id;
+        try {
+          const token = localStorage.getItem('auth_token')
+          const res = await fetch('/api/revenue/calculate', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ business_id: targetBusinessId, calculation_date: new Date().toISOString().split('T')[0], save_result: false })
+          })
+          const data = await res.json()
+          if (data.success && data.data?.calculation?.total_revenue) {
+            setDetailModalRevenueCache({ businessId: targetBusinessId, value: Math.round(Number(data.data.calculation.total_revenue) * 1.1) })
+          }
+          // 실패 시 null 유지 → InvoiceDisplay 로딩 상태 유지
+        } catch {
+          // 실패 시 null 유지
+        }
+      }
     } catch (error) {
       console.error('❌ 모달 열기 오류:', error)
       // 기본 데이터라도 표시
@@ -2983,6 +3011,7 @@ function BusinessManagementPage() {
 
   const openEditModal = async (business: UnifiedBusinessInfo) => {
     setEditingBusiness(business)
+    setEditModalRevenueCache(null)
 
     // API에서 최신 데이터 가져오기
     try {
@@ -3199,6 +3228,26 @@ function BusinessManagementPage() {
       // 메모 로드 시도
       if (freshData.id) {
         await loadBusinessMemos(freshData.id)
+      }
+
+      // 매출관리와 동일한 API로 총 매출 계산 (ReceivablesBanner totalRevenueOverride용)
+      if (freshData.id) {
+        const targetBusinessId = freshData.id;
+        try {
+          const revenueToken = localStorage.getItem('auth_token')
+          const revenueRes = await fetch('/api/revenue/calculate', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${revenueToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ business_id: targetBusinessId, calculation_date: new Date().toISOString().split('T')[0], save_result: false })
+          })
+          const revenueData = await revenueRes.json()
+          if (revenueData.success && revenueData.data?.calculation?.total_revenue) {
+            setEditModalRevenueCache({ businessId: targetBusinessId, value: Math.round(Number(revenueData.data.calculation.total_revenue) * 1.1) })
+          }
+          // 실패해도 null 유지 → 계산서 섹션이 로딩 상태 유지 (잘못된 값 표시 방지)
+        } catch {
+          // 실패해도 null 유지
+        }
       }
     } catch (error) {
       console.error('❌ [openEditModal] API 데이터 로딩 실패:', error);
@@ -3936,6 +3985,11 @@ function BusinessManagementPage() {
             .then(calcData => {
               if (calcData.success) {
                 console.log('✅ [AUTO-RECALCULATE] 매출 재계산 완료:', calcData.data.calculation.total_revenue);
+                // 수정 모달이 열려있는 경우 미수금 즉시 업데이트 (백그라운드 재계산이므로 businessId 무관)
+                const newTotalRevenue = calcData.data.calculation.total_revenue;
+                if (newTotalRevenue && businessId) {
+                  setEditModalRevenueCache({ businessId, value: Math.round(Number(newTotalRevenue) * 1.1) });
+                }
               } else {
                 console.warn('⚠️ [AUTO-RECALCULATE] 매출 재계산 실패:', calcData.message);
               }
@@ -4237,6 +4291,23 @@ function BusinessManagementPage() {
           console.log('✅ 대기필증 데이터 동기화 완료')
         }
         
+        // 저장 성공 후 미수금 기준 매출 즉시 재계산 (수정 모달 계산서 섹션 실시간 반영)
+        if (editingBusiness && result.data?.id) {
+          try {
+            const { TokenManager } = await import('@/lib/api-client');
+            const revenueToken = TokenManager.getToken();
+            const revenueRes = await fetch('/api/revenue/calculate', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${revenueToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ business_id: result.data.id, calculation_date: new Date().toISOString().split('T')[0], save_result: false })
+            });
+            const revenueCalc = await revenueRes.json();
+            if (revenueCalc.success && revenueCalc.data?.calculation?.total_revenue && result.data.id) {
+              setEditModalRevenueCache({ businessId: result.data.id, value: Math.round(Number(revenueCalc.data.calculation.total_revenue) * 1.1) });
+            }
+          } catch { /* 실패 시 기존값 유지 */ }
+        }
+
         // 모달은 닫지 않음 - 닫기/취소 버튼으로만 닫힘 (저장 후 계속 수정 가능)
         
       } else {
@@ -5110,6 +5181,7 @@ function BusinessManagementPage() {
             setSelectedRevenueBusiness={setSelectedRevenueBusiness}
             setShowRevenueModal={setShowRevenueModal}
             mapCategoryToInvoiceType={mapCategoryToInvoiceType}
+            totalRevenueOverride={detailModalRevenueCache?.businessId === selectedBusiness?.id ? detailModalRevenueCache.value : undefined}
             onFacilityUpdate={handleFacilityUpdate}
           />
         </Suspense>
@@ -6416,25 +6488,42 @@ function BusinessManagementPage() {
                           계산서 및 입금 정보 ({formData.progress_status})
                         </h3>
                       </div>
-                      {/* 미수금 현황 배너 */}
-                      <ReceivablesBanner
-                        businessId={editingBusiness.id}
-                        refreshTrigger={invoiceRefreshTrigger}
-                        revenueAdjustments={(() => {
-                          const raw = formData.revenue_adjustments;
-                          if (!raw) return [];
-                          if (Array.isArray(raw)) return raw as Array<{ reason: string; amount: number }>;
-                          try { return JSON.parse(raw as string); } catch { return []; }
-                        })()}
-                      />
-                      <InvoiceTabSection
-                        ref={invoiceTabRef}
-                        businessId={editingBusiness.id}
-                        progressStatus={formData.progress_status}
-                        userPermission={userPermission}
-                        refreshTrigger={invoiceRefreshTrigger}
-                        onRefresh={() => setInvoiceRefreshTrigger(prev => prev + 1)}
-                      />
+                      {/* 매출 계산 완료 전: 로딩 표시
+                          editModalRevenueCache가 null이거나 다른 사업장 것이면 렌더링 차단
+                          → 잘못된 미수금값이 잠깐이라도 노출되는 현상 + 불필요한 API 호출 방지 */}
+                      {(() => {
+                        const validRevenue = editModalRevenueCache?.businessId === editingBusiness.id
+                          ? editModalRevenueCache.value
+                          : undefined;
+                        if (validRevenue === undefined) {
+                          return <div className="text-xs text-gray-400 text-center py-4">매출 계산 중...</div>;
+                        }
+                        return (
+                          <>
+                          {/* 미수금 현황 배너 */}
+                          <ReceivablesBanner
+                            businessId={editingBusiness.id}
+                            refreshTrigger={invoiceRefreshTrigger}
+                            revenueAdjustments={(() => {
+                              const raw = formData.revenue_adjustments;
+                              if (!raw) return [];
+                              if (Array.isArray(raw)) return raw as Array<{ reason: string; amount: number }>;
+                              try { return JSON.parse(raw as string); } catch { return []; }
+                            })()}
+                            totalRevenueOverride={validRevenue}
+                          />
+                          <InvoiceTabSection
+                            ref={invoiceTabRef}
+                            businessId={editingBusiness.id}
+                            progressStatus={formData.progress_status}
+                            userPermission={userPermission}
+                            refreshTrigger={invoiceRefreshTrigger}
+                            onRefresh={() => setInvoiceRefreshTrigger(prev => prev + 1)}
+                            totalRevenueOverride={validRevenue}
+                          />
+                          </>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
