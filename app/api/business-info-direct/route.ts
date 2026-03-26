@@ -674,7 +674,15 @@ export async function PUT(request: Request) {
 
     // System and additional fields
     if (updateData.manufacturer !== undefined) {
-      updateObject.manufacturer = updateData.manufacturer;
+      // 한글 제조사명을 영어 코드값으로 정규화 (UI에서 한글값이 오는 경우 대비)
+      const manufacturerMap: Record<string, string> = {
+        '에코센스': 'ecosense',
+        '크린어스': 'cleanearth',
+        '가이아씨앤에스': 'gaia_cns',
+        '이브이에스': 'evs',
+      };
+      const rawMfr = updateData.manufacturer;
+      updateObject.manufacturer = rawMfr ? (manufacturerMap[rawMfr] ?? rawMfr) : null;
     }
     if (updateData.vpn !== undefined) {
       updateObject.vpn = updateData.vpn;
@@ -1084,7 +1092,11 @@ export async function POST(request: Request) {
         : '[]',
 
       // System and additional fields
-      manufacturer: businessData.manufacturer,
+      manufacturer: (() => {
+        const mfrMap: Record<string, string> = { '에코센스': 'ecosense', '크린어스': 'cleanearth', '가이아씨앤에스': 'gaia_cns', '이브이에스': 'evs' };
+        const v = businessData.manufacturer;
+        return v ? (mfrMap[v] ?? v) : null;
+      })(),
       vpn: businessData.vpn,
       greenlink_id: normalizeUTF8(businessData.greenlink_id || ''),
       greenlink_pw: normalizeUTF8(businessData.greenlink_pw || ''),
