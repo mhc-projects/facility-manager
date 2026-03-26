@@ -1543,6 +1543,7 @@ export default function BusinessDetailModal({
                             const enrichedBusiness = {
                               ...business,
                               ...calculatedData,
+                              category: business.progress_status || (business as any).category || null,
                               revenue_adjustments: revenueAdjustments,
                               multiple_stack_install_extra: multipleStackInstallExtra,
                             }
