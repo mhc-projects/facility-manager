@@ -454,7 +454,7 @@ function BusinessManagementPage() {
   const router = useRouter()
 
   // ⚡ 커스텀 훅 사용 (Phase 2.1 성능 최적화)
-  const { allBusinesses, isLoading, error: businessDataError, refetch: refetchBusinesses, addNormalizedBusiness, updateNormalizedBusiness, deleteBusiness } = useBusinessData()
+  const { allBusinesses, isLoading, error: businessDataError, refetch: refetchBusinesses, addNormalizedBusiness, updateNormalizedBusiness, patchBusiness, deleteBusiness } = useBusinessData()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<UnifiedBusinessInfo | null>(null)
@@ -6611,6 +6611,14 @@ function BusinessManagementPage() {
             onClose={() => {
               setShowRevenueModal(false)
               setSelectedRevenueBusiness(null)
+            }}
+            onMultipleStackSaved={(businessId, savedQty) => {
+              // allBusinesses 즉시 업데이트 → 모달 재오픈 시에도 최신값 반영
+              patchBusiness(businessId, { multiple_stack_install_extra: savedQty });
+              // 현재 열린 모달의 business 데이터도 즉시 동기화
+              setSelectedRevenueBusiness(prev =>
+                prev?.id === businessId ? { ...prev, multiple_stack_install_extra: savedQty } : prev
+              );
             }}
             userPermission={userPermission}
           />

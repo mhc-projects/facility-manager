@@ -347,6 +347,14 @@ export function useBusinessData() {
     console.log('✅ [useBusinessData.updateNormalizedBusiness] 사업장 업데이트 완료:', normalized.사업장명);
   }, []);
 
+  /**
+   * 특정 필드만 즉시 패치 (전체 정규화 없이 단일 필드 업데이트)
+   * - 저장 후 즉각 UI 반영이 필요한 단순 필드 변경에 사용
+   */
+  const patchBusiness = useCallback((id: string, fields: Partial<UnifiedBusinessInfo>) => {
+    setAllBusinesses(prev => prev.map(b => b.id === id ? { ...b, ...fields } : b));
+  }, []);
+
   return {
     allBusinesses,
     isLoading,
@@ -354,6 +362,7 @@ export function useBusinessData() {
     refetch: loadAllBusinesses,
     addNormalizedBusiness,
     updateNormalizedBusiness,
+    patchBusiness,
     deleteBusiness  // 삭제 함수 노출
   };
 }
