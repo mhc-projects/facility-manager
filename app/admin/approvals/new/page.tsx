@@ -55,6 +55,7 @@ export default function NewApprovalPage() {
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
+  const [saveToast, setSaveToast] = useState<'saved' | 'updated' | null>(null)
 
   const handleDocTypeChange = (type: DocType) => {
     if (type === docType) return
@@ -110,13 +111,19 @@ export default function NewApprovalPage() {
     if (!data.success) throw new Error(data.error || '삭제 실패')
   }
 
+  const showSaveToast = (type: 'saved' | 'updated') => {
+    setSaveToast(type)
+    setTimeout(() => setSaveToast(null), 2500)
+  }
+
   const handleSave = async (): Promise<string | null> => {
     const token = getToken()
     if (!token || !formData) return null
     setSaving(true)
+    const isUpdate = !!savedId
     try {
-      const method = savedId ? 'PUT' : 'POST'
-      const url = savedId ? `/api/approvals/${savedId}` : '/api/approvals'
+      const method = isUpdate ? 'PUT' : 'POST'
+      const url = isUpdate ? `/api/approvals/${savedId}` : '/api/approvals'
       const defaultTitle = docType === 'overtime_log' ? THIS_MONTH_TITLE : `${DOC_TYPES.find(d => d.value === docType)?.label} - ${TODAY}`
       const body: any = { document_type: docType, title: title || defaultTitle, team_leader_id: teamLeaderId || null, executive_id: executiveId || null, ceo_id: ceoId || null, form_data: formData, department: formData.department || '' }
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
@@ -124,6 +131,7 @@ export default function NewApprovalPage() {
       if (data.success) {
         const id = data.data?.id || savedId
         setSavedId(id)
+        showSaveToast(isUpdate ? 'updated' : 'saved')
         return id
       }
       alert(data.error || '저장 실패')
@@ -290,6 +298,16 @@ export default function NewApprovalPage() {
             <Send className="w-4 h-4" />
             {submitting ? '상신 중...' : '결재 상신'}
           </button>
+        </div>
+      </div>
+
+      {/* 임시저장 토스트 */}
+      <div className={`fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${saveToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+        <div className="flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg">
+          <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          {saveToast === 'saved' ? '임시저장 완료' : '임시저장 업데이트 완료'}
         </div>
       </div>
 
