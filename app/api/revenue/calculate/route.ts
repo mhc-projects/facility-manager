@@ -154,17 +154,7 @@ export async function POST(request: NextRequest) {
     let manufacturer = businessInfo.manufacturer;
 
     if (!manufacturer || manufacturer.trim() === '') {
-      manufacturer = '에코센스';
-
-      // Direct PostgreSQL update
-      try {
-        await pgQuery(
-          'UPDATE business_info SET manufacturer = $1 WHERE id = $2',
-          ['에코센스', business_id]
-        );
-      } catch (updateError) {
-        console.error('제조사 업데이트 오류:', updateError);
-      }
+      manufacturer = '에코센스'; // 계산용 기본값 (DB 저장 안 함)
     } else {
       // 공백 제거 (데이터베이스 매칭을 위해)
       manufacturer = manufacturer.trim();
