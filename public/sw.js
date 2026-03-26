@@ -288,7 +288,7 @@ self.addEventListener('push', (event) => {
   // 알림 유형별 설정
   // iOS는 actions, vibrate, renotify 미지원 — 포함 시 알림 드롭될 수 있어 제거
   const notificationOptions = {
-    body: notificationData.body,
+    body: notificationData.body || '새로운 알림이 도착했습니다.',
     icon: notificationData.icon,
     badge: notificationData.badge,
     tag: notificationData.tag,
@@ -298,7 +298,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(notificationData.title, notificationOptions)
+    self.registration.showNotification(notificationData.title || '시설 관리 시스템', notificationOptions)
   );
 });
 
