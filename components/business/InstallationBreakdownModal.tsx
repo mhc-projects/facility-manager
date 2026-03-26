@@ -80,6 +80,10 @@ export default function InstallationBreakdownModal({
       const data = await res.json();
       if (data.success) {
         setIsEditing(false);
+        // sessionStorage businesses 캐시 무효화 (새로고침 후에도 최신값 반영)
+        Object.keys(sessionStorage)
+          .filter(k => k.startsWith('revenue_businesses_cache'))
+          .forEach(k => sessionStorage.removeItem(k));
         onSaved(extraQty);
       } else {
         alert(data.message || '저장에 실패했습니다.');

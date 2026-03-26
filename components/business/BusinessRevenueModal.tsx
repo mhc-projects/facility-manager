@@ -55,10 +55,10 @@ export default function BusinessRevenueModal({
   const [multipleStackInstallExtra, setMultipleStackInstallExtra] = useState<number>(
     Number(business?.multiple_stack_install_extra || 0)
   );
-  // business prop이 바뀌면 (다른 사업장 열기) state 동기화
+  // business prop이 바뀌면 (다른 사업장 열기 또는 외부에서 값 변경) state 동기화
   useEffect(() => {
     setMultipleStackInstallExtra(Number(business?.multiple_stack_install_extra || 0));
-  }, [business?.id]);
+  }, [business?.id, business?.multiple_stack_install_extra]);
 
   // 영업비용 조정 상태
   const [isEditingAdjustment, setIsEditingAdjustment] = useState(false);

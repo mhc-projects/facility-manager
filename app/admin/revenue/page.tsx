@@ -370,6 +370,17 @@ function RevenueDashboard() {
     onDelete: () => { CacheManager.invalidateAll(); loadBusinesses(); },
   });
 
+  // businesses 배열 갱신 시 열린 모달의 business 데이터도 동기화
+  // (multiple_stack_install_extra 등 저장 후 새로고침 시 최신값 반영)
+  useEffect(() => {
+    if (selectedEquipmentBusiness && businesses.length > 0) {
+      const updated = businesses.find(b => b.id === selectedEquipmentBusiness.id);
+      if (updated && updated.multiple_stack_install_extra !== selectedEquipmentBusiness.multiple_stack_install_extra) {
+        setSelectedEquipmentBusiness(updated);
+      }
+    }
+  }, [businesses]);
+
   const getAuthHeaders = () => {
     const token = TokenManager.getToken();
     return {
