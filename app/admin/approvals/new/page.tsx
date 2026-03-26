@@ -158,7 +158,7 @@ export default function NewApprovalPage() {
       })
       const data = await res.json()
       if (data.success) {
-        router.push(`/admin/approvals/${id}`)
+        router.push(`/admin/approvals/${id}?submitted=1`)
       } else {
         alert(data.error || '상신 실패')
       }

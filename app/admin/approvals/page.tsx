@@ -294,21 +294,20 @@ function ApprovalsContent() {
     const channel = supabase
       .channel(`approval-notify:${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'approval_documents' },
-        () => { fetchPendingCount(); if (tabRef.current === 'pending') fetchDocs() })
+        () => { fetchPendingCount(); if (tabRef.current === 'pending' || tabRef.current === 'my') fetchDocs() })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_documents' },
         () => {
           fetchPendingCount()
-          if (tabRef.current === 'pending') fetchDocs()
+          if (tabRef.current === 'pending' || tabRef.current === 'my' || tabRef.current === 'all') fetchDocs()
           if (tabRef.current === 'completed') fetchDocs()
         })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_steps' },
-        () => { fetchPendingCount(); if (tabRef.current === 'pending') fetchDocs() })
+        () => { fetchPendingCount(); if (tabRef.current === 'pending' || tabRef.current === 'my') fetchDocs() })
       .on('broadcast', { event: 'new_notification' }, (payload) => {
         const cat = payload.payload?.category
         if (['report_submitted', 'report_approved', 'report_rejected', 'doc_deleted'].includes(cat)) {
           fetchPendingCount()
-          if (tabRef.current === 'pending') fetchDocs()
-          if (tabRef.current === 'completed') fetchDocs()
+          fetchDocs()
         }
       })
       .subscribe()

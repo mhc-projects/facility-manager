@@ -473,7 +473,8 @@ export async function POST(
     );
 
     // 다음 결재자에게 알림
-    const stepLabel = nextPendingStep.role_label;
+    const stepOrderMap: Record<number, string> = { 2: '팀장', 3: '중역', 4: '대표이사' }
+    const stepLabel = nextPendingStep.role_label || stepOrderMap[nextPendingStep.step_order] || '결재자'
     await sendNotification({
       targetUserId: nextPendingStep.approver_id,
       title: '[결재 요청]',

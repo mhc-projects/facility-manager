@@ -108,6 +108,8 @@ function ApprovalDetailContent() {
   const [editCeo, setEditCeo] = useState('')
   const [editTitle, setEditTitle] = useState('')
 
+  const [submitToast, setSubmitToast] = useState(false)
+
   const [rejectSheetOpen, setRejectSheetOpen] = useState(false)
   const [rejectComment, setRejectComment] = useState('')
   const [approveSheetOpen, setApproveSheetOpen] = useState(false)
@@ -156,6 +158,14 @@ function ApprovalDetailContent() {
   useEffect(() => { editingRef.current = editing }, [editing])
 
   useEffect(() => { fetchDoc() }, [fetchDoc])
+
+  // 상신 완료 토스트 (new 페이지에서 ?submitted=1 파라미터로 전달)
+  useEffect(() => {
+    if (searchParams?.get('submitted') === '1') {
+      setSubmitToast(true)
+      setTimeout(() => setSubmitToast(false), 3000)
+    }
+  }, [])
 
   // 문서 ID 기반 Broadcast 구독: id가 바뀔 때만 재구독 (editing/fetchDoc 변경 시 재구독 없음)
   useEffect(() => {
@@ -1119,6 +1129,16 @@ function ApprovalDetailContent() {
           </div>
         </>
       )}
+
+      {/* 상신 완료 토스트 */}
+      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${submitToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+        <div className="flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg">
+          <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          결재 상신이 완료되었습니다
+        </div>
+      </div>
     </AdminLayout>
   )
 }
