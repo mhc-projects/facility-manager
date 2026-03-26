@@ -1597,7 +1597,7 @@ export default function BusinessDetailModal({
 
                     return (
                       <InvoiceDisplay
-                        key={`invoice-${business.id}-${business.수정일 || business.생성일}`}
+                        key={`invoice-${business.id}-${business.수정일 || business.생성일}-${totalRevenueOverride ?? 'pending'}`}
                         businessId={business.id}
                         businessCategory={mappedCategory}
                         additionalCost={business.additional_cost ?? undefined}

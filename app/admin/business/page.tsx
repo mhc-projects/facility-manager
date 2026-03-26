@@ -3988,7 +3988,10 @@ function BusinessManagementPage() {
                 // 수정 모달이 열려있는 경우 미수금 즉시 업데이트 (백그라운드 재계산이므로 businessId 무관)
                 const newTotalRevenue = calcData.data.calculation.total_revenue;
                 if (newTotalRevenue && businessId) {
-                  setEditModalRevenueCache({ businessId, value: Math.round(Number(newTotalRevenue) * 1.1) });
+                  const revenueWithVat = Math.round(Number(newTotalRevenue) * 1.1);
+                  setEditModalRevenueCache({ businessId, value: revenueWithVat });
+                  // 상세모달도 동일한 값으로 업데이트 (저장 후 상세모달 재진입 시 최신 값 즉시 반영)
+                  setDetailModalRevenueCache({ businessId, value: revenueWithVat });
                 }
               } else {
                 console.warn('⚠️ [AUTO-RECALCULATE] 매출 재계산 실패:', calcData.message);
