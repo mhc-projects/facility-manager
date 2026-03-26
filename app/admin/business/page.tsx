@@ -189,7 +189,7 @@ interface UnifiedBusinessInfo {
   attachment_completion_submitted_at?: string | null;
 
   // 시스템 필드들
-  manufacturer?: 'ecosense' | 'cleanearth' | 'gaia_cns' | 'evs' | null;
+  manufacturer?: '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null;
   vpn?: 'wired' | 'wireless' | null;
   greenlink_id?: string | null;
   greenlink_pw?: string | null;
@@ -2967,7 +2967,7 @@ function BusinessManagementPage() {
       business_contact: '',
       fax_number: '',
       email: '',
-      manufacturer: null as 'ecosense' | 'cleanearth' | 'gaia_cns' | 'evs' | null,
+      manufacturer: null as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null,
       vpn: null,
       greenlink_id: '',
       greenlink_pw: '',
@@ -5917,14 +5917,14 @@ function BusinessManagementPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">제조사</label>
                       <select
                         value={formData.manufacturer || ''}
-                        onChange={(e) => setFormData({...formData, manufacturer: (e.target.value || null) as 'ecosense' | 'cleanearth' | 'gaia_cns' | 'evs' | null})}
+                        onChange={(e) => setFormData({...formData, manufacturer: (e.target.value || null) as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null})}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                       >
                         <option value="">선택하세요</option>
-                        <option value="ecosense">에코센스</option>
-                        <option value="cleanearth">크린어스</option>
-                        <option value="gaia_cns">가이아씨앤에스</option>
-                        <option value="evs">이브이에스</option>
+                        <option value="에코센스">에코센스</option>
+                        <option value="크린어스">크린어스</option>
+                        <option value="가이아씨앤에스">가이아씨앤에스</option>
+                        <option value="이브이에스">이브이에스</option>
                       </select>
                     </div>
 

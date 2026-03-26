@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { getManufacturerName } from '@/constants/manufacturers';
 
 // ⚠️ UnifiedBusinessInfo는 page.tsx에 정의되어 있어 재정의 필요
 // 향후 types/index.ts로 이동 권장
@@ -68,15 +69,7 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     vpn_wireless: business.vpn_wireless || 0,
     multiple_stack: business.multiple_stack || 0,
     multiple_stack_install_extra: business.multiple_stack_install_extra || 0,
-    manufacturer: business.manufacturer === 'ecosense' ? '에코센스' :
-                  business.manufacturer === 'cleanearth' ? '크린어스' :
-                  business.manufacturer === 'gaia_cns' ? '가이아씨앤에스' :
-                  business.manufacturer === 'evs' ? '이브이에스' :
-                  business.manufacturer === '에코센스' ? '에코센스' :
-                  business.manufacturer === '크린어스' ? '크린어스' :
-                  business.manufacturer === '가이아씨앤에스' ? '가이아씨앤에스' :
-                  business.manufacturer === '이브이에스' ? '이브이에스' :
-                  business.manufacturer || '',
+    manufacturer: getManufacturerName(business.manufacturer || '') || '',
     negotiation: business.negotiation || null,
     // 한국어 센서/장비 필드명 매핑
     PH센서: business.ph_meter || 0,
