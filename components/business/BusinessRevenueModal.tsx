@@ -52,6 +52,13 @@ export default function BusinessRevenueModal({
   const prevIsOpenRef = React.useRef<boolean>(false);
 
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [multipleStackInstallExtra, setMultipleStackInstallExtra] = useState<number>(
+    Number(business?.multiple_stack_install_extra || 0)
+  );
+  // business prop이 바뀌면 (다른 사업장 열기) state 동기화
+  useEffect(() => {
+    setMultipleStackInstallExtra(Number(business?.multiple_stack_install_extra || 0));
+  }, [business?.id]);
 
   // 영업비용 조정 상태
   const [isEditingAdjustment, setIsEditingAdjustment] = useState(false);
@@ -1936,7 +1943,7 @@ export default function BusinessRevenueModal({
             Number(displayData.additional_installation_revenue || 0)
           }
           businessId={business.id}
-          multipleStackInstallExtra={Number(business.multiple_stack_install_extra || 0)}
+          multipleStackInstallExtra={multipleStackInstallExtra}
           multipleStackUnitInstallCost={
             calculatedData.equipment_breakdown.find(
               (item) => item.equipment_type === 'multiple_stack'
@@ -1944,8 +1951,8 @@ export default function BusinessRevenueModal({
           }
           userPermission={userPermission}
           onSaved={async (savedQty: number) => {
-            // 즉시 UI 반영 — prop 변경으로 모달 내 useEffect가 동기화
-            business.multiple_stack_install_extra = savedQty;
+            // 즉시 UI 반영 — state 업데이트로 리렌더링 트리거
+            setMultipleStackInstallExtra(savedQty);
             try {
               const token = TokenManager.getToken();
               const calcResponse = await fetch('/api/revenue/calculate', {
