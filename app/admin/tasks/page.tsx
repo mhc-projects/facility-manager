@@ -155,7 +155,7 @@ function TaskManagementPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [memoInput, setMemoInput] = useState('')
   const [isMemoSubmitting, setIsMemoSubmitting] = useState(false)
-  const [memoRefreshKey, setMemoRefreshKey] = useState(0)
+  const [pendingMemo, setPendingMemo] = useState<{ content: string; author: string; createdAt: string } | null>(null)
   const [draggedTask, setDraggedTask] = useState<Task | null>(null)
   const [mobileModalOpen, setMobileModalOpen] = useState(false)
   const [mobileSelectedTask, setMobileSelectedTask] = useState<Task | null>(null)
@@ -1398,6 +1398,7 @@ function TaskManagementPage() {
 
 
     setEditingTask(task)
+    setPendingMemo(null)
     setEditBusinessSearchTerm(task.businessName || '')
     setShowEditBusinessDropdown(false)
     setShowEditModal(true)
@@ -1513,7 +1514,7 @@ function TaskManagementPage() {
       setShowEditModal(false)
       setEditingTask(null)
       setMemoInput('')
-      setMemoRefreshKey(0)
+      setPendingMemo(null)
       setEditBusinessSearchTerm('')
       setShowEditBusinessDropdown(false)
 
@@ -1557,9 +1558,10 @@ function TaskManagementPage() {
         throw new Error(errorData.message || '메모 기록에 실패했습니다.')
       }
 
-      // 입력창 초기화 후 우측 패널 새로고침
+      // 입력창 초기화 후 즉시 메모 표시 (Realtime publication 미설정 환경 대비 fallback)
+      const content = memoInput.trim()
       setMemoInput('')
-      setMemoRefreshKey(prev => prev + 1)
+      setPendingMemo({ content, author: user?.name || '나', createdAt: new Date().toISOString() })
     } catch (error) {
       console.error('Failed to add memo:', error)
       alert(`메모 기록 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
@@ -2713,7 +2715,7 @@ function TaskManagementPage() {
                         setShowEditModal(false)
                         setEditingTask(null)
                         setMemoInput('')
-                        setMemoRefreshKey(0)
+                        setPendingMemo(null)
                       }}
                       className="px-2 sm:px-3 py-1 sm:py-1.5 text-white bg-white bg-opacity-20 rounded-md hover:bg-opacity-30 transition-all font-medium backdrop-blur-sm border border-white border-opacity-30 text-xs sm:text-sm"
                     >
@@ -3028,11 +3030,12 @@ function TaskManagementPage() {
               {/* 오른쪽: 사업장 정보 패널 */}
               <div className="overflow-y-auto bg-gray-50 h-full">
                 <BusinessInfoPanel
-                  key={`${editingTask.businessId || 'empty'}-${memoRefreshKey}`}
+                  key={editingTask.businessId || 'empty'}
                   businessId={editingTask.businessId || null}
                   businessName={editingTask.businessName}
                   taskId={editingTask.id}
                   onModalClose={() => setEditingTask(null)}
+                  pendingMemo={pendingMemo}
                 />
               </div>
             </div>

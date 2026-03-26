@@ -1,10 +1,11 @@
 // components/tasks/BusinessInfoPanel.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExternalLink } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/utils/formatters'
+import { useBusinessMemoRealtime, BusinessMemoRealtimePayload } from '@/hooks/useBusinessMemoRealtime'
 
 interface UnifiedBusinessInfo {
   id: string
@@ -49,9 +50,13 @@ interface UnifiedBusinessInfo {
 
 interface Memo {
   id: string
+  title?: string
   content: string
   author: string | null
+  created_by?: string
   created_at: string
+  updated_at?: string
+  updated_by?: string
   source_type?: string // 'manual' or 'task_sync'
   task_status?: string | null
   task_type?: string | null
@@ -62,6 +67,7 @@ interface BusinessInfoPanelProps {
   businessName?: string
   taskId?: string // 현재 업무 ID (복귀용)
   onModalClose?: () => void // 모달 닫기 콜백
+  pendingMemo?: { content: string; author: string; createdAt: string } | null // 즉시 추가할 메모 (Realtime fallback)
 }
 
 // 기본 정보 섹션
@@ -286,7 +292,8 @@ function LoadingSpinner() {
 export default function BusinessInfoPanel({
   businessId,
   taskId,
-  onModalClose
+  onModalClose,
+  pendingMemo
 }: BusinessInfoPanelProps) {
   const router = useRouter()
   const [businessData, setBusinessData] = useState<UnifiedBusinessInfo | null>(null)
@@ -302,6 +309,56 @@ export default function BusinessInfoPanel({
       setMemos([])
     }
   }, [businessId])
+
+  // pendingMemo: Realtime 이벤트를 기다리지 않고 즉시 메모 추가 (Realtime publication 미설정 대비)
+  useEffect(() => {
+    if (!pendingMemo) return
+    const tempMemo: Memo = {
+      id: `pending-${Date.now()}`,
+      title: '',
+      content: pendingMemo.content,
+      author: pendingMemo.author,
+      created_at: pendingMemo.createdAt,
+      updated_at: pendingMemo.createdAt,
+      source_type: 'task_sync',
+    }
+    setMemos(prev => {
+      // 이미 Realtime으로 추가됐으면 스킵
+      if (prev.some(m => m.content === pendingMemo.content && m.author === pendingMemo.author)) return prev
+      return [tempMemo, ...prev]
+    })
+  }, [pendingMemo])
+
+  // Realtime 이벤트 핸들러
+  const handleRealtimeInsert = useCallback((payload: BusinessMemoRealtimePayload) => {
+    setMemos(prev => {
+      if (prev.some(m => m.id === payload.id)) return prev
+      const mapped: Memo = { ...payload, author: payload.created_by || null }
+      // pendingMemo로 임시 추가된 항목 제거 후 실제 데이터로 교체
+      const withoutPending = prev.filter(m => !(m.id.startsWith('pending-') && m.content === payload.content))
+      return [mapped, ...withoutPending]
+    })
+  }, [])
+
+  const handleRealtimeUpdate = useCallback((payload: BusinessMemoRealtimePayload) => {
+    setMemos(prev => prev.map(m => m.id === payload.id
+      ? { ...payload, author: payload.created_by || null }
+      : m
+    ))
+  }, [])
+
+  const handleRealtimeDelete = useCallback((memoId: string) => {
+    setMemos(prev => prev.filter(m => m.id !== memoId))
+  }, [])
+
+  // Supabase Realtime 구독
+  useBusinessMemoRealtime({
+    businessId: businessId || '',
+    enabled: !!businessId,
+    onInsert: handleRealtimeInsert,
+    onUpdate: handleRealtimeUpdate,
+    onDelete: handleRealtimeDelete,
+  })
 
   const fetchData = async () => {
     if (!businessId) return

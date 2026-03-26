@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export interface BusinessMemoRealtimePayload {
@@ -80,11 +80,6 @@ export function useBusinessMemoRealtime(options: UseBusinessMemoRealtimeOptions)
     if (!enabled || !businessId) {
       return;
     }
-
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
 
     // 채널명에 businessId 포함 → 각 사업장별 독립 구독
     const channelName = `business_memos:${businessId}`;

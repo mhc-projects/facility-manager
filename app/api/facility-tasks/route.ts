@@ -858,23 +858,19 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     }
 
     // 🆕 메모 변경 감지 및 사업장 메모 동기화 (이력 누적)
-    const notesChanged = notes !== undefined && existingTask.notes !== updatedTask.notes;
+    const notesChanged = notes !== undefined && notes.trim() !== '';
     if (notesChanged && updatedTask.notes && updatedTask.notes.trim() !== '') {
       try {
-        // business_name으로 business_id 조회
-        const businessInfo = await queryOne(
-          `SELECT id FROM business_info
-           WHERE business_name = $1 AND is_active = true AND is_deleted = false`,
-          [updatedTask.business_name]
-        );
+        // existingTask.business_id 직접 사용 (business_name 재조회 불필요)
+        const resolvedBusinessId = updatedTask.business_id || existingTask.business_id;
 
-        if (!businessInfo) {
-          console.warn('⚠️ [FACILITY-TASKS] 메모 동기화 - 사업장 조회 실패:', updatedTask.business_name);
+        if (!resolvedBusinessId) {
+          console.warn('⚠️ [FACILITY-TASKS] 메모 동기화 - business_id 없음:', updatedTask.business_name);
         } else {
           const { addTaskMemoToBusinessHistory } = await import('@/lib/task-memo-sync');
           const syncResult = await addTaskMemoToBusinessHistory({
             taskId: updatedTask.id,
-            businessId: businessInfo.id,
+            businessId: resolvedBusinessId,
             businessName: updatedTask.business_name,
             notes: updatedTask.notes,
             status: updatedTask.status,

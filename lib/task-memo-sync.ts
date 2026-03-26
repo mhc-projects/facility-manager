@@ -1,5 +1,6 @@
 // lib/task-memo-sync.ts - 업무 메모 → 사업장 메모 동기화 유틸리티
 import { query as pgQuery, queryOne } from '@/lib/supabase-direct'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { TASK_STATUS_KR, TASK_TYPE_KR } from '@/lib/task-status-utils'
 import { logDebug, logError } from '@/lib/logger'
 
@@ -55,43 +56,32 @@ export async function addTaskMemoToBusinessHistory({
       taskType: taskTypeKR
     })
 
-    // business_memos에 새 이력 레코드 추가
-    const insertQuery = `
-      INSERT INTO business_memos (
-        business_id,
+    // business_memos에 새 이력 레코드 추가 (Supabase client 사용 → Realtime 이벤트 발생)
+    const supabaseAdmin = getSupabaseAdmin()
+    const { data: insertedMemo, error: insertError } = await supabaseAdmin
+      .from('business_memos')
+      .insert({
+        business_id: businessId,
         title,
-        content,
-        source_type,
-        source_id,
-        task_status,
-        task_type,
-        created_by,
-        updated_by,
-        is_active,
-        is_deleted
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, false)
-      RETURNING id
-    `
+        content: notes,
+        source_type: 'task_sync',
+        source_id: taskId,
+        task_status: statusKR,
+        task_type: taskType,
+        created_by: userName,
+        updated_by: userName,
+        is_active: true,
+        is_deleted: false
+      })
+      .select('id')
+      .single()
 
-    const result = await pgQuery(insertQuery, [
-      businessId,
-      title,
-      notes,
-      'task_sync', // source_type
-      taskId, // source_id
-      statusKR, // task_status
-      taskType, // task_type (코드값)
-      userName,
-      userName
-    ])
-
-    if (!result.rows || result.rows.length === 0) {
-      logError('TASK-MEMO-SYNC', '메모 레코드 생성 실패', { taskId, businessId })
-      return { success: false, error: '메모 레코드 생성 실패' }
+    if (insertError || !insertedMemo) {
+      logError('TASK-MEMO-SYNC', '메모 레코드 생성 실패', { taskId, businessId, error: insertError?.message })
+      return { success: false, error: insertError?.message || '메모 레코드 생성 실패' }
     }
 
-    const memoId = result.rows[0].id
+    const memoId = insertedMemo.id
 
     logDebug('TASK-MEMO-SYNC', '업무 메모 동기화 완료', {
       taskId,
