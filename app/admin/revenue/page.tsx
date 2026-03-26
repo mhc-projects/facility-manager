@@ -2884,6 +2884,13 @@ function RevenueDashboard() {
             );
             CacheManager.updateBusinessField(businessId, '_api_receivables', receivables);
           }}
+          onMultipleStackSaved={(businessId, savedQty) => {
+            // businesses 배열 즉시 업데이트 → 모달 재오픈 시에도 최신 수량 반영
+            setBusinesses(prev =>
+              prev.map(b => b.id === businessId ? { ...b, multiple_stack_install_extra: savedQty } : b)
+            );
+            CacheManager.updateBusinessField(businessId, 'multiple_stack_install_extra', savedQty);
+          }}
           userPermission={userPermission}
         />
       </AdminLayout>

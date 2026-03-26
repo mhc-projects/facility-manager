@@ -18,6 +18,7 @@ interface BusinessRevenueModalProps {
   userPermission: number;
   canDeleteAutoMemos?: boolean;
   onReceivablesUpdate?: (businessId: string, receivables: number) => void;
+  onMultipleStackSaved?: (businessId: string, savedQty: number) => void;
 }
 
 export default function BusinessRevenueModal({
@@ -27,6 +28,7 @@ export default function BusinessRevenueModal({
   userPermission,
   canDeleteAutoMemos = false,
   onReceivablesUpdate,
+  onMultipleStackSaved,
 }: BusinessRevenueModalProps) {
   const router = useRouter();
   const { createCostChangeLog } = useCostChangeLogger(business?.id || '');
@@ -1953,6 +1955,8 @@ export default function BusinessRevenueModal({
           onSaved={async (savedQty: number) => {
             // 즉시 UI 반영 — state 업데이트로 리렌더링 트리거
             setMultipleStackInstallExtra(savedQty);
+            // 부모(revenue/page)의 businesses 배열도 즉시 업데이트
+            onMultipleStackSaved?.(business.id, savedQty);
             try {
               const token = TokenManager.getToken();
               const calcResponse = await fetch('/api/revenue/calculate', {

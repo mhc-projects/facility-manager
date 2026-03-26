@@ -67,6 +67,7 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     vpn_wired: business.vpn_wired || 0,
     vpn_wireless: business.vpn_wireless || 0,
     multiple_stack: business.multiple_stack || 0,
+    multiple_stack_install_extra: business.multiple_stack_install_extra || 0,
     manufacturer: business.manufacturer === 'ecosense' ? '에코센스' :
                   business.manufacturer === 'cleanearth' ? '크린어스' :
                   business.manufacturer === 'gaia_cns' ? '가이아씨앤에스' :

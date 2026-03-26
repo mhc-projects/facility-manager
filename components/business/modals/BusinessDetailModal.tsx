@@ -1525,25 +1525,26 @@ export default function BusinessDetailModal({
                             const calculatedData = data.data.calculation
                             console.log('✅ [REVENUE-MODAL] API 계산 완료:', calculatedData)
 
-                            // revenue_adjustments를 DB에서 직접 가져오기 (normalizeBusiness에 포함되어 있지 않을 수 있음)
+                            // DB에서 직접 최신 필드값 가져오기 (normalizeBusiness에 포함되지 않을 수 있는 필드 보완)
                             let revenueAdjustments = (business as any).revenue_adjustments ?? null;
-                            if (!revenueAdjustments) {
-                              try {
-                                const adjToken = localStorage.getItem('auth_token');
-                                const adjRes = await fetch(`/api/business-info-direct?id=${business.id}`, {
-                                  headers: { 'Authorization': `Bearer ${adjToken}` }
-                                });
-                                const adjData = await adjRes.json();
-                                if (adjData.success && adjData.data?.[0]) {
-                                  revenueAdjustments = adjData.data[0].revenue_adjustments ?? null;
-                                }
-                              } catch { /* 실패 시 null 유지 */ }
-                            }
+                            let multipleStackInstallExtra = (business as any).multiple_stack_install_extra ?? 0;
+                            try {
+                              const adjToken = localStorage.getItem('auth_token');
+                              const adjRes = await fetch(`/api/business-info-direct?id=${business.id}`, {
+                                headers: { 'Authorization': `Bearer ${adjToken}` }
+                              });
+                              const adjData = await adjRes.json();
+                              if (adjData.success && adjData.data?.[0]) {
+                                revenueAdjustments = adjData.data[0].revenue_adjustments ?? revenueAdjustments;
+                                multipleStackInstallExtra = adjData.data[0].multiple_stack_install_extra ?? multipleStackInstallExtra;
+                              }
+                            } catch { /* 실패 시 기존값 유지 */ }
 
                             const enrichedBusiness = {
                               ...business,
                               ...calculatedData,
                               revenue_adjustments: revenueAdjustments,
+                              multiple_stack_install_extra: multipleStackInstallExtra,
                             }
 
                             console.log('📊 [REVENUE-MODAL] 병합된 사업장 데이터:', enrichedBusiness)
