@@ -6433,6 +6433,7 @@ function BusinessManagementPage() {
                         progressStatus={formData.progress_status}
                         userPermission={userPermission}
                         refreshTrigger={invoiceRefreshTrigger}
+                        onRefresh={() => setInvoiceRefreshTrigger(prev => prev + 1)}
                       />
                     </div>
                   );

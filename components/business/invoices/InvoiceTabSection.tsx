@@ -16,6 +16,7 @@ interface InvoiceTabSectionProps {
   progressStatus: string;  // 진행구분 (보조금/자비 판단용)
   userPermission?: number; // 권한 레벨 (삭제 등 제어용)
   refreshTrigger?: number; // 외부에서 강제 리로드 요청 시 증가
+  onRefresh?: () => void;  // 내부 저장 완료 후 외부(ReceivablesBanner 등)에 갱신 요청
 }
 
 type TabId = InvoiceStage | 'extra';
@@ -25,6 +26,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   progressStatus,
   userPermission = 0,
   refreshTrigger = 0,
+  onRefresh,
 }: InvoiceTabSectionProps, ref) {
   const [data, setData] = useState<BusinessInvoicesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,16 +84,21 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
       const stagesWithPending = stages.filter(stage => {
         const pending = pendingForms[stage];
         if (!pending) return false;
-        // 빈 폼은 건너뜀 (기존 레코드 없고 아무것도 입력 안 한 탭)
+        // 기존 invoice_records 레코드가 있으면 항상 저장 (빈값도 유효한 수정)
+        if (getExistingRecord(stage)) return true;
+        // legacyData(business_info 레거시)가 있으면 항상 저장 (레거시 데이터 삭제 의도 반영)
+        if (getLegacyData(stage)) return true;
+        // 신규 레코드이고 레거시도 없으면 빈 폼만 건너뜀
         const hasData = pending.issue_date || pending.supply_amount || pending.payment_date || pending.payment_amount;
-        if (!hasData) return false;
-        return true;
+        return !!hasData;
       });
 
       if (stagesWithPending.length === 0) {
         // pending 없으면 현재 활성 탭만 시도 (기존 동작 호환)
         if (activeTab !== 'extra' && activeFormRef.current) {
           await activeFormRef.current.save();
+          await loadData();
+          onRefresh?.();
         }
         return;
       }
@@ -123,8 +130,12 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
       if (errors.length > 0) {
         throw new Error(`일부 계산서 저장 실패:\n${errors.join('\n')}`);
       }
+
+      // 저장 완료 후 최신 데이터 반영: 폼 상태 초기화 + 외부 배너 갱신
+      await loadData();
+      onRefresh?.();
     },
-  }), [activeTab, pendingForms, stages]);
+  }), [activeTab, pendingForms, stages, loadData, onRefresh, data]);
 
   // 비활성 탭 폼을 직접 API로 저장
   const saveFormDirectly = async (stage: InvoiceStage, formState: FormState) => {
@@ -204,6 +215,9 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   const hasPendingChanges = (stage: InvoiceStage): boolean => {
     const pending = pendingForms[stage];
     if (!pending) return false;
+    // 기존 invoice_records 레코드 또는 legacyData가 있으면 빈값도 변경사항
+    if (getExistingRecord(stage) || getLegacyData(stage)) return true;
+    // 신규이고 레거시도 없으면 실제 입력값이 있을 때만 변경사항
     return !!(pending.issue_date || pending.supply_amount || pending.payment_date || pending.payment_amount);
   };
 

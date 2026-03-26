@@ -176,8 +176,10 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
         const result = await res.json();
         if (!result.success) throw new Error(result.message);
       } else {
-        // 빈 폼이면 저장 생략 (다른 탭의 미입력 탭 무시)
-        if (!payload.issue_date && supply === 0 && !payload.payment_date && payload.payment_amount === 0) {
+        // 빈 폼이면 저장 생략 — 단, legacyData가 있으면 반드시 저장
+        // (레거시 데이터의 입금일/금액을 지우는 동작이므로 빈값도 유효)
+        const isBlankForm = !payload.issue_date && supply === 0 && !payload.payment_date && payload.payment_amount === 0;
+        if (isBlankForm && !legacyData) {
           return;
         }
         const res = await fetch('/api/invoice-records', {
