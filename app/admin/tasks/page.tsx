@@ -14,6 +14,7 @@ import BusinessInfoPanel from '@/components/tasks/BusinessInfoPanel'
 import SubsidyActiveBadge from '@/components/tasks/SubsidyActiveBadge'
 import BulkUploadModal from '@/components/tasks/BulkUploadModal'
 import DuplicateTasksModal from '@/components/admin/DuplicateTasksModal'
+import { useTaskNotesRealtime } from '@/hooks/useTaskNotesRealtime'
 // 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import
 import {
   TaskType,
@@ -365,6 +366,25 @@ function TaskManagementPage() {
     loadTasks()
     loadActiveSubsidies()
   }, [loadTasks, loadActiveSubsidies])
+
+  // ⚡ facility_tasks Realtime 구독: 다른 페이지/사용자의 메모 수정을 즉시 반영
+  useTaskNotesRealtime({
+    enabled: true,
+    onUpdate: (updatedTask) => {
+      // tasks 목록 상태 업데이트
+      setTasks(prev => prev.map(t =>
+        t.id === updatedTask.id
+          ? { ...t, notes: updatedTask.notes ?? undefined }
+          : t
+      ))
+      // 모바일 상세모달이 해당 업무를 보고 있다면 함께 갱신
+      setMobileSelectedTask(prev =>
+        prev?.id === updatedTask.id
+          ? { ...prev, notes: updatedTask.notes ?? undefined }
+          : prev
+      )
+    }
+  })
 
   // 🆕 5분마다 활성 보조금 공고 자동 갱신
   useEffect(() => {
