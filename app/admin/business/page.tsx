@@ -944,15 +944,11 @@ function BusinessManagementPage() {
   
   // 메모 관련 상태
   const [businessMemos, setBusinessMemos] = useState<BusinessMemo[]>([])
-
-  // businessMemos state 변경 추적
-  useEffect(() => {
-    console.log('🔧 [FRONTEND] businessMemos state 변경됨:', businessMemos.length, '개', businessMemos)
-  }, [businessMemos])
   const [isAddingMemo, setIsAddingMemo] = useState(false)
   const [editingMemo, setEditingMemo] = useState<BusinessMemo | null>(null)
   const [memoForm, setMemoForm] = useState({ title: '', content: '' })
   const [isLoadingMemos, setIsLoadingMemos] = useState(false)
+  const [isSavingMemo, setIsSavingMemo] = useState(false)
 
   // 업무 관련 상태
   const [businessTasks, setBusinessTasks] = useState<any[]>([])
@@ -1479,19 +1475,32 @@ function BusinessManagementPage() {
       return
     }
 
+    // Optimistic update: 임시 ID로 즉시 UI에 반영
+    const tempId = `temp-${Date.now()}`
+    const now = new Date().toISOString()
+    const optimisticMemo: BusinessMemo = {
+      id: tempId,
+      business_id: selectedBusiness.id,
+      title: memoForm.title.trim(),
+      content: memoForm.content.trim(),
+      created_at: now,
+      created_by: user?.name || user?.email || '저장 중...',
+      updated_at: now,
+      updated_by: user?.name || user?.email || '저장 중...',
+    } as BusinessMemo
+
+    setBusinessMemos(prev => [optimisticMemo, ...prev])
+    setMemoForm({ title: '', content: '' })
+    setIsAddingMemo(false)
+    setIsSavingMemo(true)
+
     try {
       const memoData: CreateBusinessMemoInput = {
         business_id: selectedBusiness.id,
-        title: memoForm.title.trim(),
-        content: memoForm.content.trim(),
+        title: optimisticMemo.title,
+        content: optimisticMemo.content,
         created_by: user?.name || user?.email || '알 수 없음'
       }
-
-      console.log('🔧 [FRONTEND] 메모 전송 데이터:', {
-        businessName: selectedBusiness.business_name,
-        memoData,
-        formData: memoForm
-      })
 
       const response = await fetch('/api/business-memos', {
         method: 'POST',
@@ -1501,35 +1510,21 @@ function BusinessManagementPage() {
 
       const result = await response.json()
 
-      console.log('🔧 [FRONTEND] API 응답:', result)
-
       if (result.success && result.data) {
-        // API 응답 구조: {success: true, data: {data: {...실제메모...}, message: ...}}
         const newMemo = result.data.data || result.data
-        console.log('🔧 [FRONTEND] 새 메모 추가 성공:', newMemo)
-        console.log('🔧 [FRONTEND] 현재 businessMemos 개수:', businessMemos.length)
-
-        // 즉시 UI에 새 메모 추가 (낙관적 업데이트)
-        setBusinessMemos(prev => {
-          console.log('🔧 [FRONTEND] setBusinessMemos 콜백 실행 - 이전 개수:', prev.length)
-          const newMemos = [newMemo, ...prev]
-          console.log('🔧 [FRONTEND] setBusinessMemos 콜백 - 새 개수:', newMemos.length)
-          console.log('🔧 [FRONTEND] 추가된 메모:', newMemo)
-          return newMemos
-        })
-
-        console.log('🔧 [FRONTEND] UI 상태 업데이트 완료 - 새 메모 추가됨')
-
-        // 메모 폼 초기화
-        setMemoForm({ title: '', content: '' })
-        setIsAddingMemo(false)
+        // 임시 메모를 서버 응답 데이터로 교체
+        setBusinessMemos(prev => prev.map(m => m.id === tempId ? newMemo : m))
       } else {
-        console.error('🔧 [FRONTEND] 메모 추가 실패:', result.error)
+        // 실패 시 optimistic update 롤백
+        setBusinessMemos(prev => prev.filter(m => m.id !== tempId))
         alert(`메모 추가 실패: ${result.error}`)
       }
     } catch (error) {
       console.error('❌ 메모 추가 오류:', error)
+      setBusinessMemos(prev => prev.filter(m => m.id !== tempId))
       alert('메모 추가 중 오류가 발생했습니다.')
+    } finally {
+      setIsSavingMemo(false)
     }
   }
 
@@ -1539,14 +1534,26 @@ function BusinessManagementPage() {
       return
     }
 
+    const editId = editingMemo.id
+    const originalMemo = editingMemo
+
+    // Optimistic update: 즉시 UI에 반영
+    setBusinessMemos(prev =>
+      prev.map(m => m.id === editId ? { ...m, title: memoForm.title.trim(), content: memoForm.content.trim() } : m)
+    )
+    setMemoForm({ title: '', content: '' })
+    setEditingMemo(null)
+    setIsAddingMemo(false)
+    setIsSavingMemo(true)
+
     try {
       const updateData: UpdateBusinessMemoInput = {
-        title: memoForm.title.trim(),
-        content: memoForm.content.trim(),
+        title: originalMemo.title !== memoForm.title.trim() ? memoForm.title.trim() : originalMemo.title,
+        content: originalMemo.content !== memoForm.content.trim() ? memoForm.content.trim() : originalMemo.content,
         updated_by: user?.name || user?.email || '알 수 없음'
       }
 
-      const response = await fetch(`/api/business-memos?id=${editingMemo.id}`, {
+      const response = await fetch(`/api/business-memos?id=${editId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData)
@@ -1555,27 +1562,20 @@ function BusinessManagementPage() {
       const result = await response.json()
 
       if (result.success && result.data) {
-        // API 응답 구조: {success: true, data: {data: {...실제메모...}, message: ...}}
         const updatedMemo = result.data.data || result.data
-        console.log('🔧 [FRONTEND] 메모 수정 성공:', updatedMemo)
-
-        // 즉시 UI에서 메모 업데이트 (낙관적 업데이트)
-        setBusinessMemos(prev =>
-          prev.map(memo => memo.id === editingMemo.id ? updatedMemo : memo)
-        )
-
-        console.log('🔧 [FRONTEND] UI 상태 업데이트 완료 - 메모 수정됨')
-
-        // 메모 폼 초기화 및 입력창 닫기
-        setMemoForm({ title: '', content: '' })
-        setEditingMemo(null)
-        setIsAddingMemo(false)
+        // 서버 응답으로 최종 교체
+        setBusinessMemos(prev => prev.map(m => m.id === editId ? updatedMemo : m))
       } else {
+        // 실패 시 롤백
+        setBusinessMemos(prev => prev.map(m => m.id === editId ? originalMemo : m))
         alert(`메모 수정 실패: ${result.error}`)
       }
     } catch (error) {
       console.error('❌ 메모 수정 오류:', error)
+      setBusinessMemos(prev => prev.map(m => m.id === editId ? originalMemo : m))
       alert('메모 수정 중 오류가 발생했습니다.')
+    } finally {
+      setIsSavingMemo(false)
     }
   }
 
@@ -5161,20 +5161,9 @@ function BusinessManagementPage() {
               }
             }}
             onEdit={openEditModal}
-            isAddingMemo={isAddingMemo}
-            setIsAddingMemo={setIsAddingMemo}
-            businessMemos={businessMemos}
             businessTasks={businessTasks}
-            getIntegratedItems={getIntegratedItems}
+            userPermission={userPermission}
             canDeleteAutoMemos={canDeleteAutoMemos}
-            startEditMemo={startEditMemo}
-            handleDeleteMemo={handleDeleteMemo}
-            editingMemo={editingMemo}
-            setEditingMemo={setEditingMemo}
-            memoForm={memoForm}
-            setMemoForm={setMemoForm}
-            handleAddMemo={handleAddMemo}
-            handleEditMemo={handleEditMemo}
             getStatusColor={getStatusColor}
             getStatusDisplayName={getStatusDisplayName}
             facilityDeviceCounts={facilityDeviceCounts}

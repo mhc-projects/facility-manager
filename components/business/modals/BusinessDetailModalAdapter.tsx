@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import BusinessDetailModal from './BusinessDetailModal';
 
 // Simplified props that Revenue page can provide
@@ -9,21 +9,16 @@ interface BusinessDetailModalAdapterProps {
   business: any;
   onClose: () => void;
   onEdit: (business: any) => void;
-  memos: any[];
-  businessTasks: any[];
-  facilityData: any;
-  isLoadingMemos?: boolean;
+  businessTasks?: any[];
+  facilityData?: any;
   isLoadingTasks?: boolean;
-  onAddMemo?: (input: any) => Promise<void>;
-  onEditMemo?: (id: string, input: any) => Promise<void>;
-  onDeleteMemo?: (id: string) => Promise<void>;
   onUpdateTaskStatus?: (taskId: string, newStatus: string) => Promise<void>;
-  onAddTaskNote?: (taskId: string, note: string) => Promise<void>;
   invoiceAmounts?: Record<string, number>;
   onUpdateInvoiceDate?: (key: string, date: string) => Promise<void>;
   onUpdateInvoiceAmount?: (key: string, amount: number) => Promise<void>;
   mapCategoryToInvoiceType?: (category: string) => string;
   userPermission?: number;
+  canDeleteAutoMemos?: boolean;
 }
 
 /**
@@ -35,51 +30,27 @@ export default function BusinessDetailModalAdapter({
   business,
   onClose,
   onEdit,
-  memos = [],
   businessTasks = [],
   facilityData,
-  isLoadingMemos = false,
   isLoadingTasks = false,
-  onAddMemo,
-  onEditMemo,
-  onDeleteMemo,
   onUpdateTaskStatus,
-  onAddTaskNote,
   invoiceAmounts = {},
   onUpdateInvoiceDate,
   onUpdateInvoiceAmount,
   mapCategoryToInvoiceType = (category) => category,
-  userPermission = 0
+  userPermission = 0,
+  canDeleteAutoMemos = false,
 }: BusinessDetailModalAdapterProps) {
 
-  // Internal state for memo management
-  const [isAddingMemo, setIsAddingMemo] = useState(false);
-  const [editingMemo, setEditingMemo] = useState<any | null>(null);
-  const [memoForm, setMemoForm] = useState({ title: '', content: '' });
-
-  // Integrated items getter
+  // Integrated items getter (tasks only - memos handled by MemoSection)
   const getIntegratedItems = useCallback(() => {
     const items: any[] = [];
-
-    // Add memos
-    if (memos && Array.isArray(memos)) {
-      memos.forEach(memo => {
-        items.push({
-          id: memo.id,
-          type: 'memo',
-          created_at: memo.created_at,
-          updated_at: memo.updated_at,
-          data: memo
-        });
-      });
-    }
-
-    // Add tasks
     if (businessTasks && Array.isArray(businessTasks)) {
       businessTasks.forEach(task => {
         items.push({
           id: task.task_id,
           type: 'task',
+          title: task.title || '',
           created_at: task.created_at,
           updated_at: task.updated_at,
           status: task.status,
@@ -89,82 +60,10 @@ export default function BusinessDetailModalAdapter({
         });
       });
     }
-
-    // Sort by created_at descending
     return items.sort((a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [memos, businessTasks]);
-
-  // Memo handlers
-  const startEditMemo = (memo: any) => {
-    setEditingMemo(memo);
-    setMemoForm({
-      title: memo.title || '',
-      content: memo.content || ''
-    });
-  };
-
-  const handleAddMemo = async () => {
-    if (!onAddMemo) {
-      console.warn('⚠️ [ADAPTER] onAddMemo not provided');
-      return;
-    }
-
-    try {
-      await onAddMemo({
-        business_id: business.id,
-        title: memoForm.title,
-        content: memoForm.content
-      });
-
-      // Reset form
-      setMemoForm({ title: '', content: '' });
-      setIsAddingMemo(false);
-    } catch (error) {
-      console.error('❌ [ADAPTER] handleAddMemo failed:', error);
-      throw error;
-    }
-  };
-
-  const handleEditMemo = async () => {
-    if (!onEditMemo || !editingMemo) {
-      console.warn('⚠️ [ADAPTER] onEditMemo not provided or no editing memo');
-      return;
-    }
-
-    try {
-      await onEditMemo(editingMemo.id, {
-        title: memoForm.title,
-        content: memoForm.content
-      });
-
-      // Reset form
-      setMemoForm({ title: '', content: '' });
-      setEditingMemo(null);
-    } catch (error) {
-      console.error('❌ [ADAPTER] handleEditMemo failed:', error);
-      throw error;
-    }
-  };
-
-  const handleDeleteMemo = async (memo: any) => {
-    if (!onDeleteMemo) {
-      console.warn('⚠️ [ADAPTER] onDeleteMemo not provided');
-      return;
-    }
-
-    if (!confirm('이 메모를 삭제하시겠습니까?')) {
-      return;
-    }
-
-    try {
-      await onDeleteMemo(memo.id);
-    } catch (error) {
-      console.error('❌ [ADAPTER] handleDeleteMemo failed:', error);
-      throw error;
-    }
-  };
+  }, [businessTasks]);
 
   // Task status helpers
   const getStatusColor = (status: string) => {
@@ -209,34 +108,18 @@ export default function BusinessDetailModalAdapter({
       business={business}
       onClose={onClose}
       onEdit={onEdit}
-      // Memo state
-      isAddingMemo={isAddingMemo}
-      setIsAddingMemo={setIsAddingMemo}
-      businessMemos={memos}
       businessTasks={businessTasks}
-      getIntegratedItems={getIntegratedItems}
-      canDeleteAutoMemos={true}  // Allow all deletes in adapter context
-      startEditMemo={startEditMemo}
-      handleDeleteMemo={handleDeleteMemo}
-      editingMemo={editingMemo}
-      setEditingMemo={setEditingMemo}
-      memoForm={memoForm}
-      setMemoForm={setMemoForm}
-      handleAddMemo={handleAddMemo}
-      handleEditMemo={handleEditMemo}
-      // Task state
+      userPermission={userPermission}
+      canDeleteAutoMemos={canDeleteAutoMemos}
       getStatusColor={getStatusColor}
       getStatusDisplayName={getStatusDisplayName}
-      // Facility props
       facilityDeviceCounts={null}
-      facilityLoading={isLoadingMemos || isLoadingTasks}
+      facilityLoading={isLoadingTasks}
       facilityData={facilityData}
       airPermitData={null}
-      // Revenue props
       setSelectedRevenueBusiness={setSelectedRevenueBusiness}
       setShowRevenueModal={setShowRevenueModal}
       mapCategoryToInvoiceType={mapCategoryToInvoiceType}
-      // Optional handlers
       onFacilityUpdate={onFacilityUpdate}
     />
   );
