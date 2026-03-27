@@ -21,7 +21,6 @@ import {
   Factory,
   Database,
   Settings,
-  Shield,
   Calculator
 } from 'lucide-react'
 import TaskProgressMiniBoard from '@/components/business/TaskProgressMiniBoard'
@@ -825,14 +824,7 @@ export default function BusinessDetailModal({
 
                     <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
                       <div className="text-xs sm:text-sm text-gray-600 mb-1">그린링크 PW</div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 flex items-center">
-                        {business.greenlink_pw ? (
-                          <>
-                            <Shield className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-green-500" />
-                            설정됨
-                          </>
-                        ) : '-'}
-                      </div>
+                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{business.greenlink_pw || '-'}</div>
                     </div>
 
                     <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
