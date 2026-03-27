@@ -596,7 +596,13 @@ function UsersManagementPage() {
       });
 
       if (response.ok) {
-        // ✅ Realtime이 자동으로 상태 업데이트 - loadEmployees() 불필요
+        // 즉시 로컬 상태 업데이트
+        setEmployees(prev =>
+          prev.map(emp => emp.id === userId ? { ...emp, is_active: isActive } : emp)
+        );
+        if (selectedUser?.id === userId) {
+          setSelectedUser(prev => prev ? { ...prev, is_active: isActive } : null);
+        }
         alert(`사용자가 ${isActive ? '활성화' : '비활성화'}되었습니다.`);
       }
     } catch (error) {
