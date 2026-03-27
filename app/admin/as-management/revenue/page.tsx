@@ -6,10 +6,17 @@ import Link from 'next/link';
 import { TokenManager } from '@/lib/api-client';
 import AdminLayout from '@/components/ui/AdminLayout';
 
+interface MaterialItem {
+  material_name: string;
+  quantity: number;
+  unit: string;
+}
+
 interface RevenueRecord {
   id: string;
   work_date: string;
   receipt_content: string | null;
+  work_content: string | null;
   dispatch_count: number;
   is_free: boolean;
   dispatch_cost: number;
@@ -25,6 +32,7 @@ interface RevenueRecord {
   dispatch_pay: number;
   total_manager_pay: number;
   net_profit: number;
+  materials: MaterialItem[];
 }
 
 interface BusinessRevenue {
@@ -307,52 +315,94 @@ export default function AsRevenuePage() {
     if (!businesses.length) return;
     const ExcelJS = (await import('exceljs')).default;
     const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('AS매출현황');
 
-    // ── 시트 1: 사업장별 매출 현황 ──
-    const sheet = workbook.addWorksheet('사업장별 매출현황');
     const HEADER_FILL  = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8EAF6' } };
-    const TOTAL_FILL   = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF3F4F6' } };
-    const FREE_FILL    = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD1FAE5' } }; // 연두 (무상)
-    const MIXED_FILL   = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFECFDF5' } }; // 연연두 (혼합)
+    const BIZ_FILL     = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD1D5DB' } }; // 사업장 요약행
+    const FREE_FILL    = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD1FAE5' } }; // 무상
+    const MIXED_FILL   = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFECFDF5' } }; // 혼합
+    const DETAIL_FILL  = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF9FAFB' } }; // 건별 상세
+    const TOTAL_FILL   = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE5E7EB' } };
     const CURRENCY_FMT = '#,##0';
 
+    // 컬럼 정의 (총 21개)
+    // [1]구분 [2]사업장/진행일 [3]접수내용 [4]작업내용 [5]사용자재 [6]건수 [7]무상건수 [8]출동횟수
+    // [9]출동원가 [10]출동매출 [11]자재원가 [12]자재매출 [13]매입조정 [14]매출조정
+    // [15]총매출 [16]순이익 [17]담당자지급 [18]회사실수익 [19]이익률
     sheet.columns = [
-      { header: '사업장',        key: 'name',           width: 22 },
-      { header: '구분',          key: 'category',       width: 8  },
-      { header: '건수',          key: 'record_count',   width: 8  },
-      { header: '무상건수',      key: 'free_count',     width: 8  },
-      { header: '출동 횟수',     key: 'dispatch_cnt',   width: 10 },
-      { header: '출동 원가(원)', key: 'dispatch_cost',  width: 16 },
-      { header: '출동 매출(원)', key: 'dispatch_rev',   width: 16 },
-      { header: '자재 원가(원)', key: 'material_cost',  width: 16 },
-      { header: '자재 매출(원)', key: 'material_rev',   width: 16 },
-      { header: '매입 조정(원)', key: 'cost_adj',       width: 14 },
-      { header: '매출 조정(원)', key: 'rev_adj',        width: 14 },
-      { header: '총 매출(원)',   key: 'total_rev',      width: 16 },
-      { header: '순이익(원)',    key: 'profit',         width: 16 },
-      { header: '담당자 지급(원)', key: 'manager_pay',  width: 16 },
-      { header: '회사 실수익(원)', key: 'net_profit',   width: 16 },
-      { header: '이익률(%)',     key: 'profit_rate',    width: 10 },
+      { header: '구분',           key: 'row_type',       width: 8  },
+      { header: '사업장/진행일',  key: 'name_or_date',   width: 22 },
+      { header: '접수내용',       key: 'receipt',        width: 28 },
+      { header: '작업내용',       key: 'work_content',   width: 28 },
+      { header: '사용자재',       key: 'materials',      width: 32 },
+      { header: '건수',           key: 'record_count',   width: 8  },
+      { header: '무상건수',       key: 'free_count',     width: 8  },
+      { header: '출동 횟수',      key: 'dispatch_cnt',   width: 10 },
+      { header: '출동 원가(원)',  key: 'dispatch_cost',  width: 16 },
+      { header: '출동 매출(원)',  key: 'dispatch_rev',   width: 16 },
+      { header: '자재 원가(원)',  key: 'material_cost',  width: 16 },
+      { header: '자재 매출(원)',  key: 'material_rev',   width: 16 },
+      { header: '매입 조정(원)',  key: 'cost_adj',       width: 14 },
+      { header: '매출 조정(원)',  key: 'rev_adj',        width: 14 },
+      { header: '총 매출(원)',    key: 'total_rev',      width: 16 },
+      { header: '순이익(원)',     key: 'profit',         width: 16 },
+      { header: '담당자 지급(원)', key: 'manager_pay',   width: 16 },
+      { header: '회사 실수익(원)', key: 'net_profit',    width: 16 },
+      { header: '이익률(%)',      key: 'profit_rate',    width: 10 },
     ];
 
-    // 구분 컬럼=2, 금액 컬럼=6~15
-    const CURRENCY_COLS = [6,7,8,9,10,11,12,13,14,15];
+    const CURRENCY_COLS = [9,10,11,12,13,14,15,16,17,18];
+
+    // 헤더 행 스타일
     const headerRow = sheet.getRow(1);
     headerRow.eachCell(cell => {
       cell.font = { bold: true };
       cell.fill = HEADER_FILL;
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = { bottom: { style: 'thin', color: { argb: 'FFB0BEC5' } } };
     });
+    headerRow.height = 30;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const applyRowStyle = (row: any, fill: typeof HEADER_FILL, isBiz: boolean) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      row.eachCell({ includeEmpty: true }, (cell: any) => { cell.fill = fill; });
+      CURRENCY_COLS.forEach(col => {
+        const cell = row.getCell(col);
+        cell.numFmt = CURRENCY_FMT;
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      });
+      // 이익률 컬럼(19)
+      row.getCell(19).numFmt = '0.0"%"';
+      row.getCell(19).alignment = { horizontal: 'center', vertical: 'middle' };
+      if (isBiz) {
+        // 구분(1), 사업장명(2), 건수(6), 무상(7), 출동(8) 가운데
+        [1, 2, 6, 7, 8].forEach(col => {
+          row.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+        row.font = { bold: true };
+        row.height = 18;
+      } else {
+        // 건별: 구분(1) 가운데
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(8).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.height = 16;
+      }
+    };
 
     businesses.forEach(biz => {
       const allFree  = biz.free_record_count === biz.record_count;
       const hasFree  = biz.free_record_count > 0;
       const category = allFree ? '무상' : hasFree ? '혼합' : '유상';
+      const bizFill  = allFree ? FREE_FILL : hasFree ? MIXED_FILL : BIZ_FILL;
 
-      const row = sheet.addRow({
-        name:          biz.business_name,
-        category,
+      // ── 사업장 요약 행 ──
+      const bizRow = sheet.addRow({
+        row_type:      category,
+        name_or_date:  biz.business_name,
+        receipt:       '',
+        work_content:  '',
+        materials:     '',
         record_count:  biz.record_count,
         free_count:    biz.free_record_count,
         dispatch_cnt:  biz.total_dispatch_count,
@@ -368,28 +418,54 @@ export default function AsRevenuePage() {
         net_profit:    biz.net_profit,
         profit_rate:   Math.round(biz.profit_rate * 10) / 10,
       });
+      applyRowStyle(bizRow, bizFill, true);
 
-      // 무상/혼합 행 배경색
-      if (allFree || hasFree) {
-        const rowFill = allFree ? FREE_FILL : MIXED_FILL;
-        row.eachCell(cell => { cell.fill = rowFill; });
-      }
+      // ── 건별 상세 행 ──
+      biz.records.forEach(rec => {
+        const materialStr = (rec.materials || [])
+          .map(m => `${m.material_name} ${m.quantity}${m.unit}`)
+          .join(', ');
 
-      // 구분 컬럼 가운데 정렬
-      row.getCell(2).alignment = { horizontal: 'center' };
-
-      CURRENCY_COLS.forEach(col => {
-        row.getCell(col).numFmt = CURRENCY_FMT;
-        row.getCell(col).alignment = { horizontal: 'right' };
+        const detailRow = sheet.addRow({
+          row_type:      rec.is_free ? '무상' : '유상',
+          name_or_date:  rec.work_date?.slice(0, 10) || '',
+          receipt:       rec.receipt_content || '',
+          work_content:  rec.work_content || '',
+          materials:     materialStr,
+          record_count:  '',
+          free_count:    '',
+          dispatch_cnt:  rec.dispatch_count,
+          dispatch_cost: rec.dispatch_cost,
+          dispatch_rev:  rec.dispatch_revenue,
+          material_cost: rec.material_cost,
+          material_rev:  rec.material_revenue,
+          cost_adj:      rec.cost_adjustment,
+          rev_adj:       rec.revenue_adjustment,
+          total_rev:     rec.total_revenue,
+          profit:        rec.profit,
+          manager_pay:   rec.total_manager_pay,
+          net_profit:    rec.net_profit,
+          profit_rate:   '',
+        });
+        applyRowStyle(detailRow, DETAIL_FILL, false);
+        // 자재 컬럼 wrapText
+        detailRow.getCell(5).alignment = { wrapText: true, vertical: 'top' };
+        detailRow.getCell(3).alignment = { wrapText: true, vertical: 'top' };
+        detailRow.getCell(4).alignment = { wrapText: true, vertical: 'top' };
+        if (rec.is_free) {
+          detailRow.getCell(1).font = { color: { argb: 'FF059669' } };
+        }
       });
-      row.getCell(16).numFmt = '0.0"%"';
-      row.getCell(16).alignment = { horizontal: 'center' };
     });
 
-    // 합계 행
+    // ── 전체 합계 행 ──
     if (summary && businesses.length > 1) {
       const totalRow = sheet.addRow({
-        name:          '합계',
+        row_type:      '합계',
+        name_or_date:  '',
+        receipt:       '',
+        work_content:  '',
+        materials:     '',
         record_count:  businesses.reduce((s, b) => s + b.record_count, 0),
         free_count:    businesses.reduce((s, b) => s + b.free_record_count, 0),
         dispatch_cnt:  businesses.reduce((s, b) => s + b.total_dispatch_count, 0),
@@ -405,14 +481,7 @@ export default function AsRevenuePage() {
         net_profit:    summary.net_profit,
         profit_rate:   Math.round(summary.profit_rate * 10) / 10,
       });
-      totalRow.font = { bold: true };
-      totalRow.fill = TOTAL_FILL;
-      CURRENCY_COLS.forEach(col => {
-        totalRow.getCell(col).numFmt = CURRENCY_FMT;
-        totalRow.getCell(col).alignment = { horizontal: 'right' };
-      });
-      totalRow.getCell(16).numFmt = '0.0"%"';
-      totalRow.getCell(16).alignment = { horizontal: 'center' };
+      applyRowStyle(totalRow, TOTAL_FILL, true);
     }
 
     const buffer = await workbook.xlsx.writeBuffer();

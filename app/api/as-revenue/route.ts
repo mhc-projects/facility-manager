@@ -192,6 +192,7 @@ export async function GET(request: NextRequest) {
             'id', record_id,
             'work_date', work_date,
             'receipt_content', receipt_content,
+            'work_content', (SELECT ar2.work_content FROM as_records ar2 WHERE ar2.id = record_id),
             'dispatch_count', dispatch_count,
             'is_free', is_free,
             'dispatch_cost', dispatch_cost,
@@ -202,7 +203,17 @@ export async function GET(request: NextRequest) {
             'cost_adjustment', cost_adjustment,
             'total_cost', dispatch_cost + material_cost + cost_adjustment,
             'total_revenue', dispatch_revenue + material_revenue + revenue_adjustment,
-            'profit', (dispatch_revenue + material_revenue + revenue_adjustment) - (dispatch_cost + material_cost + cost_adjustment)
+            'profit', (dispatch_revenue + material_revenue + revenue_adjustment) - (dispatch_cost + material_cost + cost_adjustment),
+            'materials', COALESCE(
+              (SELECT JSON_AGG(JSON_BUILD_OBJECT(
+                'material_name', amu.material_name,
+                'quantity', amu.quantity,
+                'unit', amu.unit
+              ) ORDER BY amu.id)
+              FROM as_material_usage amu
+              WHERE amu.as_record_id = record_id),
+              '[]'::json
+            )
           )
           ORDER BY work_date DESC
         ) AS records
