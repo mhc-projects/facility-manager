@@ -486,7 +486,8 @@ export interface Employee {
   team?: string;
   position?: string;
   permission_level: number;
-  role?: string;
+  role?: string | number;
+  approval_role?: string;
   is_active: boolean;
   is_deleted: boolean;
   created_at: string;

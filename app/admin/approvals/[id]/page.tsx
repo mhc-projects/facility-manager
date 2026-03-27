@@ -272,8 +272,16 @@ function ApprovalDetailContent() {
   }
 
   const handleSubmit = async () => {
-    if (!editTeamLeader || !editExecutive || !editCeo) {
-      alert('팀장, 중역, 대표이사를 모두 선택해 주세요')
+    const requesterRole = user?.approval_role
+    const needTeamLeader = requesterRole !== 'executive' && requesterRole !== 'team_leader'
+    const needExecutive  = requesterRole !== 'executive'
+    if ((needTeamLeader && !editTeamLeader) || (needExecutive && !editExecutive) || !editCeo) {
+      const missing = [
+        needTeamLeader && !editTeamLeader && '팀장',
+        needExecutive && !editExecutive && '중역',
+        !editCeo && '대표이사',
+      ].filter(Boolean).join(', ')
+      alert(`${missing}을(를) 선택해 주세요`)
       return
     }
     setProcessing(true)
@@ -485,6 +493,7 @@ function ApprovalDetailContent() {
             <ApprovalLineHeader
               documentTitle={DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
               steps={doc.steps}
+              requesterRole={user?.approval_role}
             />
           </div>
 
@@ -535,6 +544,7 @@ function ApprovalDetailContent() {
               onTeamLeaderChange={setEditTeamLeader}
               onExecutiveChange={setEditExecutive}
               onCeoChange={setEditCeo}
+              requesterRole={user?.approval_role}
             />
           </div>
         )}

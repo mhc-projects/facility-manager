@@ -26,6 +26,14 @@ interface ApproverSelectorProps {
   onExecutiveChange: (id: string) => void
   onCeoChange: (id: string) => void
   disabled?: boolean
+  requesterRole?: string
+}
+
+// role별 결재라인: 어떤 단계가 필요한지 결정
+function getRequiredSteps(role?: string) {
+  if (role === 'executive') return { needTeamLeader: false, needExecutive: false }
+  if (role === 'team_leader') return { needTeamLeader: false, needExecutive: true }
+  return { needTeamLeader: true, needExecutive: true }
 }
 
 export default function ApproverSelector({
@@ -36,7 +44,9 @@ export default function ApproverSelector({
   onExecutiveChange,
   onCeoChange,
   disabled = false,
+  requesterRole,
 }: ApproverSelectorProps) {
+  const { needTeamLeader, needExecutive } = getRequiredSteps(requesterRole)
   const [approvers, setApprovers] = useState<ApproverData>({
     teamLeaders: [],
     executives: [],
@@ -70,10 +80,23 @@ export default function ApproverSelector({
     focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed
     appearance-none`
 
+  // 표시할 컬럼 수 계산 (숨겨진 단계 제외)
+  const visibleCount = [needTeamLeader, needExecutive, true].filter(Boolean).length
+  const gridClass = visibleCount === 1
+    ? 'grid grid-cols-1 gap-4'
+    : visibleCount === 2
+      ? 'grid grid-cols-1 sm:grid-cols-2 gap-4'
+      : 'grid grid-cols-1 sm:grid-cols-3 gap-4'
+
   if (loading) {
+    const skeletonLabels = [
+      needTeamLeader && '팀장',
+      needExecutive && '중역',
+      '대표이사',
+    ].filter(Boolean) as string[]
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {['팀장', '중역', '대표이사'].map(label => (
+      <div className={gridClass}>
+        {skeletonLabels.map(label => (
           <div key={label}>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{label}</label>
             <div className="w-full h-10 bg-gray-100 animate-pulse rounded-lg" />
@@ -84,60 +107,64 @@ export default function ApproverSelector({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      {/* 팀장 */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-          팀장 <span className="text-red-500">*</span>
-        </label>
-        <div className="relative">
-          <select
-            value={teamLeaderId}
-            onChange={e => onTeamLeaderChange(e.target.value)}
-            disabled={disabled}
-            className={selectClass}
-          >
-            <option value="">팀장 선택</option>
-            {approvers.teamLeaders.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.name}{a.position ? ` (${a.position})` : ''}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+    <div className={gridClass}>
+      {/* 팀장 — 중역/팀장 role은 스킵 */}
+      {needTeamLeader && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            팀장 <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <select
+              value={teamLeaderId}
+              onChange={e => onTeamLeaderChange(e.target.value)}
+              disabled={disabled}
+              className={selectClass}
+            >
+              <option value="">팀장 선택</option>
+              {approvers.teamLeaders.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name}{a.position ? ` (${a.position})` : ''}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+          {approvers.teamLeaders.length === 0 && (
+            <p className="text-xs text-amber-600 mt-1">팀장 권한 계정이 없습니다</p>
+          )}
         </div>
-        {approvers.teamLeaders.length === 0 && (
-          <p className="text-xs text-amber-600 mt-1">팀장 권한 계정이 없습니다</p>
-        )}
-      </div>
+      )}
 
-      {/* 중역 */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-          중역 <span className="text-red-500">*</span>
-        </label>
-        <div className="relative">
-          <select
-            value={executiveId}
-            onChange={e => onExecutiveChange(e.target.value)}
-            disabled={disabled}
-            className={selectClass}
-          >
-            <option value="">중역 선택</option>
-            {approvers.executives.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.name}{a.position ? ` (${a.position})` : ''}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      {/* 중역 — 중역 role은 스킵 */}
+      {needExecutive && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            중역 <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <select
+              value={executiveId}
+              onChange={e => onExecutiveChange(e.target.value)}
+              disabled={disabled}
+              className={selectClass}
+            >
+              <option value="">중역 선택</option>
+              {approvers.executives.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name}{a.position ? ` (${a.position})` : ''}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+          {approvers.executives.length === 0 && (
+            <p className="text-xs text-amber-600 mt-1">중역 권한 계정이 없습니다</p>
+          )}
         </div>
-        {approvers.executives.length === 0 && (
-          <p className="text-xs text-amber-600 mt-1">중역 권한 계정이 없습니다</p>
-        )}
-      </div>
+      )}
 
-      {/* 대표이사 */}
+      {/* 대표이사 — 항상 필수 */}
       <div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
           대표이사 <span className="text-red-500">*</span>

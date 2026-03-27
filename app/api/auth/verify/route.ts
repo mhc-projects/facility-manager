@@ -71,8 +71,10 @@ export async function POST(request: NextRequest) {
     }
 
     // permission_level을 role로 매핑하여 반환 (프론트엔드 호환성)
+    // approval_role: DB의 결재 역할 문자열 (staff/team_leader/executive/ceo)
     const employee = {
       ...employeeData,
+      approval_role: employeeData.role,
       role: employeeData.permission_level
     };
 

@@ -141,9 +141,20 @@ export default function NewApprovalPage() {
     }
   }
 
+  const requesterRole = user?.approval_role
+
+  // role에 따라 필수 결재자 검증
+  const validateApprovers = () => {
+    if (!ceoId) return '대표이사를 선택해 주세요'
+    if (requesterRole !== 'executive' && requesterRole !== 'team_leader' && !teamLeaderId) return '팀장을 선택해 주세요'
+    if (requesterRole !== 'executive' && !executiveId) return '중역을 선택해 주세요'
+    return null
+  }
+
   const handleSubmit = async () => {
-    if (!teamLeaderId || !executiveId || !ceoId) {
-      alert('팀장, 중역, 대표이사를 모두 선택해 주세요')
+    const validationError = validateApprovers()
+    if (validationError) {
+      alert(validationError)
       return
     }
     setSubmitting(true)
@@ -222,6 +233,7 @@ export default function NewApprovalPage() {
             onTeamLeaderChange={setTeamLeaderId}
             onExecutiveChange={setExecutiveId}
             onCeoChange={setCeoId}
+            requesterRole={user?.approval_role}
           />
         </div>
 
@@ -237,6 +249,7 @@ export default function NewApprovalPage() {
                 executive: undefined,
                 ceo: undefined,
               }}
+              requesterRole={user?.approval_role}
             />
           </div>
         )}
