@@ -769,6 +769,27 @@ function ApprovalDetailContent() {
         </div>
       )}
 
+      {/* 편집 모드: 저장 / 취소 */}
+      {editing && (
+        <div className="fixed bottom-0 inset-x-0 z-20 md:hidden bg-white border-t border-gray-200 px-4 pt-3 pb-[env(safe-area-inset-bottom,12px)]">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditing(false)}
+              className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-700 font-semibold text-sm active:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              disabled={processing}
+              className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-700 font-semibold text-sm active:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <Save className="w-4 h-4" />저장
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── 처리확인 모달 (신규 + 수정 공용) ── */}
       {processModalOpen && (
         <>
