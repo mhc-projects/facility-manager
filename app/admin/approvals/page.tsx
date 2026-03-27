@@ -171,6 +171,9 @@ function ApprovalsContent() {
   const [pendingCount, setPendingCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  // 내 문서 서브탭
+  const [mySubTab, setMySubTab] = useState<'active' | 'approved'>('active')
+
   // 일반 탭 필터
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -225,10 +228,17 @@ function ApprovalsContent() {
         if (dateTo) params.set('date_to', dateTo)
         if (departmentFilter) params.set('department', departmentFilter)
       } else {
-        if (tab === 'my') params.set('mine', 'true')
+        if (tab === 'my') {
+          params.set('mine', 'true')
+          if (mySubTab === 'approved') {
+            params.set('status', 'approved')
+          } else {
+            params.set('status', 'draft,pending,returned,rejected')
+          }
+        }
         if (tab === 'pending') params.set('pending_mine', 'true')
         if (typeFilter) params.set('type', typeFilter)
-        if (statusFilter) params.set('status', statusFilter)
+        if (tab !== 'my' && statusFilter) params.set('status', statusFilter)
       }
       params.set('limit', '100')
 
@@ -246,7 +256,7 @@ function ApprovalsContent() {
     } finally {
       setLoading(false)
     }
-  }, [tab, typeFilter, statusFilter, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
+  }, [tab, mySubTab, typeFilter, statusFilter, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
@@ -645,6 +655,7 @@ function ApprovalsContent() {
                   setTab(t)
                   setTypeFilter('')
                   setStatusFilter('')
+                  setMySubTab('active')
                   router.push(`/admin/approvals?tab=${t}`)
                 }}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -680,7 +691,27 @@ function ApprovalsContent() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
-              {tab !== 'pending' && (
+              {tab === 'my' && (
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                  <button
+                    onClick={() => setMySubTab('active')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      mySubTab === 'active' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    진행중
+                  </button>
+                  <button
+                    onClick={() => setMySubTab('approved')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      mySubTab === 'approved' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    승인완료
+                  </button>
+                </div>
+              )}
+              {tab !== 'pending' && tab !== 'my' && (
                 <select
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value)}
