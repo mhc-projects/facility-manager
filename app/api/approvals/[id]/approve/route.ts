@@ -293,11 +293,26 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
 async function createLeaveCalendarEvent(doc: any, requesterName: string) {
   try {
     const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
-    if (!formData?.start_date) return;
 
-    const leaveTypeDetail = LEAVE_TYPE_LABEL[formData.leave_type] || '휴가';
-    const startDate = formData.start_date;
-    const endDate = formData.end_date || formData.start_date;
+    // items 배열 구조 지원 (start_date/end_date 구 구조도 하위 호환)
+    let startDate: string | undefined;
+    let endDate: string | undefined;
+    let leaveTypeDetail: string;
+
+    if (Array.isArray(formData?.items) && formData.items.length > 0) {
+      const dates = formData.items.map((i: { date: string }) => i.date).sort();
+      startDate = dates[0];
+      endDate = dates[dates.length - 1];
+      // items가 여러 종류일 수 있으므로 첫 항목 기준으로 표시
+      leaveTypeDetail = LEAVE_TYPE_LABEL[formData.items[0].leave_type] || '휴가';
+    } else if (formData?.start_date) {
+      startDate = formData.start_date;
+      endDate = formData.end_date || formData.start_date;
+      leaveTypeDetail = LEAVE_TYPE_LABEL[formData.leave_type] || '휴가';
+    } else {
+      return;
+    }
+
     const totalDays = formData.total_days ?? 1;
 
     const descriptionLines = [
