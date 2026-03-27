@@ -303,8 +303,9 @@ async function createLeaveCalendarEvent(doc: any, requesterName: string) {
       const dates = formData.items.map((i: { date: string }) => i.date).sort();
       startDate = dates[0];
       endDate = dates[dates.length - 1];
-      // items가 여러 종류일 수 있으므로 첫 항목 기준으로 표시
-      leaveTypeDetail = LEAVE_TYPE_LABEL[formData.items[0].leave_type] || '휴가';
+      // 중복 없이 휴가 종류 목록 표시 (예: "반차(오후), 유급휴가")
+      const typeLabels = [...new Set(formData.items.map((i: { leave_type: string }) => LEAVE_TYPE_LABEL[i.leave_type] || '휴가'))];
+      leaveTypeDetail = typeLabels.join(', ');
     } else if (formData?.start_date) {
       startDate = formData.start_date;
       endDate = formData.end_date || formData.start_date;
