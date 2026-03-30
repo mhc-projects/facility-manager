@@ -687,26 +687,30 @@ function TaskManagementPage() {
   }, [filteredBusinesses, filteredEditBusinesses, selectedBusinessIndex, editSelectedBusinessIndex])
 
   // 사업장 선택
+  // task_type은 서버 View(facility_tasks_with_business)에서 progress_status 기반으로 자동 파생됨
+  // 프론트엔드에서는 UI 단계 표시 목적으로만 type을 유지
   const handleBusinessSelect = useCallback((business: BusinessOption, isEdit = false) => {
-    // progress_status를 task_type으로 매핑
-    const mapProgressStatusToTaskType = (progressStatus?: string): TaskType => {
-      if (!progressStatus) return 'self' // 기본값
-
-      const statusLower = progressStatus.toLowerCase()
-      if (statusLower.includes('자비')) return 'self'
-      if (statusLower.includes('보조금')) return 'subsidy'
-      if (statusLower.includes('as')) return 'as'
+    // UI 표시용 type 파생 (단계 목록 렌더링에만 사용, API 전송 안 함)
+    // 사업장관리 진행구분 → 업무타입 매핑 (Migration SQL의 View 로직과 동일하게 유지)
+    const deriveTypeForUI = (progressStatus?: string): TaskType => {
+      if (!progressStatus) return 'etc'
+      if (progressStatus.includes('보조금')) return 'subsidy'  // 보조금, 보조금 동시진행, 보조금 추가승인
+      if (progressStatus.includes('자비')) return 'self'
+      if (progressStatus === 'AS') return 'as'
+      if (progressStatus.includes('외주')) return 'outsourcing' // 외주설치
+      if (progressStatus.includes('대리점')) return 'dealer'
+      // 진행불가, 확인필요 → etc
       return 'etc'
     }
 
-    const taskType = mapProgressStatusToTaskType(business.progress_status)
+    const uiType = deriveTypeForUI(business.progress_status)
 
     if (isEdit && editingTask) {
       setEditingTask(prev => prev ? {
         ...prev,
         businessName: business.name,
-        businessId: business.id, // businessId 추가
-        type: taskType
+        businessId: business.id,
+        type: uiType
       } : null)
       setEditBusinessSearchTerm(business.name)
       setShowEditBusinessDropdown(false)
@@ -715,8 +719,8 @@ function TaskManagementPage() {
       setCreateTaskForm(prev => ({
         ...prev,
         businessName: business.name,
-        businessId: business.id, // businessId 추가
-        type: taskType
+        businessId: business.id,
+        type: uiType
       }))
       setBusinessSearchTerm(business.name)
       setShowBusinessDropdown(false)
@@ -1201,6 +1205,7 @@ function TaskManagementPage() {
       self: { label: '자비', color: 'bg-blue-100 text-blue-800 border-blue-200' },
       subsidy: { label: '보조금', color: 'bg-green-100 text-green-800 border-green-200' },
       dealer: { label: '대리점', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+      outsourcing: { label: '외주설치', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
       as: { label: 'AS', color: 'bg-purple-100 text-purple-800 border-purple-200' },
       etc: { label: '기타', color: 'bg-gray-100 text-gray-800 border-gray-200' }
     }
@@ -1259,8 +1264,8 @@ function TaskManagementPage() {
       const requestData = {
         title: autoTitle,
         business_name: businessSearchTerm || '기타',
-        business_id: createTaskForm.businessId || null, // businessId 추가
-        task_type: createTaskForm.type,
+        business_id: createTaskForm.businessId || null,
+        // task_type 제거 - 서버 View에서 progress_status 기반으로 자동 파생됨
         status: createTaskForm.status,
         priority: createTaskForm.priority,
         assignees: createTaskForm.assignees,
@@ -1436,11 +1441,11 @@ function TaskManagementPage() {
 
     try {
       // 프론트엔드 중복 체크: 다른 업무 중에 같은 사업장의 같은 단계 업무가 있는지 확인
+      // task_type은 View에서 파생되므로 중복 체크에서 제외
       const duplicateTask = tasks.find(task =>
         task.id !== editingTask.id && // 자기 자신은 제외
         task.businessName === editingTask.businessName &&
-        task.status === editingTask.status &&
-        task.type === editingTask.type
+        task.status === editingTask.status
       );
 
       if (duplicateTask) {
@@ -1464,6 +1469,7 @@ function TaskManagementPage() {
       }
 
       // API 요청 데이터 준비
+      // task_type: 업무타입 변경 시 business_info.progress_status도 함께 업데이트됨
       const requestData = {
         id: editingTask.id,
         title: editingTask.title,
@@ -1562,7 +1568,7 @@ function TaskManagementPage() {
           id: editingTask.id,
           title: editingTask.title,
           business_name: editingTask.businessName || '기타',
-          task_type: editingTask.type,
+          // task_type 제거 - 서버 View에서 progress_status 기반으로 자동 파생됨
           status: editingTask.status,
           priority: editingTask.priority,
           assignees: editingTask.assignees || [],
@@ -1775,6 +1781,7 @@ function TaskManagementPage() {
                 <option value="self">자비</option>
                 <option value="subsidy">보조금</option>
                 <option value="dealer">대리점</option>
+                <option value="outsourcing">외주설치</option>
                 <option value="as">AS</option>
                 <option value="etc">기타</option>
               </select>
@@ -2769,12 +2776,7 @@ function TaskManagementPage() {
                   </div>
                   <div>
                     <p className="text-xs sm:text-xs font-medium text-gray-900 truncate">
-                      {(editingTask.type === 'self' ? selfSteps :
-                       editingTask.type === 'subsidy' ? subsidySteps :
-                       editingTask.type === 'dealer' ? dealerSteps :
-                       editingTask.type === 'outsourcing' ? outsourcingSteps :
-                       editingTask.type === 'etc' ? etcSteps : asSteps)
-                       .find(s => s.status === editingTask.status)?.label || editingTask.status}
+                      {getStatusLabel(editingTask.type, editingTask.status)}
                     </p>
                   </div>
                 </div>

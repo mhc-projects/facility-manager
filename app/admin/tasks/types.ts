@@ -3,7 +3,7 @@ import { SelectedAssignee } from '@/components/ui/MultiAssigneeSelector'
 
 // ==================== 기본 타입 ====================
 
-export type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer'
+export type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing'
 
 export type TaskStatus =
   // 공통 단계
@@ -66,6 +66,8 @@ export interface Task {
 export interface CreateTaskForm {
   title: string
   businessName: string
+  // type: UI 단계 목록 표시 전용 (API 전송 안 함)
+  // 실제 task_type은 서버 View에서 business_info.progress_status 기반으로 자동 파생됨
   type: TaskType
   status: TaskStatus
   priority: Priority

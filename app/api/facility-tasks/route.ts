@@ -117,6 +117,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       paramIndex++;
     }
     if (taskType && taskType !== 'all') {
+      // task_type은 View에서 progress_status 기반으로 파생되므로 동일하게 필터 적용
       whereClauses.push(`ftb.task_type = $${paramIndex}`);
       params.push(taskType);
       paramIndex++;
@@ -137,6 +138,8 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
+    // task_type은 facility_tasks_with_business View에서 business_info.progress_status 기반으로 파생됨
+    // 별도 JOIN 불필요 - View에 construction_report_date 포함됨
     const queryText = `
       SELECT
         ftb.id,
@@ -147,6 +150,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ftb.business_name,
         ftb.business_id,
         ftb.task_type,
+        ftb.progress_status,
         ftb.status,
         ftb.priority,
         ftb.assignee,
@@ -167,9 +171,8 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ftb.manager_name,
         ftb.manager_contact,
         ftb.local_government,
-        bi.construction_report_submitted_at as construction_report_date
+        ftb.construction_report_date
       FROM facility_tasks_with_business ftb
-      LEFT JOIN business_info bi ON ftb.business_name = bi.business_name
       ${whereClause}
       ORDER BY ftb.created_at DESC
     `;
@@ -242,7 +245,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       description,
       business_name,
       business_id, // 프론트엔드에서 전달받은 business_id
-      task_type,
+      // task_type은 더 이상 사용하지 않음 - facility_tasks_with_business View에서 progress_status 기반으로 자동 파생
       status = 'customer_contact',
       priority = 'medium',
       assignee, // 기존 호환성용
@@ -259,13 +262,12 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       title,
       business_name,
       business_id,
-      task_type,
       status
     });
 
-    // 필수 필드 검증
-    if (!title || !business_name || !task_type) {
-      return createErrorResponse('제목, 사업장명, 업무 타입은 필수입니다', 400);
+    // 필수 필드 검증 (task_type은 View에서 자동 파생되므로 검증 불필요)
+    if (!title || !business_name) {
+      return createErrorResponse('제목, 사업장명은 필수입니다', 400);
     }
 
     // business_id가 없으면 business_name으로 조회
@@ -291,11 +293,6 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       }
     }
 
-    // 업무 타입 검증
-    if (!['self', 'subsidy', 'as', 'dealer', 'outsourcing', 'etc'].includes(task_type)) {
-      return createErrorResponse('유효하지 않은 업무 타입입니다', 400);
-    }
-
     // 우선순위 검증
     if (priority && !['low', 'medium', 'high'].includes(priority)) {
       return createErrorResponse('유효하지 않은 우선순위입니다', 400);
@@ -305,11 +302,11 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     let existingTasks;
     try {
       existingTasks = await queryAll(
-        `SELECT id, title, business_name, status, created_at, task_type
+        `SELECT id, title, business_name, status, created_at
          FROM facility_tasks
-         WHERE business_name = $1 AND status = $2 AND task_type = $3
+         WHERE business_name = $1 AND status = $2
            AND is_active = true AND is_deleted = false`,
-        [business_name, status, task_type]
+        [business_name, status]
       );
     } catch (checkError) {
       console.error('🔴 [FACILITY-TASKS] 중복 체크 오류:', checkError);
@@ -377,12 +374,13 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     }
 
     // 새 업무 생성 - Direct PostgreSQL
+    // task_type은 생략 - facility_tasks_with_business View에서 progress_status 기반으로 자동 파생
     const insertQuery = `
       INSERT INTO facility_tasks (
-        title, description, business_name, business_id, task_type, status, priority,
+        title, description, business_name, business_id, status, priority,
         assignee, assignees, primary_assignee_id, start_date, due_date, notes,
         created_by, created_by_name, last_modified_by, last_modified_by_name
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
 
@@ -390,8 +388,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       title,
       description,
       business_name,
-      resolvedBusinessId, // business_id 추가
-      task_type,
+      resolvedBusinessId,
       status,
       priority,
       finalAssignees.length > 0 ? finalAssignees[0].name : null, // 기존 호환성
@@ -413,6 +410,13 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
     const newTask = insertResult.rows[0];
 
+    // INSERT 후 View를 통해 파생된 task_type 조회 (progress_status 기반)
+    const taskWithType = await queryOne(
+      `SELECT task_type FROM facility_tasks_with_business WHERE id = $1`,
+      [newTask.id]
+    );
+    const derivedTaskType = taskWithType?.task_type ?? 'etc';
+
     // 🆕 업무 메모 → 사업장 메모 동기화 (이력 누적)
     if (notes && notes.trim() !== '' && resolvedBusinessId) {
       try {
@@ -423,7 +427,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
           businessName: business_name,
           notes: notes,
           status: status,
-          taskType: task_type,
+          taskType: derivedTaskType,
           userId: user.id,
           userName: user.name
         });
@@ -443,7 +447,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       await startNewStatus({
         taskId: newTask.id,
         status: newTask.status,
-        taskType: newTask.task_type,
+        taskType: derivedTaskType,
         businessName: newTask.business_name,
         assigneeId: finalAssignees.length > 0 ? finalAssignees[0].id : undefined,
         assigneeName: finalAssignees.length > 0 ? finalAssignees[0].name : undefined,
@@ -473,7 +477,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
           })),
           newTask.business_name,
           newTask.title,
-          newTask.task_type,
+          derivedTaskType,
           newTask.priority,
           user.name
         );
@@ -510,7 +514,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
       title,
       description,
       business_name,
-      task_type,
+      task_type, // 업무타입 변경 시 business_info.progress_status 업데이트에 사용
       status,
       priority,
       assignee, // 기존 호환성용
@@ -576,22 +580,20 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
     // 중복 업무 체크: 사업장이나 상태가 변경되는 경우에만 체크
     if ((business_name !== undefined && business_name !== existingTask.business_name) ||
-        (status !== undefined && status !== existingTask.status) ||
-        (task_type !== undefined && task_type !== existingTask.task_type)) {
+        (status !== undefined && status !== existingTask.status)) {
 
       const checkBusinessName = business_name !== undefined ? business_name : existingTask.business_name;
       const checkStatus = status !== undefined ? status : existingTask.status;
-      const checkTaskType = task_type !== undefined ? task_type : existingTask.task_type;
 
       // Direct PostgreSQL 중복 체크
       let duplicateTasks;
       try {
         duplicateTasks = await queryAll(
-          `SELECT id, title, business_name, status, created_at, task_type
+          `SELECT id, title, business_name, status, created_at
            FROM facility_tasks
-           WHERE business_name = $1 AND status = $2 AND task_type = $3
-             AND is_active = true AND is_deleted = false AND id != $4`,
-          [checkBusinessName, checkStatus, checkTaskType, id]
+           WHERE business_name = $1 AND status = $2
+             AND is_active = true AND is_deleted = false AND id != $3`,
+          [checkBusinessName, checkStatus, id]
         );
       } catch (duplicateCheckError) {
         console.error('🔴 [FACILITY-TASKS] 중복 체크 오류:', duplicateCheckError);
@@ -629,7 +631,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (business_name !== undefined) updateData.business_name = business_name;
-    if (task_type !== undefined) updateData.task_type = task_type;
+    // task_type은 수정하지 않음 - View에서 progress_status 기반으로 자동 파생됨
     if (status !== undefined) updateData.status = status;
     if (priority !== undefined) updateData.priority = priority;
     if (start_date !== undefined) updateData.start_date = start_date;
@@ -739,12 +741,12 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
     const updatedTask = updateResult.rows[0];
 
-    // ✅ 업무 수정 시 사업장 updated_at 업데이트 (리스트 상단 표시) - Direct PostgreSQL
+    // ✅ 업무 수정 시 사업장 updated_at 업데이트 및 task_type 변경 시 progress_status 동기화
     if (updatedTask?.business_name) {
       try {
         // business_name을 business_id로 변환
         const businessInfo = await queryOne(
-          `SELECT id FROM business_info
+          `SELECT id, progress_status FROM business_info
            WHERE business_name = $1 AND is_active = true AND is_deleted = false`,
           [updatedTask.business_name]
         );
@@ -752,14 +754,54 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
         if (!businessInfo) {
           console.warn('⚠️ [FACILITY-TASKS] 사업장 조회 실패:', updatedTask.business_name);
         } else {
-          await pgQuery(
-            `UPDATE business_info SET updated_at = NOW() WHERE id = $1`,
-            [businessInfo.id]
-          );
-          console.log(`✅ [FACILITY-TASKS] 사업장 updated_at 업데이트 완료 - businessName: ${updatedTask.business_name}`);
+          // task_type 변경 시 business_info.progress_status 동기화
+          // task_type → progress_status 역방향 매핑 (카테고리 수준에서만 변경)
+          const TASK_TYPE_TO_PROGRESS: Record<string, string> = {
+            subsidy: '보조금',
+            self: '자비',
+            as: 'AS',
+            dealer: '대리점',
+            outsourcing: '외주설치',
+            etc: '기타'
+          };
+
+          if (task_type && TASK_TYPE_TO_PROGRESS[task_type]) {
+            const newProgressStatus = TASK_TYPE_TO_PROGRESS[task_type];
+            const currentProgressStatus = businessInfo.progress_status || '';
+
+            // 현재 progress_status의 카테고리와 다를 때만 업데이트
+            // (예: "보조금 동시진행" → "자비"로 변경은 허용, "보조금" → "보조금"은 스킵)
+            const currentCategory = (() => {
+              if (currentProgressStatus.includes('보조금')) return 'subsidy';
+              if (currentProgressStatus.includes('자비')) return 'self';
+              if (currentProgressStatus === 'AS') return 'as';
+              if (currentProgressStatus.includes('대리점')) return 'dealer';
+              if (currentProgressStatus.includes('외주')) return 'outsourcing';
+              return 'etc';
+            })();
+
+            if (currentCategory !== task_type) {
+              await pgQuery(
+                `UPDATE business_info SET progress_status = $1, updated_at = NOW() WHERE id = $2`,
+                [newProgressStatus, businessInfo.id]
+              );
+              console.log(`✅ [FACILITY-TASKS] 사업장 progress_status 동기화: ${currentProgressStatus} → ${newProgressStatus} (businessName: ${updatedTask.business_name})`);
+            } else {
+              await pgQuery(
+                `UPDATE business_info SET updated_at = NOW() WHERE id = $1`,
+                [businessInfo.id]
+              );
+            }
+          } else {
+            await pgQuery(
+              `UPDATE business_info SET updated_at = NOW() WHERE id = $1`,
+              [businessInfo.id]
+            );
+          }
+          console.log(`✅ [FACILITY-TASKS] 사업장 업데이트 완료 - businessName: ${updatedTask.business_name}`);
         }
       } catch (updateBusinessError) {
-        console.error('❌ [FACILITY-TASKS] 사업장 updated_at 업데이트 중 오류:', updateBusinessError);
+        console.error('❌ [FACILITY-TASKS] 사업장 업데이트 중 오류:', updateBusinessError);
         // 업무 수정은 성공했으므로 계속 진행
       }
     }
@@ -858,7 +900,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     }
 
     // 🆕 메모 변경 감지 및 사업장 메모 동기화 (이력 누적)
-    const notesChanged = notes !== undefined && notes.trim() !== '';
+    const notesChanged = notes !== undefined && notes !== null && notes.trim() !== '';
     if (notesChanged && updatedTask.notes && updatedTask.notes.trim() !== '') {
       try {
         // existingTask.business_id 직접 사용 (business_name 재조회 불필요)

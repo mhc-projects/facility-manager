@@ -4271,6 +4271,50 @@ function BusinessManagementPage() {
             // normalizeBusiness와 동일한 변환을 거쳐 전체 로딩과 완전히 동일한 형태 보장
             // 별도 refetch 없이 단 한 번의 상태 업데이트로 완결 → 경쟁 조건 없음
             addNormalizedBusiness(result.data)
+
+            // 새 사업장 추가 시 업무관리에 초기 업무 자동 등록 (백그라운드, 비차단)
+            ;(async () => {
+              try {
+                const newBusiness = result.data
+                const progressStatus: string = newBusiness.progress_status || newBusiness.진행상태 || ''
+
+                // 진행불가·확인필요는 업무 자동 등록 제외
+                if (progressStatus === '진행불가' || progressStatus === '확인필요') return
+
+                // progress_status → 초기 status 결정
+                const getInitialStatus = (ps: string): string => {
+                  if (ps === 'AS') return 'as_customer_contact'
+                  if (ps.includes('외주')) return 'outsourcing_order'
+                  if (ps.includes('대리점')) return 'dealer_order_received'
+                  if (ps.includes('보조금')) return 'subsidy_customer_contact'
+                  return 'self_customer_contact' // 자비 등 기본값
+                }
+
+                const { TokenManager } = await import('@/lib/api-client')
+                const token = TokenManager.getToken()
+                const taskRes = await fetch('/api/facility-tasks', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    title: `${newBusiness.business_name || newBusiness.사업장명} - 초기 업무`,
+                    business_name: newBusiness.business_name || newBusiness.사업장명,
+                    business_id: newBusiness.id,
+                    status: getInitialStatus(progressStatus),
+                    priority: 'medium'
+                  })
+                })
+                if (taskRes.ok) {
+                  console.log('✅ [AUTO-TASK] 업무관리 초기 업무 자동 등록 완료:', newBusiness.business_name || newBusiness.사업장명)
+                } else {
+                  console.warn('⚠️ [AUTO-TASK] 업무관리 초기 업무 등록 실패 (사업장 등록은 성공)')
+                }
+              } catch (taskError) {
+                console.warn('⚠️ [AUTO-TASK] 업무관리 초기 업무 등록 중 오류 (사업장 등록은 성공):', taskError)
+              }
+            })()
           }
         } else {
           // API 응답에 데이터가 없는 경우에만 전체 새로고침
