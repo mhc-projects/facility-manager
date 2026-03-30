@@ -61,6 +61,7 @@ export default function SubsidyActiveBadge({
     'completion_supplement_2nd',
     'completion_supplement_3rd',
     'final_document_submit',
+    'subsidy_payment_pending',
     'subsidy_payment',
     'document_complete'
   ]

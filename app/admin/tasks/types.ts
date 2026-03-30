@@ -19,7 +19,7 @@ export type TaskStatus =
   | 'pre_completion_document_submit' | 'completion_inspection'
   // 준공 보완 세분화
   | 'completion_supplement_1st' | 'completion_supplement_2nd' | 'completion_supplement_3rd'
-  | 'final_document_submit' | 'subsidy_payment'
+  | 'final_document_submit' | 'subsidy_payment_pending' | 'subsidy_payment'
   // AS 전용 단계
   | 'as_customer_contact' | 'as_site_inspection' | 'as_quotation' | 'as_progress_confirm' | 'as_contract'
   | 'as_part_order' | 'as_completed'
@@ -135,6 +135,7 @@ export const subsidySteps: StepInfo[] = [
   { status: 'completion_supplement_2nd', label: '준공 보완 2차', color: 'zinc' },
   { status: 'completion_supplement_3rd', label: '준공 보완 3차', color: 'stone' },
   { status: 'final_document_submit', label: '보조금지급신청서 제출', color: 'gray' },
+  { status: 'subsidy_payment_pending', label: '보조금 입금 대기', color: 'amber' },
   { status: 'subsidy_payment', label: '보조금 입금', color: 'green' }
 ]
 

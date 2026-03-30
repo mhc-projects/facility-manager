@@ -1091,6 +1091,7 @@ function BusinessManagementPage() {
       'subsidy_completion_supplement_2nd': '준공 보완 2차',
       'subsidy_completion_supplement_3rd': '준공 보완 3차',
       'subsidy_final_document_submit': '보조금지급신청서 제출',
+      'subsidy_payment_pending': '보조금 입금 대기',
       'subsidy_payment': '보조금 입금',
       // AS 단계
       'as_customer_contact': 'AS 고객 상담',

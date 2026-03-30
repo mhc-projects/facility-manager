@@ -71,6 +71,7 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
   'subsidy_completion_supplement_2nd': '준공 보완 2차',
   'subsidy_completion_supplement_3rd': '준공 보완 3차',
   'subsidy_final_document_submit': '보조금지급신청서 제출',
+  'subsidy_payment_pending': '보조금 입금 대기',
   'subsidy_payment': '보조금 입금',
 
   // 레거시 호환성 (구버전 status - 마이그레이션 전까지 유지)
@@ -277,6 +278,7 @@ export function getStatusColor(status: string): string {
     'subsidy_completion_supplement_2nd': 'bg-zinc-100 text-zinc-800',
     'subsidy_completion_supplement_3rd': 'bg-stone-100 text-stone-800',
     'subsidy_final_document_submit': 'bg-gray-100 text-gray-800',
+    'subsidy_payment_pending': 'bg-amber-100 text-amber-800',
     'subsidy_payment': 'bg-green-100 text-green-800',
 
     // AS 전용 단계

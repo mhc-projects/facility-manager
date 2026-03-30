@@ -203,6 +203,7 @@ export async function POST(request: NextRequest) {
           'subsidy_completion_supplement_2nd': 'bg-amber-100 text-amber-800',
           'subsidy_completion_supplement_3rd': 'bg-amber-100 text-amber-800',
           'subsidy_final_document_submit': 'bg-green-100 text-green-800',
+          'subsidy_payment_pending': 'bg-amber-100 text-amber-800',
           'subsidy_payment': 'bg-emerald-100 text-emerald-800',
 
           // 대리점 단계 (dealer_ prefix)
@@ -251,6 +252,7 @@ export async function POST(request: NextRequest) {
           completion_supplement_2nd: 'bg-amber-100 text-amber-800',
           completion_supplement_3rd: 'bg-amber-100 text-amber-800',
           final_document_submit: 'bg-green-100 text-green-800',
+          subsidy_payment_pending: 'bg-amber-100 text-amber-800',
           subsidy_payment: 'bg-emerald-100 text-emerald-800',
           etc_status: 'bg-gray-100 text-gray-600'
         }
