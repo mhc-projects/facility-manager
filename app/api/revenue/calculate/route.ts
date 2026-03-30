@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
+import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 
 // Force dynamic rendering for API routes
@@ -516,25 +516,6 @@ export async function POST(request: NextRequest) {
     const additionalCost = Math.round(Number(businessInfo.additional_cost) || 0); // 추가공사비 (매출에 더하기)
     const negotiationDiscount = Math.round(businessInfo.negotiation ? parseFloat(businessInfo.negotiation) || 0 : 0); // 협의사항 (매출에서 빼기)
 
-    // 8-0. 추가 계산서(invoice_records.extra) 공급가액 합계 조회 — 미수금 기준금액에 포함
-    // supply_amount(부가세 제외) 사용 — adjustedRevenue는 부가세 제외 기준이며 마지막에 × 1.1 변환됨
-    // total_amount(부가세 포함)를 사용하면 이중 부가세가 적용되어 미수금이 틀려짐
-    let extraInvoiceTotal = 0;
-    try {
-      const extraResult = await pgQuery(
-        `SELECT COALESCE(SUM(supply_amount), 0) AS total
-         FROM invoice_records
-         WHERE business_id = $1
-           AND invoice_stage = 'extra'
-           AND is_active = TRUE
-           AND record_type != 'cancelled'`,
-        [business_id]
-      );
-      extraInvoiceTotal = Math.round(Number(extraResult.rows?.[0]?.total) || 0);
-    } catch {
-      // invoice_records 테이블 없는 레거시 환경 → 0 유지
-    }
-
     // 8-1. 매출비용 조정 합계 계산 (revenue_adjustments JSONB 배열)
     const revenueAdjustmentTotal = (() => {
       const raw = businessInfo.revenue_adjustments;
@@ -564,8 +545,10 @@ export async function POST(request: NextRequest) {
     // 영업비용 계산 기준: 기본 매출 - 협의사항 (추가공사비 제외)
     const commissionBaseRevenue = totalRevenue - negotiationDiscount;
 
-    // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항 + 매출비용 조정 + 추가 계산서 합계
-    const adjustedRevenue = totalRevenue + additionalCost - negotiationDiscount + revenueAdjustmentTotal + extraInvoiceTotal;
+    // 최종 매출 = 기본 매출 + 추가공사비 - 협의사항 + 매출비용 조정
+    // 추가 계산서(invoice_records.extra)는 포함하지 않음 — 미수금 기준금액 보정은
+    // /api/business-invoices 및 /api/business-invoices/batch에서 자체 처리
+    const adjustedRevenue = totalRevenue + additionalCost - negotiationDiscount + revenueAdjustmentTotal;
 
     // 최종 매입 = 기기별 매입 합계 + 매입비용 조정
     totalCost = Math.round(totalCost + purchaseAdjustmentTotal);
