@@ -101,9 +101,9 @@ export async function GET(request: NextRequest) {
       }
     } else {
       const monthsToShow = months || 12;
+      const now = new Date();
       for (let i = 0; i < monthsToShow; i++) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         aggregationData.set(key, { total: 0, byOffice: {}, businessesByOffice: {} });
       }
