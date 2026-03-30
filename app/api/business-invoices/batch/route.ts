@@ -37,10 +37,11 @@ export async function POST(request: NextRequest) {
     const ids = businesses.map((b: any) => b.id);
 
     // 모든 사업장의 invoice_records를 한 번에 조회
+    // supply_amount: extra 계산서의 부가세 제외 금액 — contract_amount 보정에 사용
     const placeholders = ids.map((_: any, i: number) => `$${i + 1}`).join(', ');
     const recordsResult = await pgQuery(
       `SELECT id, business_id, invoice_stage, record_type, parent_record_id,
-              issue_date, total_amount, payment_amount, is_active
+              issue_date, total_amount, supply_amount, payment_amount, is_active
        FROM invoice_records
        WHERE business_id IN (${placeholders}) AND is_active = TRUE
        ORDER BY business_id, invoice_stage, record_type, created_at ASC`,
@@ -125,9 +126,17 @@ export async function POST(request: NextRequest) {
         .filter((r: InvoiceRecord) => r.record_type !== 'cancelled')
         .reduce((sum: number, r: InvoiceRecord) => sum + (r.total_amount || 0), 0);
 
-      // contract_amount와 실제 발행 계산서 중 큰 값 사용
+      // extra 계산서 공급가액(부가세 제외) 합계 — contract_amount 보정용
+      // contract_amount는 클라이언트의 calculateBusinessRevenue() 기반이므로 invoice_records.extra를 모름.
+      // 서버에서 직접 조회한 supply_amount × 1.1 을 더해 정확한 기준금액으로 보정.
+      const extraSupplyTotal = stages.extra
+        .filter((r: InvoiceRecord) => r.record_type !== 'cancelled')
+        .reduce((sum: number, r: InvoiceRecord) => sum + (r.supply_amount || 0), 0);
+      const contractAmountWithExtra = Math.round((b.contract_amount || 0) + extraSupplyTotal * 1.1);
+
+      // contract_amount(extra 보정 후)와 실제 발행 계산서 중 큰 값 사용
       // (부가세 반올림으로 contract_amount가 실제보다 1원 작을 수 있으므로)
-      const baseFromInvoice = Math.max(b.contract_amount || 0, invoicedFallback);
+      const baseFromInvoice = Math.max(contractAmountWithExtra, invoicedFallback);
 
       // 계산서 발행이 없고 입금만 있는 경우: 입금액이 실질 기준 (마이너스 방지)
       // 계산서 발행이 있는 경우: allPayments 비교 안 함 (초과입금 음수 허용)
