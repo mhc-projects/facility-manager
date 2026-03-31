@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, lazy, Suspense } from 'react';
-import { Bell, Pin, Plus, Calendar } from 'lucide-react';
+import { Bell, Pin, Plus, Calendar, Paperclip } from 'lucide-react';
 
 // Lazy load modals for better performance
 const AnnouncementModal = lazy(() => import('@/components/modals/AnnouncementModal'));
@@ -19,6 +19,7 @@ interface Announcement {
   is_pinned: boolean;
   created_at: string;
   updated_at: string;
+  attachment_count?: number;
 }
 
 /**
@@ -228,6 +229,15 @@ export default function AnnouncementBoard() {
                       </span>
                       <span>·</span>
                       <span>{announcement.author_name}</span>
+                      {Number(announcement.attachment_count) > 0 && (
+                        <>
+                          <span>·</span>
+                          <span className="flex items-center gap-1 text-blue-500">
+                            <Paperclip className="w-3 h-3" />
+                            {announcement.attachment_count}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

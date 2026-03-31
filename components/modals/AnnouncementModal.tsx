@@ -1,11 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Pin, Bell } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Pin, Bell, Paperclip, FileText, Image, Download, Trash2, Upload } from 'lucide-react';
 
-/**
- * 공지사항 데이터 타입
- */
 interface Announcement {
   id: string;
   title: string;
@@ -17,6 +14,17 @@ interface Announcement {
   updated_at: string;
 }
 
+interface Attachment {
+  id: string;
+  announcement_id: string;
+  file_name: string;
+  original_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  created_at: string;
+}
+
 interface AnnouncementModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,11 +33,17 @@ interface AnnouncementModalProps {
   onSuccess?: () => void;
 }
 
-/**
- * 공지사항 모달 컴포넌트
- * - 보기/작성/수정 모드 지원
- * - Level 3+ (SUPER_ADMIN) 작성/수정 권한
- */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function getFileIcon(mimeType: string) {
+  if (mimeType.startsWith('image/')) return Image;
+  return FileText;
+}
+
 export default function AnnouncementModal({
   isOpen,
   onClose,
@@ -44,7 +58,13 @@ export default function AnnouncementModal({
   const [error, setError] = useState<string | null>(null);
   const [internalMode, setInternalMode] = useState<'view' | 'create' | 'edit'>(mode);
 
-  // 모달이 열릴 때 기존 데이터 로드
+  // 첨부파일 관련 상태
+  const [existingAttachments, setExistingAttachments] = useState<Attachment[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [deletedAttachmentIds, setDeletedAttachmentIds] = useState<string[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (isOpen) {
       setInternalMode(mode);
@@ -52,20 +72,119 @@ export default function AnnouncementModal({
         setTitle(announcement.title);
         setContent(announcement.content);
         setIsPinned(announcement.is_pinned);
+        fetchAttachments(announcement.id);
       } else if (mode === 'create') {
         setTitle('');
         setContent('');
         setIsPinned(false);
+        setExistingAttachments([]);
       }
+      setNewFiles([]);
+      setDeletedAttachmentIds([]);
       setError(null);
     }
   }, [isOpen, announcement, mode]);
 
   if (!isOpen) return null;
 
-  /**
-   * 저장 처리
-   */
+  async function fetchAttachments(announcementId: string) {
+    try {
+      const res = await fetch(`/api/announcements/${announcementId}/attachments`);
+      const result = await res.json();
+      if (result.success) {
+        setExistingAttachments(result.data);
+      }
+    } catch (err) {
+      console.error('[첨부파일 조회 오류]', err);
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files) return;
+
+    const fileArray = Array.from(files);
+    const maxSize = 10 * 1024 * 1024;
+
+    for (const file of fileArray) {
+      if (file.size > maxSize) {
+        setError(`파일 "${file.name}"이(가) 10MB를 초과합니다.`);
+        return;
+      }
+    }
+
+    setNewFiles(prev => [...prev, ...fileArray]);
+    setError(null);
+
+    // input 값 초기화 (같은 파일 다시 선택 가능)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  function removeNewFile(index: number) {
+    setNewFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function markExistingForDeletion(attachmentId: string) {
+    setDeletedAttachmentIds(prev => [...prev, attachmentId]);
+  }
+
+  async function handleDownload(attachment: Attachment) {
+    try {
+      const announcementId = announcement?.id;
+      if (!announcementId) return;
+
+      const res = await fetch(
+        `/api/announcements/${announcementId}/attachments/download?attachmentId=${attachment.id}`
+      );
+      const result = await res.json();
+
+      if (result.success && result.url) {
+        const link = document.createElement('a');
+        link.href = result.url;
+        link.download = result.fileName || attachment.original_name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error('[다운로드 오류]', err);
+    }
+  }
+
+  async function uploadFiles(announcementId: string) {
+    if (newFiles.length === 0) return;
+
+    setUploadingFiles(true);
+    try {
+      const formData = new FormData();
+      newFiles.forEach(file => formData.append('files', file));
+
+      const res = await fetch(`/api/announcements/${announcementId}/attachments`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await res.json();
+      if (!result.success) {
+        throw new Error(result.error || '파일 업로드에 실패했습니다.');
+      }
+    } finally {
+      setUploadingFiles(false);
+    }
+  }
+
+  async function deleteMarkedAttachments(announcementId: string) {
+    for (const attachmentId of deletedAttachmentIds) {
+      await fetch(
+        `/api/announcements/${announcementId}/attachments?attachmentId=${attachmentId}`,
+        { method: 'DELETE' }
+      );
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -78,12 +197,12 @@ export default function AnnouncementModal({
       setLoading(true);
       setError(null);
 
-      // TODO: 실제 사용자 정보 가져오기
       const authorId = 'temp_user_id';
       const authorName = '관리자';
 
+      let announcementId = announcement?.id;
+
       if (internalMode === 'create') {
-        // 생성
         const response = await fetch('/api/announcements', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -102,8 +221,9 @@ export default function AnnouncementModal({
           setError(result.error || '공지사항 생성에 실패했습니다.');
           return;
         }
+
+        announcementId = result.data.id;
       } else if (internalMode === 'edit' && announcement) {
-        // 수정
         const response = await fetch(`/api/announcements/${announcement.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -122,6 +242,16 @@ export default function AnnouncementModal({
         }
       }
 
+      // 첨부파일 처리
+      if (announcementId) {
+        if (deletedAttachmentIds.length > 0) {
+          await deleteMarkedAttachments(announcementId);
+        }
+        if (newFiles.length > 0) {
+          await uploadFiles(announcementId);
+        }
+      }
+
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -132,9 +262,6 @@ export default function AnnouncementModal({
     }
   };
 
-  /**
-   * 삭제 처리
-   */
   const handleDelete = async () => {
     if (!announcement) return;
 
@@ -167,15 +294,18 @@ export default function AnnouncementModal({
     }
   };
 
+  // 보기모드에서 표시할 첨부파일
+  const visibleExistingAttachments = existingAttachments.filter(
+    a => !deletedAttachmentIds.includes(a.id)
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      {/* 배경 오버레이 */}
       <div
         className="absolute inset-0 bg-gradient-to-br from-black/60 to-black/40"
         onClick={onClose}
       />
 
-      {/* 모달 컨텐츠 */}
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-blue-100/20">
         {/* 헤더 */}
         <div className="relative overflow-hidden">
@@ -207,7 +337,6 @@ export default function AnnouncementModal({
         {/* 본문 */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] bg-gradient-to-b from-white to-gray-50/30">
           {internalMode === 'view' && announcement ? (
-            // 보기 모드
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 rounded-2xl p-6 border border-blue-100/50">
                 <div className="flex items-center gap-3 mb-3">
@@ -228,9 +357,48 @@ export default function AnnouncementModal({
                   {announcement.content}
                 </p>
               </div>
+
+              {/* 첨부파일 표시 (보기 모드) */}
+              {existingAttachments.length > 0 && (
+                <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                  <p className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    첨부파일 ({existingAttachments.length})
+                  </p>
+                  <div className="space-y-2">
+                    {existingAttachments.map(attachment => {
+                      const IconComponent = getFileIcon(attachment.mime_type);
+                      return (
+                        <div
+                          key={attachment.id}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <IconComponent className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">
+                                {attachment.original_name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {formatFileSize(attachment.file_size)}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDownload(attachment)}
+                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors flex-shrink-0"
+                            title="다운로드"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            // 작성/수정 모드
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -259,6 +427,104 @@ export default function AnnouncementModal({
                   required
                   disabled={loading}
                 />
+              </div>
+
+              {/* 첨부파일 섹션 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" />
+                  첨부파일
+                </label>
+
+                {/* 기존 첨부파일 */}
+                {visibleExistingAttachments.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {visibleExistingAttachments.map(attachment => {
+                      const IconComponent = getFileIcon(attachment.mime_type);
+                      return (
+                        <div
+                          key={attachment.id}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <IconComponent className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            <span className="text-sm text-gray-700 truncate">
+                              {attachment.original_name}
+                            </span>
+                            <span className="text-xs text-gray-400 flex-shrink-0">
+                              {formatFileSize(attachment.file_size)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => markExistingForDeletion(attachment.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            title="삭제"
+                            disabled={loading}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 새로 추가한 파일 */}
+                {newFiles.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {newFiles.map((file, index) => {
+                      const IconComponent = getFileIcon(file.type);
+                      return (
+                        <div
+                          key={`new-${index}`}
+                          className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <IconComponent className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                            <span className="text-sm text-blue-800 truncate">
+                              {file.name}
+                            </span>
+                            <span className="text-xs text-blue-500 flex-shrink-0">
+                              {formatFileSize(file.size)}
+                            </span>
+                            <span className="text-xs bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                              신규
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeNewFile(index)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            disabled={loading}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 파일 선택 버튼 */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.txt,.zip,.hwp"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-all duration-200 w-full justify-center"
+                  disabled={loading}
+                >
+                  <Upload className="w-4 h-4" />
+                  파일 첨부 (최대 10MB)
+                </button>
               </div>
 
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-100">
@@ -321,9 +587,9 @@ export default function AnnouncementModal({
               <button
                 onClick={handleSubmit}
                 className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                disabled={loading}
+                disabled={loading || uploadingFiles}
               >
-                {loading ? '처리 중...' : internalMode === 'create' ? '작성' : '저장'}
+                {loading || uploadingFiles ? '처리 중...' : internalMode === 'create' ? '작성' : '저장'}
               </button>
             )}
           </div>

@@ -21,18 +21,20 @@ export async function GET(request: NextRequest) {
 
     // Direct PostgreSQL 쿼리 구성
     let queryStr = `
-      SELECT * FROM announcements
-      WHERE is_deleted = false
+      SELECT a.*,
+        (SELECT COUNT(*) FROM announcement_attachments aa WHERE aa.announcement_id = a.id) as attachment_count
+      FROM announcements a
+      WHERE a.is_deleted = false
     `;
     const params: any[] = [];
 
     // 상단 고정 필터
     if (showPinnedOnly) {
-      queryStr += ` AND is_pinned = true`;
+      queryStr += ` AND a.is_pinned = true`;
     }
 
     // 정렬 (상단 고정 우선, 그 다음 최신순)
-    queryStr += ` ORDER BY is_pinned DESC, created_at DESC`;
+    queryStr += ` ORDER BY a.is_pinned DESC, a.created_at DESC`;
 
     // 페이징 (상단 고정만 조회하는 경우 페이징 제외)
     if (!showPinnedOnly) {
