@@ -250,10 +250,15 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, name, description, department_id } = body;
+    const { id, name, description, department_id, is_management_support } = body;
 
     if (!id || !name || !department_id) {
       return NextResponse.json({ error: '팀 ID, 팀명, 소속 부서는 필수입니다.' }, { status: 400 });
+    }
+
+    // is_management_support 설정은 권한 레벨 4만 가능
+    if (is_management_support !== undefined && user.permission_level < 4) {
+      return NextResponse.json({ error: '전자결재 관리 역할 설정은 시스템 권한(레벨 4)만 가능합니다.' }, { status: 403 });
     }
 
     // 기존 데이터 조회 (히스토리용) - Direct PostgreSQL
@@ -293,13 +298,22 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: '해당 부서에 이미 존재하는 팀명입니다.' }, { status: 409 });
     }
 
+    // is_management_support 변경 시 기존 플래그 팀 해제 (1개만 유지)
+    if (is_management_support === true) {
+      await queryOne(
+        `UPDATE teams SET is_management_support = FALSE WHERE is_management_support = TRUE AND id != $1`,
+        [id]
+      );
+    }
+
     // 팀 수정 - Direct PostgreSQL
+    const mgmtFlag = is_management_support !== undefined ? is_management_support : (oldTeam.is_management_support ?? false);
     const updatedTeam = await queryOne(
       `UPDATE teams
-       SET name = $1, description = $2, department_id = $3, updated_at = $4
-       WHERE id = $5
+       SET name = $1, description = $2, department_id = $3, updated_at = $4, is_management_support = $5
+       WHERE id = $6
        RETURNING *`,
-      [name, description || null, department_id, new Date().toISOString(), id]
+      [name, description || null, department_id, new Date().toISOString(), mgmtFlag, id]
     );
 
     if (!updatedTeam) {

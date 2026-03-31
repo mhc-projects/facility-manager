@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  *   - status: 상태 필터 (comma separated)
  *   - mine: 'true' → 내가 작성한 문서
  *   - pending_mine: 'true' → 내가 결재해야 할 문서
- *   - completed_tab: 'true' → 결재완료 탭 (경영지원부/권한4 전용)
+ *   - completed_tab: 'true' → 결재완료 탭 (총무팀/권한4 전용)
  *   - search: 검색어 (문서번호, 제목, 작성자명)
  *   - date_from: 완료일 범위 시작 (YYYY-MM-DD)
  *   - date_to: 완료일 범위 끝 (YYYY-MM-DD)
@@ -49,22 +49,26 @@ export async function GET(request: NextRequest) {
     const limit           = parseInt(searchParams.get('limit') || '50');
     const offset          = parseInt(searchParams.get('offset') || '0');
 
-    // ── 결재완료 탭: 경영지원부 또는 권한4 전용 ──
+    // ── 결재완료 탭: 총무팀 또는 권한4 전용 ──
     if (completedTab) {
       let isManagementSupport = false;
       if (!isSuperAdmin) {
         const emp = await queryOne(
-          `SELECT e.department
+          `SELECT e.department, e.team
            FROM employees e
            WHERE e.id = $1 AND e.is_deleted = FALSE`,
           [userId]
         );
-        if (emp?.department) {
-          const dept = await queryOne(
-            `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
-            [emp.department]
+        if (emp?.department && emp?.team) {
+          const teamRow = await queryOne(
+            `SELECT t.is_management_support
+             FROM teams t
+             JOIN departments d ON d.id = t.department_id
+             WHERE d.name = $1 AND t.name = $2
+             LIMIT 1`,
+            [emp.department, emp.team]
           );
-          isManagementSupport = dept?.is_management_support === true;
+          isManagementSupport = teamRow?.is_management_support === true;
         }
       }
 
@@ -147,19 +151,23 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 일반 탭 (기존 로직) ──
-    // 경영지원부 여부 확인 (슈퍼어드민이 아닌 경우)
+    // 총무팀 여부 확인 (슈퍼어드민이 아닌 경우)
     let isManagementSupportGeneral = false;
     if (!isSuperAdmin) {
       const empGeneral = await queryOne(
-        `SELECT e.department FROM employees e WHERE e.id = $1 AND e.is_deleted = FALSE`,
+        `SELECT e.department, e.team FROM employees e WHERE e.id = $1 AND e.is_deleted = FALSE`,
         [userId]
       );
-      if (empGeneral?.department) {
-        const deptGeneral = await queryOne(
-          `SELECT is_management_support FROM departments WHERE name = $1 LIMIT 1`,
-          [empGeneral.department]
+      if (empGeneral?.department && empGeneral?.team) {
+        const teamGeneral = await queryOne(
+          `SELECT t.is_management_support
+           FROM teams t
+           JOIN departments d ON d.id = t.department_id
+           WHERE d.name = $1 AND t.name = $2
+           LIMIT 1`,
+          [empGeneral.department, empGeneral.team]
         );
-        isManagementSupportGeneral = deptGeneral?.is_management_support === true;
+        isManagementSupportGeneral = teamGeneral?.is_management_support === true;
       }
     }
 
@@ -186,7 +194,7 @@ export async function GET(request: NextRequest) {
     } else if (isSuperAdmin) {
       // 권한 4(슈퍼 관리자): 모든 문서 열람 가능
     } else if (isManagementSupportGeneral) {
-      // 경영지원부: 승인완료 + 결재중 문서 열람 가능
+      // 총무팀: 승인완료 + 결재중 문서 열람 가능
       conditions.push(`d.status IN ('approved', 'pending')`);
     } else {
       // 전체 탭: 작성자 본인 OR 결재선에 포함된 문서

@@ -210,7 +210,7 @@ async function notifyCooperativeTeam({
 }
 
 /**
- * 최종 승인 완료 시 경영지원 역할 부서 직원 전체에게 알림 발송
+ * 최종 승인 완료 시 총무팀 직원에게 알림 발송
  */
 async function notifyManagementSupportDept({
   doc, allSteps, documentId, requesterName,
@@ -218,15 +218,22 @@ async function notifyManagementSupportDept({
   doc: any; allSteps: any[]; documentId: string; requesterName: string;
 }) {
   try {
-    const mgmtDept = await queryOne(
-      `SELECT id, name FROM departments WHERE is_management_support = TRUE AND is_active = TRUE LIMIT 1`,
+    // 총무팀(teams.is_management_support = TRUE) 소속 직원만 알림 발송
+    const mgmtTeam = await queryOne(
+      `SELECT t.id, t.name AS team_name, d.name AS dept_name
+       FROM teams t
+       JOIN departments d ON d.id = t.department_id
+       WHERE t.is_management_support = TRUE
+       LIMIT 1`,
       []
     );
-    if (!mgmtDept) return;
+    if (!mgmtTeam) return;
 
     const staffList = await queryAll(
-      `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-      [mgmtDept.name]
+      `SELECT id FROM employees
+       WHERE department = $1 AND team = $2
+         AND is_deleted = FALSE AND is_active = TRUE`,
+      [mgmtTeam.dept_name, mgmtTeam.team_name]
     );
     if (!staffList || staffList.length === 0) return;
 
@@ -263,7 +270,7 @@ async function notifyManagementSupportDept({
     }));
 
     const { error } = await supabaseAdmin.from('notifications').insert(rows);
-    if (error) console.error('[APPROVAL] 경영지원부 알림 DB 저장 실패:', error);
+    if (error) console.error('[APPROVAL] 총무팀 알림 DB 저장 실패:', error);
 
     // WebPush + 텔레그램 발송
     await Promise.all(
@@ -273,7 +280,7 @@ async function notifyManagementSupportDept({
       ]))
     );
   } catch (e) {
-    console.warn('[APPROVAL] 경영지원부 통보 처리 실패:', e);
+    console.warn('[APPROVAL] 총무팀 통보 처리 실패:', e);
   }
 }
 

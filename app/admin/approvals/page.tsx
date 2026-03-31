@@ -190,7 +190,7 @@ function ApprovalsContent() {
   const [processTarget, setProcessTarget] = useState<ApprovalDoc | null>(null)
   const [processing, setProcessing] = useState(false)
 
-  // 경영지원부 여부
+  // 총무팀 여부
   const [isManagementSupport, setIsManagementSupport] = useState(false)
   const isSuperAdmin = (user?.role ?? 0) >= 4
   const showCompletedTab = isSuperAdmin || isManagementSupport
@@ -198,7 +198,7 @@ function ApprovalsContent() {
   const channelRef = useRef<RealtimeChannel | null>(null)
   const tabRef = useRef<TabType>(tab)
 
-  // 경영지원부 여부 확인 (최초 1회)
+  // 총무팀 여부 확인 (최초 1회)
   useEffect(() => {
     if (isSuperAdmin) return
     const token = TokenManager.getToken()

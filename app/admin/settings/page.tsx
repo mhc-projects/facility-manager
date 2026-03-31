@@ -65,8 +65,10 @@ function AdminSettingsContent() {
   // 공통 메시지 상태
   const [message, setMessage] = useState<{ type: 'success' | 'error' | null; text: string }>({ type: null, text: '' });
 
-  // 경영지원 역할 부서 상태 (권한 4 전용)
+  // 전자결재 관리 역할 팀 상태 (권한 4 전용)
   const [deptList, setDeptList] = useState<{ id: number; name: string; is_management_support: boolean }[]>([]);
+  const [teamList, setTeamList] = useState<{ id: number; name: string; department_id: number; is_management_support: boolean }[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
   const [savingMgmt, setSavingMgmt] = useState(false);
 
   // 컴포넌트 마운트 시 데이터 로드
@@ -79,9 +81,10 @@ function AdminSettingsContent() {
     setMessage({ type: null, text: '' });
   }, [activeTab]);
 
-  // organization 탭 진입 시 부서 목록 로드
+  // organization 탭 진입 시 부서 + 팀 목록 로드
   useEffect(() => {
     if (activeTab === 'organization' && isSystemAdmin && deptList.length === 0) {
+      // 부서 목록 로드
       fetch('/api/organization/departments')
         .then(r => r.json())
         .then(data => {
@@ -91,6 +94,27 @@ function AdminSettingsContent() {
               name: d.name,
               is_management_support: d.is_management_support ?? false,
             })));
+          }
+        })
+        .catch(console.error);
+
+      // 팀 목록 로드
+      fetch('/api/organization/teams')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            const teams = (data.data || []).map((t: any) => ({
+              id: t.id,
+              name: t.name,
+              department_id: t.department_id,
+              is_management_support: t.is_management_support ?? false,
+            }));
+            setTeamList(teams);
+            // 현재 지정된 팀이 있으면 해당 부서를 자동 선택
+            const mgmtTeam = teams.find((t: any) => t.is_management_support);
+            if (mgmtTeam) {
+              setSelectedDeptId(mgmtTeam.department_id);
+            }
           }
         })
         .catch(console.error);
@@ -142,19 +166,19 @@ function AdminSettingsContent() {
     }
   };
 
-  // 경영지원 역할 부서 지정 (권한 4 전용)
-  const handleSetManagementSupport = async (deptId: number, deptName: string) => {
+  // 전자결재 관리 역할 팀 지정 (권한 4 전용)
+  const handleSetManagementSupportTeam = async (team: { id: number; name: string; department_id: number }) => {
     setSavingMgmt(true);
     try {
       const token = TokenManager.getToken();
-      const res = await fetch('/api/organization/departments', {
+      const res = await fetch('/api/organization/teams', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: deptId, name: deptName, is_management_support: true }),
+        body: JSON.stringify({ id: team.id, name: team.name, department_id: team.department_id, is_management_support: true }),
       });
       const data = await res.json();
       if (data.success) {
-        setDeptList(prev => prev.map(d => ({ ...d, is_management_support: d.id === deptId })));
+        setTeamList(prev => prev.map(t => ({ ...t, is_management_support: t.id === team.id })));
       } else {
         alert(data.error || '저장 실패');
       }
@@ -405,49 +429,97 @@ function AdminSettingsContent() {
             <div className="p-2 sm:p-6 space-y-6">
               <OrganizationManagement />
 
-              {/* 경영지원 역할 부서 설정 — 권한 4 전용 */}
+              {/* 전자결재 관리 역할 팀 설정 — 권한 4 전용 */}
               {isSystemAdmin && (
                 <div className="border border-amber-200 rounded-lg p-5 bg-amber-50/30">
                   <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
                     <ShieldCheck className="w-5 h-5 text-amber-600" />
-                    경영지원 역할 부서
+                    전자결재 관리 역할 팀
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">
-                    결재 최종 승인 시 알림을 받을 부서를 지정합니다. 부서 이름이 변경되어도 지정은 유지됩니다.
+                    결재 최종 승인 시 알림을 받고, 결재완료 문서를 열람/처리확인할 수 있는 팀을 지정합니다.
                   </p>
-                  <div className="space-y-2">
+
+                  {/* 1단계: 부서 선택 */}
+                  <p className="text-xs font-medium text-gray-600 mb-2">부서 선택</p>
+                  <div className="space-y-2 mb-4">
                     {deptList.length === 0 ? (
                       <p className="text-sm text-gray-400">부서 정보를 불러오는 중...</p>
                     ) : (
-                      deptList.map(dept => (
-                        <label
-                          key={dept.id}
-                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                            dept.is_management_support
-                              ? 'border-amber-400 bg-amber-50'
-                              : 'border-gray-200 bg-white hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="radio"
-                              name="management_support_dept"
-                              checked={dept.is_management_support}
-                              onChange={() => handleSetManagementSupport(dept.id, dept.name)}
-                              disabled={savingMgmt}
-                              className="accent-amber-500"
-                            />
+                      deptList.map(dept => {
+                        const hasSelectedTeam = teamList.some(t => t.department_id === dept.id && t.is_management_support);
+                        return (
+                          <button
+                            key={dept.id}
+                            type="button"
+                            onClick={() => setSelectedDeptId(prev => prev === dept.id ? null : dept.id)}
+                            className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-left ${
+                              selectedDeptId === dept.id
+                                ? 'border-amber-400 bg-amber-50'
+                                : hasSelectedTeam
+                                  ? 'border-amber-200 bg-amber-50/50'
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                          >
                             <span className="text-sm font-medium text-gray-800">{dept.name}</span>
-                          </div>
-                          {dept.is_management_support && (
-                            <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
-                              지정됨
-                            </span>
-                          )}
-                        </label>
-                      ))
+                            <div className="flex items-center gap-2">
+                              {hasSelectedTeam && (
+                                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                                  지정된 팀 있음
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400">
+                                {selectedDeptId === dept.id ? '▲' : '▼'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })
                     )}
                   </div>
+
+                  {/* 2단계: 선택한 부서의 팀 목록 */}
+                  {selectedDeptId && (
+                    <>
+                      <p className="text-xs font-medium text-gray-600 mb-2">
+                        {deptList.find(d => d.id === selectedDeptId)?.name} — 팀 선택
+                      </p>
+                      <div className="space-y-2 ml-4">
+                        {teamList.filter(t => t.department_id === selectedDeptId).length === 0 ? (
+                          <p className="text-sm text-gray-400">등록된 팀이 없습니다.</p>
+                        ) : (
+                          teamList.filter(t => t.department_id === selectedDeptId).map(team => (
+                            <label
+                              key={team.id}
+                              className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                                team.is_management_support
+                                  ? 'border-amber-400 bg-amber-50'
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name="management_support_team"
+                                  checked={team.is_management_support}
+                                  onChange={() => handleSetManagementSupportTeam(team)}
+                                  disabled={savingMgmt}
+                                  className="accent-amber-500"
+                                />
+                                <span className="text-sm font-medium text-gray-800">{team.name}</span>
+                              </div>
+                              {team.is_management_support && (
+                                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                                  지정됨
+                                </span>
+                              )}
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+
                   {savingMgmt && (
                     <p className="text-xs text-amber-600 mt-2">저장 중...</p>
                   )}

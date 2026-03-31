@@ -192,7 +192,7 @@ function ApprovalDetailContent() {
   const isMyDoc = doc?.requester_id === user?.id
   const isSuperAdmin = (user?.role ?? 0) >= 4
 
-  // 경영지원부 여부 확인 (최초 1회, isSuperAdmin 선언 이후)
+  // 총무팀 여부 확인 (최초 1회, isSuperAdmin 선언 이후)
   useEffect(() => {
     if (isSuperAdmin) return
     const t = TokenManager.getToken()
@@ -601,7 +601,7 @@ function ApprovalDetailContent() {
           />
         </div>
 
-        {/* 처리확인 섹션 (경영지원부 또는 권한4, approved 상태에서만) */}
+        {/* 처리확인 섹션 (총무팀 또는 권한4, approved 상태에서만) */}
         {(isManagementSupport || isSuperAdmin) && doc?.status === 'approved' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
