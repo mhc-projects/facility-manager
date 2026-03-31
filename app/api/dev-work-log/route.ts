@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (period === 'week') {
-      conditions.push(`w.received_date >= (CURRENT_DATE - INTERVAL '7 days')`)
+      conditions.push(`w.received_date >= DATE_TRUNC('week', CURRENT_DATE) AND w.received_date < DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '7 days'`)
     } else if (period === 'month') {
       conditions.push(`w.received_date >= (CURRENT_DATE - INTERVAL '30 days')`)
     }
