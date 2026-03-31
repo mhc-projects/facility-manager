@@ -198,7 +198,8 @@ export async function GET(request: NextRequest) {
       conditions.push(`d.status IN ('approved', 'pending')`);
     } else {
       // 전체 탭: 작성자 본인 OR 결재선에 포함된 문서
-      // + 업무품의서의 경우 현재 사용자 부서가 작성팀/협조팀이면 추가 조회
+      // + 업무품의서의 경우 현재 사용자의 팀이 작성팀/협조팀이면 추가 조회
+      // 신규 문서: department_id에 teams.id 저장 / 기존 문서: departments.id 저장 → 양쪽 호환
       conditions.push(`(
         d.requester_id = $${idx++}
         OR d.id IN (
@@ -211,18 +212,30 @@ export async function GET(request: NextRequest) {
             WHERE bp.is_deleted = FALSE
               AND (
                 (bp.form_data->>'department_id') IN (
-                  SELECT id::TEXT FROM departments
-                  WHERE name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
+                  SELECT t.id::TEXT FROM teams t
+                  JOIN departments dd ON dd.id = t.department_id
+                  WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
+                    AND t.name = (SELECT team FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
                 )
                 OR (bp.form_data->>'cooperative_team_id') IN (
-                  SELECT id::TEXT FROM departments
-                  WHERE name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
+                  SELECT t.id::TEXT FROM teams t
+                  JOIN departments dd ON dd.id = t.department_id
+                  WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
+                    AND t.name = (SELECT team FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
+                )
+                OR (bp.form_data->>'department_id') IN (
+                  SELECT dd.id::TEXT FROM departments dd
+                  WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
+                )
+                OR (bp.form_data->>'cooperative_team_id') IN (
+                  SELECT dd.id::TEXT FROM departments dd
+                  WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
                 )
               )
           )
         )
       )`);
-      values.push(userId, userId, userId, userId);
+      values.push(userId, userId, userId, userId, userId, userId, userId, userId);
     }
 
     if (typeFilter) {

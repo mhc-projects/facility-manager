@@ -28,6 +28,13 @@ export interface BusinessProposalData {
   attachments?: AttachmentFile[]
 }
 
+interface Team {
+  id: string
+  name: string
+  department_id: string
+  department_name: string
+}
+
 interface Department {
   id: string
   name: string
@@ -59,6 +66,7 @@ const selectInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 
 
 export default function BusinessProposalForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
   const [departments, setDepartments] = useState<Department[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachments = data.attachments || []
 
@@ -89,11 +97,26 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
 
   useEffect(() => {
     if (disabled) return
+    // 부서 목록 로드
     fetch('/api/organization/departments')
       .then(r => r.json())
       .then(res => {
         if (res.success && Array.isArray(res.data)) {
           setDepartments(res.data.map((d: any) => ({ id: String(d.id), name: d.name })))
+        }
+      })
+      .catch(() => {})
+    // 팀 목록 로드
+    fetch('/api/organization/teams')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setTeams(res.data.map((t: any) => ({
+            id: String(t.id),
+            name: t.name,
+            department_id: String(t.department_id),
+            department_name: t.department?.name || '',
+          })))
         }
       })
       .catch(() => {})
@@ -127,14 +150,22 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
                 className={selectInput}
                 value={data.department_id || ''}
                 onChange={e => {
-                  const dept = departments.find(d => d.id === e.target.value)
-                  onChange({ ...data, department_id: dept?.id || '', department: dept?.name || '' })
+                  const team = teams.find(t => t.id === e.target.value)
+                  onChange({ ...data, department_id: team?.id || '', department: team ? `${team.department_name} ${team.name}` : '' })
                 }}
               >
                 <option value="">작성팀 선택...</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
+                {departments.map(dept => {
+                  const deptTeams = teams.filter(t => t.department_id === dept.id)
+                  if (deptTeams.length === 0) return null
+                  return (
+                    <optgroup key={dept.id} label={dept.name}>
+                      {deptTeams.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
               </select>
             )}
           </div>
@@ -149,14 +180,22 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
                 className={selectInput}
                 value={data.cooperative_team_id || ''}
                 onChange={e => {
-                  const dept = departments.find(d => d.id === e.target.value)
-                  onChange({ ...data, cooperative_team_id: dept?.id || '', cooperative_team: dept?.name || '' })
+                  const team = teams.find(t => t.id === e.target.value)
+                  onChange({ ...data, cooperative_team_id: team?.id || '', cooperative_team: team ? `${team.department_name} ${team.name}` : '' })
                 }}
               >
                 <option value="">협조팀 선택...</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
+                {departments.map(dept => {
+                  const deptTeams = teams.filter(t => t.department_id === dept.id)
+                  if (deptTeams.length === 0) return null
+                  return (
+                    <optgroup key={dept.id} label={dept.name}>
+                      {deptTeams.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
               </select>
             )}
           </div>

@@ -241,41 +241,40 @@ export async function POST(
       });
     }
 
-    // 업무품의서: 작성팀 + 협조팀 부서원 전체에게 상신 알림
+    // 업무품의서: 작성팀 + 협조팀 직원에게 상신 알림
     if (doc.document_type === 'business_proposal') {
       const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : (doc.form_data || {});
 
       const writingTeamId   = formData?.department_id;
-      const writingTeamName = formData?.department;
       const coopTeamId      = formData?.cooperative_team_id;
-      const coopTeamName    = formData?.cooperative_team;
 
-      // 부서 ID/name으로 직원 목록 조회 (employees 테이블은 department text 컬럼만 존재)
-      const fetchDeptStaff = async (deptId?: string, deptName?: string): Promise<string[]> => {
-        if (!deptId && !deptName) return [];
-        let resolvedName = deptName;
-        if (deptId) {
-          const dept = await queryOne(`SELECT name FROM departments WHERE id = $1`, [deptId]);
-          if (dept?.name) resolvedName = dept.name;
-        }
-        if (!resolvedName) return [];
+      // teams.id로 팀 정보 조회 → 해당 팀 직원만 필터
+      const fetchTeamStaff = async (teamId?: string): Promise<string[]> => {
+        if (!teamId) return [];
+        const teamInfo = await queryOne(
+          `SELECT t.name AS team_name, d.name AS dept_name
+           FROM teams t JOIN departments d ON d.id = t.department_id
+           WHERE t.id = $1`,
+          [teamId]
+        );
+        if (!teamInfo) return [];
         const rows = await queryAll(
-          `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-          [resolvedName]
+          `SELECT id FROM employees WHERE department = $1 AND team = $2 AND is_deleted = FALSE AND is_active = TRUE`,
+          [teamInfo.dept_name, teamInfo.team_name]
         );
         return (rows || []).map((r: any) => r.id);
       };
 
       const [writingStaff, coopStaff] = await Promise.all([
-        fetchDeptStaff(writingTeamId, writingTeamName),
-        fetchDeptStaff(coopTeamId, coopTeamName),
+        fetchTeamStaff(writingTeamId),
+        fetchTeamStaff(coopTeamId),
       ]);
 
       // 중복 제거 + 작성자 본인 제외 (작성자는 이미 알고 있음)
       const notifySet = new Set([...writingStaff, ...coopStaff]);
       notifySet.delete(userId);
 
-      const teamLabel = [writingTeamName, coopTeamName].filter(Boolean).join(' / ');
+      const teamLabel = [formData?.department, formData?.cooperative_team].filter(Boolean).join(' / ');
       const notifyMessage = `${requesterName}님이 업무품의서(${doc.document_number})를 ${actionWord}했습니다.`;
 
       await Promise.all(

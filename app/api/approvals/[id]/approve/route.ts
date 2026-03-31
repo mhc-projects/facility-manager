@@ -81,6 +81,7 @@ const DOC_TYPE_LABEL: Record<string, string> = {
 
 /**
  * 최종 승인 완료 시 작성팀 직원 전체에게 알림 발송 (업무품의서 전용)
+ * department_id에 teams.id가 저장됨 → teams에서 부서명/팀명 조회 후 employees 필터
  */
 async function notifyWritingTeam({
   doc, documentId,
@@ -90,20 +91,24 @@ async function notifyWritingTeam({
   try {
     const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
     const teamId = formData?.department_id;
-    const teamName = formData?.department;
-    if (!teamId && !teamName) return;
+    const teamDisplayName = formData?.department;
+    if (!teamId && !teamDisplayName) return;
 
     let staffList;
     if (teamId) {
-      staffList = await queryAll(
-        `SELECT id FROM employees WHERE department_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+      // teams.id로 팀 정보 조회 → 해당 팀 직원만 필터
+      const teamInfo = await queryOne(
+        `SELECT t.name AS team_name, d.name AS dept_name
+         FROM teams t JOIN departments d ON d.id = t.department_id
+         WHERE t.id = $1`,
         [teamId]
       );
-    } else {
-      staffList = await queryAll(
-        `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-        [teamName]
-      );
+      if (teamInfo) {
+        staffList = await queryAll(
+          `SELECT id FROM employees WHERE department = $1 AND team = $2 AND is_deleted = FALSE AND is_active = TRUE`,
+          [teamInfo.dept_name, teamInfo.team_name]
+        );
+      }
     }
     if (!staffList || staffList.length === 0) return;
 
@@ -112,7 +117,7 @@ async function notifyWritingTeam({
     if (targets.length === 0) return;
 
     const typeLabel = DOC_TYPE_LABEL[doc.document_type] || doc.document_type;
-    const label = teamName || '작성팀';
+    const label = teamDisplayName || '작성팀';
     const title = '[업무품의서 승인 완료]';
     const message = `${doc.document_number} ${typeLabel}\n작성팀(${label}) 문서가 최종 승인되었습니다.`;
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -134,7 +139,6 @@ async function notifyWritingTeam({
     const { error } = await supabaseAdmin.from('notifications').insert(rows);
     if (error) console.error('[APPROVAL] 작성팀 알림 DB 저장 실패:', error);
 
-    // WebPush + 텔레그램 발송
     await Promise.all(
       targets.map((staff: any) => Promise.all([
         sendWebPushToUser(staff.id, { title, body: message, url: `/admin/approvals/${documentId}`, category: 'report_approved' }),
@@ -148,6 +152,7 @@ async function notifyWritingTeam({
 
 /**
  * 최종 승인 완료 시 협조팀 직원 전체에게 알림 발송 (업무품의서 전용)
+ * cooperative_team_id에 teams.id가 저장됨 → teams에서 부서명/팀명 조회 후 employees 필터
  */
 async function notifyCooperativeTeam({
   doc, documentId,
@@ -157,25 +162,28 @@ async function notifyCooperativeTeam({
   try {
     const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
     const cooperativeTeamId = formData?.cooperative_team_id;
-    const cooperativeTeamName = formData?.cooperative_team;
-    if (!cooperativeTeamId && !cooperativeTeamName) return;
+    const cooperativeTeamDisplayName = formData?.cooperative_team;
+    if (!cooperativeTeamId && !cooperativeTeamDisplayName) return;
 
     let staffList;
     if (cooperativeTeamId) {
-      staffList = await queryAll(
-        `SELECT id FROM employees WHERE department_id = $1 AND is_deleted = FALSE AND is_active = TRUE`,
+      const teamInfo = await queryOne(
+        `SELECT t.name AS team_name, d.name AS dept_name
+         FROM teams t JOIN departments d ON d.id = t.department_id
+         WHERE t.id = $1`,
         [cooperativeTeamId]
       );
-    } else {
-      staffList = await queryAll(
-        `SELECT id FROM employees WHERE department = $1 AND is_deleted = FALSE AND is_active = TRUE`,
-        [cooperativeTeamName]
-      );
+      if (teamInfo) {
+        staffList = await queryAll(
+          `SELECT id FROM employees WHERE department = $1 AND team = $2 AND is_deleted = FALSE AND is_active = TRUE`,
+          [teamInfo.dept_name, teamInfo.team_name]
+        );
+      }
     }
     if (!staffList || staffList.length === 0) return;
 
     const typeLabel = DOC_TYPE_LABEL[doc.document_type] || doc.document_type;
-    const teamLabel = cooperativeTeamName || '협조팀';
+    const teamLabel = cooperativeTeamDisplayName || '협조팀';
     const title = '[협조 요청 완료]';
     const message = `${doc.document_number} ${typeLabel}\n협조팀(${teamLabel})으로 지정된 문서가 최종 승인되었습니다.`;
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -197,7 +205,6 @@ async function notifyCooperativeTeam({
     const { error } = await supabaseAdmin.from('notifications').insert(rows);
     if (error) console.error('[APPROVAL] 협조팀 알림 DB 저장 실패:', error);
 
-    // WebPush + 텔레그램 발송
     await Promise.all(
       staffList.map((staff: any) => Promise.all([
         sendWebPushToUser(staff.id, { title, body: message, url: `/admin/approvals/${documentId}`, category: 'report_approved' }),
