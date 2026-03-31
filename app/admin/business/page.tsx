@@ -4885,14 +4885,13 @@ function BusinessManagementPage() {
                 </div>
               )}
 
-              {/* 필터 드롭다운 - 헤더와 입력창 통합 행 */}
+              {/* 필터 드롭다운 */}
               <div className="mt-2 md:mt-2 pt-2 md:pt-2 border-t border-gray-200">
-                {/* 필터 헤더: 라벨 + 토글 버튼 + 초기화 */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm font-medium text-gray-700">필터</span>
-                    {/* 모바일에서만 토글 버튼 표시 */}
-                    {isMobile && (
+                {/* 모바일: 헤더 + 토글 + 초기화 */}
+                {isMobile && (
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-700">필터</span>
                       <button
                         onClick={() => setIsFilterExpanded(!isFilterExpanded)}
                         className="ml-1 text-gray-500 hover:text-gray-700 transition-colors"
@@ -4904,80 +4903,69 @@ function BusinessManagementPage() {
                           <ChevronDown className="w-4 h-4" />
                         )}
                       </button>
+                    </div>
+                    {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
+                      <button
+                        onClick={() => {
+                          setFilterOffices([])
+                          setFilterRegions([])
+                          setFilterCategories([])
+                          setFilterProjectYears([])
+                          setFilterCurrentSteps([])
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                      >
+                        <X className="w-3 h-3" />
+                        초기화
+                      </button>
                     )}
                   </div>
+                )}
 
-                  {/* 초기화 버튼 */}
-                  {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
-                    <button
-                      onClick={() => {
-                        setFilterOffices([])
-                        setFilterRegions([])
-                        setFilterCategories([])
-                        setFilterProjectYears([])
-                        setFilterCurrentSteps([])
-                      }}
-                      className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                    >
-                      <X className="w-3 h-3" />
-                      초기화
-                    </button>
-                  )}
-                </div>
+                {/* 모바일: 접기/펼치기 필터 목록 */}
+                {isMobile && (
+                  <div
+                    className={`
+                      grid grid-cols-1 sm:grid-cols-2 gap-2
+                      transition-all duration-300 ease-in-out
+                      ${isFilterExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}
+                    `}
+                  >
+                    <MultiSelectDropdown label="영업점" options={filterOptions.offices} selectedValues={filterOffices} onChange={setFilterOffices} placeholder="전체" inline />
+                    <MultiSelectDropdown label="지역" options={filterOptions.regions} selectedValues={filterRegions} onChange={setFilterRegions} placeholder="전체" inline />
+                    <MultiSelectDropdown label="진행구분" options={filterOptions.categories} selectedValues={filterCategories} onChange={setFilterCategories} placeholder="전체" inline />
+                    <MultiSelectDropdown label="사업 진행 연도" options={filterOptions.years.map(year => `${year}년`)} selectedValues={filterProjectYears} onChange={setFilterProjectYears} placeholder="전체" inline />
+                    <MultiSelectDropdown label="현재 단계" options={filterOptions.currentSteps} selectedValues={filterCurrentSteps} onChange={setFilterCurrentSteps} placeholder="전체" inline />
+                  </div>
+                )}
 
-                {/* 필터 입력창들 - 접기/펼치기 애니메이션 */}
-                <div
-                  className={`
-                    grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2
-                    transition-all duration-300 ease-in-out
-                    ${(!isMobile || isFilterExpanded) ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}
-                  `}
-                >
-                  <MultiSelectDropdown
-                    label="영업점"
-                    options={filterOptions.offices}
-                    selectedValues={filterOffices}
-                    onChange={setFilterOffices}
-                    placeholder="전체"
-                    inline
-                  />
-
-                  <MultiSelectDropdown
-                    label="지역"
-                    options={filterOptions.regions}
-                    selectedValues={filterRegions}
-                    onChange={setFilterRegions}
-                    placeholder="전체"
-                    inline
-                  />
-
-                  <MultiSelectDropdown
-                    label="진행구분"
-                    options={filterOptions.categories}
-                    selectedValues={filterCategories}
-                    onChange={setFilterCategories}
-                    placeholder="전체"
-                    inline
-                  />
-
-                  <MultiSelectDropdown
-                    label="사업 진행 연도"
-                    options={filterOptions.years.map(year => `${year}년`)}
-                    selectedValues={filterProjectYears}
-                    onChange={setFilterProjectYears}
-                    placeholder="전체"
-                    inline
-                  />
-
-                  <MultiSelectDropdown
-                    label="현재 단계"
-                    options={filterOptions.currentSteps}
-                    selectedValues={filterCurrentSteps}
-                    onChange={setFilterCurrentSteps}
-                    placeholder="전체"
-                    inline
-                  />
-                </div>
+                {/* 데스크톱: 한 행 (grid 비율 유지, 현재단계만 적절히 조정) */}
+                {!isMobile && (
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <MultiSelectDropdown label="영업점" options={filterOptions.offices} selectedValues={filterOffices} onChange={setFilterOffices} placeholder="전체" inline className="col-span-2" />
+                    <MultiSelectDropdown label="지역" options={filterOptions.regions} selectedValues={filterRegions} onChange={setFilterRegions} placeholder="전체" inline className="col-span-2" />
+                    <MultiSelectDropdown label="진행구분" options={filterOptions.categories} selectedValues={filterCategories} onChange={setFilterCategories} placeholder="전체" inline className="col-span-2" />
+                    <MultiSelectDropdown label="사업 진행 연도" options={filterOptions.years.map(year => `${year}년`)} selectedValues={filterProjectYears} onChange={setFilterProjectYears} placeholder="전체" inline className="col-span-2" />
+                    <MultiSelectDropdown label="현재 단계" options={filterOptions.currentSteps} selectedValues={filterCurrentSteps} onChange={setFilterCurrentSteps} placeholder="전체" inline className="col-span-3" />
+                    <div className="col-span-1 flex justify-end">
+                      {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
+                        <button
+                          onClick={() => {
+                            setFilterOffices([])
+                            setFilterRegions([])
+                            setFilterCategories([])
+                            setFilterProjectYears([])
+                            setFilterCurrentSteps([])
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 whitespace-nowrap"
+                        >
+                          <X className="w-3 h-3" />
+                          초기화
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* 상세 필터 (제출일 + 설치완료) */}
                 <div className="mt-3 pt-3 border-t border-gray-200">
