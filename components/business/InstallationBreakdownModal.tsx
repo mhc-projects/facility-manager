@@ -54,10 +54,14 @@ export default function InstallationBreakdownModal({
     0
   );
 
-  // 복수굴뚝이 존재하는지 여부 (편집 섹션 표시 조건)
+  // 복수굴뚝 기기가 존재하는지 여부
   const hasMultipleStack = equipmentBreakdown.some(
     (item) => item.equipment_type === 'multiple_stack' && item.quantity > 0
   );
+  // 복수굴뚝 섹션 표시: 기기가 있거나, 이미 추가 수량이 저장되어 있거나, 단가가 설정된 경우
+  const showMultipleStackSection = hasMultipleStack
+    || multipleStackInstallExtra > 0
+    || multipleStackUnitInstallCost > 0;
 
   const extraInstallCost = extraQty * multipleStackUnitInstallCost;
   const computedTotal = baseInstallTotal + extraInstallCost + installationExtraCost;
@@ -169,7 +173,7 @@ export default function InstallationBreakdownModal({
           </div>
 
           {/* 복수굴뚝 추가 설치 수량 */}
-          {hasMultipleStack && (
+          {showMultipleStackSection && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -188,6 +192,11 @@ export default function InstallationBreakdownModal({
                 <p className="text-xs text-blue-600">
                   ℹ️ 채널 수 기준 추가분 — 매출에 영향 없음
                 </p>
+                {!hasMultipleStack && (
+                  <p className="text-xs text-amber-600">
+                    ⚠️ 현재 측정기기에 복수굴뚝이 없지만, 추가 설치 비용을 입력할 수 있습니다.
+                  </p>
+                )}
                 {isEditing ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">

@@ -1949,7 +1949,9 @@ export default function BusinessRevenueModal({
           multipleStackUnitInstallCost={
             calculatedData.equipment_breakdown.find(
               (item) => item.equipment_type === 'multiple_stack'
-            )?.unit_installation_cost || 0
+            )?.unit_installation_cost
+            || calculatedData.multiple_stack_unit_install_cost
+            || 0
           }
           userPermission={userPermission}
           onSaved={async (savedQty: number) => {

@@ -50,6 +50,7 @@ interface RevenueCalculationResult {
   custom_additional_costs?: any;  // 커스텀 추가비용 (JSONB)
   net_profit: number;
   equipment_breakdown: EquipmentBreakdown[];
+  multiple_stack_unit_install_cost: number;  // 복수굴뚝 설치비 단가 (기기 유무와 무관)
   cost_breakdown: CostBreakdown;
 }
 
@@ -656,6 +657,7 @@ export async function POST(request: NextRequest) {
       custom_additional_costs: businessInfo.custom_additional_costs,  // 커스텀 추가비용
       net_profit: netProfit,
       equipment_breakdown: equipmentBreakdown,
+      multiple_stack_unit_install_cost: installationCostMap['multiple_stack'] || 0,
       cost_breakdown: {
         sales_commission_type: commissionSettings.commission_type,
         sales_commission_rate: commissionSettings.commission_type === 'percentage'

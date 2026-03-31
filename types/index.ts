@@ -614,6 +614,9 @@ export interface CalculatedData {
   // 커스텀 추가비용
   custom_additional_costs?: any;
 
+  // 복수굴뚝 설치비 단가 (기기 유무와 무관)
+  multiple_stack_unit_install_cost?: number;
+
   // 영업비용 조정 관련 (신규)
   operating_cost_adjustment?: OperatingCostAdjustment | null;
   adjusted_sales_commission?: number;
