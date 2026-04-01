@@ -1488,7 +1488,16 @@ function RevenueDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoadingState, businesses.length, pricingData, batchTrigger]);
 
-  // ✅ 실시간 매출 계산 (useMemo로 성능 최적화) — 위험도 필터 적용 전
+  // ✅ 서버 계산 결과를 business_id → calculation 맵으로 변환 (O(1) 조회)
+  const calculationsMap = useMemo(() => {
+    const map = new Map<string, RevenueCalculation>();
+    for (const calc of calculations) {
+      map.set(calc.business_id, calc);
+    }
+    return map;
+  }, [calculations]);
+
+  // ✅ 매출 계산 (서버 API 결과 우선, 로컬 계산 fallback) — 위험도 필터 적용 전
   const preRiskFilteredBusinesses = useMemo(() => {
     // 🔄 State Machine: 데이터가 준비되지 않았으면 빈 배열 반환
     if (dataLoadingState !== 'ready') {
@@ -1591,8 +1600,22 @@ function RevenueDashboard() {
 
       return searchMatch && officeMatch && regionMatch && categoryMatch && yearMatch && monthMatch && surveyMonthMatch && invoiceMatch && paymentYearMatch && paymentMonthMatch;
     }).map((business) => {
-      // ✅ 실시간 계산 적용 (Admin 대시보드와 동일한 계산식)
-      const calculatedData = calculateBusinessRevenue(business, pricingData);
+      // ✅ 서버 API 계산 결과 우선 사용 (사업장별 추가설치비, 영업비용 조정, 실사비용 조정 포함)
+      // 서버 결과가 없을 때만 클라이언트 로컬 계산을 fallback으로 사용
+      const serverCalc = calculationsMap.get(business.id);
+      const localCalc = calculateBusinessRevenue(business, pricingData);
+      const calculatedData = serverCalc ? {
+        total_revenue: Math.round(Number(serverCalc.total_revenue) || 0),
+        total_cost: Math.round(Number(serverCalc.total_cost) || 0),
+        gross_profit: Math.round(Number(serverCalc.gross_profit) || 0),
+        net_profit: Math.round(Number(serverCalc.net_profit) || 0),
+        sales_commission: Math.round(Number(serverCalc.sales_commission) || 0),
+        adjusted_sales_commission: serverCalc.adjusted_sales_commission != null
+          ? Math.round(Number(serverCalc.adjusted_sales_commission) || 0) : null,
+        survey_costs: Math.round(Number(serverCalc.survey_costs) || 0),
+        installation_costs: Math.round(Number(serverCalc.installation_costs) || 0),
+        installation_extra_cost: Math.round(Number(serverCalc.installation_extra_cost) || 0),
+      } : localCalc;
 
       // 기기 수 계산
       const equipmentFields = [
@@ -1608,15 +1631,6 @@ function RevenueDashboard() {
         return sum + (business[field as keyof BusinessInfo] as number || 0);
       }, 0);
 
-      // ✅ 실시간 계산 결과 사용
-      const actualTotalCost = calculatedData.total_cost;
-      const grossProfit = calculatedData.gross_profit;
-      const salesCommission = calculatedData.sales_commission;
-      const surveyCosts = calculatedData.survey_costs;
-      const installationCosts = calculatedData.installation_costs;
-      const installationExtraCost = calculatedData.installation_extra_cost;
-      const netProfit = calculatedData.net_profit;
-
     // 미수금: batch API(_api_receivables)가 단일 진실 공급원
     // 페이지 로드 후 백그라운드 batch 호출로 모든 사업장이 _api_receivables를 가짐
     // batch 로드 전 잠깐의 공백기에는 ir_receivables fallback 사용
@@ -1629,7 +1643,7 @@ function RevenueDashboard() {
 
       return {
         ...business,
-        // ✅ 실시간 계산 결과 사용 (Admin 대시보드와 동일한 계산식)
+        // ✅ 서버 API 계산 결과 우선 사용 (모달과 동일한 계산 결과)
         total_revenue: calculatedData.total_revenue,
         total_cost: calculatedData.total_cost,
         net_profit: calculatedData.net_profit,
@@ -1638,11 +1652,11 @@ function RevenueDashboard() {
         adjusted_sales_commission: calculatedData.adjusted_sales_commission,
         survey_costs: calculatedData.survey_costs,
         installation_costs: calculatedData.installation_costs,
-        installation_extra_cost: calculatedData.installation_extra_cost, // ✅ 추가설치비 포함 (총 설치비용 통계 정확도 개선)
+        installation_extra_cost: calculatedData.installation_extra_cost,
         equipment_count: totalEquipment,
-        calculation_date: new Date().toISOString(), // 실시간 계산 시각
+        calculation_date: serverCalc ? serverCalc.calculation_date : new Date().toISOString(),
         category: business.progress_status || 'N/A',
-        has_calculation: true, // ✅ 항상 true (실시간 계산)
+        has_calculation: true,
         additional_cost: business.additional_cost || 0,
         negotiation: business.negotiation ? parseFloat(business.negotiation.toString()) : 0,
         total_receivables: totalReceivables,
@@ -1691,6 +1705,7 @@ function RevenueDashboard() {
     businesses,
     dataLoadingState, // 🔧 State Machine dependency 추가
     pricingData, // 🎯 안정화된 객체 사용
+    calculationsMap, // ✅ 서버 계산 결과 (모달과 동일한 정확한 값)
     searchTerm,
     selectedOffices,
     selectedRegions,
