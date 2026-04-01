@@ -479,12 +479,15 @@ export async function GET(request: NextRequest) {
 
     // 파일 목록 조회 (Direct PostgreSQL with dynamic filters)
     // Phase 필터링 (phase에 따른 스토리지 경로 필터링)
-    // ✅ FIX: postinstall과 aftersales는 모두 'completion' 폴더 사용
-    const phasePrefix = (phase === 'aftersales' || phase === 'postinstall') ? 'completion' : 'presurvey';
+    // 시스템 카테고리: postinstall/aftersales → completion 폴더, presurvey → presurvey 폴더
+    // 사용자 정의 카테고리 (custom_*): 카테고리 키 자체를 폴더명으로 사용
+    const isCustomCategory = phase && phase.startsWith('custom_');
+    const phasePrefix = isCustomCategory ? phase : (phase === 'aftersales' || phase === 'postinstall') ? 'completion' : 'presurvey';
 
     console.log(`🔍 [PHASE-FILTER] Phase 필터 적용:`, {
       원본phase: phase,
       스토리지경로: phasePrefix,
+      커스텀카테고리: isCustomCategory,
       쿼리패턴: `%/${phasePrefix}/%`,
       전체사진수: totalPhotoCount
     });

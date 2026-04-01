@@ -24,7 +24,7 @@ interface ImprovedFacilityPhotoSectionProps {
   businessName: string;
   facilities: FacilitiesData | null;
   facilityNumbering?: any; // 🎯 대기필증 관리 시설번호 매핑
-  currentPhase: SystemPhase;
+  currentPhase: SystemPhase | string;
 }
 
 type ViewMode = 'grid' | 'list';

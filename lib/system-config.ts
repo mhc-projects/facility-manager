@@ -74,7 +74,7 @@ export function mapSystemTypeToPhase(systemType: SystemType): SystemPhase {
 }
 
 // SystemPhase를 SystemType으로 매핑 (기존 호환성)
-export function mapPhaseToSystemType(phase: SystemPhase): SystemType {
+export function mapPhaseToSystemType(phase: SystemPhase | string): SystemType {
   switch (phase) {
     case 'presurvey':
       return 'presurvey';
@@ -83,6 +83,21 @@ export function mapPhaseToSystemType(phase: SystemPhase): SystemType {
     case 'aftersales':
       return 'completion'; // AS 사진도 completion으로 분류
     default:
-      return 'presurvey';
+      return 'completion'; // 사용자 정의 카테고리는 completion으로 분류
   }
+}
+
+// 동적 카테고리 키로부터 스토리지 프리픽스 결정
+export function getCategoryStoragePrefix(categoryKey: string): string {
+  // 시스템 카테고리는 기존 경로 유지
+  if (categoryKey in PHASE_CONFIG) {
+    return PHASE_CONFIG[categoryKey as SystemPhase].storagePrefix;
+  }
+  // 사용자 정의 카테고리는 키 자체를 프리픽스로 사용
+  return categoryKey;
+}
+
+// 카테고리 키가 시스템 phase인지 확인
+export function isSystemPhase(key: string): key is SystemPhase {
+  return key === 'presurvey' || key === 'postinstall' || key === 'aftersales';
 }

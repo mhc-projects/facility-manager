@@ -363,6 +363,25 @@ export type SystemType = 'completion' | 'presurvey';
 // 새로운 사진 단계별 구분 타입 (3단계 확장)
 export type SystemPhase = 'presurvey' | 'postinstall' | 'aftersales';
 
+// 사용자 정의 포토 카테고리 (동적 확장 가능)
+export interface PhotoCategory {
+  id: string;
+  business_id: string;
+  category_key: string;
+  category_name: string;
+  icon: string;
+  color: string;
+  sort_order: number;
+  is_system: boolean;
+  inspector_name?: string;
+  inspector_contact?: string;
+  inspector_date?: string;
+  special_notes?: string;
+  // 조회 시 계산되는 필드
+  has_data?: boolean;
+  photo_count?: number;
+}
+
 export interface SystemConfig {
   sheetName: string;
   folderId: string;

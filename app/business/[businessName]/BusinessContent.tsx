@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { FacilitiesData, BusinessInfo, SystemType, SystemPhase } from '@/types';
+import { FacilitiesData, BusinessInfo, SystemType, SystemPhase, PhotoCategory } from '@/types';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ArrowLeft, Factory, Shield, Zap, Router, Camera, FileText, AlertTriangle, Building2, User, Save, ChevronDown, Wifi, WifiOff } from 'lucide-react';
+import { ArrowLeft, Factory, Shield, Zap, Router, Camera, FileText, AlertTriangle, Building2, User, Save, ChevronDown, Wifi, WifiOff, Plus, Trash2 } from 'lucide-react';
+import { mapPhaseToSystemType, isSystemPhase } from '@/lib/system-config';
 
 // Import new section components
 import BusinessInfoSection from '@/components/sections/BusinessInfoSection';
@@ -56,6 +57,14 @@ export default function BusinessContent() {
   });
   const [showSystemTypeDropdown, setShowSystemTypeDropdown] = useState(false);
 
+  // 포토 카테고리 (동적)
+  const [photoCategories, setPhotoCategories] = useState<PhotoCategory[]>([]);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   // 시설 상세 데이터 상태
   const [facilityDetails, setFacilityDetails] = useState<{[facilityId: string]: {[key: string]: string}}>({});
 
@@ -73,8 +82,12 @@ export default function BusinessContent() {
   // 업데이트 타이머 참조
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Phase별 독립적인 상태 관리
-  const [phaseData, setPhaseData] = useState({
+  // Phase별 독립적인 상태 관리 (동적 카테고리 지원)
+  const [phaseData, setPhaseData] = useState<Record<string, {
+    inspectorInfo: { name: string; contact: string; date: string };
+    specialNotes: string;
+    categoryId?: string; // DB의 category ID
+  }>>({
     presurvey: {
       inspectorInfo: { name: '', contact: '', date: '' },
       specialNotes: ''
@@ -91,7 +104,7 @@ export default function BusinessContent() {
 
   // 현재 phase의 데이터를 반환하는 헬퍼 함수
   const getCurrentPhaseData = useCallback(() => {
-    return phaseData[currentPhase];
+    return phaseData[currentPhase] || { inspectorInfo: { name: '', contact: '', date: '' }, specialNotes: '' };
   }, [phaseData, currentPhase]);
 
   // 현재 phase의 inspectorInfo와 specialNotes (호환성용)
@@ -111,8 +124,8 @@ export default function BusinessContent() {
 
         // 각 phase의 date가 비어있으면 기본값 설정
         const updated = { ...prev };
-        (['presurvey', 'postinstall', 'aftersales'] as const).forEach(phase => {
-          if (!updated[phase].inspectorInfo.date) {
+        Object.keys(updated).forEach(phase => {
+          if (updated[phase] && !updated[phase].inspectorInfo.date) {
             updated[phase] = {
               ...updated[phase],
               inspectorInfo: {
@@ -323,8 +336,34 @@ export default function BusinessContent() {
 
             if (mgmtData.success && mgmtData.data.business) {
               const business = mgmtData.data.business;
+              const bId = business.id;
 
-                // Phase별 데이터 로드 (날짜 필드는 null이면 빈 문자열로 유지)
+              // 카테고리 API에서 동적 카테고리 + 담당자 정보 로드
+              try {
+                const catRes = await fetch(`/api/business-photo-categories?businessId=${bId}&_t=${Date.now()}`);
+                const catData = await catRes.json();
+
+                if (catData.success && catData.data) {
+                  setPhotoCategories(catData.data);
+
+                  // phaseData를 카테고리 기반으로 구성
+                  const newPhaseData: Record<string, any> = {};
+                  catData.data.forEach((cat: PhotoCategory) => {
+                    newPhaseData[cat.category_key] = {
+                      inspectorInfo: {
+                        name: cat.inspector_name || '',
+                        contact: cat.inspector_contact || '',
+                        date: cat.inspector_date || ''
+                      },
+                      specialNotes: cat.special_notes || '',
+                      categoryId: cat.id
+                    };
+                  });
+                  setPhaseData(newPhaseData);
+                }
+              } catch (catError) {
+                console.error('❌ [FRONTEND] 카테고리 로드 실패, 기존 방식 fallback:', catError);
+                // fallback: 기존 business_info 컬럼에서 로드
                 setPhaseData({
                   presurvey: {
                     inspectorInfo: {
@@ -351,6 +390,7 @@ export default function BusinessContent() {
                     specialNotes: business.aftersales_special_notes || ''
                   }
                 });
+              }
               }
             } catch (error) {
               console.error('❌ [FRONTEND] 시설 관리 정보 로드 실패:', error);
@@ -397,15 +437,20 @@ export default function BusinessContent() {
     const handleClickOutside = (event: MouseEvent) => {
       if (showSystemTypeDropdown) {
         const target = event.target as Element;
-        if (!target.closest('.system-type-dropdown')) {
+        // 드롭다운 내부 클릭이거나, 삭제 중이면 닫지 않음
+        if (!target.closest('.system-type-dropdown') && !deletingCategoryId) {
           setShowSystemTypeDropdown(false);
+          setShowAddCategory(false);
+          setNewCategoryName('');
+          setConfirmDeleteId(null);
         }
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showSystemTypeDropdown]);
+    // click 이벤트 사용 (mousedown 대신) - 드롭다운 내부 버튼의 onClick이 먼저 처리되도록 함
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showSystemTypeDropdown, showAddCategory, deletingCategoryId]);
 
   // Phase별 업데이트 핸들러
   const handleInspectorUpdate = useCallback((info: typeof inspectorInfo) => {
@@ -458,143 +503,220 @@ export default function BusinessContent() {
     }));
   }, [currentPhase]);
 
-  // Save inspector info using facility-management API (phase별 저장)
+  // 카테고리 추가 핸들러
+  const handleAddCategory = useCallback(async () => {
+    if (!newCategoryName.trim() || !businessInfo?.id || addingCategory) return;
+
+    setAddingCategory(true);
+    try {
+      const response = await fetch('/api/business-photo-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: businessInfo.id,
+          categoryName: newCategoryName.trim()
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        const newCat = result.data;
+        setPhotoCategories(prev => [...prev, newCat]);
+        setPhaseData(prev => ({
+          ...prev,
+          [newCat.category_key]: {
+            inspectorInfo: { name: '', contact: '', date: '' },
+            specialNotes: '',
+            categoryId: newCat.id
+          }
+        }));
+        setNewCategoryName('');
+        setShowAddCategory(false);
+      }
+    } catch (error) {
+      console.error('카테고리 추가 실패:', error);
+    } finally {
+      setAddingCategory(false);
+    }
+  }, [newCategoryName, businessInfo?.id, addingCategory]);
+
+  // 카테고리 삭제 - 1단계: 확인 요청
+  const requestDeleteCategory = useCallback((categoryId: string) => {
+    setConfirmDeleteId(prev => prev === categoryId ? null : categoryId);
+  }, []);
+
+  // 카테고리 삭제 - 2단계: 실제 삭제 실행
+  const executeDeleteCategory = useCallback(async (categoryId: string, categoryKey: string) => {
+    setConfirmDeleteId(null);
+    setDeletingCategoryId(categoryId);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const response = await fetch(`/api/business-photo-categories?id=${categoryId}`, { method: 'DELETE', headers });
+      const result = await response.json();
+      if (result.success) {
+        setPhotoCategories(prev => prev.filter(c => c.id !== categoryId));
+        setPhaseData(prev => {
+          const updated = { ...prev };
+          delete updated[categoryKey];
+          return updated;
+        });
+        if (currentPhase === categoryKey) {
+          setCurrentPhase('presurvey' as SystemPhase);
+          setSystemType('presurvey');
+        }
+      } else {
+        const toast = document.createElement('div');
+        toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
+        toast.textContent = result.message || '삭제 실패';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+      }
+    } catch (error) {
+      console.error('카테고리 삭제 실패:', error);
+    } finally {
+      setDeletingCategoryId(null);
+    }
+  }, [currentPhase]);
+
+  // Save inspector info using category API (카테고리 기반 저장)
   const saveInspectorInfo = useCallback(async (infoToSave?: typeof inspectorInfo) => {
     if (saveStates.inspector || !businessInfo?.id) return;
 
     const info = infoToSave || inspectorInfo;
+    const categoryData = phaseData[currentPhase];
+    const categoryId = categoryData?.categoryId;
 
     try {
       setSaveStates(prev => ({ ...prev, inspector: true }));
 
-      // Phase별 필드명 매핑
-      const fieldMap = {
-        presurvey: {
-          name: 'presurvey_inspector_name',
-          contact: 'presurvey_inspector_contact',
-          date: 'presurvey_inspector_date'
-        },
-        postinstall: {
-          name: 'postinstall_installer_name',
-          contact: 'postinstall_installer_contact',
-          date: 'postinstall_installer_date'
-        },
-        aftersales: {
-          name: 'aftersales_technician_name',
-          contact: 'aftersales_technician_contact',
-          date: 'aftersales_technician_date'
-        }
-      };
-
-      const fields = fieldMap[currentPhase];
-
-      const response = await fetch('/api/facility-management', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessId: businessInfo.id,
-          phase: currentPhase,
-          [fields.name]: info.name,
-          [fields.contact]: info.contact,
-          [fields.date]: info.date
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        const phaseNames = {
-          presurvey: '실사자',
-          postinstall: '설치자',
-          aftersales: 'AS 담당자'
-        };
-        const toast = document.createElement('div');
-        toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
-        toast.textContent = `${phaseNames[currentPhase]} 정보가 저장되었습니다.`;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-          toast.remove();
-        }, 3000);
+      if (categoryId) {
+        // 새로운 카테고리 API로 저장
+        const response = await fetch('/api/business-photo-categories', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: categoryId,
+            inspector_name: info.name,
+            inspector_contact: info.contact,
+            inspector_date: info.date
+          })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || '저장 실패');
       } else {
-        throw new Error(result.message || '저장 실패');
+        // fallback: 기존 facility-management API
+        const fieldMap: Record<string, { name: string; contact: string; date: string }> = {
+          presurvey: { name: 'presurvey_inspector_name', contact: 'presurvey_inspector_contact', date: 'presurvey_inspector_date' },
+          postinstall: { name: 'postinstall_installer_name', contact: 'postinstall_installer_contact', date: 'postinstall_installer_date' },
+          aftersales: { name: 'aftersales_technician_name', contact: 'aftersales_technician_contact', date: 'aftersales_technician_date' }
+        };
+        const fields = fieldMap[currentPhase];
+        if (fields) {
+          const response = await fetch('/api/facility-management', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              businessId: businessInfo.id,
+              phase: currentPhase,
+              [fields.name]: info.name,
+              [fields.contact]: info.contact,
+              [fields.date]: info.date
+            })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.message || '저장 실패');
+        }
       }
+
+      // 카테고리의 has_data 갱신
+      if (info.name || info.contact) {
+        setPhotoCategories(prev => prev.map(c =>
+          c.category_key === currentPhase ? { ...c, has_data: true } : c
+        ));
+      }
+
+      const currentCat = photoCategories.find(c => c.category_key === currentPhase);
+      const displayName = currentCat?.category_name || currentPhase;
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
+      toast.textContent = `${displayName} 담당자 정보가 저장되었습니다.`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
     } catch (error) {
       console.error(`${currentPhase} 담당자 정보 저장 오류:`, error);
-      const errorMessage = error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
-
       const toast = document.createElement('div');
       toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
-      toast.textContent = errorMessage;
+      toast.textContent = error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
       document.body.appendChild(toast);
-
-      setTimeout(() => {
-        toast.remove();
-      }, 3000);
+      setTimeout(() => toast.remove(), 3000);
     } finally {
       setSaveStates(prev => ({ ...prev, inspector: false }));
     }
-  }, [saveStates.inspector, businessInfo?.id, inspectorInfo, currentPhase]);
+  }, [saveStates.inspector, businessInfo?.id, inspectorInfo, currentPhase, phaseData, photoCategories]);
 
-  // Save special notes using facility-management API (phase별 저장)
+  // Save special notes using category API (카테고리 기반 저장)
   const saveSpecialNotes = useCallback(async (notesToSave?: string) => {
     if (saveStates.notes || !businessInfo?.id) return;
 
     const notes = notesToSave !== undefined ? notesToSave : specialNotes;
+    const categoryData = phaseData[currentPhase];
+    const categoryId = categoryData?.categoryId;
 
     try {
       setSaveStates(prev => ({ ...prev, notes: true }));
 
-      // Phase별 필드명 매핑
-      const fieldMap = {
-        presurvey: 'presurvey_special_notes',
-        postinstall: 'postinstall_special_notes',
-        aftersales: 'aftersales_special_notes'
-      };
-
-      const response = await fetch('/api/facility-management', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessId: businessInfo.id,
-          phase: currentPhase,
-          [fieldMap[currentPhase]]: notes
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        const toast = document.createElement('div');
-        toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
-        toast.textContent = '특이사항이 저장되었습니다.';
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-          toast.remove();
-        }, 3000);
-
-        // 저장 성공 - 페이지 새로고침 없이 상태만 업데이트
-        console.log('✅ [SPECIAL-NOTES-SAVED] 특이사항 저장 완료');
+      if (categoryId) {
+        // 새로운 카테고리 API로 저장
+        const response = await fetch('/api/business-photo-categories', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: categoryId, special_notes: notes })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || '저장 실패');
       } else {
-        throw new Error(result.message || '저장 실패');
+        // fallback: 기존 facility-management API
+        const fieldMap: Record<string, string> = {
+          presurvey: 'presurvey_special_notes',
+          postinstall: 'postinstall_special_notes',
+          aftersales: 'aftersales_special_notes'
+        };
+        const fieldName = fieldMap[currentPhase];
+        if (fieldName) {
+          const response = await fetch('/api/facility-management', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ businessId: businessInfo.id, phase: currentPhase, [fieldName]: notes })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.message || '저장 실패');
+        }
       }
-    } catch (error) {
-      console.error('특이사항 저장 오류:', error);
-      const errorMessage = error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
+
+      // 카테고리의 has_data 갱신
+      if (notes) {
+        setPhotoCategories(prev => prev.map(c =>
+          c.category_key === currentPhase ? { ...c, has_data: true } : c
+        ));
+      }
 
       const toast = document.createElement('div');
-      toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
-      toast.textContent = errorMessage;
+      toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
+      toast.textContent = '특이사항이 저장되었습니다.';
       document.body.appendChild(toast);
-
-      setTimeout(() => {
-        toast.remove();
-      }, 3000);
+      setTimeout(() => toast.remove(), 3000);
+    } catch (error) {
+      console.error('특이사항 저장 오류:', error);
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-3 py-2 rounded-lg z-50 animate-fade-in text-sm';
+      toast.textContent = error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
     } finally {
       setSaveStates(prev => ({ ...prev, notes: false }));
     }
-  }, [saveStates.notes, businessInfo?.id, specialNotes, currentPhase]);
+  }, [saveStates.notes, businessInfo?.id, specialNotes, currentPhase, phaseData]);
 
   // Memoized facility stats
   const facilityStats = useMemo(() => {
@@ -670,56 +792,177 @@ export default function BusinessContent() {
                   시설 관리 및 보고서 작성
                 </p>
                 
-                {/* System Phase selection dropdown */}
+                {/* System Phase selection dropdown - 동적 카테고리 */}
                 <div className="relative system-type-dropdown">
                   <button
                     onClick={() => setShowSystemTypeDropdown(!showSystemTypeDropdown)}
                     className="bg-gray-700 hover:bg-gray-800 text-white px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium flex items-center gap-2 transition-colors"
                   >
-                    {currentPhase === 'presurvey' && '🔍 설치 전 실사'}
-                    {currentPhase === 'postinstall' && '📸 설치 후 사진'}
-                    {currentPhase === 'aftersales' && '🔧 AS 사진'}
+                    {(() => {
+                      const currentCat = photoCategories.find(c => c.category_key === currentPhase);
+                      if (currentCat) return `${currentCat.icon} ${currentCat.category_name}`;
+                      if (currentPhase === 'presurvey') return '🔍 설치 전 실사';
+                      if (currentPhase === 'postinstall') return '📸 설치 후 사진';
+                      if (currentPhase === 'aftersales') return '🔧 AS 사진';
+                      return currentPhase;
+                    })()}
                     <ChevronDown className={`w-3 h-3 md:w-4 md:h-4 transition-transform ${showSystemTypeDropdown ? 'rotate-180' : ''}`} />
                   </button>
-                  
+
                   {showSystemTypeDropdown && (
-                    <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-10 min-w-[140px] md:min-w-[160px]">
-                      <button
-                        onClick={() => {
-                          setCurrentPhase('presurvey');
-                          setSystemType('presurvey');
-                          setShowSystemTypeDropdown(false);
-                        }}
-                        className={`w-full px-3 py-2 md:px-3 md:py-2 text-left hover:bg-gray-50 transition-colors text-xs md:text-sm ${
-                          currentPhase === 'presurvey' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                        }`}
-                      >
-                        🔍 설치 전 실사
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCurrentPhase('postinstall');
-                          setSystemType('completion');
-                          setShowSystemTypeDropdown(false);
-                        }}
-                        className={`w-full px-3 py-2 md:px-3 md:py-2 text-left hover:bg-gray-50 transition-colors text-xs md:text-sm ${
-                          currentPhase === 'postinstall' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                        }`}
-                      >
-                        📸 설치 후 사진
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCurrentPhase('aftersales');
-                          setSystemType('completion');
-                          setShowSystemTypeDropdown(false);
-                        }}
-                        className={`w-full px-3 py-2 md:px-3 md:py-2 text-left hover:bg-gray-50 transition-colors text-xs md:text-sm ${
-                          currentPhase === 'aftersales' ? 'bg-orange-50 text-orange-700 font-medium' : 'text-gray-700'
-                        }`}
-                      >
-                        🔧 AS 사진
-                      </button>
+                    <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-10 min-w-[180px] md:min-w-[220px]">
+                      {/* 시스템 기본 카테고리 */}
+                      {photoCategories.filter(c => c.is_system).map(cat => (
+                        <button
+                          key={cat.id}
+                          onClick={() => {
+                            setCurrentPhase(cat.category_key as SystemPhase);
+                            setSystemType(mapPhaseToSystemType(cat.category_key));
+                            setShowSystemTypeDropdown(false);
+                          }}
+                          className={`w-full px-3 py-2 md:px-3 md:py-2 text-left hover:bg-gray-50 transition-colors text-xs md:text-sm flex items-center justify-between ${
+                            currentPhase === cat.category_key ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          <span>{cat.icon} {cat.category_name}</span>
+                          {cat.has_data && (
+                            <span className="flex items-center gap-1">
+                              {cat.photo_count ? (
+                                <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{cat.photo_count}</span>
+                              ) : (
+                                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                              )}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+
+                      {/* 사용자 정의 카테고리 구분선 */}
+                      {photoCategories.some(c => !c.is_system) && (
+                        <div className="border-t border-gray-200 my-1"></div>
+                      )}
+
+                      {/* 사용자 정의 카테고리 */}
+                      {photoCategories.filter(c => !c.is_system).map(cat => (
+                        <div key={cat.id}>
+                          <div
+                            className={`flex items-center justify-between hover:bg-gray-50 transition-colors ${
+                              currentPhase === cat.category_key ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <button
+                              onClick={() => {
+                                setCurrentPhase(cat.category_key as SystemPhase);
+                                setSystemType(mapPhaseToSystemType(cat.category_key));
+                                setShowSystemTypeDropdown(false);
+                                setConfirmDeleteId(null);
+                              }}
+                              className={`flex-1 px-3 py-2 text-left text-xs md:text-sm flex items-center justify-between ${
+                                currentPhase === cat.category_key ? 'text-blue-700 font-medium' : 'text-gray-700'
+                              }`}
+                            >
+                              <span>{cat.icon} {cat.category_name}</span>
+                              {cat.has_data && (
+                                <span className="flex items-center gap-1">
+                                  {cat.photo_count ? (
+                                    <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{cat.photo_count}</span>
+                                  ) : (
+                                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                  )}
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.nativeEvent.stopImmediatePropagation();
+                                requestDeleteCategory(cat.id);
+                              }}
+                              disabled={deletingCategoryId === cat.id}
+                              className="p-1.5 mr-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                              title="카테고리 삭제"
+                            >
+                              {deletingCategoryId === cat.id ? (
+                                <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                          {/* 인라인 삭제 확인 UI */}
+                          {confirmDeleteId === cat.id && (
+                            <div className="px-3 py-2 bg-red-50 border-t border-red-100">
+                              <p className="text-[11px] text-red-600 mb-1.5">
+                                {cat.photo_count
+                                  ? `사진 ${cat.photo_count}장이 포함되어 있습니다. 삭제 시 복구할 수 없습니다.`
+                                  : '이 카테고리를 삭제하시겠습니까?'}
+                              </p>
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.nativeEvent.stopImmediatePropagation();
+                                    executeDeleteCategory(cat.id, cat.category_key);
+                                  }}
+                                  className="px-2 py-0.5 bg-red-500 text-white text-[11px] rounded hover:bg-red-600 transition-colors"
+                                >
+                                  삭제
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.nativeEvent.stopImmediatePropagation();
+                                    setConfirmDeleteId(null);
+                                  }}
+                                  className="px-2 py-0.5 bg-gray-200 text-gray-700 text-[11px] rounded hover:bg-gray-300 transition-colors"
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* 카테고리 추가 버튼 */}
+                      <div className="border-t border-gray-200 mt-1">
+                        {showAddCategory ? (
+                          <div className="p-2 flex gap-1">
+                            <input
+                              type="text"
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter') handleAddCategory();
+                                if (e.key === 'Escape') { setShowAddCategory(false); setNewCategoryName(''); }
+                              }}
+                              placeholder="카테고리명 입력"
+                              className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleAddCategory(); }}
+                              disabled={addingCategory || !newCategoryName.trim()}
+                              className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:bg-gray-300 transition-colors"
+                            >
+                              {addingCategory ? '...' : '추가'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAddCategory(true);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors text-xs md:text-sm text-blue-600 flex items-center gap-1.5"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            카테고리 추가
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -809,17 +1052,19 @@ export default function BusinessContent() {
                 )}
 
 
-                {/* 3. 담당자 정보 (Phase별) */}
+                {/* 3. 담당자 정보 (카테고리별) */}
                 <InspectorInfoSection
                   inspectorInfo={inspectorInfo}
                   onUpdate={handleInspectorUpdate}
                   onSave={saveInspectorInfo}
                   isSaving={saveStates.inspector}
-                  title={
-                    currentPhase === 'postinstall' ? '설치자 정보' :
-                    currentPhase === 'aftersales' ? 'AS 담당자 정보' :
-                    '실사자 정보'
-                  }
+                  title={(() => {
+                    const currentCat = photoCategories.find(c => c.category_key === currentPhase);
+                    if (currentCat && !currentCat.is_system) return `${currentCat.category_name} 담당자 정보`;
+                    if (currentPhase === 'postinstall') return '설치자 정보';
+                    if (currentPhase === 'aftersales') return 'AS 담당자 정보';
+                    return '실사자 정보';
+                  })()}
                 />
 
                 {/* 4. 특이사항 */}
