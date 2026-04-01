@@ -103,6 +103,9 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     invoice_balance_amount: business.invoice_balance_amount ? parseInt(business.invoice_balance_amount) : null,
     payment_balance_date: normalizeDateField(business.payment_balance_date),
     payment_balance_amount: business.payment_balance_amount ? parseInt(business.payment_balance_amount) : null,
+    subsidy_approval_date: normalizeDateField(business.subsidy_approval_date),
+    quote_sent_date: normalizeDateField(business.quote_sent_date),
+    contract_sent_date: normalizeDateField(business.contract_sent_date),
     construction_report_submitted_at: normalizeDateField(business.construction_report_submitted_at),
     greenlink_confirmation_submitted_at: normalizeDateField(business.greenlink_confirmation_submitted_at),
     attachment_completion_submitted_at: normalizeDateField(business.attachment_completion_submitted_at),
@@ -172,6 +175,7 @@ export async function GET(request: Request) {
       shipment_date::text as shipment_date,
       installation_date::text as installation_date,
       subsidy_approval_date::text as subsidy_approval_date,
+      quote_sent_date::text as quote_sent_date,
       contract_sent_date::text as contract_sent_date,
       construction_report_submitted_at::text as construction_report_submitted_at,
       greenlink_confirmation_submitted_at::text as greenlink_confirmation_submitted_at,
@@ -280,6 +284,7 @@ export async function GET(request: Request) {
         bi.shipment_date::text AS shipment_date,
         bi.installation_date::text AS installation_date,
         bi.subsidy_approval_date::text AS subsidy_approval_date,
+        bi.quote_sent_date::text AS quote_sent_date,
         bi.contract_sent_date::text AS contract_sent_date,
         bi.construction_report_submitted_at::text AS construction_report_submitted_at,
         bi.greenlink_confirmation_submitted_at::text AS greenlink_confirmation_submitted_at,
@@ -667,6 +672,9 @@ export async function PUT(request: Request) {
     }
     if (updateData.subsidy_approval_date !== undefined) {
       updateObject.subsidy_approval_date = updateData.subsidy_approval_date || null;
+    }
+    if (updateData.quote_sent_date !== undefined) {
+      updateObject.quote_sent_date = updateData.quote_sent_date || null;
     }
     if (updateData.contract_sent_date !== undefined) {
       updateObject.contract_sent_date = updateData.contract_sent_date || null;
@@ -1076,6 +1084,7 @@ export async function POST(request: Request) {
       first_report_date: businessData.first_report_date || null,
       operation_start_date: businessData.operation_start_date || null,
       subsidy_approval_date: businessData.subsidy_approval_date || null,
+      quote_sent_date: businessData.quote_sent_date || null,
       contract_sent_date: businessData.contract_sent_date || null,
 
       // 관리책임자 (JSONB 배열)

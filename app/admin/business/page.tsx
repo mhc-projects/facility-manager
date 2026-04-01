@@ -2666,6 +2666,7 @@ function BusinessManagementPage() {
           first_report_date: business.first_report_date,
           operation_start_date: business.operation_start_date,
           subsidy_approval_date: business.subsidy_approval_date,
+          quote_sent_date: business.quote_sent_date,
           expansion_pack: business.expansion_pack,
           other_equipment: business.other_equipment,
           additional_cost: business.additional_cost,
