@@ -278,6 +278,15 @@ function ApprovalsContent() {
     if (t === 'pending' || t === 'my' || t === 'all' || t === 'completed') setTab(t as TabType)
   }, [searchParams])
 
+  // _t 파라미터 변경 감지: 상세 페이지에서 수정/결재 후 복귀 시 강제 refetch
+  const refreshToken = searchParams?.get('_t')
+  useEffect(() => {
+    if (refreshToken) {
+      fetchDocs()
+      fetchPendingCount()
+    }
+  }, [refreshToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { fetchDocs() }, [fetchDocs])
   useEffect(() => { fetchPendingCount() }, [fetchPendingCount])
 

@@ -175,7 +175,7 @@ function ApprovalDetailContent() {
       .on('broadcast', { event: 'doc_updated' }, (payload) => {
         // 삭제된 문서면 목록으로 이동
         if (payload.payload?.status === 'deleted') {
-          router.push(`/admin/approvals?tab=${fromTab}`)
+          router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
           return
         }
         // ref로 최신 editing 상태 확인 — 편집 중이 아닐 때만 갱신
@@ -321,7 +321,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setApproveSheetOpen(false)
         setApproveComment('')
-        router.push(`/admin/approvals?tab=${fromTab}`)
+        router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
       } else {
         alert(data.error || '승인 실패')
       }
@@ -342,7 +342,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setRejectSheetOpen(false)
         setRejectComment('')
-        router.push(`/admin/approvals?tab=${fromTab}`)
+        router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
       } else {
         alert(data.error || '반려 실패')
       }
@@ -362,7 +362,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setExpressModalOpen(false)
         setExpressComment('')
-        router.push(`/admin/approvals?tab=${fromTab}`)
+        router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
       } else {
         alert(data.error || '전결 처리 실패')
       }
@@ -444,7 +444,7 @@ function ApprovalDetailContent() {
     const t = token()
     const res = await fetch(`/api/approvals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } })
     const data = await res.json()
-    if (data.success) router.push(`/admin/approvals?tab=${fromTab}`)
+    if (data.success) router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
     else alert(data.error || '삭제 실패')
   }
 
