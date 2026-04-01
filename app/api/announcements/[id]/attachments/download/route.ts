@@ -38,7 +38,9 @@ export async function GET(
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
-      .createSignedUrl(attachment.file_path, 60); // 60초 유효
+      .createSignedUrl(attachment.file_path, 300, {
+        download: attachment.original_name || true,
+      }); // 300초 유효, Content-Disposition: attachment 설정
 
     if (error) {
       console.error('[다운로드 URL 생성 실패]', error);

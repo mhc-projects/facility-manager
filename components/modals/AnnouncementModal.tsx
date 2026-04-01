@@ -141,13 +141,8 @@ export default function AnnouncementModal({
       const result = await res.json();
 
       if (result.success && result.url) {
-        const link = document.createElement('a');
-        link.href = result.url;
-        link.download = result.fileName || attachment.original_name;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // signed URL에 download 옵션이 설정되어 있으므로 새 탭에서 직접 다운로드
+        window.open(result.url, '_blank');
       }
     } catch (err) {
       console.error('[다운로드 오류]', err);
@@ -371,7 +366,8 @@ export default function AnnouncementModal({
                       return (
                         <div
                           key={attachment.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                          onClick={() => handleDownload(attachment)}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                             <IconComponent className="w-5 h-5 text-blue-500 flex-shrink-0" />
@@ -385,7 +381,7 @@ export default function AnnouncementModal({
                             </div>
                           </div>
                           <button
-                            onClick={() => handleDownload(attachment)}
+                            onClick={(e) => { e.stopPropagation(); handleDownload(attachment); }}
                             className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors flex-shrink-0"
                             title="다운로드"
                           >
@@ -446,24 +442,40 @@ export default function AnnouncementModal({
                           key={attachment.id}
                           className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDownload(attachment)}
+                            className="flex items-center gap-3 min-w-0 flex-1 text-left hover:text-blue-600 transition-colors cursor-pointer"
+                            title="클릭하여 다운로드"
+                          >
                             <IconComponent className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                            <span className="text-sm text-gray-700 truncate">
+                            <span className="text-sm text-gray-700 truncate hover:text-blue-600">
                               {attachment.original_name}
                             </span>
                             <span className="text-xs text-gray-400 flex-shrink-0">
                               {formatFileSize(attachment.file_size)}
                             </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => markExistingForDeletion(attachment.id)}
-                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                            title="삭제"
-                            disabled={loading}
-                          >
-                            <Trash2 className="w-4 h-4" />
                           </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(attachment)}
+                              className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="다운로드"
+                              disabled={loading}
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => markExistingForDeletion(attachment.id)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="삭제"
+                              disabled={loading}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
