@@ -202,11 +202,20 @@ function ApprovalDetailContent() {
       .then(d => { if (d.success) setIsManagementSupport(d.data.is_management_support) })
       .catch(() => {})
   }, [isSuperAdmin])
-  const canEdit = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
-  const canDelete = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
+  // pending 상태에서 작성자 이후 실질 결재자가 아직 미처리인지 확인
+  const isPendingNotYetApproved = doc?.status === 'pending' && isMyDoc && (() => {
+    const steps = doc?.steps || []
+    // step_order > 1 이면서 작성자가 아닌 결재자 중 approved된 건이 없으면 회수 가능
+    const approvedByOthers = steps.filter(s =>
+      s.step_order > 1 && s.approver_id !== user?.id && s.status === 'approved'
+    )
+    return approvedByOthers.length === 0
+  })()
+  const canEdit = isMyDoc && (['draft', 'returned', 'rejected'].includes(doc?.status || '') || isPendingNotYetApproved)
+  const canDelete = isMyDoc && (['draft', 'returned', 'rejected'].includes(doc?.status || '') || isPendingNotYetApproved)
   const canForceCancel = isSuperAdmin && !['draft', 'returned', 'rejected'].includes(doc?.status || '') && doc?.status !== undefined
-  const canSubmit = isMyDoc && ['draft', 'returned', 'rejected'].includes(doc?.status || '')
-  const isResubmit = ['returned', 'rejected'].includes(doc?.status || '')
+  const canSubmit = isMyDoc && (['draft', 'returned', 'rejected'].includes(doc?.status || '') || isPendingNotYetApproved)
+  const isResubmit = ['returned', 'rejected'].includes(doc?.status || '') || isPendingNotYetApproved
 
   const myPendingStep = doc?.steps?.find(s =>
     s.approver_id === user?.id && s.status === 'pending' &&

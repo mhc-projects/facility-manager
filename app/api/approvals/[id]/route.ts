@@ -91,12 +91,27 @@ export async function PUT(
     if (doc.requester_id !== userId) {
       return NextResponse.json({ success: false, error: '본인이 작성한 문서만 수정할 수 있습니다' }, { status: 403 });
     }
-    if (!['draft', 'returned', 'rejected'].includes(doc.status)) {
-      return NextResponse.json({ success: false, error: '임시저장 또는 반려된 문서만 수정할 수 있습니다' }, { status: 400 });
+    if (!['draft', 'returned', 'rejected', 'pending'].includes(doc.status)) {
+      return NextResponse.json({ success: false, error: '임시저장, 반려 또는 결재 대기 중인 문서만 수정할 수 있습니다' }, { status: 400 });
+    }
+
+    // pending 상태: 작성자(1단계) 이후 첫 번째 실질 결재자가 아직 미처리인 경우에만 수정 허용
+    if (doc.status === 'pending') {
+      const approvedByOthers = await queryOne(
+        `SELECT COUNT(*) AS cnt FROM approval_steps
+         WHERE document_id = $1 AND status = 'approved' AND step_order > 1 AND approver_id != $2`,
+        [params.id, userId]
+      );
+      if (approvedByOthers && Number(approvedByOthers.cnt) > 0) {
+        return NextResponse.json({ success: false, error: '이미 결재가 진행된 문서는 수정할 수 없습니다' }, { status: 400 });
+      }
     }
 
     const body = await request.json();
     const { title, team_leader_id, executive_id, ceo_id, form_data, department } = body;
+
+    // pending 상태에서 수정 시: draft로 되돌리고 결재 단계 초기화 (재상신 필요)
+    const wasPending = doc.status === 'pending';
 
     const updated = await queryOne(
       `UPDATE approval_documents
@@ -106,6 +121,7 @@ export async function PUT(
            executive_id = $4,
            ceo_id = $5,
            form_data = COALESCE($6, form_data),
+           ${wasPending ? "status = 'draft', current_step = 0," : ''}
            updated_at = NOW()
        WHERE id = $7
        RETURNING *`,
@@ -119,6 +135,14 @@ export async function PUT(
         params.id
       ]
     );
+
+    // pending → draft 전환 시 기존 결재 단계 삭제 (재상신 시 다시 생성됨)
+    if (wasPending) {
+      await queryOne(
+        `DELETE FROM approval_steps WHERE document_id = $1`,
+        [params.id]
+      );
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
@@ -165,8 +189,20 @@ export async function DELETE(
       if (doc.requester_id !== userId) {
         return NextResponse.json({ success: false, error: '본인이 작성한 문서만 삭제할 수 있습니다' }, { status: 403 });
       }
-      if (!['draft', 'returned', 'rejected'].includes(doc.status)) {
-        return NextResponse.json({ success: false, error: '임시저장 또는 반려된 문서만 삭제할 수 있습니다' }, { status: 400 });
+      if (!['draft', 'returned', 'rejected', 'pending'].includes(doc.status)) {
+        return NextResponse.json({ success: false, error: '임시저장, 반려 또는 결재 대기 중인 문서만 삭제할 수 있습니다' }, { status: 400 });
+      }
+
+      // pending 상태: 작성자(1단계) 이후 첫 번째 실질 결재자가 아직 미처리인 경우에만 삭제 허용
+      if (doc.status === 'pending') {
+        const approvedByOthers = await queryOne(
+          `SELECT COUNT(*) AS cnt FROM approval_steps
+           WHERE document_id = $1 AND status = 'approved' AND step_order > 1 AND approver_id != $2`,
+          [params.id, userId]
+        );
+        if (approvedByOthers && Number(approvedByOthers.cnt) > 0) {
+          return NextResponse.json({ success: false, error: '이미 결재가 진행된 문서는 삭제할 수 없습니다' }, { status: 400 });
+        }
       }
     }
 
