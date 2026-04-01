@@ -155,7 +155,7 @@ BEGIN
                 ('deposit_confirm'::task_status, '계약금 확인', 5),
                 ('product_order'::task_status, '제품 발주', 6),
                 ('product_shipment'::task_status, '제품 출고', 7),
-                ('installation_schedule'::task_status, '설치 협의', 8),
+                ('installation_schedule'::task_status, '설치예정', 8),
                 ('installation'::task_status, '제품 설치', 9),
                 ('balance_payment'::task_status, '잔금 입금', 10),
                 ('document_complete'::task_status, '서류 발송 완료', 11);
@@ -170,7 +170,7 @@ BEGIN
                 ('pre_construction_supplement'::task_status, '착공 보완', 7),
                 ('product_order'::task_status, '제품 발주', 8),
                 ('product_shipment'::task_status, '제품 출고', 9),
-                ('installation_schedule'::task_status, '설치 협의', 10),
+                ('installation_schedule'::task_status, '설치예정', 10),
                 ('installation'::task_status, '제품 설치', 11),
                 ('completion_inspection'::task_status, '준공 실사', 12),
                 ('completion_supplement'::task_status, '준공 보완', 13),

@@ -29,7 +29,7 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
   'self_deposit_confirm': '계약금 확인',
   'self_product_order': '제품 발주',
   'self_product_shipment': '제품 출고',
-  'self_installation_schedule': '설치 협의',
+  'self_installation_schedule': '설치예정',
   'self_installation': '제품 설치',
   'self_balance_payment': '잔금 입금',
   'self_document_complete': '서류 발송 완료',

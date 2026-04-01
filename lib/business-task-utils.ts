@@ -52,7 +52,7 @@ const STATUS_LABELS: Record<string, string> = {
   deposit_confirm: '계약금 확인',
   product_order: '제품 발주',
   product_shipment: '제품 출고',
-  installation_schedule: '설치 협의',
+  installation_schedule: '설치예정',
   installation: '제품 설치',
   balance_payment: '잔금 입금',
   document_complete: '서류 발송 완료',

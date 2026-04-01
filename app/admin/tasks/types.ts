@@ -103,7 +103,7 @@ export const selfSteps: StepInfo[] = [
   { status: 'deposit_confirm', label: '계약금 확인', color: 'indigo' },
   { status: 'product_order', label: '제품 발주', color: 'cyan' },
   { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'installation_schedule', label: '설치 협의', color: 'teal' },
+  { status: 'installation_schedule', label: '설치예정', color: 'teal' },
   { status: 'installation', label: '제품 설치', color: 'green' },
   { status: 'balance_payment', label: '잔금 입금', color: 'lime' },
   { status: 'document_complete', label: '서류 발송 완료', color: 'green' }
@@ -126,7 +126,7 @@ export const subsidySteps: StepInfo[] = [
   { status: 'pre_construction_supplement_2nd', label: '착공 보완 2차', color: 'fuchsia' },
   { status: 'product_order', label: '제품 발주', color: 'cyan' },
   { status: 'product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'installation_schedule', label: '설치 협의', color: 'teal' },
+  { status: 'installation_schedule', label: '설치예정', color: 'teal' },
   { status: 'installation', label: '제품 설치', color: 'green' },
   { status: 'pre_completion_document_submit', label: '준공실사 전 서류 제출', color: 'amber' },
   { status: 'completion_inspection', label: '준공 실사', color: 'violet' },

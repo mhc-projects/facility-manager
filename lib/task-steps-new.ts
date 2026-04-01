@@ -48,7 +48,7 @@ export const selfSteps: TaskStep[] = [
   { status: 'self_deposit_confirm', label: '계약금 확인', color: 'indigo' },
   { status: 'self_product_order', label: '제품 발주', color: 'cyan' },
   { status: 'self_product_shipment', label: '제품 출고', color: 'emerald' },
-  { status: 'self_installation_schedule', label: '설치 협의', color: 'teal' },
+  { status: 'self_installation_schedule', label: '설치예정', color: 'teal' },
   { status: 'self_installation', label: '제품 설치', color: 'green' },
   { status: 'self_balance_payment', label: '잔금 입금', color: 'lime' },
   { status: 'self_document_complete', label: '서류 발송 완료', color: 'green' }
