@@ -132,6 +132,7 @@ interface UnifiedBusinessInfo {
   operation_start_date?: string | null;
   subsidy_approval_date?: string | null;
   contract_sent_date?: string | null;
+  quote_sent_date?: string | null;
   expansion_pack?: number | null;
   other_equipment?: string | null;
   additional_cost?: number | null;
@@ -3149,6 +3150,7 @@ function BusinessManagementPage() {
 
         // 일정 관리
         subsidy_approval_date: freshData.subsidy_approval_date || '',
+        quote_sent_date: freshData.quote_sent_date || '',
         contract_sent_date: freshData.contract_sent_date || '',
         order_request_date: freshData.order_request_date || '',
         order_date: freshData.order_date || '',
@@ -5711,6 +5713,14 @@ function BusinessManagementPage() {
                       <DateInput
                         value={formData.subsidy_approval_date || ''}
                         onChange={(value) => setFormData({...formData, subsidy_approval_date: value})}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">견적서 발송일</label>
+                      <DateInput
+                        value={formData.quote_sent_date || ''}
+                        onChange={(value) => setFormData({...formData, quote_sent_date: value})}
                       />
                     </div>
 

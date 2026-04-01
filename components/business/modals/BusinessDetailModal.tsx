@@ -1214,6 +1214,13 @@ export default function BusinessDetailModal({
                       </div>
                     )}
 
+                    {business.quote_sent_date && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">견적서 발송일</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.quote_sent_date)}</div>
+                      </div>
+                    )}
+
                     {business.contract_sent_date && (
                       <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
                         <div className="text-xs sm:text-sm text-gray-600 mb-1">계약서 발송일</div>
