@@ -1302,9 +1302,6 @@ function RevenueDashboard() {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('매출관리');
 
-    // 금액 컬럼 인덱스 (1-based): 환경부고시가(J), 매출(K), 발주금액(L), 기본설치비(M), 추가설치비(N), 영업비(O), 실사비(P)
-    const CURRENCY_COLS = [10, 11, 12, 13, 14, 15, 16];
-
     // 헤더
     sheet.columns = [
       { header: '설치날짜',    key: 'installation_date',    width: 14 },
@@ -1318,12 +1315,20 @@ function RevenueDashboard() {
       { header: '장착구분',    key: 'progress_status',      width: 14 },
       { header: '환경부고시가', key: 'official_price_total', width: 16 },
       { header: '매출',        key: 'total_revenue',        width: 16 },
-      { header: '발주금액',    key: 'total_cost',           width: 16 },
+      { header: '매입',        key: 'total_cost',           width: 16 },
       { header: '기본설치비',  key: 'installation_costs',       width: 16 },
       { header: '추가설치비',  key: 'installation_extra_cost',  width: 16 },
-      { header: '영업비',      key: 'sales_commission',         width: 16 },
-      { header: '실사비',      key: 'survey_costs',             width: 16 },
+      { header: '영업비용',    key: 'sales_commission',         width: 16 },
+      { header: '실사비용',    key: 'survey_costs',             width: 16 },
+      { header: 'AS비용',      key: 'as_cost',                  width: 14 },
+      { header: '추가비용',    key: 'custom_cost_total',        width: 14 },
+      { header: '총이익',      key: 'gross_profit',             width: 16 },
+      { header: '순이익',      key: 'net_profit',               width: 16 },
+      { header: '이익률(%)',   key: 'profit_margin',            width: 12 },
     ];
+
+    // 금액 컬럼 인덱스 (1-based): 환경부고시가(J)~순이익(T)
+    const CURRENCY_COLS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
     // 헤더 스타일
     sheet.getRow(1).eachCell(cell => {
@@ -1364,6 +1369,30 @@ function RevenueDashboard() {
         return sum + qty * price;
       }, 0);
 
+      // 영업비용: 조정값 우선 사용
+      const salesCommission = Number(b.adjusted_sales_commission || b.sales_commission) || 0;
+
+      // AS 비용
+      const asCost = Number(b.as_cost) || 0;
+
+      // 커스텀 추가비용 합계
+      let customCostTotal = 0;
+      if (b.custom_additional_costs) {
+        try {
+          const costs = typeof b.custom_additional_costs === 'string'
+            ? JSON.parse(b.custom_additional_costs)
+            : b.custom_additional_costs;
+          if (Array.isArray(costs)) {
+            customCostTotal = costs.reduce((t: number, c: any) => t + (Number(c.amount) || 0), 0);
+          }
+        } catch (e) {}
+      }
+
+      // 이익률
+      const profitMargin = b.total_revenue > 0
+        ? ((b.net_profit || 0) / b.total_revenue * 100)
+        : 0;
+
       const row = sheet.addRow({
         installation_date:    b.installation_date || '',
         installation_team:    b.installation_team || '',
@@ -1379,8 +1408,13 @@ function RevenueDashboard() {
         total_cost:           b.total_cost || 0,
         installation_costs:       b.installation_costs || 0,
         installation_extra_cost:  b.installation_extra_cost || 0,
-        sales_commission:         b.sales_commission || 0,
+        sales_commission:         salesCommission,
         survey_costs:             b.survey_costs || 0,
+        as_cost:                  asCost,
+        custom_cost_total:        customCostTotal,
+        gross_profit:             b.gross_profit || 0,
+        net_profit:               b.net_profit || 0,
+        profit_margin:            Math.round(profitMargin * 10) / 10,
       });
 
       // 금액 컬럼 숫자 서식 적용 (천단위 콤마)
@@ -1389,6 +1423,10 @@ function RevenueDashboard() {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
       });
+      // 이익률 컬럼 (U, 21번) 서식
+      const marginCell = row.getCell(21);
+      marginCell.numFmt = '0.0';
+      marginCell.alignment = { horizontal: 'right' };
     });
 
     const today = new Date().toISOString().split('T')[0];
