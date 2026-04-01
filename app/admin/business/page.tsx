@@ -4566,22 +4566,36 @@ function BusinessManagementPage() {
       title: '설치완료',
       width: '80px',
       render: (item: any) => {
-        // 설치일이 있으면 완료
         const hasInstallation = !!item.installation_date
-
-        // 진행구분이 '대리점'이고 발주일이 있으면 완료 (대리점은 발주로 모든 과정 종료)
         const isDealerComplete = item.progress_status === '대리점' && !!item.order_date
 
+        const formatDate = (dateStr: string) => {
+          const d = new Date(dateStr)
+          const yy = d.getFullYear().toString().slice(-2)
+          const mm = (d.getMonth() + 1).toString().padStart(2, '0')
+          const dd = d.getDate().toString().padStart(2, '0')
+          return `${yy}.${mm}.${dd}`
+        }
+
+        if (hasInstallation) {
+          return (
+            <div className="flex justify-center">
+              <span className="text-[11px] text-green-600 font-medium">{formatDate(item.installation_date)}</span>
+            </div>
+          )
+        }
+
+        if (isDealerComplete) {
+          return (
+            <div className="flex justify-center">
+              <span className="text-[11px] text-blue-600 font-medium">{formatDate(item.order_date)}</span>
+            </div>
+          )
+        }
+
         return (
-          <div className="flex justify-center items-center">
-            {(hasInstallation || isDealerComplete) ? (
-              <div className="flex items-center gap-1">
-                <Check className="w-4 h-4 text-green-600" />
-                <span className="text-xs text-green-600 font-medium">완료</span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400">-</span>
-            )}
+          <div className="flex justify-center">
+            <span className="text-[11px] text-gray-400">-</span>
           </div>
         )
       }
