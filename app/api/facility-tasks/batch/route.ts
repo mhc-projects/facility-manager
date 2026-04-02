@@ -174,6 +174,7 @@ export async function POST(request: NextRequest) {
           'self_product_shipment': 'bg-cyan-100 text-cyan-800',
           'self_installation_schedule': 'bg-amber-100 text-amber-800',
           'self_installation': 'bg-orange-100 text-orange-800',
+          'self_completion_document': 'bg-amber-100 text-amber-800',
           'self_balance_payment': 'bg-teal-100 text-teal-800',
           'self_document_complete': 'bg-sky-100 text-sky-800',
 

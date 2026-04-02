@@ -1063,7 +1063,8 @@ function BusinessManagementPage() {
       'self_product_order': '제품 발주',
       'self_product_shipment': '제품 출고',
       'self_installation_schedule': '설치예정',
-      'self_installation': '설치완료',
+      'self_installation': '설치 완료',
+      'self_completion_document': '준공서류 작성필요',
       'self_balance_payment': '잔금 입금',
       'self_document_complete': '서류 발송 완료',
       // 보조금 공통 단계

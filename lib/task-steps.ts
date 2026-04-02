@@ -17,7 +17,7 @@ export type TaskStatus =
   // outsourcing 공통 단계 (필요시 추가)
   // 자비 전용 단계 (self_ prefix)
   | 'self_deposit_confirm' | 'self_product_order' | 'self_product_shipment' | 'self_installation_schedule'
-  | 'self_installation' | 'self_balance_payment' | 'self_document_complete'
+  | 'self_installation' | 'self_completion_document' | 'self_balance_payment' | 'self_document_complete'
   // 보조금 전용 단계 (subsidy_ prefix)
   | 'subsidy_document_preparation' | 'subsidy_application_submit' | 'subsidy_approval_pending' | 'subsidy_approved' | 'subsidy_rejected'
   | 'subsidy_document_supplement' | 'subsidy_pre_construction_inspection'
@@ -55,7 +55,8 @@ export const selfSteps: TaskStep[] = [
   { status: 'self_product_order', label: '제품 발주', color: 'cyan' },
   { status: 'self_product_shipment', label: '제품 출고', color: 'emerald' },
   { status: 'self_installation_schedule', label: '설치예정', color: 'teal' },
-  { status: 'self_installation', label: '제품 설치', color: 'green' },
+  { status: 'self_installation', label: '설치 완료', color: 'green' },
+  { status: 'self_completion_document', label: '준공서류 작성필요', color: 'amber' },
   { status: 'self_balance_payment', label: '잔금 입금', color: 'lime' },
   { status: 'self_document_complete', label: '서류 발송 완료', color: 'green' }
 ]
