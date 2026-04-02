@@ -912,6 +912,34 @@ function BusinessManagementPage() {
     }
   }, [calculateBusinessRevenue, salesOfficeCommissions])
 
+  // 🎯 사업장 목록 로드 완료 후 batch API로 정확한 미수금 계산 (서버 사이드 contract_amount)
+  const [batchReceivables, setBatchReceivables] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (isLoading || !allBusinesses.length) return;
+
+    const fetchBatchReceivables = async () => {
+      try {
+        const ids = allBusinesses.map(b => b.id);
+
+        const response = await fetch('/api/business-invoices/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          setBatchReceivables(result.data);
+          console.log(`✅ [BATCH-RECEIVABLES] 사업장관리 ${Object.keys(result.data).length}개 미수금 계산 완료`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [BATCH-RECEIVABLES] 미수금 batch 계산 실패:', err);
+      }
+    };
+
+    fetchBatchReceivables();
+  }, [isLoading, allBusinesses.length])
+
   // 대기필증 관련 상태
   const [airPermitData, setAirPermitData] = useState<{
     business_type: string
@@ -4634,29 +4662,21 @@ function BusinessManagementPage() {
       title: '미수금',
       width: '80px',
       render: (item: any) => {
-        // 미수금 계산: 진행구분에 따라 보조금/자비 분기
-        const progressStatus = item.progress_status || ''
-        let totalInvoice = 0
-        let totalPayment = 0
+        // batch API 결과 우선, fallback으로 ir_receivables 사용
+        const batchVal = batchReceivables[item.id];
+        const receivables = batchVal !== undefined ? batchVal : item.ir_receivables;
 
-        if (progressStatus === '자비' || progressStatus === '대리점') {
-          // 자비/대리점: 선급 + 잔금
-          totalInvoice = Number(item.invoice_advance_amount || 0) + Number(item.invoice_balance_amount || 0)
-          totalPayment = Number(item.payment_advance_amount || 0) + Number(item.payment_balance_amount || 0)
-        } else {
-          // 보조금 계열: 1차 + 2차 + 추가공사비
-          totalInvoice = Number(item.invoice_1st_amount || 0) + Number(item.invoice_2nd_amount || 0) + Number(item.additional_cost || 0)
-          totalPayment = Number(item.payment_1st_amount || 0) + Number(item.payment_2nd_amount || 0) + Number(item.payment_additional_amount || 0)
+        if (receivables === null || receivables === undefined) {
+          return <div className="flex justify-center"><span className="text-[11px] text-gray-400">-</span></div>
         }
 
-        const outstanding = totalInvoice - totalPayment
-
-        if (totalInvoice === 0) return <div className="flex justify-center"><span className="text-[11px] text-gray-400">-</span></div>
-        if (outstanding <= 0) return <div className="flex justify-center"><span className="text-[11px] text-green-600 font-medium">0</span></div>
+        if (receivables <= 0) {
+          return <div className="flex justify-center"><span className="text-[11px] text-green-600 font-medium">0</span></div>
+        }
 
         return (
           <div className="flex justify-center">
-            <span className="text-[11px] text-red-600 font-medium">{outstanding.toLocaleString()}</span>
+            <span className="text-[11px] text-red-600 font-medium">{receivables.toLocaleString()}</span>
           </div>
         )
       }

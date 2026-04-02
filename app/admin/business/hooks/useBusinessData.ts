@@ -169,6 +169,8 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     additional_cost: business.additional_cost || null,
     // 매출비용 조정
     revenue_adjustments: business.revenue_adjustments ?? null,
+    // 미수금 (API에서 계산된 값)
+    ir_receivables: business.ir_receivables ?? null,
   };
 }
 
