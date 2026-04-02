@@ -301,64 +301,115 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
 };
 
 /**
+ * 연속 날짜끼리 그룹화 (1일 차이면 같은 그룹, 그 이상이면 새 그룹)
+ */
+function groupConsecutiveDates(items: Array<{ date: string; leave_type: string; days: number }>) {
+  const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
+  const groups: Array<typeof sorted> = [];
+  let current: typeof sorted = [];
+
+  for (const item of sorted) {
+    if (current.length === 0) {
+      current.push(item);
+    } else {
+      const prevDate = new Date(current[current.length - 1].date);
+      const currDate = new Date(item.date);
+      const diffDays = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays === 1) {
+        current.push(item);
+      } else {
+        groups.push(current);
+        current = [item];
+      }
+    }
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+/**
  * 휴가원 최종 승인 완료 시 일정관리에 '연차' 라벨로 자동 등록
+ * - 연속 날짜는 하나의 이벤트로, 비연속 날짜는 별도 이벤트로 생성
  * - 실패해도 결재 완료에는 영향 없음
  */
 async function createLeaveCalendarEvent(doc: any, requesterName: string) {
   try {
     const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
-
-    // items 배열 구조 지원 (start_date/end_date 구 구조도 하위 호환)
-    let startDate: string | undefined;
-    let endDate: string | undefined;
-    let leaveTypeDetail: string;
-
-    if (Array.isArray(formData?.items) && formData.items.length > 0) {
-      const dates = formData.items.map((i: { date: string }) => i.date).sort();
-      startDate = dates[0];
-      endDate = dates[dates.length - 1];
-      // 중복 없이 휴가 종류 목록 표시 (예: "반차(오후), 유급휴가")
-      const typeLabels = [...new Set(formData.items.map((i: { leave_type: string }) => LEAVE_TYPE_LABEL[i.leave_type] || '휴가'))];
-      leaveTypeDetail = typeLabels.join(', ');
-    } else if (formData?.start_date) {
-      startDate = formData.start_date;
-      endDate = formData.end_date || formData.start_date;
-      leaveTypeDetail = LEAVE_TYPE_LABEL[formData.leave_type] || '휴가';
-    } else {
-      return;
-    }
-
     const totalDays = formData.total_days ?? 1;
 
-    const descriptionLines = [
-      `[휴가원] ${doc.document_number}`,
-      `신청자: ${requesterName} (${formData.department || ''})`,
-      `휴가 종류: ${leaveTypeDetail}`,
-      `기간: ${startDate} ~ ${endDate} (${totalDays}일)`,
-      `사유: ${formData.reason || ''}`,
-    ];
-    if (formData.note) descriptionLines.push(`비고: ${formData.note}`);
+    const insertQuery = `INSERT INTO calendar_events (
+      title, description, event_date, end_date,
+      event_type, is_completed, author_id, author_name,
+      attached_files, labels
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`;
 
-    await queryOne(
-      `INSERT INTO calendar_events (
-        title, description, event_date, end_date,
-        event_type, is_completed, author_id, author_name,
-        attached_files, labels
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
-      [
-        `${requesterName} - 연차`,
+    if (Array.isArray(formData?.items) && formData.items.length > 0) {
+      const groups = groupConsecutiveDates(formData.items);
+
+      for (const group of groups) {
+        const startDate = group[0].date;
+        const endDate = group[group.length - 1].date;
+        const groupDays = group.reduce((sum, i) => sum + (i.days ?? 1), 0);
+        const typeLabels = [...new Set(group.map(i => LEAVE_TYPE_LABEL[i.leave_type] || '휴가'))];
+        const leaveTypeDetail = typeLabels.join(', ');
+
+        // 타이틀: 단일 종류면 종류명, 복수면 '연차'로 통합
+        const title = typeLabels.length === 1
+          ? `${requesterName} - ${typeLabels[0]}`
+          : `${requesterName} - 연차 (${groupDays}일)`;
+
+        const descriptionLines = [
+          `[휴가원] ${doc.document_number}`,
+          `신청자: ${requesterName} (${formData.department || ''})`,
+          `휴가 종류: ${leaveTypeDetail}`,
+          `기간: ${startDate} ~ ${endDate} (${groupDays}일)`,
+          `전체 휴가: ${totalDays}일`,
+          `사유: ${formData.reason || ''}`,
+        ];
+        if (formData.note) descriptionLines.push(`비고: ${formData.note}`);
+
+        await queryOne(insertQuery, [
+          title,
+          descriptionLines.join('\n'),
+          startDate,
+          startDate === endDate ? null : endDate,
+          'schedule',
+          false,
+          doc.requester_id,
+          requesterName,
+          JSON.stringify([]),
+          ['연차'],
+        ]);
+      }
+    } else if (formData?.start_date) {
+      const startDate = formData.start_date;
+      const endDate = formData.end_date || formData.start_date;
+      const leaveTypeDetail = LEAVE_TYPE_LABEL[formData.leave_type] || '휴가';
+
+      const descriptionLines = [
+        `[휴가원] ${doc.document_number}`,
+        `신청자: ${requesterName} (${formData.department || ''})`,
+        `휴가 종류: ${leaveTypeDetail}`,
+        `기간: ${startDate} ~ ${endDate} (${totalDays}일)`,
+        `사유: ${formData.reason || ''}`,
+      ];
+      if (formData.note) descriptionLines.push(`비고: ${formData.note}`);
+
+      await queryOne(insertQuery, [
+        `${requesterName} - ${leaveTypeDetail}`,
         descriptionLines.join('\n'),
         startDate,
-        endDate,
+        startDate === endDate ? null : endDate,
         'schedule',
         false,
         doc.requester_id,
         requesterName,
         JSON.stringify([]),
         ['연차'],
-      ]
-    );
+      ]);
+    } else {
+      return;
+    }
 
     console.log('[APPROVAL] 휴가원 일정 자동 등록 완료:', doc.document_number);
   } catch (e) {

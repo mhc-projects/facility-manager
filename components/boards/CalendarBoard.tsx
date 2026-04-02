@@ -732,20 +732,21 @@ export default function CalendarBoard() {
     });
 
     rowSegments.forEach(rowSegs => {
-      rowSegs.sort((a, b) => a.startCellIndex - b.startCellIndex);
+      rowSegs.sort((a, b) => a.startCellIndex - b.startCellIndex || b.spanWidth - a.spanWidth);
+      const assigned: MultiDayLayout[] = [];
       rowSegs.forEach(seg => {
-        const usedLanes = rowSegs
-          .filter(other => other !== seg)
+        const segEnd = seg.startCellIndex + seg.spanWidth - 1;
+        const usedLanes = assigned
           .filter(other => {
-            const aEnd = other.startCellIndex + other.spanWidth - 1;
-            const bEnd = seg.startCellIndex + seg.spanWidth - 1;
-            return other.startCellIndex <= bEnd && aEnd >= seg.startCellIndex;
+            const otherEnd = other.startCellIndex + other.spanWidth - 1;
+            return other.startCellIndex <= segEnd && otherEnd >= seg.startCellIndex;
           })
           .map(other => other.lane);
 
         let lane = 0;
         while (usedLanes.includes(lane)) lane++;
         seg.lane = lane;
+        assigned.push(seg);
       });
     });
 
@@ -996,7 +997,7 @@ export default function CalendarBoard() {
                     ${isCurrentMonth
                       ? holiday ? 'bg-red-50 hover:bg-red-100' : 'bg-white hover:bg-gray-50'
                       : 'bg-gray-50 hover:bg-gray-100'}
-                    ${isToday ? 'ring-2 ring-purple-500 z-10 relative' : ''}
+                    ${isToday ? 'ring-2 ring-purple-500 z-[3] relative' : ''}
                     transition-colors
                   `}
                 >
