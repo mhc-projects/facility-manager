@@ -4395,7 +4395,7 @@ function BusinessManagementPage() {
     {
       key: '사업장명' as string,
       title: '사업장명',
-      width: '200px',
+      width: '180px',
       render: (item: any) => {
         const managers = item.admin_managers;
         const firstManager = Array.isArray(managers) && managers.length > 0 ? managers[0] : null;
@@ -4420,7 +4420,7 @@ function BusinessManagementPage() {
     {
       key: '담당자명' as string,
       title: '담당자',
-      width: '100px',
+      width: '70px',
       render: (item: any) => (
         searchQuery ? highlightSearchTerm(item.담당자명 || '-', searchQuery) : (item.담당자명 || '-')
       )
@@ -4428,7 +4428,7 @@ function BusinessManagementPage() {
     {
       key: '담당자연락처' as string,
       title: '연락처',
-      width: '110px',
+      width: '100px',
       render: (item: any) => (
         searchQuery ? highlightSearchTerm(item.담당자연락처 || '-', searchQuery) : (item.담당자연락처 || '-')
       )
@@ -4436,7 +4436,7 @@ function BusinessManagementPage() {
     {
       key: 'sales_office' as string,
       title: '영업점',
-      width: '90px',
+      width: '70px',
       render: (item: any) => {
         const office = item.sales_office || item.영업점 || '-'
 
@@ -4456,7 +4456,7 @@ function BusinessManagementPage() {
     {
       key: 'manufacturer' as string,
       title: '제조사',
-      width: '100px',
+      width: '80px',
       render: (item: any) => {
         const manufacturer = item.manufacturer || '-'
 
@@ -4491,7 +4491,7 @@ function BusinessManagementPage() {
     {
       key: '주소' as string,
       title: '주소',
-      width: '210px',
+      width: '170px',
       render: (item: any) => (
         <div className="truncate" title={item.주소 || item.local_government || '-'}>
           {searchQuery ? highlightSearchTerm(item.주소 || item.local_government || '-', searchQuery) : (item.주소 || item.local_government || '-')}
@@ -4500,8 +4500,8 @@ function BusinessManagementPage() {
     },
     {
       key: 'project_year' as string,
-      title: '사업 진행연도',
-      width: '90px',
+      title: '진행연도',
+      width: '70px',
       render: (item: any) => {
         const projectYear = item.project_year || (item as any).사업진행연도
 
@@ -4519,7 +4519,7 @@ function BusinessManagementPage() {
     {
       key: 'progress_status' as string,
       title: '진행구분',
-      width: '100px',
+      width: '80px',
       render: (item: any) => {
         const progressStatus = item.progress_status || (item as any).진행상태 || '-'
 
@@ -4564,7 +4564,7 @@ function BusinessManagementPage() {
     {
       key: 'installation_status' as string,
       title: '설치완료',
-      width: '80px',
+      width: '70px',
       render: (item: any) => {
         const hasInstallation = !!item.installation_date
         const isDealerComplete = item.progress_status === '대리점' && !!item.order_date
@@ -4601,9 +4601,69 @@ function BusinessManagementPage() {
       }
     },
     {
+      key: 'attachment_completion_submitted_at' as string,
+      title: '부착통보',
+      width: '70px',
+      render: (item: any) => {
+        const dateStr = item.attachment_completion_submitted_at
+        if (!dateStr) return <div className="flex justify-center"><span className="text-[11px] text-gray-400">-</span></div>
+        const d = new Date(dateStr)
+        const yy = d.getFullYear().toString().slice(-2)
+        const mm = (d.getMonth() + 1).toString().padStart(2, '0')
+        const dd = d.getDate().toString().padStart(2, '0')
+        return <div className="flex justify-center"><span className="text-[11px] text-emerald-600 font-medium">{`${yy}.${mm}.${dd}`}</span></div>
+      }
+    },
+    {
+      key: 'greenlink_confirmation_submitted_at' as string,
+      title: '그린링크',
+      width: '70px',
+      render: (item: any) => {
+        const dateStr = item.greenlink_confirmation_submitted_at
+        if (!dateStr) return <div className="flex justify-center"><span className="text-[11px] text-gray-400">-</span></div>
+        const d = new Date(dateStr)
+        const yy = d.getFullYear().toString().slice(-2)
+        const mm = (d.getMonth() + 1).toString().padStart(2, '0')
+        const dd = d.getDate().toString().padStart(2, '0')
+        return <div className="flex justify-center"><span className="text-[11px] text-blue-600 font-medium">{`${yy}.${mm}.${dd}`}</span></div>
+      }
+    },
+    {
+      key: 'outstanding_amount' as string,
+      title: '미수금',
+      width: '80px',
+      render: (item: any) => {
+        // 미수금 계산: 진행구분에 따라 보조금/자비 분기
+        const progressStatus = item.progress_status || ''
+        let totalInvoice = 0
+        let totalPayment = 0
+
+        if (progressStatus === '자비' || progressStatus === '대리점') {
+          // 자비/대리점: 선급 + 잔금
+          totalInvoice = (item.invoice_advance_amount || 0) + (item.invoice_balance_amount || 0)
+          totalPayment = (item.payment_advance_amount || 0) + (item.payment_balance_amount || 0)
+        } else {
+          // 보조금 계열: 1차 + 2차 + 추가공사비
+          totalInvoice = (item.invoice_1st_amount || 0) + (item.invoice_2nd_amount || 0) + (item.additional_cost || 0)
+          totalPayment = (item.payment_1st_amount || 0) + (item.payment_2nd_amount || 0) + (item.payment_additional_amount || 0)
+        }
+
+        const outstanding = totalInvoice - totalPayment
+
+        if (totalInvoice === 0) return <div className="flex justify-center"><span className="text-[11px] text-gray-400">-</span></div>
+        if (outstanding <= 0) return <div className="flex justify-center"><span className="text-[11px] text-green-600 font-medium">0</span></div>
+
+        return (
+          <div className="flex justify-center">
+            <span className="text-[11px] text-red-600 font-medium">{outstanding.toLocaleString()}</span>
+          </div>
+        )
+      }
+    },
+    {
       key: '현재단계',
       title: '현재 단계',
-      width: '120px',
+      width: '100px',
       render: (item: any) => {
         const businessName = item.사업장명 || item.business_name || ''
         const taskStatus = businessTaskStatuses[businessName]
@@ -4723,24 +4783,8 @@ function BusinessManagementPage() {
     }
   }, [currentIndex, businessesWithId, isLoadingMore])
 
-  const actions = [
-    {
-      label: (item: UnifiedBusinessInfo) =>
-        pendingDeletions.has(item.id) ? '삭제 중...' : '삭제',
-      icon: Trash2,
-      onClick: (item: UnifiedBusinessInfo) => {
-        // 삭제 진행 중이면 클릭 무시
-        if (pendingDeletions.has(item.id)) {
-          return
-        }
-        confirmDelete(item)
-      },
-      variant: 'danger' as const,
-      show: () => true,
-      compact: true,  // 작은 버튼 스타일
-      disabled: (item: UnifiedBusinessInfo) => pendingDeletions.has(item.id)
-    }
-  ]
+  // 삭제 기능은 상세 모달 헤더로 이동 (테이블 공간 확보)
+  const actions: any[] = []
 
   return (
     <AdminLayout
@@ -5127,7 +5171,7 @@ function BusinessManagementPage() {
 
           {/* Data Table - Desktop Only */}
           <div className="hidden md:block p-2 md:p-6 overflow-x-auto">
-            <div className="min-w-[1090px]">
+            <div className="min-w-[1200px]">
               <DataTable
                 key={`datatable-${filteredBusinesses.length}`}
                 data={businessesWithId}
@@ -5211,6 +5255,10 @@ function BusinessManagementPage() {
               }
             }}
             onEdit={openEditModal}
+            onDelete={(business) => {
+              setIsDetailModalOpen(false)
+              confirmDelete(business)
+            }}
             businessTasks={businessTasks}
             userPermission={userPermission}
             canDeleteAutoMemos={canDeleteAutoMemos}

@@ -21,7 +21,8 @@ import {
   Factory,
   Database,
   Settings,
-  Calculator
+  Calculator,
+  Trash2
 } from 'lucide-react'
 import TaskProgressMiniBoard from '@/components/business/TaskProgressMiniBoard'
 import { InvoiceDisplay } from '@/components/business/InvoiceDisplay'
@@ -217,6 +218,7 @@ interface BusinessDetailModalProps {
   business: UnifiedBusinessInfo
   onClose: () => void
   onEdit: (business: UnifiedBusinessInfo) => void
+  onDelete?: (business: UnifiedBusinessInfo) => void
   // Memo관련 props
   businessTasks: Task[]
   userPermission: number
@@ -254,6 +256,7 @@ export default function BusinessDetailModal({
   business,
   onClose,
   onEdit,
+  onDelete,
   businessTasks,
   userPermission,
   canDeleteAutoMemos,
@@ -312,6 +315,14 @@ export default function BusinessDetailModal({
                     }`}></div>
                     {business?.is_active || business?.상태 === '활성' ? '활성' : '비활성'}
                   </div>
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(business)}
+                      className="flex items-center px-2 py-1 bg-red-500 bg-opacity-30 text-white rounded-lg hover:bg-opacity-50 transition-all duration-200 text-xs font-medium border border-red-300 border-opacity-40"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       // Don't call onClose() - let onEdit handle modal state
@@ -354,6 +365,15 @@ export default function BusinessDetailModal({
                   </div>
                 </div>
                 <div className="flex items-center space-x-1 md:space-x-2">
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(business)}
+                      className="flex items-center px-2 md:px-3 py-2 bg-red-500 bg-opacity-30 text-white rounded-lg hover:bg-opacity-50 transition-all duration-200 text-xs md:text-xs font-medium border border-red-300 border-opacity-40 hover:border-opacity-60"
+                    >
+                      <Trash2 className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-1.5" />
+                      <span className="hidden md:inline">삭제</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       // Don't call onClose() - let onEdit handle modal state
