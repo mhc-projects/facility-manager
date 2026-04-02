@@ -4640,12 +4640,12 @@ function BusinessManagementPage() {
 
         if (progressStatus === '자비' || progressStatus === '대리점') {
           // 자비/대리점: 선급 + 잔금
-          totalInvoice = (item.invoice_advance_amount || 0) + (item.invoice_balance_amount || 0)
-          totalPayment = (item.payment_advance_amount || 0) + (item.payment_balance_amount || 0)
+          totalInvoice = Number(item.invoice_advance_amount || 0) + Number(item.invoice_balance_amount || 0)
+          totalPayment = Number(item.payment_advance_amount || 0) + Number(item.payment_balance_amount || 0)
         } else {
           // 보조금 계열: 1차 + 2차 + 추가공사비
-          totalInvoice = (item.invoice_1st_amount || 0) + (item.invoice_2nd_amount || 0) + (item.additional_cost || 0)
-          totalPayment = (item.payment_1st_amount || 0) + (item.payment_2nd_amount || 0) + (item.payment_additional_amount || 0)
+          totalInvoice = Number(item.invoice_1st_amount || 0) + Number(item.invoice_2nd_amount || 0) + Number(item.additional_cost || 0)
+          totalPayment = Number(item.payment_1st_amount || 0) + Number(item.payment_2nd_amount || 0) + Number(item.payment_additional_amount || 0)
         }
 
         const outstanding = totalInvoice - totalPayment

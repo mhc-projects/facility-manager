@@ -5,6 +5,10 @@ import { Pool, types } from 'pg';
 // pg 기본 동작은 Date 객체로 변환하며 UTC 기준이라 KST에서 하루 밀림 발생
 types.setTypeParser(1082, (val: string) => val);
 
+// BIGINT 타입(OID 20)을 문자열 대신 숫자로 반환
+// pg 기본 동작은 BIGINT를 문자열로 반환하여 + 연산 시 문자열 연결이 발생함
+types.setTypeParser(20, (val: string) => parseInt(val, 10));
+
 // PostgreSQL 연결 풀 (싱글톤)
 let pool: Pool | null = null;
 
