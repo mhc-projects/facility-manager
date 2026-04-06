@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { X, Download, CheckSquare, Square } from 'lucide-react'
+import { TokenManager } from '@/lib/api-client'
 
 interface UnifiedBusinessInfo {
   [key: string]: any
@@ -74,6 +75,8 @@ const COLUMN_GROUPS: ColumnGroup[] = [
       { key: 'relay_16ch', label: '중계기16채널', width: 12, type: 'number' },
       { key: 'multiple_stack', label: '복수굴뚝', width: 10, type: 'number' },
       { key: 'multiple_stack_cost', label: '복수굴뚝비용', width: 14, type: 'number' },
+      { key: 'multiple_stack_install_extra', label: '복수굴뚝추가설치수량', width: 18, type: 'number' },
+      { key: 'multiple_stack_install_extra_cost', label: '복수굴뚝추가설치금액', width: 18, type: 'number' },
       { key: 'main_board_replacement', label: '메인보드교체', width: 12, type: 'number' },
       { key: 'explosion_proof_differential_pressure_meter_domestic', label: '방폭차압계(국산)', width: 16, type: 'number' },
       { key: 'explosion_proof_temperature_meter_domestic', label: '방폭온도계(국산)', width: 16, type: 'number' },
@@ -198,6 +201,28 @@ export default function BusinessExcelDownloadModal({
     }
     setIsDownloading(true)
     try {
+      // 복수굴뚝 추가설치금액 컬럼이 선택된 경우 단가 조회
+      let multipleStackUnitInstallCost = 0
+      if (selectedColumns.has('multiple_stack_install_extra_cost')) {
+        try {
+          const token = TokenManager.getToken()
+          const res = await fetch('/api/revenue/installation-cost', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          const data = await res.json()
+          if (data.success && data.data?.costs) {
+            const msItem = data.data.costs.find(
+              (c: any) => c.equipment_type === 'multiple_stack'
+            )
+            if (msItem) {
+              multipleStackUnitInstallCost = Number(msItem.base_installation_cost) || 0
+            }
+          }
+        } catch {
+          console.warn('복수굴뚝 설치 단가 조회 실패, 금액 0으로 처리')
+        }
+      }
+
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       const sheet = workbook.addWorksheet('사업장관리')
@@ -224,7 +249,12 @@ export default function BusinessExcelDownloadModal({
       businesses.forEach(b => {
         const rowData: Record<string, any> = {}
         selectedCols.forEach(c => {
-          rowData[c.key] = formatCellValue(b, c)
+          if (c.key === 'multiple_stack_install_extra_cost') {
+            const qty = Number(b.multiple_stack_install_extra) || 0
+            rowData[c.key] = qty * multipleStackUnitInstallCost
+          } else {
+            rowData[c.key] = formatCellValue(b, c)
+          }
         })
         const row = sheet.addRow(rowData)
 
