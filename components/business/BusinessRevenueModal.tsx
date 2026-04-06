@@ -18,7 +18,7 @@ interface BusinessRevenueModalProps {
   userPermission: number;
   canDeleteAutoMemos?: boolean;
   onReceivablesUpdate?: (businessId: string, receivables: number) => void;
-  onMultipleStackSaved?: (businessId: string, savedQty: number) => void;
+  onMultipleStackSaved?: (businessId: string, savedQty: number, calculationResult?: any) => void;
 }
 
 export default function BusinessRevenueModal({
@@ -1957,8 +1957,6 @@ export default function BusinessRevenueModal({
           onSaved={async (savedQty: number) => {
             // 즉시 UI 반영 — state 업데이트로 리렌더링 트리거
             setMultipleStackInstallExtra(savedQty);
-            // 부모(revenue/page)의 businesses 배열도 즉시 업데이트
-            onMultipleStackSaved?.(business.id, savedQty);
             try {
               const token = TokenManager.getToken();
               const calcResponse = await fetch('/api/revenue/calculate', {
@@ -1974,8 +1972,14 @@ export default function BusinessRevenueModal({
                 setCalculatedData(calcData.data.calculation);
                 invalidateRevenueCache(business.id);
                 setDataChanged(true);
+                // 부모에 재계산 결과 전달 → 테이블/엑셀에 즉시 반영
+                onMultipleStackSaved?.(business.id, savedQty, calcData.data.calculation);
+              } else {
+                // 재계산 실패 시에도 수량은 업데이트
+                onMultipleStackSaved?.(business.id, savedQty);
               }
             } catch {
+              onMultipleStackSaved?.(business.id, savedQty);
               alert('재계산에 실패했습니다. 페이지를 새로고침해주세요.');
             }
           }}

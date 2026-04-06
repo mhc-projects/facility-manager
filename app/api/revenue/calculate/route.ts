@@ -703,9 +703,9 @@ export async function POST(request: NextRequest) {
           `INSERT INTO revenue_calculations (
             business_id, business_name, calculation_date, total_revenue, total_cost,
             gross_profit, sales_commission, adjusted_sales_commission, survey_costs,
-            installation_costs, net_profit, equipment_breakdown, cost_breakdown,
+            installation_costs, installation_extra_cost, net_profit, equipment_breakdown, cost_breakdown,
             pricing_version_snapshot, sales_office, business_category, calculated_by, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           ON CONFLICT (business_id, calculation_date)
           DO UPDATE SET
             business_name = $2,
@@ -716,14 +716,15 @@ export async function POST(request: NextRequest) {
             adjusted_sales_commission = $8,
             survey_costs = $9,
             installation_costs = $10,
-            net_profit = $11,
-            equipment_breakdown = $12,
-            cost_breakdown = $13,
-            pricing_version_snapshot = $14,
-            sales_office = $15,
-            business_category = $16,
-            calculated_by = $17,
-            updated_at = $18
+            installation_extra_cost = $11,
+            net_profit = $12,
+            equipment_breakdown = $13,
+            cost_breakdown = $14,
+            pricing_version_snapshot = $15,
+            sales_office = $16,
+            business_category = $17,
+            calculated_by = $18,
+            updated_at = $19
           RETURNING *`,
           [
             business_id,
@@ -735,7 +736,8 @@ export async function POST(request: NextRequest) {
             salesCommission,
             hasAdjustment ? adjustedSalesCommission : null,
             totalSurveyCosts,
-            totalInstallationCosts + installationExtraCost,
+            totalInstallationCosts,
+            installationExtraCost,
             netProfit,
             JSON.stringify(equipmentBreakdown),
             JSON.stringify(result.cost_breakdown),

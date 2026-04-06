@@ -2941,12 +2941,22 @@ function RevenueDashboard() {
             );
             CacheManager.updateBusinessField(businessId, '_api_receivables', receivables);
           }}
-          onMultipleStackSaved={(businessId, savedQty) => {
+          onMultipleStackSaved={(businessId, savedQty, calculationResult) => {
             // businesses 배열 즉시 업데이트 → 모달 재오픈 시에도 최신 수량 반영
             setBusinesses(prev =>
               prev.map(b => b.id === businessId ? { ...b, multiple_stack_install_extra: savedQty } : b)
             );
             CacheManager.updateBusinessField(businessId, 'multiple_stack_install_extra', savedQty);
+            if (calculationResult) {
+              // 서버 재계산 결과로 calculations 캐시 즉시 업데이트
+              setCalculations(prev => {
+                const filtered = prev.filter(c => c.business_id !== businessId);
+                return [...filtered, { ...calculationResult, business_id: businessId }];
+              });
+            } else {
+              // 재계산 결과 없으면 캐시 무효화 → localCalc 사용
+              setCalculations(prev => prev.filter(c => c.business_id !== businessId));
+            }
           }}
           userPermission={userPermission}
         />
