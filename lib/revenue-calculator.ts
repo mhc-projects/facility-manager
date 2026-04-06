@@ -214,6 +214,13 @@ export function calculateBusinessRevenue(
   // 실사비용 조정은 DB 조회가 필요하므로 클라이언트에서는 생략
   // (서버 측 계산에서는 survey_cost_adjustments 테이블 조회)
 
+  // 복수굴뚝 추가 수량 설치비 (기본설치비에 포함)
+  const multipleStackInstallExtra = Number(business.multiple_stack_install_extra) || 0;
+  if (multipleStackInstallExtra > 0) {
+    const unitInstallCost = baseInstallationCosts['multiple_stack'] || 0;
+    totalInstallationCosts += unitInstallCost * multipleStackInstallExtra;
+  }
+
   // 추가설치비 (설치팀 요청 추가 비용)
   const installationExtraCost = Number(business.installation_extra_cost) || 0;
 

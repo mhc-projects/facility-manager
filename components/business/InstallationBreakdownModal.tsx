@@ -260,41 +260,54 @@ export default function InstallationBreakdownModal({
           )}
 
           {/* 추가 설치비 */}
-          {installationExtraCost > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                추가 설치비
-              </p>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              추가 설치비
+            </p>
+            {installationExtraCost > 0 ? (
               <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3 flex items-center justify-between">
                 <span className="text-sm text-gray-600">설치팀 요청 추가비용</span>
                 <span className="text-sm font-bold text-orange-600">
                   {formatCurrency(installationExtraCost)}
                 </span>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 flex items-center justify-between">
+                <span className="text-sm text-gray-400">추가 설치비 없음</span>
+                <span className="text-sm text-gray-400">₩0</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 합계 푸터 */}
         <div className="border-t border-gray-100 px-5 py-4 space-y-1.5 bg-gray-50 rounded-b-xl">
           <div className="flex justify-between text-sm text-gray-600">
             <span>기본 설치비</span>
-            <span>{formatCurrency(baseInstallTotal)}</span>
+            <span>{formatCurrency(baseInstallTotal + (isEditing ? extraQty : multipleStackInstallExtra) * multipleStackUnitInstallCost)}</span>
           </div>
           {(multipleStackInstallExtra > 0 || (isEditing && extraQty > 0)) && (
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>복수굴뚝 추가 ({isEditing ? extraQty : multipleStackInstallExtra}개)</span>
-              <span className="text-blue-600">
+            <div className="flex justify-between text-xs text-gray-400 pl-3">
+              <span>ㄴ 기기별 설치비 합계</span>
+              <span>{formatCurrency(baseInstallTotal)}</span>
+            </div>
+          )}
+          {(multipleStackInstallExtra > 0 || (isEditing && extraQty > 0)) && (
+            <div className="flex justify-between text-xs text-gray-400 pl-3">
+              <span>ㄴ 복수굴뚝 추가 ({isEditing ? extraQty : multipleStackInstallExtra}개)</span>
+              <span className="text-blue-500">
                 + {formatCurrency((isEditing ? extraQty : multipleStackInstallExtra) * multipleStackUnitInstallCost)}
               </span>
             </div>
           )}
-          {installationExtraCost > 0 && (
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>추가 설치비</span>
-              <span className="text-orange-600">+ {formatCurrency(installationExtraCost)}</span>
-            </div>
-          )}
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>추가 설치비</span>
+            {installationExtraCost > 0 ? (
+              <span className="text-orange-600">{formatCurrency(installationExtraCost)}</span>
+            ) : (
+              <span className="text-gray-400">없음</span>
+            )}
+          </div>
           <div className="flex justify-between text-base font-bold text-gray-800 pt-1.5 border-t border-gray-200">
             <span>총 설치비</span>
             <span className="text-cyan-700">

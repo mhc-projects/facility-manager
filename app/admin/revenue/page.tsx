@@ -1652,7 +1652,11 @@ function RevenueDashboard() {
           ? Math.round(Number(serverCalc.adjusted_sales_commission) || 0) : null,
         survey_costs: Math.round(Number(serverCalc.survey_costs) || 0),
         installation_costs: Math.round(Number(serverCalc.installation_costs) || 0),
-        installation_extra_cost: Math.round(Number(serverCalc.installation_extra_cost) || 0),
+        // revenue_calculations 테이블에 installation_extra_cost 컬럼이 없으므로
+        // 서버 계산 결과에 값이 없을 경우 business_info 원본 데이터에서 가져옴
+        installation_extra_cost: Math.round(
+          Number(serverCalc.installation_extra_cost) || Number(business.installation_extra_cost) || 0
+        ),
       } : localCalc;
 
       // 기기 수 계산
