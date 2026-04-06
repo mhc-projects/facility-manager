@@ -102,6 +102,12 @@ export interface Task {
   supplementCompletedAt?: string
   stepStartedAt?: string
   _stepInfo?: {status: TaskStatus, label: string, color: string} // 전체 보기에서 올바른 단계 정보
+  // 사업장 정보 연동 필드 (설치완료/부착통보/그린링크/미수금 컬럼용)
+  progressStatus?: string
+  installationDate?: string
+  orderDate?: string
+  attachmentCompletionSubmittedAt?: string
+  greenlinkConfirmationSubmittedAt?: string
 }
 
 interface CreateTaskForm {
@@ -142,6 +148,7 @@ function TaskManagementPage() {
   const [assigneeFilterInitialized, setAssigneeFilterInitialized] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [taskReceivables, setTaskReceivables] = useState<Record<string, number>>({})
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [showCompletedTasks, setShowCompletedTasks] = useState(false) // 🆕 완료된 업무 표시 여부
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -265,7 +272,13 @@ function TaskManagementPage() {
           delayDays: 0,
           createdAt: dbTask.created_at,
           description: dbTask.description || undefined,
-          notes: dbTask.notes || undefined
+          notes: dbTask.notes || undefined,
+          // 사업장 정보 연동 필드
+          progressStatus: dbTask.progress_status || undefined,
+          installationDate: dbTask.installation_date || undefined,
+          orderDate: dbTask.order_date || undefined,
+          attachmentCompletionSubmittedAt: dbTask.attachment_completion_submitted_at || undefined,
+          greenlinkConfirmationSubmittedAt: dbTask.greenlink_confirmation_submitted_at || undefined,
         }))
 
         console.log('✅ [STATE] setTasks 호출:', convertedTasks.length, '개')
@@ -366,6 +379,30 @@ function TaskManagementPage() {
     loadTasks()
     loadActiveSubsidies()
   }, [loadTasks, loadActiveSubsidies])
+
+  // 미수금 batch API 호출 (tasks 로드 완료 후)
+  useEffect(() => {
+    if (isLoading || !tasks.length) return
+    const businessIds = [...new Set(tasks.map(t => t.businessId).filter(Boolean))] as string[]
+    if (!businessIds.length) return
+
+    const fetchReceivables = async () => {
+      try {
+        const response = await fetch('/api/business-invoices/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: businessIds }),
+        })
+        const result = await response.json()
+        if (result.success && result.data) {
+          setTaskReceivables(result.data)
+        }
+      } catch (error) {
+        console.error('❌ [TASKS] 미수금 batch 로딩 실패:', error)
+      }
+    }
+    fetchReceivables()
+  }, [isLoading, tasks])
 
   // ⚡ facility_tasks Realtime 구독: 다른 페이지/사용자의 메모 수정을 즉시 반영
   useTaskNotesRealtime({
@@ -791,9 +828,9 @@ function TaskManagementPage() {
   }, [])
 
   // 업무 목록 실시간 지연 상태 업데이트
-  const tasksWithDelayStatus = useMemo(() => {
+  const tasksWithDelayStatus = useMemo((): Task[] => {
     console.log('🔄 [MEMO] tasksWithDelayStatus 계산 중... tasks.length:', tasks.length)
-    const result = tasks.map(task => {
+    const result: Task[] = tasks.map(task => {
       const { delayStatus, delayDays } = calculateDelayStatus(task)
       return {
         ...task,
@@ -2023,13 +2060,14 @@ function TaskManagementPage() {
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">사업장</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">지자체</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800 w-32 sm:w-80 max-w-32 sm:max-w-80">업무 설명</th>
+                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800 w-28 sm:w-40 max-w-28 sm:max-w-40">업무 설명</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">업무 단계</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">담당자</th>
                     <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">업무 타입</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">우선순위</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">마감일</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">작업</th>
+                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">설치완료</th>
+                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">부착통보</th>
+                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">그린링크</th>
+                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">미수금</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2064,7 +2102,7 @@ function TaskManagementPage() {
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
                           <div
-                            className="font-medium text-gray-900 max-w-xs leading-tight"
+                            className="font-medium text-gray-900 max-w-[160px] leading-tight"
                             style={{
                               display: '-webkit-box',
                               WebkitLineClamp: 2,
@@ -2124,28 +2162,45 @@ function TaskManagementPage() {
                              task.type === 'etc' ? '기타' : 'AS'}
                           </span>
                         </td>
-                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <div className="flex items-center gap-1">
-                            {getPriorityIcon(task.priority)}
-                            <span className="capitalize">{task.priority}</span>
-                          </div>
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {(() => {
+                            const formatDateShort = (dateStr: string) => {
+                              const d = new Date(dateStr)
+                              const yy = d.getFullYear().toString().slice(-2)
+                              const mm = (d.getMonth() + 1).toString().padStart(2, '0')
+                              const dd = d.getDate().toString().padStart(2, '0')
+                              return `${yy}.${mm}.${dd}`
+                            }
+                            if (task.installationDate) {
+                              return <span className="text-green-600 font-medium">{formatDateShort(task.installationDate)}</span>
+                            }
+                            if (task.progressStatus === '대리점' && task.orderDate) {
+                              return <span className="text-blue-600 font-medium">{formatDateShort(task.orderDate)}</span>
+                            }
+                            return <span className="text-gray-400">-</span>
+                          })()}
                         </td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 text-[10px] sm:text-sm text-gray-600">
-                          {task.dueDate ? formatDate(task.dueDate) : '-'}
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.attachmentCompletionSubmittedAt ? (
+                            <span className="text-emerald-600 font-medium">
+                              {(() => { const d = new Date(task.attachmentCompletionSubmittedAt); return `${d.getFullYear().toString().slice(-2)}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')}` })()}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
                         </td>
-                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDeleteTask(task.id)
-                              }}
-                              className="p-1 text-gray-400 hover:text-red-600 rounded"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.greenlinkConfirmationSubmittedAt ? (
+                            <span className="text-blue-600 font-medium">
+                              {(() => { const d = new Date(task.greenlinkConfirmationSubmittedAt); return `${d.getFullYear().toString().slice(-2)}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')}` })()}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {(() => {
+                            const batchVal = taskReceivables[task.businessId || '']
+                            if (batchVal === null || batchVal === undefined) return <span className="text-gray-400">-</span>
+                            if (batchVal <= 0) return <span className="text-green-600 font-medium">0</span>
+                            return <span className="text-red-600 font-medium">{batchVal.toLocaleString()}</span>
+                          })()}
                         </td>
                       </tr>
                     )

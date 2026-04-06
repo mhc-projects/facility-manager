@@ -171,7 +171,11 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ftb.manager_name,
         ftb.manager_contact,
         ftb.local_government,
-        ftb.construction_report_date
+        ftb.construction_report_date,
+        ftb.installation_date,
+        ftb.order_date,
+        ftb.attachment_completion_submitted_at,
+        ftb.greenlink_confirmation_submitted_at
       FROM facility_tasks_with_business ftb
       ${whereClause}
       ORDER BY ftb.created_at DESC

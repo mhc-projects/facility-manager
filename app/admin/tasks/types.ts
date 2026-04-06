@@ -61,6 +61,15 @@ export interface Task {
   supplementCompletedAt?: string
   stepStartedAt?: string
   _stepInfo?: {status: TaskStatus, label: string, color: string} // 전체 보기에서 올바른 단계 정보
+  // 사업장 정보 연동 필드
+  businessId?: string
+  localGovernment?: string
+  constructionReportDate?: string
+  progressStatus?: string
+  installationDate?: string
+  orderDate?: string
+  attachmentCompletionSubmittedAt?: string
+  greenlinkConfirmationSubmittedAt?: string
 }
 
 export interface CreateTaskForm {
