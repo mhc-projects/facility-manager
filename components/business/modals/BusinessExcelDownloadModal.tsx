@@ -128,6 +128,8 @@ const COLUMN_GROUPS: ColumnGroup[] = [
       { key: 'greenlink_confirmation_submitted_at', label: '그린링크제출일', width: 16, type: 'date' },
       { key: 'construction_report_submitted_at', label: '공사실적제출일', width: 16, type: 'date' },
       { key: 'attachment_completion_submitted_at', label: '준공서류제출일', width: 16, type: 'date' },
+      { key: 'attachment_support_application_date', label: '부착지원신청서신청일', width: 20, type: 'date' },
+      { key: 'attachment_support_writing_date', label: '부착지원신청서작성일', width: 20, type: 'date' },
     ],
   },
 ]

@@ -117,6 +117,8 @@ export interface BusinessInfo {
   construction_report_submitted_at: string | null
   greenlink_confirmation_submitted_at: string | null
   attachment_completion_submitted_at: string | null
+  attachment_support_application_date: string | null
+  attachment_support_writing_date: string | null
 
   // 시설 요약 정보
   facility_summary: {

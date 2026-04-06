@@ -523,6 +523,8 @@ function convertExcelToBusinessData(excelRow: any): Partial<BusinessInfo> {
     construction_report_submitted_at: convertExcelDate(getExcelValue(excelRow, '착공신고서제출일')),
     greenlink_confirmation_submitted_at: convertExcelDate(getExcelValue(excelRow, '그린링크전송확인서제출일')),
     attachment_completion_submitted_at: convertExcelDate(getExcelValue(excelRow, '부착완료통보서제출일')),
+    attachment_support_application_date: convertExcelDate(getExcelValue(excelRow, '부착지원신청서신청일')),
+    attachment_support_writing_date: convertExcelDate(getExcelValue(excelRow, '부착지원신청서작성일')),
 
     // 기존 필드들 (엑셀에 없어서 null로 설정)
     relay_8ch: null,

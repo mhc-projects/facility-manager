@@ -158,6 +158,8 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     construction_report_submitted_at: business.construction_report_submitted_at || null,
     greenlink_confirmation_submitted_at: business.greenlink_confirmation_submitted_at || null,
     attachment_completion_submitted_at: business.attachment_completion_submitted_at || null,
+    attachment_support_application_date: business.attachment_support_application_date || null,
+    attachment_support_writing_date: business.attachment_support_writing_date || null,
     // 일정 관리
     order_request_date: business.order_request_date || null,
     receipt_date: business.receipt_date || null,

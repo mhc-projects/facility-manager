@@ -109,6 +109,8 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     construction_report_submitted_at: normalizeDateField(business.construction_report_submitted_at),
     greenlink_confirmation_submitted_at: normalizeDateField(business.greenlink_confirmation_submitted_at),
     attachment_completion_submitted_at: normalizeDateField(business.attachment_completion_submitted_at),
+    attachment_support_application_date: normalizeDateField(business.attachment_support_application_date),
+    attachment_support_writing_date: normalizeDateField(business.attachment_support_writing_date),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     is_active: true,
@@ -180,6 +182,8 @@ export async function GET(request: Request) {
       construction_report_submitted_at::text as construction_report_submitted_at,
       greenlink_confirmation_submitted_at::text as greenlink_confirmation_submitted_at,
       attachment_completion_submitted_at::text as attachment_completion_submitted_at,
+      attachment_support_application_date::text as attachment_support_application_date,
+      attachment_support_writing_date::text as attachment_support_writing_date,
       invoice_1st_date::text as invoice_1st_date,
       invoice_1st_amount,
       payment_1st_date::text as payment_1st_date,
@@ -289,6 +293,8 @@ export async function GET(request: Request) {
         bi.construction_report_submitted_at::text AS construction_report_submitted_at,
         bi.greenlink_confirmation_submitted_at::text AS greenlink_confirmation_submitted_at,
         bi.attachment_completion_submitted_at::text AS attachment_completion_submitted_at,
+        bi.attachment_support_application_date::text AS attachment_support_application_date,
+        bi.attachment_support_writing_date::text AS attachment_support_writing_date,
         bi.invoice_1st_date::text AS invoice_1st_date,
         COALESCE(ir.ir_invoice_1st,        bi.invoice_1st_amount)        AS invoice_1st_amount,
         bi.payment_1st_date::text AS payment_1st_date,
@@ -950,6 +956,12 @@ export async function PUT(request: Request) {
     if (updateData.attachment_completion_submitted_at !== undefined) {
       updateObject.attachment_completion_submitted_at = updateData.attachment_completion_submitted_at || null;
     }
+    if (updateData.attachment_support_application_date !== undefined) {
+      updateObject.attachment_support_application_date = updateData.attachment_support_application_date || null;
+    }
+    if (updateData.attachment_support_writing_date !== undefined) {
+      updateObject.attachment_support_writing_date = updateData.attachment_support_writing_date || null;
+    }
 
     // Set updated timestamp
     updateObject.updated_at = new Date().toISOString();
@@ -1141,6 +1153,8 @@ export async function POST(request: Request) {
       construction_report_submitted_at: businessData.construction_report_submitted_at || null,
       greenlink_confirmation_submitted_at: businessData.greenlink_confirmation_submitted_at || null,
       attachment_completion_submitted_at: businessData.attachment_completion_submitted_at || null,
+      attachment_support_application_date: businessData.attachment_support_application_date || null,
+      attachment_support_writing_date: businessData.attachment_support_writing_date || null,
 
       // System fields
       created_at: new Date().toISOString(),

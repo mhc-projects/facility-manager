@@ -189,6 +189,10 @@ interface UnifiedBusinessInfo {
   greenlink_confirmation_submitted_at?: string | null;
   attachment_completion_submitted_at?: string | null;
 
+  // 부착지원신청서
+  attachment_support_application_date?: string | null;  // 부착지원신청서 신청일
+  attachment_support_writing_date?: string | null;      // 부착지원신청서 작성일
+
   // 시스템 필드들
   manufacturer?: '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null;
   vpn?: 'wired' | 'wireless' | null;
@@ -2830,6 +2834,8 @@ function BusinessManagementPage() {
           construction_report_submitted_at: business.construction_report_submitted_at || null,
           greenlink_confirmation_submitted_at: business.greenlink_confirmation_submitted_at || null,
           attachment_completion_submitted_at: business.attachment_completion_submitted_at || null,
+          attachment_support_application_date: business.attachment_support_application_date || null,
+          attachment_support_writing_date: business.attachment_support_writing_date || null,
 
           // 계산서 및 입금 관리 필드 (보조금 사업장)
           invoice_1st_date: business.invoice_1st_date || null,
@@ -3222,7 +3228,11 @@ function BusinessManagementPage() {
         // 제출일 관리 (착공신고서, 그린링크 전송확인서, 부착완료통보서)
         construction_report_submitted_at: freshData.construction_report_submitted_at || '',
         greenlink_confirmation_submitted_at: freshData.greenlink_confirmation_submitted_at || '',
-        attachment_completion_submitted_at: freshData.attachment_completion_submitted_at || ''
+        attachment_completion_submitted_at: freshData.attachment_completion_submitted_at || '',
+
+        // 부착지원신청서
+        attachment_support_application_date: freshData.attachment_support_application_date || '',
+        attachment_support_writing_date: freshData.attachment_support_writing_date || ''
       })
 
       // Initialize adjAmountInputs display strings from revenue_adjustments
@@ -3826,6 +3836,7 @@ function BusinessManagementPage() {
         'receipt_date', 'order_request_date', 'order_date', 'shipment_date', 'installation_date',
         'construction_report_submitted_at', 'greenlink_confirmation_submitted_at',
         'attachment_completion_submitted_at',
+        'attachment_support_application_date', 'attachment_support_writing_date',
         'estimate_survey_date', 'pre_construction_survey_date', 'completion_survey_date',
         'invoice_1st_date', 'payment_1st_date', 'invoice_2nd_date', 'payment_2nd_date',
         'invoice_additional_date', 'payment_additional_date',
@@ -4197,6 +4208,12 @@ function BusinessManagementPage() {
               pre_construction_survey_date: serverData.pre_construction_survey_date || null,
               completion_survey_manager: serverData.completion_survey_manager || null,
               completion_survey_date: serverData.completion_survey_date || null,
+              // 제출일 관리
+              construction_report_submitted_at: serverData.construction_report_submitted_at || null,
+              greenlink_confirmation_submitted_at: serverData.greenlink_confirmation_submitted_at || null,
+              attachment_completion_submitted_at: serverData.attachment_completion_submitted_at || null,
+              attachment_support_application_date: serverData.attachment_support_application_date || null,
+              attachment_support_writing_date: serverData.attachment_support_writing_date || null,
               // 비용 정보
               additional_cost: serverData.additional_cost || null,
               installation_extra_cost: serverData.installation_extra_cost || null,
@@ -5813,6 +5830,22 @@ function BusinessManagementPage() {
                       <DateInput
                         value={formData.contract_sent_date || ''}
                         onChange={(value) => setFormData({...formData, contract_sent_date: value})}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">부착지원신청서 작성일</label>
+                      <DateInput
+                        value={formData.attachment_support_writing_date || ''}
+                        onChange={(value) => setFormData({...formData, attachment_support_writing_date: value})}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">부착지원신청서 신청일</label>
+                      <DateInput
+                        value={formData.attachment_support_application_date || ''}
+                        onChange={(value) => setFormData({...formData, attachment_support_application_date: value})}
                       />
                     </div>
 
