@@ -141,6 +141,8 @@ function RevenueDashboard() {
   const [riskMap, setRiskMap] = useState<Record<string, string | null>>({}); // 위험도 별도 상태 (businesses 재계산 방지)
   const [riskIsManualMap, setRiskIsManualMap] = useState<Record<string, boolean>>({}); // 수동 설정 여부
   const [calculations, setCalculations] = useState<RevenueCalculation[]>([]);
+  // 모달에서 POST 재계산된 결과를 보존 (loadCalculations의 GET 데이터로 덮어쓰기 방지)
+  const freshCalcOverrides = useRef<Map<string, any>>(new Map());
   const [selectedOffices, setSelectedOffices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -1067,13 +1069,24 @@ function RevenueDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        const calculations = data.data.calculations || [];
-        setCalculations(calculations);
+        let loadedCalcs = data.data.calculations || [];
+
+        // 모달에서 POST 재계산된 최신 결과가 있으면 DB GET 데이터 대신 사용
+        if (freshCalcOverrides.current.size > 0) {
+          const overrideIds = new Set(freshCalcOverrides.current.keys());
+          loadedCalcs = loadedCalcs
+            .filter((c: any) => !overrideIds.has(c.business_id))
+            .concat(Array.from(freshCalcOverrides.current.values()));
+          // override 적용 후 클리어
+          freshCalcOverrides.current.clear();
+        }
+
+        setCalculations(loadedCalcs);
 
         // 💾 캐시 저장
-        setCachedData(CACHE_KEYS.CALCULATIONS, calculations);
+        setCachedData(CACHE_KEYS.CALCULATIONS, loadedCalcs);
 
-        console.log('✅ [LOAD-CALCULATIONS] API 로드 완료:', calculations.length, '개 (캐시 저장 완료)');
+        console.log('✅ [LOAD-CALCULATIONS] API 로드 완료:', loadedCalcs.length, '개 (캐시 저장 완료)');
         // calculateStats는 useEffect에서 필터링된 데이터로 자동 계산됨
       }
     } catch (error) {
@@ -2948,6 +2961,8 @@ function RevenueDashboard() {
             );
             CacheManager.updateBusinessField(businessId, 'multiple_stack_install_extra', savedQty);
             if (calculationResult) {
+              // POST 재계산 결과 보존 (loadCalculations GET으로 덮어쓰기 방지)
+              freshCalcOverrides.current.set(businessId, { ...calculationResult, business_id: businessId });
               // 서버 재계산 결과로 calculations 캐시 즉시 업데이트
               setCalculations(prev => {
                 const filtered = prev.filter(c => c.business_id !== businessId);
