@@ -1316,6 +1316,7 @@ function RevenueDashboard() {
       { header: '설치날짜',    key: 'installation_date',    width: 14 },
       { header: '설치팀',      key: 'installation_team',    width: 12 },
       { header: '입금일',      key: 'payment_date',         width: 14 },
+      { header: '입금액',      key: 'total_payments',       width: 16 },
       { header: '매출처',      key: 'revenue_source',       width: 20 },
       { header: '영업점',      key: 'sales_office',         width: 12 },
       { header: '지역대구분',  key: 'region_category',      width: 16 },
@@ -1338,8 +1339,8 @@ function RevenueDashboard() {
       { header: '설치비상태',  key: 'payment_status_label',     width: 12 },
     ];
 
-    // 금액 컬럼 인덱스 (1-based): 환경부고시가(K)~순이익(U) — C열 입금일 추가로 +1 시프트
-    const CURRENCY_COLS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+    // 금액 컬럼 인덱스 (1-based): 입금액(D), 환경부고시가(L)~순이익(V)
+    const CURRENCY_COLS = [4, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
 
     // 헤더 스타일
     sheet.getRow(1).eachCell(cell => {
@@ -1438,6 +1439,7 @@ function RevenueDashboard() {
         installation_date:    b.installation_date || '',
         installation_team:    b.installation_team || '',
         payment_date:         getLastPaymentDate(b) || '',
+        total_payments:       sumAllPayments(b as any),
         revenue_source:       b.revenue_source || '',
         sales_office:         b.sales_office || '',
         region_category:      regionCategory,
@@ -1466,8 +1468,8 @@ function RevenueDashboard() {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
       });
-      // 이익률 컬럼 (V, 22번) 서식 — C열 입금일 추가로 +1 시프트
-      const marginCell = row.getCell(22);
+      // 이익률 컬럼 (W, 23번) 서식 — D열 입금액 추가로 +1 시프트
+      const marginCell = row.getCell(23);
       marginCell.numFmt = '0.0';
       marginCell.alignment = { horizontal: 'right' };
     });
