@@ -115,18 +115,16 @@ function calcAutoRisk(installationDate: string | null | undefined): '상' | '중
 }
 
 /**
- * 추가공사비 입금을 제외한 가장 마지막 입금일 반환
- * progress_status와 무관하게 4가지 입금일 필드 모두 확인
- * (보조금 동시진행 등 양쪽 필드에 데이터가 있는 케이스 대응)
+ * 입금 필터용 날짜 반환
+ * 보조금 계열: payment_2nd_date (2차 입금일)
+ * 자비/기타 계열: payment_balance_date (잔금 입금일)
  */
-function getLastPaymentDate(business: Record<string, any>): string | null {
-  const dates: string[] = [];
-  if (business.payment_1st_date) dates.push(business.payment_1st_date);
-  if (business.payment_2nd_date) dates.push(business.payment_2nd_date);
-  if (business.payment_advance_date) dates.push(business.payment_advance_date);
-  if (business.payment_balance_date) dates.push(business.payment_balance_date);
-  if (dates.length === 0) return null;
-  return dates.sort().at(-1) ?? null;
+function getFilterPaymentDate(business: Record<string, any>): string | null {
+  const status = (business.progress_status || '').trim();
+  if (status.includes('보조금')) {
+    return business.payment_2nd_date || null;
+  }
+  return business.payment_balance_date || null;
 }
 
 function RevenueDashboard() {
@@ -175,8 +173,8 @@ function RevenueDashboard() {
   const [selectedSurveyMonths, setSelectedSurveyMonths] = useState<string[]>([]); // 실사 월 필터 ['견적|1', '착공|2', '준공|9']
   const [selectedInvoiceYears, setSelectedInvoiceYears] = useState<string[]>([]); // 세금계산서 발행 연도 필터
   const [selectedInvoiceMonths, setSelectedInvoiceMonths] = useState<string[]>([]); // 세금계산서 발행 월 필터
-  const [selectedPaymentYears, setSelectedPaymentYears] = useState<string[]>([]); // 입금연도 필터 - 추가공사비 제외 최신 입금일 기준
-  const [selectedPaymentMonths, setSelectedPaymentMonths] = useState<string[]>([]); // 입금월 필터 (1-12) - 추가공사비 제외 최신 입금일 기준
+  const [selectedPaymentYears, setSelectedPaymentYears] = useState<string[]>([]); // 입금연도 필터 - 보조금:2차/자비:잔금 입금일 기준
+  const [selectedPaymentMonths, setSelectedPaymentMonths] = useState<string[]>([]); // 입금월 필터 (1-12) - 보조금:2차/자비:잔금 입금일 기준
   const [showReceivablesOnly, setShowReceivablesOnly] = useState(false); // 미수금 필터
   const [showOverpaymentOnly, setShowOverpaymentOnly] = useState(false); // 초과입금(마이너스) 필터
   const [excludeOverpayment, setExcludeOverpayment] = useState(false); // 초과입금 제외 필터
@@ -1438,7 +1436,7 @@ function RevenueDashboard() {
       const row = sheet.addRow({
         installation_date:    b.installation_date || '',
         installation_team:    b.installation_team || '',
-        payment_date:         getLastPaymentDate(b) || '',
+        payment_date:         getFilterPaymentDate(b) || '',
         total_payments:       sumAllPayments(b as any),
         revenue_source:       b.revenue_source || '',
         sales_office:         b.sales_office || '',
@@ -1664,11 +1662,11 @@ function RevenueDashboard() {
         });
       }
 
-      // 입금연도/월 필터 (추가공사비 제외 최신 입금일 기준)
+      // 입금연도/월 필터 (보조금: 2차 입금일, 자비: 잔금 입금일 기준)
       let paymentMonthMatch = true;
       let paymentYearMatch = true;
       if (selectedPaymentYears.length > 0 || selectedPaymentMonths.length > 0) {
-        const lastPaymentDate = getLastPaymentDate(business);
+        const lastPaymentDate = getFilterPaymentDate(business);
         if (lastPaymentDate) {
           const dt = new Date(lastPaymentDate);
           const year = String(dt.getFullYear());
@@ -1905,9 +1903,9 @@ function RevenueDashboard() {
     .filter(Boolean) as number[]
   )].sort((a, b) => b - a);
 
-  // 입금 연도 목록 (추가공사비 제외 최신 입금일 기준)
+  // 입금 연도 목록 (보조금: 2차 입금일, 자비: 잔금 입금일 기준)
   const paymentYears = [...new Set(businesses
-    .map(b => getLastPaymentDate(b))
+    .map(b => getFilterPaymentDate(b))
     .filter(Boolean)
     .map(d => new Date(d!).getFullYear())
   )].sort((a, b) => b - a);
@@ -3280,7 +3278,7 @@ function VirtualizedTable({
                       // 입금월 필터 ON: 실제 입금일 표시 (읽기 전용)
                       <span className="text-center">
                         {(() => {
-                          const d = getLastPaymentDate(business);
+                          const d = getFilterPaymentDate(business);
                           if (!d) return <span className="text-gray-300">—</span>;
                           const dt = new Date(d);
                           const yy = String(dt.getFullYear()).slice(2);
