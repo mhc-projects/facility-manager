@@ -116,19 +116,15 @@ function calcAutoRisk(installationDate: string | null | undefined): '상' | '중
 
 /**
  * 추가공사비 입금을 제외한 가장 마지막 입금일 반환
- * 보조금계열: payment_1st_date, payment_2nd_date
- * 자비/기타계열: payment_advance_date, payment_balance_date
+ * progress_status와 무관하게 4가지 입금일 필드 모두 확인
+ * (보조금 동시진행 등 양쪽 필드에 데이터가 있는 케이스 대응)
  */
 function getLastPaymentDate(business: Record<string, any>): string | null {
-  const status = (business.progress_status || '').trim();
   const dates: string[] = [];
-  if (status.includes('보조금')) {
-    if (business.payment_1st_date) dates.push(business.payment_1st_date);
-    if (business.payment_2nd_date) dates.push(business.payment_2nd_date);
-  } else {
-    if (business.payment_advance_date) dates.push(business.payment_advance_date);
-    if (business.payment_balance_date) dates.push(business.payment_balance_date);
-  }
+  if (business.payment_1st_date) dates.push(business.payment_1st_date);
+  if (business.payment_2nd_date) dates.push(business.payment_2nd_date);
+  if (business.payment_advance_date) dates.push(business.payment_advance_date);
+  if (business.payment_balance_date) dates.push(business.payment_balance_date);
   if (dates.length === 0) return null;
   return dates.sort().at(-1) ?? null;
 }
@@ -1319,6 +1315,7 @@ function RevenueDashboard() {
     sheet.columns = [
       { header: '설치날짜',    key: 'installation_date',    width: 14 },
       { header: '설치팀',      key: 'installation_team',    width: 12 },
+      { header: '입금일',      key: 'payment_date',         width: 14 },
       { header: '매출처',      key: 'revenue_source',       width: 20 },
       { header: '영업점',      key: 'sales_office',         width: 12 },
       { header: '지역대구분',  key: 'region_category',      width: 16 },
@@ -1338,10 +1335,11 @@ function RevenueDashboard() {
       { header: '총이익',      key: 'gross_profit',             width: 16 },
       { header: '순이익',      key: 'net_profit',               width: 16 },
       { header: '이익률(%)',   key: 'profit_margin',            width: 12 },
+      { header: '설치비상태',  key: 'payment_status_label',     width: 12 },
     ];
 
-    // 금액 컬럼 인덱스 (1-based): 환경부고시가(J)~순이익(T)
-    const CURRENCY_COLS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    // 금액 컬럼 인덱스 (1-based): 환경부고시가(K)~순이익(U) — C열 입금일 추가로 +1 시프트
+    const CURRENCY_COLS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
     // 헤더 스타일
     sheet.getRow(1).eachCell(cell => {
@@ -1352,6 +1350,36 @@ function RevenueDashboard() {
         bottom: { style: 'thin', color: { argb: 'FF4472C4' } }
       };
     });
+
+    // 설치비 지급 상태 조회 (엑셀 포함용)
+    const PAYMENT_STATUS_LABELS: Record<string, string> = {
+      diff_pending: '차액발생',
+      final_completed: '정산완료',
+      final_pending: '본마감대기',
+      forecast_completed: '예측완료',
+      forecast_pending: '예측대기',
+      not_applicable: '미대상',
+    };
+    let paymentStatusMap: Record<string, string> = {};
+    try {
+      const token = localStorage.getItem('auth_token');
+      const bizIds = sortedBusinesses.map((b: any) => b.id).filter(Boolean);
+      if (bizIds.length > 0 && token) {
+        const psRes = await fetch('/api/installation-closing/payment-status', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ business_ids: bizIds }),
+        });
+        const psData = await psRes.json();
+        if (psData.success) {
+          psData.data.forEach((item: any) => {
+            paymentStatusMap[item.business_id] = PAYMENT_STATUS_LABELS[item.payment_status] || '미대상';
+          });
+        }
+      }
+    } catch (e) {
+      // 설치비 상태 조회 실패해도 엑셀 다운로드는 계속 진행
+    }
 
     // 환경부고시가 계산: Σ(고시가 × 수량) - 추가공사비/협의사항 제외
     const EQUIPMENT_EXPORT_FIELDS = [
@@ -1409,6 +1437,7 @@ function RevenueDashboard() {
       const row = sheet.addRow({
         installation_date:    b.installation_date || '',
         installation_team:    b.installation_team || '',
+        payment_date:         getLastPaymentDate(b) || '',
         revenue_source:       b.revenue_source || '',
         sales_office:         b.sales_office || '',
         region_category:      regionCategory,
@@ -1428,6 +1457,7 @@ function RevenueDashboard() {
         gross_profit:             b.gross_profit || 0,
         net_profit:               b.net_profit || 0,
         profit_margin:            Math.round(profitMargin * 10) / 10,
+        payment_status_label:     paymentStatusMap[b.id] || '미대상',
       });
 
       // 금액 컬럼 숫자 서식 적용 (천단위 콤마)
@@ -1436,8 +1466,8 @@ function RevenueDashboard() {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
       });
-      // 이익률 컬럼 (U, 21번) 서식
-      const marginCell = row.getCell(21);
+      // 이익률 컬럼 (V, 22번) 서식 — C열 입금일 추가로 +1 시프트
+      const marginCell = row.getCell(22);
       marginCell.numFmt = '0.0';
       marginCell.alignment = { horizontal: 'right' };
     });

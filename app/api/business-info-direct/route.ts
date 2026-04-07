@@ -252,6 +252,12 @@ export async function GET(request: Request) {
           MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_additional,
           MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_advance,
           MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_balance,
+          -- 입금일: invoice_records 우선 (계산서 미발행 + 입금만 있는 케이스 대응)
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_1st_date,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_2nd_date,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_additional_date,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_advance_date,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_balance_date,
           -- 추가 계산서(extra) 입금 합계 (취소 제외)
           COALESCE(SUM(CASE WHEN invoice_stage = 'extra' AND record_type != 'cancelled' THEN payment_amount ELSE 0 END), 0) AS ir_extra_payment_total,
           -- invoice_records 레코드 존재 여부 (1 = 있음, NULL = 없음)
@@ -297,24 +303,24 @@ export async function GET(request: Request) {
         bi.attachment_support_writing_date::text AS attachment_support_writing_date,
         bi.invoice_1st_date::text AS invoice_1st_date,
         COALESCE(ir.ir_invoice_1st,        bi.invoice_1st_amount)        AS invoice_1st_amount,
-        bi.payment_1st_date::text AS payment_1st_date,
-        COALESCE(ir.ir_payment_1st,        bi.payment_1st_amount)        AS payment_1st_amount,
+        COALESCE(ir.ir_payment_1st_date,        bi.payment_1st_date::text)        AS payment_1st_date,
+        COALESCE(ir.ir_payment_1st,             bi.payment_1st_amount)            AS payment_1st_amount,
         bi.invoice_2nd_date::text AS invoice_2nd_date,
-        COALESCE(ir.ir_invoice_2nd,        bi.invoice_2nd_amount)        AS invoice_2nd_amount,
-        bi.payment_2nd_date::text AS payment_2nd_date,
-        COALESCE(ir.ir_payment_2nd,        bi.payment_2nd_amount)        AS payment_2nd_amount,
+        COALESCE(ir.ir_invoice_2nd,             bi.invoice_2nd_amount)            AS invoice_2nd_amount,
+        COALESCE(ir.ir_payment_2nd_date,        bi.payment_2nd_date::text)        AS payment_2nd_date,
+        COALESCE(ir.ir_payment_2nd,             bi.payment_2nd_amount)            AS payment_2nd_amount,
         bi.invoice_additional_date::text AS invoice_additional_date,
         ir.ir_invoice_additional AS invoice_additional_amount,
-        bi.payment_additional_date::text AS payment_additional_date,
-        COALESCE(ir.ir_payment_additional, bi.payment_additional_amount) AS payment_additional_amount,
+        COALESCE(ir.ir_payment_additional_date, bi.payment_additional_date::text) AS payment_additional_date,
+        COALESCE(ir.ir_payment_additional,      bi.payment_additional_amount)     AS payment_additional_amount,
         bi.invoice_advance_date::text AS invoice_advance_date,
-        COALESCE(ir.ir_invoice_advance,    bi.invoice_advance_amount)    AS invoice_advance_amount,
-        bi.payment_advance_date::text AS payment_advance_date,
-        COALESCE(ir.ir_payment_advance,    bi.payment_advance_amount)    AS payment_advance_amount,
+        COALESCE(ir.ir_invoice_advance,         bi.invoice_advance_amount)        AS invoice_advance_amount,
+        COALESCE(ir.ir_payment_advance_date,    bi.payment_advance_date::text)    AS payment_advance_date,
+        COALESCE(ir.ir_payment_advance,         bi.payment_advance_amount)        AS payment_advance_amount,
         bi.invoice_balance_date::text AS invoice_balance_date,
-        COALESCE(ir.ir_invoice_balance,    bi.invoice_balance_amount)    AS invoice_balance_amount,
-        bi.payment_balance_date::text AS payment_balance_date,
-        COALESCE(ir.ir_payment_balance,    bi.payment_balance_amount)    AS payment_balance_amount,
+        COALESCE(ir.ir_invoice_balance,         bi.invoice_balance_amount)        AS invoice_balance_amount,
+        COALESCE(ir.ir_payment_balance_date,    bi.payment_balance_date::text)    AS payment_balance_date,
+        COALESCE(ir.ir_payment_balance,         bi.payment_balance_amount)        AS payment_balance_amount,
         bi.estimate_survey_date::text AS estimate_survey_date,
         bi.estimate_survey_manager,
         bi.pre_construction_survey_date::text AS pre_construction_survey_date,
@@ -991,6 +997,52 @@ export async function PUT(request: Request) {
     }
 
     log('✅ [BUSINESS-INFO-DIRECT] PUT 성공:', `사업장 ${updatedBusiness.business_name} 업데이트 완료`);
+
+    // ── 설치비 마감 트리거: installation_date / order_date 변경 감지 ──
+    try {
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+      if (token) {
+        const oldInstallDate = business.installation_date || null;
+        const newInstallDate = updatedBusiness.installation_date || null;
+        const oldOrderDate = business.order_date || null;
+        const newOrderDate = updatedBusiness.order_date || null;
+
+        // installation_date가 새로 설정됨 → 본마감 자동 트리거
+        if (!oldInstallDate && newInstallDate) {
+          fetch(new URL('/api/installation-closing/final/auto-trigger', request.url).toString(), {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ business_id: id }),
+          }).catch(err => console.error('⚠️ [CLOSING-TRIGGER] 본마감 자동 트리거 실패:', err.message));
+        }
+
+        // order_date가 삭제/변경됨 → 환수 처리
+        if (oldOrderDate && !newOrderDate) {
+          fetch(new URL('/api/installation-closing/refund', request.url).toString(), {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ business_id: id, reason: 'order_date_deleted' }),
+          }).catch(err => console.error('⚠️ [CLOSING-TRIGGER] 환수 트리거 실패:', err.message));
+        } else if (oldOrderDate && newOrderDate && oldOrderDate !== newOrderDate) {
+          // 발주일이 다른 월로 변경된 경우
+          const oldMonth = oldOrderDate.substring(0, 7);
+          const newMonth = newOrderDate.substring(0, 7);
+          if (oldMonth !== newMonth) {
+            fetch(new URL('/api/installation-closing/refund', request.url).toString(), {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ business_id: id, reason: 'order_date_changed', old_month: oldMonth, new_month: newMonth }),
+            }).catch(err => console.error('⚠️ [CLOSING-TRIGGER] 환수 트리거 실패:', err.message));
+          }
+        }
+      }
+    } catch (triggerErr) {
+      // 트리거 실패가 메인 업데이트에 영향을 주지 않도록
+      console.error('⚠️ [CLOSING-TRIGGER] 트리거 처리 오류:', triggerErr);
+    }
+    // ── 설치비 마감 트리거 끝 ──
 
     return NextResponse.json({
       success: true,
