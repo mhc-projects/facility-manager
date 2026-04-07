@@ -121,12 +121,12 @@ function calcAutoRisk(installationDate: string | null | undefined): '상' | '중
  */
 /**
  * 입금 필터용 날짜 반환
- * "보조금" (순수 보조금)만: payment_2nd_date (2차 입금일)
+ * "보조금", "보조금 추가승인": payment_2nd_date (2차 입금일)
  * 보조금 동시진행, 자비, 기타: null (입금 필터 대상 아님)
  */
 function getFilterPaymentDate(business: Record<string, any>): string | null {
   const status = (business.progress_status || '').trim();
-  if (status === '보조금') {
+  if (status === '보조금' || status === '보조금 추가승인') {
     return business.payment_2nd_date || null;
   }
   return null;
