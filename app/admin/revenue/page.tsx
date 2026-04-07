@@ -119,12 +119,17 @@ function calcAutoRisk(installationDate: string | null | undefined): '상' | '중
  * 보조금 계열: payment_2nd_date (2차 입금일)
  * 자비/기타 계열: payment_balance_date (잔금 입금일)
  */
+/**
+ * 입금 필터용 날짜 반환
+ * 보조금 계열만: payment_2nd_date (2차 입금일)
+ * 자비/기타: null (입금 필터 대상 아님)
+ */
 function getFilterPaymentDate(business: Record<string, any>): string | null {
   const status = (business.progress_status || '').trim();
   if (status.includes('보조금')) {
     return business.payment_2nd_date || null;
   }
-  return business.payment_balance_date || null;
+  return null;
 }
 
 function RevenueDashboard() {
