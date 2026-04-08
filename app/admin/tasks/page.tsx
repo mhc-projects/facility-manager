@@ -975,10 +975,10 @@ function TaskManagementPage() {
     }
     console.log('==================')
 
-    // 완료업무 필터 활성화 시: 완료 업무만 포함, 마지막 단계 컬럼만 표시
+    // 완료업무 필터 활성화 시: 완료 업무만 표시, 기본: 전체 표시 (완료 포함)
     const activeTasks = showCompletedTasks
       ? kanbanTasks.filter(task => task.progressPercentage === 100)
-      : kanbanTasks.filter(task => task.progressPercentage !== 100)
+      : kanbanTasks
 
     const allTypeSteps = selectedType === 'all' ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps, ...asSteps] :
                   selectedType === 'self' ? selfSteps :
