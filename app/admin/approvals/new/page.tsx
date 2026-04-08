@@ -10,6 +10,7 @@ import PurchaseRequestForm, { PurchaseRequestData, AttachmentFile } from '@/comp
 import LeaveRequestForm, { LeaveRequestData } from '@/components/approvals/forms/LeaveRequestForm'
 import BusinessProposalForm, { BusinessProposalData } from '@/components/approvals/forms/BusinessProposalForm'
 import OvertimeLogForm, { OvertimeLogData } from '@/components/approvals/forms/OvertimeLogForm'
+import InstallationClosingForm, { InstallationClosingData } from '@/components/approvals/forms/InstallationClosingForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Save, Send, ChevronLeft } from 'lucide-react'
@@ -20,6 +21,7 @@ const DOC_TYPES = [
   { value: 'leave_request',     label: '휴가원',       desc: '휴가/경조사 신청' },
   { value: 'business_proposal', label: '업무품의서',   desc: '업무 협의/승인 요청' },
   { value: 'overtime_log',      label: '연장근무일지', desc: '연장근무 내역 보고' },
+  { value: 'installation_closing', label: '설치비 마감', desc: '설치비 예측/본마감 결재' },
 ] as const
 
 type DocType = typeof DOC_TYPES[number]['value']
@@ -40,6 +42,8 @@ function getDefaultFormData(type: DocType, writerName: string, dept: string): an
       return { writer: writerName, department: dept, department_id: '', written_date: TODAY, title: '', content: '', retention_period: '3년', cooperative_team: '', cooperative_team_id: '', instructions: '', attachments_desc: '없음' } as BusinessProposalData
     case 'overtime_log':
       return { writer: writerName, department: dept, written_date: TODAY, items: Array.from({ length: 5 }, () => ({ date: '', day_of_week: '', ot_hours: 1, start_time: '18:00', work_time: '근무시간 1H (18:00~19:00)', work_content: '' })) } as OvertimeLogData
+    case 'installation_closing':
+      return { writer: writerName, department: dept, written_date: TODAY, closing_type: 'forecast', closing_month: '', items: [], total_count: 0, total_amount: 0, note: '' } as InstallationClosingData
   }
 }
 
@@ -289,6 +293,9 @@ export default function NewApprovalPage() {
             )}
             {docType === 'overtime_log' && (
               <OvertimeLogForm data={formData} onChange={setFormData} />
+            )}
+            {docType === 'installation_closing' && (
+              <InstallationClosingForm data={formData} onChange={setFormData} />
             )}
           </div>
         )}

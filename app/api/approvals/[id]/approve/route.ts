@@ -539,6 +539,28 @@ export async function POST(
         await createLeaveCalendarEvent(doc, requesterEmployee?.name || '담당자');
       }
 
+      // 설치비 마감인 경우 pending → paid 자동 전환
+      if (doc.document_type === 'installation_closing') {
+        try {
+          const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+          const businessIds = formData?.business_ids || [];
+          const closingType = formData?.closing_type || 'forecast';
+          if (businessIds.length > 0) {
+            await queryOne(`
+              UPDATE installation_payments
+              SET status = 'paid', payment_date = CURRENT_DATE
+              WHERE business_id = ANY($1)
+                AND payment_type = $2
+                AND status = 'pending'
+                AND notes LIKE $3
+            `, [businessIds, closingType, `%${doc.document_number}%`]);
+            console.log(`✅ [APPROVAL] 설치비 마감 자동 지급 처리: ${businessIds.length}건 (${doc.document_number})`);
+          }
+        } catch (closingErr) {
+          console.error('⚠️ [APPROVAL] 설치비 마감 자동 처리 실패:', closingErr);
+        }
+      }
+
       // 문서 상세 페이지 실시간 갱신 트리거
       await supabaseAdmin.channel(`approval-doc:${params.id}`)
         .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: 'approved' } });

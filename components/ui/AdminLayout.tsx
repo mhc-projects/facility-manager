@@ -32,7 +32,8 @@ import {
   FileEdit,
   Wrench,
   FileCheck,
-  Code2
+  Code2,
+  Calculator
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -142,6 +143,13 @@ const navigationItems: NavigationItem[] = [
     icon: DollarSign,
     description: '환경부 고시가 기준 매출 현황 및 분석',
     requiredLevel: 2
+  },
+  {
+    name: '설치비 마감',
+    href: '/admin/revenue/installation-closing',
+    icon: Calculator,
+    description: '예측마감/본마감 처리 및 은결 정산',
+    requiredLevel: 3
   },
   {
     name: '사용자 관리',
