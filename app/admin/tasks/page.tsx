@@ -913,6 +913,31 @@ function TaskManagementPage() {
   }, [tasksWithDelayStatus, searchTerm, selectedType, selectedPriority, selectedAssignee,
       showCompletedTasks, selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
 
+  // 칸반 보드용 필터링 (완료 업무도 항상 포함)
+  const kanbanTasks = useMemo(() => {
+    return tasksWithDelayStatus.filter(task => {
+      const matchesSearch = searchTerm === '' ||
+        task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.assignee?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.localGovernment?.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchesType = selectedType === 'all' || task.type === selectedType
+      const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority
+      const matchesAssignee = selectedAssignee === 'all' ||
+        task.assignee === selectedAssignee ||
+        (task.assignees && Array.isArray(task.assignees) &&
+         task.assignees.some((assignee: any) => assignee.name === selectedAssignee))
+      const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus
+      const matchesLocalGov = selectedLocalGov === 'all' || task.localGovernment === selectedLocalGov
+      const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
+
+      return matchesSearch && matchesType && matchesPriority && matchesAssignee &&
+             matchesStatus && matchesLocalGov && matchesConstructionReport
+    })
+  }, [tasksWithDelayStatus, searchTerm, selectedType, selectedPriority, selectedAssignee,
+      selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
+
   // 페이지네이션을 위한 현재 페이지 업무 목록
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage
@@ -929,19 +954,19 @@ function TaskManagementPage() {
   }, [searchTerm, selectedType, selectedPriority, selectedAssignee,
       selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
 
-  // 상태별 업무 그룹화
+  // 상태별 업무 그룹화 (칸반용: 완료 업무 포함)
   const tasksByStatus = useMemo(() => {
     console.log('🔍 [FILTER DEBUG] ==================')
     console.log('🎯 selectedType:', selectedType)
-    console.log('📊 filteredTasks count:', filteredTasks.length)
-    console.log('📦 filteredTasks types distribution:',
-      filteredTasks.reduce((acc: any, t) => {
+    console.log('📊 kanbanTasks count:', kanbanTasks.length)
+    console.log('📦 kanbanTasks types distribution:',
+      kanbanTasks.reduce((acc: any, t) => {
         acc[t.type] = (acc[t.type] || 0) + 1
         return acc
       }, {})
     )
-    if (filteredTasks.length > 0) {
-      console.log('📋 Sample tasks:', filteredTasks.slice(0, 3).map(t => ({
+    if (kanbanTasks.length > 0) {
+      console.log('📋 Sample tasks:', kanbanTasks.slice(0, 3).map(t => ({
         id: t.id.slice(0, 8),
         type: t.type,
         status: t.status,
@@ -950,14 +975,36 @@ function TaskManagementPage() {
     }
     console.log('==================')
 
-    const steps = selectedType === 'all' ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps, ...asSteps] :
+    // 완료업무 필터 활성화 시: 완료 업무만 포함, 마지막 단계 컬럼만 표시
+    const activeTasks = showCompletedTasks
+      ? kanbanTasks.filter(task => task.progressPercentage === 100)
+      : kanbanTasks.filter(task => task.progressPercentage !== 100)
+
+    const allTypeSteps = selectedType === 'all' ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps, ...asSteps] :
                   selectedType === 'self' ? selfSteps :
                   selectedType === 'subsidy' ? subsidySteps :
                   selectedType === 'dealer' ? dealerSteps :
                   selectedType === 'etc' ? etcSteps : asSteps
 
+    // 완료업무 필터 시: 각 타입의 마지막 단계만 표시
+    const steps = showCompletedTasks ? (() => {
+      if (selectedType === 'all') {
+        // 전체 보기: 각 타입의 마지막 단계 수집
+        return [
+          selfSteps[selfSteps.length - 1],
+          subsidySteps[subsidySteps.length - 1],
+          dealerSteps[dealerSteps.length - 1],
+          etcSteps[etcSteps.length - 1],
+          asSteps[asSteps.length - 1],
+        ]
+      } else {
+        // 개별 타입: 해당 타입의 마지막 단계만
+        return [allTypeSteps[allTypeSteps.length - 1]]
+      }
+    })() : allTypeSteps
+
     // 전체 보기일 때 중복 단계 제거
-    const uniqueSteps = selectedType === 'all' ? (() => {
+    const uniqueSteps = selectedType === 'all' && !showCompletedTasks ? (() => {
       const stepMap = new Map<string, typeof steps[0]>()
       steps.forEach(step => {
         if (!stepMap.has(step.label)) {
@@ -974,7 +1021,7 @@ function TaskManagementPage() {
       uniqueSteps.forEach(uniqueStep => {
         const tasksForThisStep: Task[] = []
 
-        filteredTasks.forEach(task => {
+        activeTasks.forEach(task => {
           // 업무의 실제 타입에 맞는 단계 정보를 찾기
           const correctSteps = task.type === 'self' ? selfSteps :
                              task.type === 'subsidy' ? subsidySteps :
@@ -1010,7 +1057,7 @@ function TaskManagementPage() {
     } else {
       // 개별 카테고리 보기일 때: 기존 로직 유지
       uniqueSteps.forEach(step => {
-        grouped[step.status] = filteredTasks.filter(task => task.status === step.status)
+        grouped[step.status] = activeTasks.filter(task => task.status === step.status)
       })
     }
 
@@ -1023,7 +1070,7 @@ function TaskManagementPage() {
       console.log('🔢 uniqueSteps.length:', uniqueSteps.length);
       console.log('🔢 Expected: 4, Actual:', uniqueSteps.length);
 
-      const dealerTasks = filteredTasks.filter((t: any) => t.type === 'dealer');
+      const dealerTasks = activeTasks.filter((t: any) => t.type === 'dealer');
       const uniqueStatuses = new Set(dealerTasks.map((t: any) => t.status));
       console.log('🏷️ Unique Statuses in Dealer Tasks:', Array.from(uniqueStatuses));
       console.log('📦 Dealer Tasks Detail:', dealerTasks.map((t: any) => ({
@@ -1039,7 +1086,7 @@ function TaskManagementPage() {
     }
 
     return { grouped, steps: uniqueSteps }
-  }, [filteredTasks, selectedType])
+  }, [kanbanTasks, selectedType, showCompletedTasks])
 
   // 동적 통계 계산
   const dynamicStats = useMemo(() => {
