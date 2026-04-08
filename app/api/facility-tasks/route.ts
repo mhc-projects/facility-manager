@@ -803,6 +803,23 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
             );
           }
           console.log(`✅ [FACILITY-TASKS] 사업장 업데이트 완료 - businessName: ${updatedTask.business_name}`);
+
+          // task_type 변경 시 기존 메모 제목에서 업무 타입도 업데이트
+          if (task_type && currentCategory !== task_type) {
+            try {
+              const { updateMemoTaskType } = await import('@/lib/task-memo-sync');
+              const memoUpdateResult = await updateMemoTaskType(
+                updatedTask.id,
+                task_type,
+                updatedTask.business_name
+              );
+              if (memoUpdateResult.updatedCount > 0) {
+                console.log(`✅ [FACILITY-TASKS] 업무 타입 변경 → 기존 메모 ${memoUpdateResult.updatedCount}건 업데이트`);
+              }
+            } catch (memoUpdateError) {
+              console.warn('⚠️ [FACILITY-TASKS] 메모 타입 업데이트 실패 (계속 진행):', memoUpdateError);
+            }
+          }
         }
       } catch (updateBusinessError) {
         console.error('❌ [FACILITY-TASKS] 사업장 업데이트 중 오류:', updateBusinessError);
@@ -1141,7 +1158,7 @@ async function createAutoProgressNote(params: {
          ) VALUES ($1, $2, $3, $4, $5)`,
         [
           businessInfo.id,
-          `[자동] ${task.task_type === 'self' ? '자비' : task.task_type === 'subsidy' ? '보조금' : task.task_type === 'as' ? 'AS' : '기타'} 업무 상태 변경`,
+          `[자동] ${getTaskTypeKR(task.task_type)} 업무 상태 변경`,
           content,
           'system',
           'system'
@@ -1320,7 +1337,7 @@ async function createTaskCreationNote(task: any) {
          ) VALUES ($1, $2, $3, $4, $5)`,
         [
           businessInfo.id,
-          `[자동] ${task.task_type === 'self' ? '자비' : task.task_type === 'subsidy' ? '보조금' : task.task_type === 'as' ? 'AS' : '기타'} 업무 상태 변경`,
+          `[자동] ${getTaskTypeKR(task.task_type)} 업무 상태 변경`,
           content,
           'system',
           'system'

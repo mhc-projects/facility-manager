@@ -174,3 +174,76 @@ export async function softDeleteTaskMemos(taskId: string): Promise<{ success: bo
     return { success: false, deletedCount: 0 }
   }
 }
+
+/**
+ * 업무 타입 변경 시 해당 업무의 기존 메모 제목에서 업무 타입을 업데이트
+ * 제목 형식: [업무] 사업장명 - 업무타입 - 현재단계
+ *
+ * @param taskId - 업무 ID
+ * @param newTaskType - 새 업무 타입 (e.g., 'subsidy', 'self')
+ * @param businessName - 사업장명
+ * @returns Promise<{ success: boolean, updatedCount: number }>
+ */
+export async function updateMemoTaskType(
+  taskId: string,
+  newTaskType: string,
+  businessName: string
+): Promise<{ success: boolean; updatedCount: number }> {
+  try {
+    const newTaskTypeKR = TASK_TYPE_KR[newTaskType] || newTaskType
+
+    // 해당 업무의 [업무] 형식 메모를 조회
+    const selectQuery = `
+      SELECT id, title
+      FROM business_memos
+      WHERE source_type = 'task_sync'
+        AND source_id = $1
+        AND is_deleted = false
+        AND title LIKE '[업무]%'
+    `
+    const memos = await pgQuery(selectQuery, [taskId])
+
+    if (!memos.rows || memos.rows.length === 0) {
+      return { success: true, updatedCount: 0 }
+    }
+
+    let updatedCount = 0
+    for (const memo of memos.rows) {
+      // [업무] 사업장명 - 업무타입 - 현재단계 → 업무타입 부분만 교체
+      const prefix = `[업무] ${businessName} - `
+      if (!memo.title.startsWith(prefix)) continue
+
+      const afterPrefix = memo.title.substring(prefix.length)
+      const lastDashIdx = afterPrefix.lastIndexOf(' - ')
+      if (lastDashIdx === -1) continue
+
+      const statusPart = afterPrefix.substring(lastDashIdx) // ' - 현재단계'
+      const newTitle = `${prefix}${newTaskTypeKR}${statusPart}`
+
+      if (newTitle !== memo.title) {
+        await pgQuery(
+          `UPDATE business_memos SET title = $1, updated_at = NOW() WHERE id = $2`,
+          [newTitle, memo.id]
+        )
+        updatedCount++
+      }
+    }
+
+    if (updatedCount > 0) {
+      logDebug('TASK-MEMO-SYNC', '업무 타입 변경 → 기존 메모 제목 업데이트', {
+        taskId,
+        newTaskType: newTaskTypeKR,
+        updatedCount
+      })
+    }
+
+    return { success: true, updatedCount }
+  } catch (error: any) {
+    logError('TASK-MEMO-SYNC', '메모 타입 업데이트 오류', {
+      error: error.message,
+      taskId,
+      newTaskType
+    })
+    return { success: false, updatedCount: 0 }
+  }
+}

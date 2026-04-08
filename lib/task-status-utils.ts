@@ -130,7 +130,9 @@ export const TASK_TYPE_KR: { [key: string]: string } = {
   'self': '자비',
   'subsidy': '보조금',
   'as': 'A/S',
-  'dealer': '대리점'
+  'dealer': '대리점',
+  'etc': '기타',
+  'outsourcing': '외주설치'
 };
 
 // 우선순위 한글 매핑
