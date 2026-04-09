@@ -733,6 +733,27 @@ input[type="date"]:focus {
   margin: 0;
 }
 
+/* Presentation mode overrides (dark background) */
+.tiptap-presentation table {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tiptap-presentation table td,
+.tiptap-presentation table th {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #e2e8f0; /* slate-200 */
+}
+
+.tiptap-presentation table th {
+  background-color: rgba(59, 130, 246, 0.25); /* blue-500/25 */
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.tiptap-presentation table tr:nth-child(even) td {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
 /* Placeholder style */
 .tiptap-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

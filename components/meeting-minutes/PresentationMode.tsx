@@ -262,7 +262,7 @@ function SlideAgenda({ slide }: { slide: Extract<Slide, { type: 'agenda' }> }) {
       <div className="flex-1 overflow-auto">
         {item.description && /<[a-z][\s\S]*>/i.test(item.description) ? (
           <div
-            className="tiptap-readonly text-slate-200 text-lg leading-relaxed mb-6"
+            className="tiptap-readonly tiptap-presentation text-slate-200 text-lg leading-relaxed mb-6"
             dangerouslySetInnerHTML={{ __html: item.description }}
           />
         ) : (
