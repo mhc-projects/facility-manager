@@ -329,13 +329,6 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
     return (
       <div key={item.href}>
         <div
-          onClick={() => {
-            if (hasChildren) {
-              toggleSubmenu(item.href)
-            }
-            router.push(item.href)
-            onItemClick()
-          }}
           title={collapsed ? item.name : undefined}
           className={`
             relative group flex items-center rounded-xl text-xs lg:text-sm font-medium transition-all duration-200 cursor-pointer
@@ -345,6 +338,10 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
               : 'text-gray-600 hover:bg-gray-50 lg:hover:bg-gray-100 hover:text-gray-900'
             }
           `}
+          onClick={() => {
+            router.push(item.href)
+            onItemClick()
+          }}
         >
           <Icon className={`${isChild ? 'w-3.5 h-3.5' : 'w-4 h-4'} flex-shrink-0 ${collapsed ? '' : 'mr-2 lg:mr-2'} ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
           {!collapsed && (
@@ -355,7 +352,13 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
                 </div>
               </div>
               {hasChildren && (
-                <div className="ml-1">
+                <div
+                  className="ml-1 p-1 -mr-1 rounded hover:bg-gray-200 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleSubmenu(item.href)
+                  }}
+                >
                   {isExpanded
                     ? <ChevronDown className="w-3 h-3 text-gray-400" />
                     : <ChevronRight className="w-3 h-3 text-gray-400" />
