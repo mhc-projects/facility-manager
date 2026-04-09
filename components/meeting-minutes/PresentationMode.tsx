@@ -260,9 +260,16 @@ function SlideAgenda({ slide }: { slide: Extract<Slide, { type: 'agenda' }> }) {
 
       {/* 설명 */}
       <div className="flex-1 overflow-auto">
-        <p className="text-slate-200 text-lg leading-relaxed whitespace-pre-wrap mb-6">
-          {item.description}
-        </p>
+        {item.description && /<[a-z][\s\S]*>/i.test(item.description) ? (
+          <div
+            className="tiptap-readonly text-slate-200 text-lg leading-relaxed mb-6"
+            dangerouslySetInnerHTML={{ __html: item.description }}
+          />
+        ) : (
+          <p className="text-slate-200 text-lg leading-relaxed whitespace-pre-wrap mb-6">
+            {item.description}
+          </p>
+        )}
 
         {/* 메타 정보 */}
         <div className="flex flex-wrap gap-4 mb-6">

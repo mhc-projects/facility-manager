@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import AutocompleteSelectInput from '@/components/ui/AutocompleteSelectInput'
+import ResizableTiptapEditor from '@/components/ui/ResizableTiptapEditor'
 import {
   ArrowLeft,
   Save,
@@ -30,6 +31,7 @@ import {
 } from '@/types/meeting-minutes'
 import { TokenManager } from '@/lib/api-client'
 import { useMeetingPresence } from '@/hooks/useMeetingPresence'
+import { normalizeTiptapContent } from '@/lib/rich-text'
 
 export default function EditMeetingMinutePage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -223,20 +225,26 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         setExternalParticipants(externalParts)
 
         // 안건 데이터 마이그레이션: 단일 담당자 → 다중 담당자
+        // 추가로, 레거시 plain-text 설명(\n 포함)을 Tiptap 호환 HTML 로 정규화한다.
+        // Tiptap 에디터에 plain text를 그대로 넣으면 HTML 파서가 줄바꿈을 모두 collapse하기 때문.
         const migratedAgenda = agendaData.map(item => {
+          const normalized = {
+            ...item,
+            description: normalizeTiptapContent(item.description),
+          }
           // 이미 다중 담당자 형식이면 그대로 사용
-          if (item.assignees && Array.isArray(item.assignees)) {
-            return item
+          if (normalized.assignees && Array.isArray(normalized.assignees)) {
+            return normalized
           }
           // 단일 담당자 형식이면 배열로 변환
-          if (item.assignee_id && item.assignee_name) {
+          if (normalized.assignee_id && normalized.assignee_name) {
             return {
-              ...item,
-              assignee_ids: [item.assignee_id],
-              assignees: [{ id: item.assignee_id, name: item.assignee_name }]
+              ...normalized,
+              assignee_ids: [normalized.assignee_id],
+              assignees: [{ id: normalized.assignee_id, name: normalized.assignee_name }]
             }
           }
-          return item
+          return normalized
         })
 
         // 사업장별 이슈 데이터 마이그레이션: 단일 담당자 → 다중 담당자
@@ -974,14 +982,15 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                           />
 
-                                          {/* 설명 */}
-                                          <textarea
-                                            value={item.description}
-                                            onChange={(e) => handleUpdateAgenda(index, 'description', e.target.value)}
-                                            placeholder="안건 설명 (우측 하단을 드래그하여 크기 조정 가능)"
-                                            rows={3}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-y"
-                                            style={{ minHeight: '75px' }}
+                                          {/* 설명 (Tiptap 리치 에디터, 하단 핸들로 높이 조정 + localStorage 영속화) */}
+                                          <ResizableTiptapEditor
+                                            content={item.description || ''}
+                                            onChange={(html) => handleUpdateAgenda(index, 'description', html)}
+                                            disabled={agendaLocked}
+                                            placeholder="안건 설명을 입력하세요 (표, 제목, 목록 서식 지원)"
+                                            storageKey={`meeting-agenda-desc-height-${params.id}-${item.id}`}
+                                            defaultHeight={200}
+                                            minHeight={120}
                                           />
 
                                           {/* 데드라인 + 진행률 + 담당자 */}

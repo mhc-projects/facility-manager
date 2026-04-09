@@ -326,7 +326,14 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                             </div>
                             <div className="flex-1">
                               <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                              <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{item.description}</p>
+                              {item.description && /<[a-z][\s\S]*>/i.test(item.description) ? (
+                                <div
+                                  className="tiptap-readonly text-sm text-gray-600 mb-2"
+                                  dangerouslySetInnerHTML={{ __html: item.description }}
+                                />
+                              ) : (
+                                <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{item.description}</p>
+                              )}
                               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                                 {/* 다중 담당자 우선, 없으면 단일 담당자 폴백 */}
                                 {(item.assignees && item.assignees.length > 0) ? (

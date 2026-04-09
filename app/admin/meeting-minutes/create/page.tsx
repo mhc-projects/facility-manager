@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import AutocompleteSelectInput from '@/components/ui/AutocompleteSelectInput'
 import RecurringIssuesPanel from '@/components/admin/meeting-minutes/RecurringIssuesPanel'
+import ResizableTiptapEditor from '@/components/ui/ResizableTiptapEditor'
 import {
   ArrowLeft,
   Save,
@@ -699,13 +700,13 @@ export default function CreateMeetingMinutePage() {
                                             placeholder="안건 제목"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                           />
-                                          <textarea
-                                            value={item.description}
-                                            onChange={(e) => handleUpdateAgenda(index, 'description', e.target.value)}
-                                            placeholder="안건 설명 (우측 하단을 드래그하여 크기 조정 가능)"
-                                            rows={4}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
-                                            style={{ minHeight: '75px' }}
+                                          <ResizableTiptapEditor
+                                            content={item.description || ''}
+                                            onChange={(html) => handleUpdateAgenda(index, 'description', html)}
+                                            placeholder="안건 설명을 입력하세요 (표, 제목, 목록 서식 지원)"
+                                            storageKey={`meeting-agenda-desc-height-create-${item.id}`}
+                                            defaultHeight={200}
+                                            minHeight={120}
                                           />
 
                                           {/* 데드라인 + 진행률 + 담당자 */}
