@@ -293,18 +293,38 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
                 type="text"
                 value={memoForm.title}
                 onChange={(e) => setMemoForm(prev => ({ ...prev, title: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="메모 제목"
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">내용</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                내용 <span className="text-gray-400">(Ctrl/⌘+Enter로 저장, 우측 하단을 드래그하여 크기 조정)</span>
+              </label>
               <textarea
                 value={memoForm.content}
                 onChange={(e) => setMemoForm(prev => ({ ...prev, content: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    if (!isSaving && memoForm.title.trim() && memoForm.content.trim()) {
+                      if (editingMemo) {
+                        handleEditMemo();
+                      } else {
+                        handleAddMemo();
+                      }
+                    }
+                  }
+                }}
                 placeholder="메모 내용"
-                rows={4}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                rows={8}
+                style={{ minHeight: '200px' }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y"
               />
             </div>
             <div className="flex gap-2">
@@ -367,7 +387,7 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
                         </span>
                       )}
                     </div>
-                    <p className={`text-xs leading-relaxed break-words ${isAutoMemo ? 'text-gray-500' : 'text-gray-700'}`}>
+                    <p className={`text-xs leading-relaxed break-words whitespace-pre-wrap ${isAutoMemo ? 'text-gray-500' : 'text-gray-700'}`}>
                       {memo.content}
                     </p>
                   </div>

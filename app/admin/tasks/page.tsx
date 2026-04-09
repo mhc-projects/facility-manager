@@ -516,7 +516,19 @@ function TaskManagementPage() {
     if (showEditModal && editingTask) {
       // Delay to ensure DOM is ready
       setTimeout(() => {
-        resizeTextarea(editDescriptionRef.current)
+        // 업무 설명: 저장된 높이가 있으면 복원, 없으면 내용에 맞춰 자동 조정
+        const descTextarea = editDescriptionRef.current
+        if (descTextarea) {
+          let savedHeight: string | null = null
+          try {
+            savedHeight = localStorage.getItem(`task-desc-height-${editingTask.id}`)
+          } catch {}
+          if (savedHeight) {
+            descTextarea.style.height = savedHeight
+          } else {
+            resizeTextarea(descTextarea)
+          }
+        }
         resizeTextarea(editNotesRef.current)
       }, 0)
     }
@@ -3077,20 +3089,27 @@ function TaskManagementPage() {
 
                 {/* 업무 설명 */}
                 <div>
-                  <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">업무 설명</label>
+                  <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">
+                    업무 설명 <span className="text-gray-400">(우측 하단을 드래그하여 크기 조정)</span>
+                  </label>
                   <textarea
                     ref={editDescriptionRef}
                     value={editingTask.description || ''}
                     onChange={(e) => {
                       setEditingTask(prev => prev ? { ...prev, description: e.target.value || undefined } : null)
-                      // Auto-resize
+                    }}
+                    onMouseUp={(e) => {
+                      // 사용자가 크기 조정 후 높이를 업무 id별로 저장
                       const target = e.target as HTMLTextAreaElement
-                      target.style.height = 'auto'
-                      target.style.height = Math.min(target.scrollHeight, window.innerHeight * 0.5) + 'px'
+                      if (editingTask?.id && target.style.height) {
+                        try {
+                          localStorage.setItem(`task-desc-height-${editingTask.id}`, target.style.height)
+                        } catch {}
+                      }
                     }}
                     placeholder="업무에 대한 설명을 입력하세요"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none text-xs sm:text-sm"
-                    style={{ minHeight: '80px', maxHeight: '50vh' }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y text-xs sm:text-sm whitespace-pre-wrap"
+                    style={{ minHeight: '80px' }}
                   />
                 </div>
 
