@@ -56,8 +56,12 @@ export function useMeetingPresence({
   const [otherEditors, setOtherEditors] = useState<PresenceUser[]>([])
   const [myLockedSections, setMyLockedSections] = useState<string[]>([])
   const [isConnected, setIsConnected] = useState(false)
+  // isConnectedRef: stale closure 방지용 — lockSection/unlockSection/trackPresence 내부에서 참조
+  const isConnectedRef = useRef(false)
   const myColorRef = useRef<string>(PRESENCE_COLORS[0])
   const myLockedSectionsRef = useRef<string[]>([])
+  // joinedAtRef: 매 track 호출마다 joinedAt이 갱신되어 불필요한 presence sync가 발생하는 것을 방지
+  const joinedAtRef = useRef<number | null>(null)
 
   // myLockedSections가 변경될 때 ref도 동기화
   useEffect(() => {
@@ -65,16 +69,17 @@ export function useMeetingPresence({
   }, [myLockedSections])
 
   // Presence 상태 갱신 (채널에 현재 상태 broadcast)
+  // isConnectedRef를 참조해 stale closure를 방지하고, joinedAt은 최초값을 재사용
   const trackPresence = useCallback((lockedSections: string[]) => {
-    if (!channelRef.current || !isConnected) return
+    if (!channelRef.current || !isConnectedRef.current) return
     channelRef.current.track({
       userId: currentUserId,
       userName: currentUserName,
       color: myColorRef.current,
       lockedSections,
-      joinedAt: Date.now(),
+      joinedAt: joinedAtRef.current ?? Date.now(),
     })
-  }, [currentUserId, currentUserName, isConnected])
+  }, [currentUserId, currentUserName])
 
   useEffect(() => {
     if (!enabled || !meetingId || !currentUserId) return
@@ -120,20 +125,30 @@ export function useMeetingPresence({
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          // isConnectedRef를 state보다 먼저 동기 갱신해 이후 콜백에서 stale closure 방지
+          isConnectedRef.current = true
           setIsConnected(true)
+
+          // joinedAt: 최초 구독 시에만 설정, 재연결 시에는 기존 값 유지
+          if (joinedAtRef.current === null) {
+            joinedAtRef.current = Date.now()
+          }
+
           // 입장 시 색상 배정: 현재 사용자 수 기반
           const state = channel.presenceState()
           const existingCount = Object.keys(state).length
           myColorRef.current = PRESENCE_COLORS[existingCount % PRESENCE_COLORS.length]
 
+          // 재연결 시 기존 잠금 상태 복구 (myLockedSectionsRef.current), 초기 입장 시에는 []
           await channel.track({
             userId: currentUserId,
             userName: currentUserName,
             color: myColorRef.current,
-            lockedSections: [],
-            joinedAt: Date.now(),
+            lockedSections: myLockedSectionsRef.current,
+            joinedAt: joinedAtRef.current,
           })
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          isConnectedRef.current = false
           setIsConnected(false)
         }
       })
@@ -144,6 +159,8 @@ export function useMeetingPresence({
       channel.untrack()
       supabase.removeChannel(channel)
       channelRef.current = null
+      isConnectedRef.current = false
+      joinedAtRef.current = null
       setIsConnected(false)
       setOtherEditors([])
     }
@@ -160,36 +177,36 @@ export function useMeetingPresence({
     setMyLockedSections(prev => {
       if (prev.includes(sectionId)) return prev
       const next = [...prev, sectionId]
-      // Presence 즉시 갱신
-      if (channelRef.current && isConnected) {
+      // isConnectedRef로 stale closure 방지, joinedAt 재사용
+      if (channelRef.current && isConnectedRef.current) {
         channelRef.current.track({
           userId: currentUserId,
           userName: currentUserName,
           color: myColorRef.current,
           lockedSections: next,
-          joinedAt: Date.now(),
+          joinedAt: joinedAtRef.current ?? Date.now(),
         })
       }
       return next
     })
-  }, [currentUserId, currentUserName, isConnected])
+  }, [currentUserId, currentUserName])
 
   const unlockSection = useCallback((sectionId: string) => {
     setMyLockedSections(prev => {
       const next = prev.filter(s => s !== sectionId)
-      // Presence 즉시 갱신
-      if (channelRef.current && isConnected) {
+      // isConnectedRef로 stale closure 방지, joinedAt 재사용
+      if (channelRef.current && isConnectedRef.current) {
         channelRef.current.track({
           userId: currentUserId,
           userName: currentUserName,
           color: myColorRef.current,
           lockedSections: next,
-          joinedAt: Date.now(),
+          joinedAt: joinedAtRef.current ?? Date.now(),
         })
       }
       return next
     })
-  }, [currentUserId, currentUserName, isConnected])
+  }, [currentUserId, currentUserName])
 
   const canLockSection = useCallback((sectionId: string): boolean => {
     return !otherEditors.some(editor => editor.lockedSections.includes(sectionId))
