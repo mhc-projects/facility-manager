@@ -31,6 +31,8 @@ interface ResizableTiptapEditorProps {
   onFocus?: () => void
   /** Presence 섹션 잠금 해제용 블러 콜백 */
   onBlur?: () => void
+  /** Ctrl/⌘+Enter 단축키 핸들러 */
+  onSubmitShortcut?: () => void
 }
 
 export default function ResizableTiptapEditor({
@@ -44,6 +46,7 @@ export default function ResizableTiptapEditor({
   maxHeight,
   onFocus,
   onBlur,
+  onSubmitShortcut,
 }: ResizableTiptapEditorProps) {
   const [height, setHeight] = useState<number>(defaultHeight)
   const [mounted, setMounted] = useState(false)
@@ -146,6 +149,7 @@ export default function ResizableTiptapEditor({
           minHeight="100%"
           onFocus={onFocus}
           onBlur={onBlur}
+          onSubmitShortcut={onSubmitShortcut}
         />
       </div>
       {/* Resize handle */}

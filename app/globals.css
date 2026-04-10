@@ -774,3 +774,67 @@ input[type="date"]:focus {
     display: none !important;
   }
 }
+
+/* Memo display: dangerouslySetInnerHTML로 렌더링된 Tiptap HTML / plain text 변환 HTML 공통 스타일 */
+.tiptap-memo-display p {
+  margin: 0.2em 0;
+}
+
+.tiptap-memo-display h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.5em 0 0.2em;
+}
+
+.tiptap-memo-display h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+
+.tiptap-memo-display ul {
+  list-style-type: disc;
+  padding-left: 1.25em;
+  margin: 0.2em 0;
+}
+
+.tiptap-memo-display ol {
+  list-style-type: decimal;
+  padding-left: 1.25em;
+  margin: 0.2em 0;
+}
+
+.tiptap-memo-display li {
+  margin: 0.1em 0;
+}
+
+.tiptap-memo-display li p {
+  margin: 0;
+}
+
+.tiptap-memo-display strong {
+  font-weight: 700;
+}
+
+.tiptap-memo-display em {
+  font-style: italic;
+}
+
+.tiptap-memo-display table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.4em 0;
+  font-size: 0.75rem;
+}
+
+.tiptap-memo-display table td,
+.tiptap-memo-display table th {
+  border: 1px solid #d1d5db;
+  padding: 0.25em 0.5em;
+  vertical-align: top;
+}
+
+.tiptap-memo-display table th {
+  background-color: #f3f4f6;
+  font-weight: 600;
+}

@@ -4,6 +4,32 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquarePlus, MessageSquare, Edit3, Trash2 } from 'lucide-react';
 import { TokenManager } from '@/lib/api-client';
 import { useBusinessMemoRealtime } from '@/hooks/useBusinessMemoRealtime';
+import ResizableTiptapEditor from '@/components/ui/ResizableTiptapEditor';
+
+/**
+ * 메모 내용이 Tiptap HTML인지 plain text인지 판별하여 렌더링용 HTML 문자열 반환.
+ * - HTML 태그를 포함하면 그대로 사용
+ * - plain text(\n 포함)이면 <p> 단락으로 변환하여 줄바꿈 보존
+ */
+function renderMemoContent(content: string): string {
+  if (!content) return '';
+  const trimmed = content.trim();
+  // HTML 태그 포함 여부 검사
+  if (/<[a-zA-Z][\s\S]*?>/.test(trimmed)) {
+    return trimmed;
+  }
+  // plain text: \n\n은 단락 구분, \n은 줄바꿈
+  const paragraphs = trimmed.split(/\n\n+/);
+  return paragraphs
+    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+/** Tiptap 빈 문서 판별 */
+function isTiptapEmpty(html: string): boolean {
+  const stripped = html.replace(/<[^>]+>/g, '').trim();
+  return stripped === '' || html === '<p></p>';
+}
 
 interface Memo {
   id?: string;
@@ -99,7 +125,7 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
 
   // 메모 추가
   const handleAddMemo = async () => {
-    if (!memoForm.title.trim() || !memoForm.content.trim()) return;
+    if (!memoForm.title.trim() || isTiptapEmpty(memoForm.content)) return;
 
     // Optimistic update: 임시 ID로 즉시 UI에 반영
     const tempId = `temp-${Date.now()}`;
@@ -155,7 +181,7 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
 
   // 메모 수정
   const handleEditMemo = async () => {
-    if (!editingMemo?.id || !memoForm.title.trim() || !memoForm.content.trim()) return;
+    if (!editingMemo?.id || !memoForm.title.trim() || isTiptapEmpty(memoForm.content)) return;
 
     const editId = editingMemo.id;
 
@@ -242,9 +268,13 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
 
   const startEditMemo = (memo: Memo) => {
     setEditingMemo(memo);
+    // plain text 메모를 편집할 때 줄바꿈이 보존되도록 HTML로 변환
+    const contentForEditor = /<[a-zA-Z][\s\S]*?>/.test(memo.content)
+      ? memo.content
+      : renderMemoContent(memo.content);
     setMemoForm({
       title: memo.title,
-      content: memo.content
+      content: contentForEditor,
     });
     setIsAddingMemo(false);
   };
@@ -304,33 +334,30 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                내용 <span className="text-gray-400">(Ctrl/⌘+Enter로 저장, 우측 하단을 드래그하여 크기 조정)</span>
+                내용 <span className="text-gray-400">(Ctrl/⌘+Enter로 저장, 하단 핸들을 드래그하여 크기 조정)</span>
               </label>
-              <textarea
-                value={memoForm.content}
-                onChange={(e) => setMemoForm(prev => ({ ...prev, content: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    if (!isSaving && memoForm.title.trim() && memoForm.content.trim()) {
-                      if (editingMemo) {
-                        handleEditMemo();
-                      } else {
-                        handleAddMemo();
-                      }
+              <ResizableTiptapEditor
+                content={memoForm.content}
+                onChange={(html) => setMemoForm(prev => ({ ...prev, content: html }))}
+                placeholder="메모 내용 (Bold, 목록, 표 등 서식 지원)"
+                storageKey={`business-memo-height-${businessId}${editingMemo ? `-edit-${editingMemo.id}` : '-new'}`}
+                defaultHeight={120}
+                minHeight={80}
+                onSubmitShortcut={() => {
+                  if (!isSaving && memoForm.title.trim() && !isTiptapEmpty(memoForm.content)) {
+                    if (editingMemo) {
+                      handleEditMemo();
+                    } else {
+                      handleAddMemo();
                     }
                   }
                 }}
-                placeholder="메모 내용"
-                rows={8}
-                style={{ minHeight: '200px' }}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y"
               />
             </div>
             <div className="flex gap-2">
               <button
                 onClick={editingMemo ? handleEditMemo : handleAddMemo}
-                disabled={isSaving || !memoForm.title.trim() || !memoForm.content.trim()}
+                disabled={isSaving || !memoForm.title.trim() || isTiptapEmpty(memoForm.content)}
                 className="flex-1 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {isSaving ? '저장 중...' : (editingMemo ? '수정' : '추가')}
@@ -387,9 +414,10 @@ export function MemoSection({ businessId, businessName, userPermission, canDelet
                         </span>
                       )}
                     </div>
-                    <p className={`text-xs leading-relaxed break-words whitespace-pre-wrap ${isAutoMemo ? 'text-gray-500' : 'text-gray-700'}`}>
-                      {memo.content}
-                    </p>
+                    <div
+                      className={`text-xs leading-relaxed break-words tiptap-memo-display ${isAutoMemo ? 'text-gray-500' : 'text-gray-700'}`}
+                      dangerouslySetInnerHTML={{ __html: renderMemoContent(memo.content) }}
+                    />
                   </div>
                   {memo.id && !isTempMemo && ((!isAutoMemo && userPermission >= 1) || (isAutoMemo && canDeleteAutoMemos)) && (
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">

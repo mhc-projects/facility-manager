@@ -31,6 +31,8 @@ interface TiptapEditorProps {
   minHeight?: string
   onFocus?: () => void
   onBlur?: () => void
+  /** Ctrl/⌘+Enter 단축키 핸들러 */
+  onSubmitShortcut?: () => void
 }
 
 function ToolbarButton({
@@ -75,12 +77,15 @@ export default function TiptapEditor({
   minHeight = '280px',
   onFocus,
   onBlur,
+  onSubmitShortcut,
 }: TiptapEditorProps) {
   // ref 패턴: 최신 콜백을 ref에 저장하여 editor 이벤트 핸들러 재등록 없이 항상 최신 콜백 호출
   const onFocusRef = useRef<(() => void) | undefined>(onFocus)
   const onBlurRef = useRef<(() => void) | undefined>(onBlur)
+  const onSubmitShortcutRef = useRef<(() => void) | undefined>(onSubmitShortcut)
   useEffect(() => { onFocusRef.current = onFocus }, [onFocus])
   useEffect(() => { onBlurRef.current = onBlur }, [onBlur])
+  useEffect(() => { onSubmitShortcutRef.current = onSubmitShortcut }, [onSubmitShortcut])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -124,6 +129,13 @@ export default function TiptapEditor({
       attributes: {
         class: 'tiptap-editor-content focus:outline-none',
         style: `min-height: ${minHeight}`,
+      },
+      handleKeyDown: (_view, event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          onSubmitShortcutRef.current?.()
+          return true
+        }
+        return false
       },
     },
   })
