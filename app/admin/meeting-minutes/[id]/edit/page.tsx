@@ -127,6 +127,18 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
     setIsDirty(dirtySections.size > 0)
   }, [dirtySections])
 
+  // 미저장 변경사항이 있는 상태에서 페이지 이탈 시 브라우저 경고
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
   const loadBusinessesAndEmployees = async () => {
     try {
       // 사업장 목록 로드
@@ -553,12 +565,37 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
 
       // 병렬 전송
       const results = await Promise.all(patches)
-      const responses = await Promise.all(results.map(r => r.json()))
+
+      // HTTP 상태 코드 체크 (5xx, 4xx 등 비정상 응답을 json() 호출 전에 잡음)
+      const httpFailed = results.filter(r => !r.ok)
+      if (httpFailed.length > 0) {
+        console.error('[MEETING-MINUTE] HTTP error responses:', httpFailed.map(r => r.status))
+        alert(`저장 중 서버 오류가 발생했습니다. (HTTP ${httpFailed[0].status})\n잠시 후 다시 시도해 주세요.`)
+        return
+      }
+
+      // JSON 파싱 (HTTP 200이 보장된 상태에서만 실행)
+      let responses: { success: boolean; error?: string }[]
+      try {
+        responses = await Promise.all(results.map(r => r.json()))
+      } catch (parseError) {
+        console.error('[MEETING-MINUTE] JSON parse error:', parseError)
+        alert('서버 응답을 읽는 중 오류가 발생했습니다. 변경 내용은 유지됩니다.\n잠시 후 다시 시도해 주세요.')
+        return
+      }
+
       const failed = responses.filter(r => !r.success)
+      const succeeded = responses.filter(r => r.success)
+
+      if (failed.length > 0 && succeeded.length > 0) {
+        console.error('[MEETING-MINUTE] Partial failure:', failed)
+        alert(`일부 항목이 저장되지 않았습니다 (${succeeded.length}개 성공, ${failed.length}개 실패).\n실패한 항목: ${failed[0].error ?? '알 수 없는 오류'}\n변경 내용은 유지됩니다.`)
+        return
+      }
 
       if (failed.length > 0) {
-        console.error('[MEETING-MINUTE] Some patches failed:', failed)
-        alert(`저장 중 일부 오류가 발생했습니다: ${failed[0].error}`)
+        console.error('[MEETING-MINUTE] All patches failed:', failed)
+        alert(`저장 중 오류가 발생했습니다: ${failed[0].error ?? '알 수 없는 오류'}\n변경 내용은 유지됩니다.`)
         return
       }
 
