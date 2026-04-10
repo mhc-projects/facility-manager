@@ -7,7 +7,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import Placeholder from '@tiptap/extension-placeholder'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   Bold,
   Italic,
@@ -29,6 +29,8 @@ interface TiptapEditorProps {
   disabled?: boolean
   placeholder?: string
   minHeight?: string
+  onFocus?: () => void
+  onBlur?: () => void
 }
 
 function ToolbarButton({
@@ -71,7 +73,15 @@ export default function TiptapEditor({
   disabled = false,
   placeholder = '',
   minHeight = '280px',
+  onFocus,
+  onBlur,
 }: TiptapEditorProps) {
+  // ref 패턴: 최신 콜백을 ref에 저장하여 editor 이벤트 핸들러 재등록 없이 항상 최신 콜백 호출
+  const onFocusRef = useRef<(() => void) | undefined>(onFocus)
+  const onBlurRef = useRef<(() => void) | undefined>(onBlur)
+  useEffect(() => { onFocusRef.current = onFocus }, [onFocus])
+  useEffect(() => { onBlurRef.current = onBlur }, [onBlur])
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -103,6 +113,12 @@ export default function TiptapEditor({
       } else {
         onChange(html)
       }
+    },
+    onFocus: () => {
+      onFocusRef.current?.()
+    },
+    onBlur: () => {
+      onBlurRef.current?.()
     },
     editorProps: {
       attributes: {

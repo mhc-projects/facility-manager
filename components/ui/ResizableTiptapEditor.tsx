@@ -27,6 +27,10 @@ interface ResizableTiptapEditorProps {
   minHeight?: number
   /** 최대 높이 px. 기본 window.innerHeight (제한 없음이면 undefined) */
   maxHeight?: number
+  /** Presence 섹션 잠금용 포커스 콜백 */
+  onFocus?: () => void
+  /** Presence 섹션 잠금 해제용 블러 콜백 */
+  onBlur?: () => void
 }
 
 export default function ResizableTiptapEditor({
@@ -38,6 +42,8 @@ export default function ResizableTiptapEditor({
   defaultHeight = 200,
   minHeight = 120,
   maxHeight,
+  onFocus,
+  onBlur,
 }: ResizableTiptapEditorProps) {
   const [height, setHeight] = useState<number>(defaultHeight)
   const [mounted, setMounted] = useState(false)
@@ -121,6 +127,8 @@ export default function ResizableTiptapEditor({
         disabled
         placeholder={placeholder}
         minHeight={`${height}px`}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
     )
   }
@@ -136,6 +144,8 @@ export default function ResizableTiptapEditor({
           onChange={onChange}
           placeholder={placeholder}
           minHeight="100%"
+          onFocus={onFocus}
+          onBlur={onBlur}
         />
       </div>
       {/* Resize handle */}

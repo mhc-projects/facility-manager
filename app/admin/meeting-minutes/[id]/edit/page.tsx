@@ -991,6 +991,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                             storageKey={`meeting-agenda-desc-height-${params.id}-${item.id}`}
                                             defaultHeight={200}
                                             minHeight={120}
+                                            onFocus={() => { if (!agendaLocked) lockSection(agendaSectionId) }}
+                                            onBlur={() => unlockSection(agendaSectionId)}
                                           />
 
                                           {/* 데드라인 + 진행률 + 담당자 */}
