@@ -471,8 +471,8 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       console.error('⚠️ [FACILITY-TASKS] 단계 이력 기록 실패 (계속 진행):', historyError);
     }
 
-    // 업무 생성 시 자동 메모 생성
-    await createTaskCreationNote(newTask);
+    // 업무 생성 시 자동 메모 생성 (derivedTaskType을 명시적으로 주입)
+    await createTaskCreationNote({ ...newTask, task_type: derivedTaskType });
 
     // 다중 담당자 알림 생성 (PostgreSQL 함수 사용)
     if (finalAssignees.length > 0) {
@@ -1158,7 +1158,8 @@ async function createAutoProgressNote(params: {
       }
 
       // task_type은 status prefix에서 파생 (facility_tasks.task_type 컬럼은 stale 가능성 있음)
-      const derivedTaskType = getTaskTypeFromStatus(newStatus || task.status);
+      // prefix로 파생 불가능한 레거시 status의 경우 task.task_type을 fallback으로 사용
+      const derivedTaskType = getTaskTypeFromStatus(newStatus || task.status, task.task_type);
 
       // 메모 생성 - Direct PostgreSQL
       await pgQuery(
@@ -1311,8 +1312,8 @@ async function createTaskNotifications(params: {
 async function createTaskCreationNote(task: any) {
   try {
     // ✅ 중앙 매핑 시스템 사용 (67개 전체 상태 + 6개 업무 타입 지원)
-    // task_type은 status prefix에서 파생 (facility_tasks.task_type 컬럼은 stale 가능성 있음)
-    const taskTypeLabel = getTaskTypeKR(getTaskTypeFromStatus(task.status));
+    // task_type은 status prefix에서 파생 (레거시 status의 경우 task.task_type을 fallback으로 사용)
+    const taskTypeLabel = getTaskTypeKR(getTaskTypeFromStatus(task.status, task.task_type));
     const statusLabel = getTaskStatusKR(task.status);
     const assigneeList = task.assignees?.map((a: any) => a.name).filter(Boolean).join(', ') || '미배정';
 
@@ -1340,8 +1341,8 @@ async function createTaskCreationNote(task: any) {
         return; // 메모 생성 실패하지만 업무는 계속 진행
       }
 
-      // task_type은 status prefix에서 파생 (신규 생성 시 task_type 컬럼 미반영 가능)
-      const derivedTaskType = getTaskTypeFromStatus(task.status);
+      // task_type은 status prefix에서 파생 (레거시 status의 경우 task.task_type을 fallback으로 사용)
+      const derivedTaskType = getTaskTypeFromStatus(task.status, task.task_type);
 
       // 메모 생성 - Direct PostgreSQL
       await pgQuery(

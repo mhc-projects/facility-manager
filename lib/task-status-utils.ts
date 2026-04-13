@@ -163,16 +163,19 @@ export function getTaskTypeKR(taskType: string): string {
  * facility_tasks.task_type 컬럼은 business_info.progress_status 기반으로 별도
  * 동기화되므로 stale 값이 남을 수 있다. 메모 타이틀 등에서는 status 값 자체의
  * prefix로부터 직접 파생하는 것이 안전하다.
+ *
+ * prefix로 파생이 불가능한 레거시 status(예: deposit_confirm, customer_contact 등)는
+ * fallbackTaskType을 사용한다. fallbackTaskType도 없으면 'etc'로 반환한다.
  */
-export function getTaskTypeFromStatus(status: string | null | undefined): string {
-  if (!status) return 'etc';
+export function getTaskTypeFromStatus(status: string | null | undefined, fallbackTaskType?: string): string {
+  if (!status) return fallbackTaskType || 'etc';
   if (status.startsWith('self_')) return 'self';
   if (status.startsWith('subsidy_')) return 'subsidy';
   if (status.startsWith('as_')) return 'as';
   if (status.startsWith('dealer_')) return 'dealer';
   if (status.startsWith('outsourcing_')) return 'outsourcing';
   if (status.startsWith('etc_')) return 'etc';
-  return 'etc';
+  return fallbackTaskType || 'etc';
 }
 
 /**
