@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyTokenString } from '@/utils/auth';
-import { calculateRevenue } from '@/lib/services/revenue-calculator';
+import { calculateRevenue, preloadMasterData } from '@/lib/services/revenue-calculator';
 
 // POST: 월 마감 자동 계산 (매출 데이터 자동 생성 포함)
 export async function POST(request: NextRequest) {
@@ -88,6 +88,9 @@ export async function POST(request: NextRequest) {
       businesses: [] as any[]
     };
 
+    // 글로벌 마스터 데이터 사전 로드 (루프 진입 전 1회)
+    const masterData = await preloadMasterData();
+
     for (const business of businesses) {
       try {
         // 2-1. 기존 계산 결과 확인
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest) {
             save_result: true,
             userId,
             permissionLevel,
+            preloadedMasterData: masterData,
           });
 
           const revenue = calculateResult.calculation?.total_revenue || 0;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyTokenString } from '@/utils/auth';
-import { calculateRevenue } from '@/lib/services/revenue-calculator';
+import { calculateRevenue, preloadMasterData } from '@/lib/services/revenue-calculator';
 
 /**
  * Batch Revenue Calculation API
@@ -63,6 +63,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`🚀 [BATCH-CALC] ${business_ids.length}개 사업장 계산 시작`);
 
+    // 글로벌 마스터 데이터 사전 로드 (루프 진입 전 1회)
+    const masterData = await preloadMasterData();
+
     // 각 사업장에 대해 서비스 함수 직접 호출 (NEXT_PUBLIC_APP_URL 의존 제거)
     const results: any[] = [];
     const errors: any[] = [];
@@ -79,6 +82,7 @@ export async function POST(request: NextRequest) {
             save_result,
             userId,
             permissionLevel,
+            preloadedMasterData: masterData,
           });
 
           const calc = data.calculation;

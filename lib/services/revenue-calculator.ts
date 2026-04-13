@@ -70,12 +70,32 @@ export interface RevenueCalculationResult {
   adjusted_survey_costs?: number;
 }
 
+/**
+ * 글로벌 마스터 데이터 (배치 계산 시 루프 밖에서 1회 사전 로드)
+ *
+ * government_pricing, manufacturer_pricing, equipment_installation_cost,
+ * survey_cost_settings 4개 테이블은 사업장마다 동일한 값을 반환하므로
+ * 배치 계산 전 한 번만 조회하고 재사용합니다.
+ */
+export interface PreloadedMasterData {
+  /** government_pricing — equipment_type → row */
+  officialPriceMap: Record<string, any>;
+  /** manufacturer_pricing — equipment_type → row, 제조사별 */
+  manufacturerPricingByManufacturer: Record<string, Record<string, any>>;
+  /** equipment_installation_cost — equipment_type → base_installation_cost */
+  installationCostMap: Record<string, number>;
+  /** survey_cost_settings — survey_type → base_cost */
+  surveyCostMap: Record<string, number>;
+}
+
 export interface CalculateRevenueParams {
   business_id: string | number;
   calculation_date?: string;
   save_result?: boolean;
   userId: string | number;
   permissionLevel: number;
+  /** 배치 계산 시 루프 밖에서 사전 로드된 글로벌 마스터 데이터 (있으면 해당 테이블 재조회 생략) */
+  preloadedMasterData?: PreloadedMasterData;
 }
 
 export interface CalculateRevenueReturn {
@@ -107,6 +127,7 @@ export async function calculateRevenue(
     save_result = true,
     userId,
     permissionLevel,
+    preloadedMasterData,
   } = params;
 
   // 1. 사업장 정보 조회
@@ -142,19 +163,25 @@ export async function calculateRevenue(
     new Date().toISOString().split('T')[0];
 
   // 2. 환경부 고시가 정보 조회 (활성화된 최신 데이터)
-  const pricingData = await queryAll(
-    'SELECT * FROM government_pricing WHERE is_active = $1',
-    [true]
-  );
+  // preloadedMasterData가 있으면 DB 재조회 생략
+  let officialPriceMap: Record<string, any>;
+  if (preloadedMasterData) {
+    officialPriceMap = preloadedMasterData.officialPriceMap;
+  } else {
+    const pricingData = await queryAll(
+      'SELECT * FROM government_pricing WHERE is_active = $1',
+      [true]
+    );
 
-  if (!pricingData) {
-    throw new Error('가격 정보 조회에 실패했습니다.');
+    if (!pricingData) {
+      throw new Error('가격 정보 조회에 실패했습니다.');
+    }
+
+    officialPriceMap = pricingData?.reduce((acc: Record<string, any>, item: any) => {
+      acc[item.equipment_type] = item;
+      return acc;
+    }, {} as Record<string, any>) || {};
   }
-
-  const officialPriceMap = pricingData?.reduce((acc: Record<string, any>, item: any) => {
-    acc[item.equipment_type] = item;
-    return acc;
-  }, {} as Record<string, any>) || {};
 
   // 2-1. 제조사별 원가 정보 조회
   let manufacturer = businessInfo.manufacturer;
@@ -164,37 +191,61 @@ export async function calculateRevenue(
     manufacturer = manufacturer.trim();
   }
 
-  const manufacturerPricing = await queryAll(
-    `SELECT * FROM manufacturer_pricing
-     WHERE manufacturer = $1
-     AND is_active = $2`,
-    [manufacturer, true]
-  );
+  // preloadedMasterData가 있으면 DB 재조회 생략 (제조사별로 필터링)
+  let manufacturerCostMap: Record<string, any>;
+  if (preloadedMasterData) {
+    // preloaded 데이터에서 해당 제조사 원가 추출
+    // 제조사명 매칭: 한글/영문 코드 양쪽 시도
+    const manufacturerCodeMap: Record<string, string> = {
+      '에코센스': 'ecosense',
+      '크린어스': 'cleanearth',
+      '가이아씨앤에스': 'gaia_cns',
+      '이브이에스': 'evs',
+    };
+    const manufacturerCode = manufacturerCodeMap[manufacturer] || manufacturer.toLowerCase();
+    manufacturerCostMap =
+      preloadedMasterData.manufacturerPricingByManufacturer[manufacturer] ||
+      preloadedMasterData.manufacturerPricingByManufacturer[manufacturerCode] ||
+      {};
+  } else {
+    const manufacturerPricing = await queryAll(
+      `SELECT * FROM manufacturer_pricing
+       WHERE manufacturer = $1
+       AND is_active = $2`,
+      [manufacturer, true]
+    );
 
-  if (!manufacturerPricing) {
-    throw new Error('제조사별 원가 조회에 실패했습니다.');
+    if (!manufacturerPricing) {
+      throw new Error('제조사별 원가 조회에 실패했습니다.');
+    }
+
+    manufacturerCostMap = manufacturerPricing?.reduce((acc: Record<string, any>, item: any) => {
+      acc[item.equipment_type] = item;
+      return acc;
+    }, {} as Record<string, any>) || {};
   }
-
-  const manufacturerCostMap = manufacturerPricing?.reduce((acc: Record<string, any>, item: any) => {
-    acc[item.equipment_type] = item;
-    return acc;
-  }, {} as Record<string, any>) || {};
 
   // 2-2. 기기별 기본 설치비 조회
-  const installationCosts = await queryAll(
-    `SELECT * FROM equipment_installation_cost
-     WHERE is_active = $1`,
-    [true]
-  );
+  // preloadedMasterData가 있으면 DB 재조회 생략
+  let installationCostMap: Record<string, number>;
+  if (preloadedMasterData) {
+    installationCostMap = preloadedMasterData.installationCostMap;
+  } else {
+    const installationCosts = await queryAll(
+      `SELECT * FROM equipment_installation_cost
+       WHERE is_active = $1`,
+      [true]
+    );
 
-  if (!installationCosts) {
-    console.error('설치비 조회 오류');
+    if (!installationCosts) {
+      console.error('설치비 조회 오류');
+    }
+
+    installationCostMap = installationCosts?.reduce((acc: Record<string, number>, item: any) => {
+      acc[item.equipment_type] = Number(item.base_installation_cost) || 0;
+      return acc;
+    }, {} as Record<string, number>) || {};
   }
-
-  const installationCostMap = installationCosts?.reduce((acc: Record<string, number>, item: any) => {
-    acc[item.equipment_type] = Number(item.base_installation_cost) || 0;
-    return acc;
-  }, {} as Record<string, number>) || {};
 
   // 2-3. 사업장별 추가 설치비 조회
   const additionalCosts = await queryAll(
@@ -279,27 +330,33 @@ export async function calculateRevenue(
   }
 
   // 4. 실사비용 설정 조회
-  const surveyCostsRaw = await queryAll(
-    `SELECT * FROM survey_cost_settings
-     WHERE is_active = $1`,
-    [true]
-  );
+  // preloadedMasterData가 있으면 DB 재조회 생략
+  let surveyCostMap: Record<string, number>;
+  if (preloadedMasterData) {
+    surveyCostMap = preloadedMasterData.surveyCostMap;
+  } else {
+    const surveyCostsRaw = await queryAll(
+      `SELECT * FROM survey_cost_settings
+       WHERE is_active = $1`,
+      [true]
+    );
 
-  const surveyCostMap = surveyCostsRaw?.reduce((acc: Record<string, number>, item: any) => {
-    acc[item.survey_type] = Number(item.base_cost) || 0;
-    return acc;
-  }, {} as Record<string, number>) || {
-    estimate: 100000,
-    pre_construction: 150000,
-    completion: 200000,
-  };
+    surveyCostMap = surveyCostsRaw?.reduce((acc: Record<string, number>, item: any) => {
+      acc[item.survey_type] = Number(item.base_cost) || 0;
+      return acc;
+    }, {} as Record<string, number>) || {
+      estimate: 100000,
+      pre_construction: 150000,
+      completion: 200000,
+    };
 
-  console.log('📋 [REVENUE-SVC] 실사비용 설정 로드:', {
-    business_id,
-    calcDate,
-    surveyCosts_count: surveyCostsRaw?.length || 0,
-    surveyCostMap,
-  });
+    console.log('📋 [REVENUE-SVC] 실사비용 설정 로드:', {
+      business_id,
+      calcDate,
+      surveyCosts_count: surveyCostsRaw?.length || 0,
+      surveyCostMap,
+    });
+  }
 
   // 5. 실사비용 조정 조회
   const surveyAdjustments = await queryAll(
@@ -745,5 +802,66 @@ export async function calculateRevenue(
           ? ((netProfit / totalRevenue) * 100).toFixed(2) + '%'
           : '0%',
     },
+  };
+}
+
+// ─── 배치 최적화 헬퍼 ─────────────────────────────────────────────────────────
+
+/**
+ * 글로벌 마스터 데이터 사전 로드
+ *
+ * 배치 계산(auto-calculate, calculate-batch) 시 루프 진입 전 한 번만 호출합니다.
+ * 반환값을 calculateRevenue({ ..., preloadedMasterData }) 에 넘기면
+ * government_pricing, manufacturer_pricing, equipment_installation_cost,
+ * survey_cost_settings 4개 테이블의 N+1 조회를 제거합니다.
+ */
+export async function preloadMasterData(): Promise<PreloadedMasterData> {
+  const [pricingRows, manufacturerRows, installationRows, surveyCostRows] = await Promise.all([
+    queryAll('SELECT * FROM government_pricing WHERE is_active = $1', [true]),
+    queryAll('SELECT * FROM manufacturer_pricing WHERE is_active = $1', [true]),
+    queryAll('SELECT * FROM equipment_installation_cost WHERE is_active = $1', [true]),
+    queryAll('SELECT * FROM survey_cost_settings WHERE is_active = $1', [true]),
+  ]);
+
+  // government_pricing: equipment_type → row
+  const officialPriceMap = (pricingRows || []).reduce((acc: Record<string, any>, item: any) => {
+    acc[item.equipment_type] = item;
+    return acc;
+  }, {} as Record<string, any>);
+
+  // manufacturer_pricing: 제조사명 → { equipment_type → row }
+  const manufacturerPricingByManufacturer = (manufacturerRows || []).reduce(
+    (acc: Record<string, Record<string, any>>, item: any) => {
+      const mfr: string = item.manufacturer || '';
+      if (!acc[mfr]) acc[mfr] = {};
+      acc[mfr][item.equipment_type] = item;
+      return acc;
+    },
+    {} as Record<string, Record<string, any>>
+  );
+
+  // equipment_installation_cost: equipment_type → base_installation_cost
+  const installationCostMap = (installationRows || []).reduce(
+    (acc: Record<string, number>, item: any) => {
+      acc[item.equipment_type] = Number(item.base_installation_cost) || 0;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  // survey_cost_settings: survey_type → base_cost
+  const surveyCostMap = (surveyCostRows || []).reduce(
+    (acc: Record<string, number>, item: any) => {
+      acc[item.survey_type] = Number(item.base_cost) || 0;
+      return acc;
+    },
+    { estimate: 100000, pre_construction: 150000, completion: 200000 } as Record<string, number>
+  );
+
+  return {
+    officialPriceMap,
+    manufacturerPricingByManufacturer,
+    installationCostMap,
+    surveyCostMap,
   };
 }
