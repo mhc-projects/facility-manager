@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
-import { getTaskStatusKR, getTaskTypeKR, createStatusChangeMessage } from '@/lib/task-status-utils';
+import { getTaskStatusKR, getTaskTypeKR, getTaskTypeFromStatus, createStatusChangeMessage } from '@/lib/task-status-utils';
 import { createTaskAssignmentNotifications, updateTaskAssignmentNotifications, type TaskAssignee } from '@/lib/task-notification-service';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { logDebug, logError } from '@/lib/logger';
@@ -1157,6 +1157,9 @@ async function createAutoProgressNote(params: {
         return; // 메모 생성 실패하지만 업무는 계속 진행
       }
 
+      // task_type은 status prefix에서 파생 (facility_tasks.task_type 컬럼은 stale 가능성 있음)
+      const derivedTaskType = getTaskTypeFromStatus(newStatus || task.status);
+
       // 메모 생성 - Direct PostgreSQL
       await pgQuery(
         `INSERT INTO business_memos (
@@ -1164,7 +1167,7 @@ async function createAutoProgressNote(params: {
          ) VALUES ($1, $2, $3, $4, $5)`,
         [
           businessInfo.id,
-          `[자동] ${getTaskTypeKR(task.task_type)} 업무 상태 변경`,
+          `[자동] ${getTaskTypeKR(derivedTaskType)} 업무 상태 변경`,
           content,
           'system',
           'system'
@@ -1308,7 +1311,8 @@ async function createTaskNotifications(params: {
 async function createTaskCreationNote(task: any) {
   try {
     // ✅ 중앙 매핑 시스템 사용 (67개 전체 상태 + 6개 업무 타입 지원)
-    const taskTypeLabel = getTaskTypeKR(task.task_type);
+    // task_type은 status prefix에서 파생 (facility_tasks.task_type 컬럼은 stale 가능성 있음)
+    const taskTypeLabel = getTaskTypeKR(getTaskTypeFromStatus(task.status));
     const statusLabel = getTaskStatusKR(task.status);
     const assigneeList = task.assignees?.map((a: any) => a.name).filter(Boolean).join(', ') || '미배정';
 
@@ -1336,6 +1340,9 @@ async function createTaskCreationNote(task: any) {
         return; // 메모 생성 실패하지만 업무는 계속 진행
       }
 
+      // task_type은 status prefix에서 파생 (신규 생성 시 task_type 컬럼 미반영 가능)
+      const derivedTaskType = getTaskTypeFromStatus(task.status);
+
       // 메모 생성 - Direct PostgreSQL
       await pgQuery(
         `INSERT INTO business_memos (
@@ -1343,7 +1350,7 @@ async function createTaskCreationNote(task: any) {
          ) VALUES ($1, $2, $3, $4, $5)`,
         [
           businessInfo.id,
-          `[자동] ${getTaskTypeKR(task.task_type)} 업무 상태 변경`,
+          `[자동] ${getTaskTypeKR(derivedTaskType)} 업무 생성`,
           content,
           'system',
           'system'

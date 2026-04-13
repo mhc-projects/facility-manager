@@ -158,6 +158,24 @@ export function getTaskTypeKR(taskType: string): string {
 }
 
 /**
+ * status 값의 prefix에서 task_type을 파생한다.
+ *
+ * facility_tasks.task_type 컬럼은 business_info.progress_status 기반으로 별도
+ * 동기화되므로 stale 값이 남을 수 있다. 메모 타이틀 등에서는 status 값 자체의
+ * prefix로부터 직접 파생하는 것이 안전하다.
+ */
+export function getTaskTypeFromStatus(status: string | null | undefined): string {
+  if (!status) return 'etc';
+  if (status.startsWith('self_')) return 'self';
+  if (status.startsWith('subsidy_')) return 'subsidy';
+  if (status.startsWith('as_')) return 'as';
+  if (status.startsWith('dealer_')) return 'dealer';
+  if (status.startsWith('outsourcing_')) return 'outsourcing';
+  if (status.startsWith('etc_')) return 'etc';
+  return 'etc';
+}
+
+/**
  * 우선순위 코드를 한글로 변환
  */
 export function getPriorityKR(priority: string): string {
