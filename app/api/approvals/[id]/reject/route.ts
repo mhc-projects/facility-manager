@@ -140,13 +140,17 @@ export async function POST(
       return NextResponse.json({ success: false, error: '아직 내 결재 차례가 아닙니다' }, { status: 403 });
     }
 
-    // 현재 step 반려 처리
-    await queryOne(
+    // 현재 step 반려 처리 (낙관 락: status = 'pending' 조건으로 중복 처리 방지)
+    const updatedStep = await queryOne(
       `UPDATE approval_steps
        SET status = 'rejected', approved_at = NOW(), comment = $1
-       WHERE id = $2`,
+       WHERE id = $2 AND status = 'pending'
+       RETURNING *`,
       [comment, currentStep.id]
     );
+    if (!updatedStep) {
+      return NextResponse.json({ success: false, error: '이미 다른 결재자가 처리한 단계입니다' }, { status: 409 });
+    }
 
     // 반려 이력 추가
     const currentHistory = doc.rejection_history || [];
