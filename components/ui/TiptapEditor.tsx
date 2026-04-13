@@ -7,6 +7,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import Placeholder from '@tiptap/extension-placeholder'
+import TextAlign from '@tiptap/extension-text-align'
 import { useEffect, useRef } from 'react'
 import {
   Bold,
@@ -21,6 +22,9 @@ import {
   Columns,
   Rows,
   Trash2,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react'
 
 interface TiptapEditorProps {
@@ -106,6 +110,9 @@ export default function TiptapEditor({
       TableHeader,
       Placeholder.configure({
         placeholder,
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
       }),
     ],
     content: content || '',
@@ -231,6 +238,31 @@ export default function TiptapEditor({
           title="번호 매기기 목록"
         >
           <ListOrdered className="w-4 h-4" />
+        </ToolbarButton>
+
+        <ToolbarDivider />
+
+        {/* Text alignment */}
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          active={editor.isActive({ textAlign: 'left' })}
+          title="왼쪽 정렬"
+        >
+          <AlignLeft className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          active={editor.isActive({ textAlign: 'center' })}
+          title="가운데 정렬"
+        >
+          <AlignCenter className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          active={editor.isActive({ textAlign: 'right' })}
+          title="오른쪽 정렬"
+        >
+          <AlignRight className="w-4 h-4" />
         </ToolbarButton>
 
         <ToolbarDivider />
