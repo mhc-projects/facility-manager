@@ -1,0 +1,11 @@
+# Claude Code 세션 진행 로그
+# 각 세션 종료 시 아래 형식으로 추가합니다.
+# 최신 항목이 맨 아래에 위치합니다.
+
+---
+
+## 2026-04-13 | 초기 설정
+- CLAUDE.md 생성 (프로젝트 가이드, 개발 규칙, 오류 검증 절차 포함)
+- claude-progress.txt 생성 (이 파일)
+- feature_list.json 생성 (기능 목록 + 상태 관리)
+- claude-mem 플러그인 제거, 하위 CLAUDE.md 정리 완료

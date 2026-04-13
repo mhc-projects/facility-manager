@@ -80,3 +80,4 @@ test-*.js
 # Local tool config (not project-specific)
 .claude/settings.local.json
 .serena/project.yml
+.aider*

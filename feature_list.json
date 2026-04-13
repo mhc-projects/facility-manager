@@ -1,0 +1,128 @@
+[
+  {
+    "id": "F001",
+    "category": "사업장관리",
+    "description": "사업장 CRUD (생성/조회/수정/삭제)",
+    "passes": true
+  },
+  {
+    "id": "F002",
+    "category": "사업장관리",
+    "description": "사업장 수정 모달 (비용정보, 장비정보, 실사정보 섹션)",
+    "passes": true
+  },
+  {
+    "id": "F003",
+    "category": "매출관리",
+    "description": "세금계산서 발행/입금 관리",
+    "passes": true
+  },
+  {
+    "id": "F004",
+    "category": "매출관리",
+    "description": "매출 목록 조회 및 필터링",
+    "passes": true
+  },
+  {
+    "id": "F005",
+    "category": "장비관리",
+    "description": "센서/게이트웨이/장비 재고 수량 관리",
+    "passes": true
+  },
+  {
+    "id": "F006",
+    "category": "인증",
+    "description": "소셜 로그인 (Kakao/Naver/Google)",
+    "passes": true
+  },
+  {
+    "id": "F007",
+    "category": "인증",
+    "description": "JWT 기반 세션 유지 (로그아웃 전까지 유지)",
+    "passes": true
+  },
+  {
+    "id": "F008",
+    "category": "인증",
+    "description": "권한 기반 페이지 접근 제어 (레벨 1/2/3)",
+    "passes": true
+  },
+  {
+    "id": "F009",
+    "category": "예측마감",
+    "description": "발주일 기준 예측마감 대상 자동 추출",
+    "passes": false
+  },
+  {
+    "id": "F010",
+    "category": "예측마감",
+    "description": "예측마감 일괄 처리 (기본설치비 + 추가공사비 지급)",
+    "passes": false
+  },
+  {
+    "id": "F011",
+    "category": "예측마감",
+    "description": "은결 지급 내역 기록 (입금일, 입금액, 대상건)",
+    "passes": false
+  },
+  {
+    "id": "F012",
+    "category": "예측마감",
+    "description": "본마감 처리 및 예측마감 대비 차액 정산",
+    "passes": false
+  },
+  {
+    "id": "F013",
+    "category": "예측마감",
+    "description": "마감 상태 뱃지 표시 (미마감/예측마감/본마감/정산완료/환수)",
+    "passes": false
+  },
+  {
+    "id": "F014",
+    "category": "예측마감",
+    "description": "월별 예측마감 집계 대시보드",
+    "passes": false
+  },
+  {
+    "id": "F015",
+    "category": "업무게시판",
+    "description": "업무 등록 (제목, 내용, 우선순위, 마감일, 수행자 지정)",
+    "passes": false
+  },
+  {
+    "id": "F016",
+    "category": "업무게시판",
+    "description": "업무 상태 변경 (대기/진행중/완료/해결불가/이관)",
+    "passes": false
+  },
+  {
+    "id": "F017",
+    "category": "업무게시판",
+    "description": "업무 협조 요청/응답",
+    "passes": false
+  },
+  {
+    "id": "F018",
+    "category": "업무게시판",
+    "description": "주간 업무 보고서 자동 생성",
+    "passes": false
+  },
+  {
+    "id": "F019",
+    "category": "IoT모니터링",
+    "description": "MQTT 센서 데이터 수집 및 실시간 표시",
+    "passes": false
+  },
+  {
+    "id": "F020",
+    "category": "IoT모니터링",
+    "description": "전력량 분석 대시보드 (전류 → 추정 전력량/전기요금)",
+    "passes": false
+  },
+  {
+    "id": "F021",
+    "category": "IoT모니터링",
+    "description": "화재 위험 알림 (과전류/이상전류/야간 가동 감지)",
+    "passes": false
+  }
+]
