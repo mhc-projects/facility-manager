@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const permissionLevel = decoded.permissionLevel || decoded.permission_level;
-    if (!permissionLevel || permissionLevel < 1) {
+    if (!permissionLevel || permissionLevel < 3) {
       return NextResponse.json({
         success: false,
         message: '권한이 부족합니다.'
