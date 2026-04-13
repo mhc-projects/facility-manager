@@ -77,6 +77,123 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   leave_request: '휴가원', business_proposal: '업무품의서', overtime_log: '연장근무일지',
 };
 
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  annual:     '연차',
+  condolence: '경조휴가',
+  special:    '특별휴가',
+  half_am:    '반차(오전)',
+  half_pm:    '반차(오후)',
+  other:      '기타휴가',
+};
+
+function groupConsecutiveDates(items: Array<{ date: string; leave_type: string; days: number }>) {
+  const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
+  const groups: Array<typeof sorted> = [];
+  let current: typeof sorted = [];
+
+  for (const item of sorted) {
+    if (current.length === 0) {
+      current.push(item);
+    } else {
+      const prevDate = new Date(current[current.length - 1].date);
+      const currDate = new Date(item.date);
+      const diffDays = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays === 1) {
+        current.push(item);
+      } else {
+        groups.push(current);
+        current = [item];
+      }
+    }
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+async function createLeaveCalendarEvent(doc: any, requesterName: string) {
+  try {
+    const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+    const totalDays = formData.total_days ?? 1;
+
+    const insertQuery = `INSERT INTO calendar_events (
+      title, description, event_date, end_date,
+      event_type, is_completed, author_id, author_name,
+      attached_files, labels
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`;
+
+    if (Array.isArray(formData?.items) && formData.items.length > 0) {
+      const groups = groupConsecutiveDates(formData.items);
+
+      for (const group of groups) {
+        const startDate = group[0].date;
+        const endDate = group[group.length - 1].date;
+        const groupDays = group.reduce((sum, i) => sum + (i.days ?? 1), 0);
+        const typeLabels = [...new Set(group.map(i => LEAVE_TYPE_LABEL[i.leave_type] || '휴가'))];
+        const leaveTypeDetail = typeLabels.join(', ');
+
+        const title = typeLabels.length === 1
+          ? `${requesterName} - ${typeLabels[0]}`
+          : `${requesterName} - 연차 (${groupDays}일)`;
+
+        const descriptionLines = [
+          `[휴가원] ${doc.document_number}`,
+          `신청자: ${requesterName} (${formData.department || ''})`,
+          `휴가 종류: ${leaveTypeDetail}`,
+          `기간: ${startDate} ~ ${endDate} (${groupDays}일)`,
+          `전체 휴가: ${totalDays}일`,
+          `사유: ${formData.reason || ''}`,
+        ];
+        if (formData.note) descriptionLines.push(`비고: ${formData.note}`);
+
+        await queryOne(insertQuery, [
+          title,
+          descriptionLines.join('\n'),
+          startDate,
+          startDate === endDate ? null : endDate,
+          'schedule',
+          false,
+          doc.requester_id,
+          requesterName,
+          JSON.stringify([]),
+          ['연차'],
+        ]);
+      }
+    } else if (formData?.start_date) {
+      const startDate = formData.start_date;
+      const endDate = formData.end_date || formData.start_date;
+      const leaveTypeDetail = LEAVE_TYPE_LABEL[formData.leave_type] || '휴가';
+
+      const descriptionLines = [
+        `[휴가원] ${doc.document_number}`,
+        `신청자: ${requesterName} (${formData.department || ''})`,
+        `휴가 종류: ${leaveTypeDetail}`,
+        `기간: ${startDate} ~ ${endDate} (${totalDays}일)`,
+        `사유: ${formData.reason || ''}`,
+      ];
+      if (formData.note) descriptionLines.push(`비고: ${formData.note}`);
+
+      await queryOne(insertQuery, [
+        `${requesterName} - ${leaveTypeDetail}`,
+        descriptionLines.join('\n'),
+        startDate,
+        startDate === endDate ? null : endDate,
+        'schedule',
+        false,
+        doc.requester_id,
+        requesterName,
+        JSON.stringify([]),
+        ['연차'],
+      ]);
+    } else {
+      return;
+    }
+
+    console.log('[EXPRESS-APPROVE] 휴가원 일정 자동 등록 완료:', doc.document_number);
+  } catch (e) {
+    console.warn('[EXPRESS-APPROVE] 휴가원 일정 등록 실패 (결재 완료는 정상 처리됨):', e);
+  }
+}
+
 async function notifyWritingTeam({
   doc, documentId,
 }: {
@@ -428,6 +545,33 @@ export async function POST(
         notifyWritingTeam({ doc, documentId: params.id }),
         notifyCooperativeTeam({ doc, documentId: params.id }),
       ]);
+    }
+
+    // 휴가원인 경우 일정관리에 '연차' 라벨로 자동 등록
+    if (doc.document_type === 'leave_request') {
+      await createLeaveCalendarEvent(doc, requesterEmployee?.name || '담당자');
+    }
+
+    // 설치비 마감인 경우 pending → paid 자동 전환
+    if (doc.document_type === 'installation_closing') {
+      try {
+        const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+        const businessIds = formData?.business_ids || [];
+        const closingType = formData?.closing_type || 'forecast';
+        if (businessIds.length > 0) {
+          await queryOne(`
+            UPDATE installation_payments
+            SET status = 'paid', payment_date = CURRENT_DATE
+            WHERE business_id = ANY($1)
+              AND payment_type = $2
+              AND status = 'pending'
+              AND notes LIKE $3
+          `, [businessIds, closingType, `%${doc.document_number}%`]);
+          console.log(`✅ [EXPRESS-APPROVE] 설치비 마감 자동 지급 처리: ${businessIds.length}건 (${doc.document_number})`);
+        }
+      } catch (closingErr) {
+        console.error('⚠️ [EXPRESS-APPROVE] 설치비 마감 자동 처리 실패:', closingErr);
+      }
     }
 
     console.log(`[EXPRESS-APPROVE] 전결 완료: doc=${params.id}, executive=${currentUser.name}(${userId})`);
