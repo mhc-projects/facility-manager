@@ -323,6 +323,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setApproveSheetOpen(false)
         setApproveComment('')
+        await fetchDoc()
         router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
       } else {
         alert(data.error || '승인 실패')
@@ -344,6 +345,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setRejectSheetOpen(false)
         setRejectComment('')
+        await fetchDoc()
         router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
       } else {
         alert(data.error || '반려 실패')
@@ -364,6 +366,7 @@ function ApprovalDetailContent() {
       if (data.success) {
         setExpressModalOpen(false)
         setExpressComment('')
+        await fetchDoc()
         router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
       } else {
         alert(data.error || '전결 처리 실패')

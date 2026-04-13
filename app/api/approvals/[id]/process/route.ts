@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,9 @@ export async function POST(
       [params.id, userId, processorName, processNote]
     );
 
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id } });
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[API] POST /approvals/[id]/process error:', error);
@@ -175,6 +179,9 @@ export async function PATCH(
       [params.id, processNote]
     );
 
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id } });
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[API] PATCH /approvals/[id]/process error:', error);
@@ -243,6 +250,9 @@ export async function DELETE(
     if (!updated) {
       return NextResponse.json({ success: false, error: '문서를 찾을 수 없습니다' }, { status: 404 });
     }
+
+    await supabaseAdmin.channel(`approval-doc:${params.id}`)
+      .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id } });
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {

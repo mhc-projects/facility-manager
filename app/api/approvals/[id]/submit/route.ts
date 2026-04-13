@@ -138,7 +138,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: '본인이 작성한 문서만 상신할 수 있습니다' }, { status: 403 });
     }
 
-    const allowedStatuses = isResubmit ? ['returned', 'rejected'] : ['draft'];
+    const allowedStatuses = isResubmit ? ['returned', 'rejected', 'pending'] : ['draft'];
     if (!allowedStatuses.includes(doc.status)) {
       return NextResponse.json({
         success: false,
