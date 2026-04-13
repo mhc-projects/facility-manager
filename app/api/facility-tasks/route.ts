@@ -129,11 +129,17 @@ export const GET = withApiHandler(async (request: NextRequest) => {
     }
     if (assignee) {
       console.log('🔍 [FACILITY-TASKS] assignee 필터 적용:', assignee);
-      // 다중 담당자 지원: assignees JSON 배열에서 검색
-      whereClauses.push(`(ftb.assignee = $${paramIndex} OR ftb.assignees::text LIKE $${paramIndex + 1})`);
+      // 다중 담당자 지원: assignee 단일 필드 또는 assignees JSONB 배열의 name 필드와 매칭
+      // jsonb_array_elements 방식으로 부분 문자열 오매칭 방지
+      whereClauses.push(`(
+        ftb.assignee = $${paramIndex}
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(ftb.assignees) AS a
+          WHERE a->>'name' = $${paramIndex}
+        )
+      )`);
       params.push(assignee);
-      params.push(`%"name":"${assignee}"%`);
-      paramIndex += 2;
+      paramIndex += 1;
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
