@@ -146,6 +146,22 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // pending 상태 재상신: 첫 번째 실질 결재자(step_order > 1)가 아직 미처리인 경우에만 허용
+    if (isResubmit && doc.status === 'pending') {
+      const firstRealStep = await queryOne(
+        `SELECT id, status FROM approval_steps
+         WHERE document_id = $1 AND step_order > 1
+         ORDER BY step_order ASC LIMIT 1`,
+        [params.id]
+      );
+      if (firstRealStep && firstRealStep.status !== 'pending') {
+        return NextResponse.json({
+          success: false,
+          error: '이미 결재가 진행된 문서는 재상신할 수 없습니다'
+        }, { status: 400 });
+      }
+    }
+
     // role별 필수 결재자 검증
     const requesterRole = doc.requester_role as string | null;
     const needTeamLeader = requesterRole !== 'executive' && requesterRole !== 'team_leader';
