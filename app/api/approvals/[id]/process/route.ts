@@ -6,6 +6,26 @@ import { supabaseAdmin } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 
 /**
+ * 총무팀 소속 여부 확인 헬퍼 — POST/PATCH/DELETE 공통 사용
+ */
+async function isManagementSupportUser(userId: string): Promise<boolean> {
+  const emp = await queryOne(
+    `SELECT department, team FROM employees WHERE id = $1 AND is_deleted = FALSE`,
+    [userId]
+  );
+  if (!emp?.department || !emp?.team) return false;
+  const teamRow = await queryOne(
+    `SELECT t.is_management_support
+     FROM teams t
+     JOIN departments d ON d.id = t.department_id
+     WHERE d.name = $1 AND t.name = $2
+     LIMIT 1`,
+    [emp.department, emp.team]
+  );
+  return teamRow?.is_management_support === true;
+}
+
+/**
  * POST /api/approvals/[id]/process
  * 결재완료 문서 처리확인
  * - 총무팀 소속 직원 또는 권한 레벨 4만 가능
@@ -31,24 +51,7 @@ export async function POST(
     const isSuperAdmin = permissionLevel >= 4;
 
     // 총무팀 소속 여부 확인
-    let isManagementSupport = false;
-    if (!isSuperAdmin) {
-      const emp = await queryOne(
-        `SELECT e.department, e.team FROM employees e WHERE e.id = $1 AND e.is_deleted = FALSE`,
-        [userId]
-      );
-      if (emp?.department && emp?.team) {
-        const teamRow = await queryOne(
-          `SELECT t.is_management_support
-           FROM teams t
-           JOIN departments d ON d.id = t.department_id
-           WHERE d.name = $1 AND t.name = $2
-           LIMIT 1`,
-          [emp.department, emp.team]
-        );
-        isManagementSupport = teamRow?.is_management_support === true;
-      }
-    }
+    const isManagementSupport = isSuperAdmin ? false : await isManagementSupportUser(userId);
 
     if (!isSuperAdmin && !isManagementSupport) {
       return NextResponse.json({ success: false, error: '처리확인 권한이 없습니다 (총무팀 또는 관리자 권한 필요)' }, { status: 403 });
@@ -137,24 +140,7 @@ export async function PATCH(
     const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
     const isSuperAdmin = permissionLevel >= 4;
 
-    let isManagementSupport = false;
-    if (!isSuperAdmin) {
-      const emp = await queryOne(
-        `SELECT department, team FROM employees WHERE id = $1 AND is_deleted = FALSE`,
-        [userId]
-      );
-      if (emp?.department && emp?.team) {
-        const teamRow = await queryOne(
-          `SELECT t.is_management_support
-           FROM teams t
-           JOIN departments d ON d.id = t.department_id
-           WHERE d.name = $1 AND t.name = $2
-           LIMIT 1`,
-          [emp.department, emp.team]
-        );
-        isManagementSupport = teamRow?.is_management_support === true;
-      }
-    }
+    const isManagementSupport = isSuperAdmin ? false : await isManagementSupportUser(userId);
 
     if (!isSuperAdmin && !isManagementSupport) {
       return NextResponse.json({ success: false, error: '처리확인 수정 권한이 없습니다 (총무팀 또는 관리자 권한 필요)' }, { status: 403 });
@@ -218,24 +204,7 @@ export async function DELETE(
     const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
     const isSuperAdmin = permissionLevel >= 4;
 
-    let isManagementSupport = false;
-    if (!isSuperAdmin) {
-      const emp = await queryOne(
-        `SELECT department, team FROM employees WHERE id = $1 AND is_deleted = FALSE`,
-        [userId]
-      );
-      if (emp?.department && emp?.team) {
-        const teamRow = await queryOne(
-          `SELECT t.is_management_support
-           FROM teams t
-           JOIN departments d ON d.id = t.department_id
-           WHERE d.name = $1 AND t.name = $2
-           LIMIT 1`,
-          [emp.department, emp.team]
-        );
-        isManagementSupport = teamRow?.is_management_support === true;
-      }
-    }
+    const isManagementSupport = isSuperAdmin ? false : await isManagementSupportUser(userId);
 
     if (!isSuperAdmin && !isManagementSupport) {
       return NextResponse.json({ success: false, error: '처리확인 취소는 총무팀 또는 관리자만 가능합니다' }, { status: 403 });
