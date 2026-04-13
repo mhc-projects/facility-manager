@@ -44,6 +44,12 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await transaction(async (client) => {
+      // 대상 사업장 행 락 (FOR UPDATE) — forecast/process 와 동일한 패턴
+      // 동시 요청이 들어와도 한 트랜잭션씩 순차 처리됨
+      await client.query(`
+        SELECT id FROM business_info WHERE id = ANY($1) FOR UPDATE OF business_info
+      `, [business_ids]);
+
       let processed = 0;
       let skipped = 0;
       const skippedIds: string[] = [];
