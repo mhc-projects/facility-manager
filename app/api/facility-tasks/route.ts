@@ -255,7 +255,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       description,
       business_name,
       business_id, // 프론트엔드에서 전달받은 business_id
-      // task_type은 더 이상 사용하지 않음 - facility_tasks_with_business View에서 progress_status 기반으로 자동 파생
+      task_type, // 업무타입 - business_info.progress_status 업데이트에 사용
       status = 'customer_contact',
       priority = 'medium',
       assignee, // 기존 호환성용
@@ -419,6 +419,50 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     }
 
     const newTask = insertResult.rows[0];
+
+    // 업무 생성 시 task_type이 제공된 경우 business_info.progress_status 동기화
+    if (task_type && resolvedBusinessId) {
+      try {
+        const TASK_TYPE_TO_PROGRESS: Record<string, string> = {
+          subsidy: '보조금',
+          self: '자비',
+          as: 'AS',
+          dealer: '대리점',
+          outsourcing: '외주설치',
+          etc: '기타'
+        };
+
+        if (TASK_TYPE_TO_PROGRESS[task_type]) {
+          const businessInfo = await queryOne(
+            'SELECT id, progress_status FROM business_info WHERE id = $1',
+            [resolvedBusinessId]
+          );
+
+          if (businessInfo) {
+            const currentProgressStatus = businessInfo.progress_status || '';
+            const currentCategory = (() => {
+              if (currentProgressStatus.includes('보조금')) return 'subsidy';
+              if (currentProgressStatus.includes('자비')) return 'self';
+              if (currentProgressStatus === 'AS') return 'as';
+              if (currentProgressStatus.includes('대리점')) return 'dealer';
+              if (currentProgressStatus.includes('외주')) return 'outsourcing';
+              return 'etc';
+            })();
+
+            if (currentCategory !== task_type) {
+              const newProgressStatus = TASK_TYPE_TO_PROGRESS[task_type];
+              await pgQuery(
+                `UPDATE business_info SET progress_status = $1, updated_at = NOW() WHERE id = $2`,
+                [newProgressStatus, resolvedBusinessId]
+              );
+              console.log(`✅ [FACILITY-TASKS] 업무 생성 시 사업장 progress_status 업데이트: ${currentProgressStatus} → ${newProgressStatus}`);
+            }
+          }
+        }
+      } catch (progressUpdateError: any) {
+        console.error('⚠️ [FACILITY-TASKS] progress_status 업데이트 실패 (계속 진행):', progressUpdateError?.message);
+      }
+    }
 
     // INSERT 후 View를 통해 파생된 task_type 조회 (progress_status 기반)
     const taskWithType = await queryOne(
