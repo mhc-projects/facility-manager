@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 
+if (!process.env.JWT_SECRET) {
+  console.warn('[reset-password] 경고: JWT_SECRET 환경변수가 설정되지 않았습니다. 프로덕션에서는 반드시 설정하세요.');
+}
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
 // 비밀번호 재설정
