@@ -137,7 +137,7 @@ function TaskManagementPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
-  const [selectedType, setSelectedType] = useState<TaskType | 'all'>('subsidy') // 기본값: 보조금
+  const [selectedType, setSelectedType] = useState<TaskType | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all')
