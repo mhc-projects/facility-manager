@@ -3,13 +3,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { TokenManager } from '@/lib/api-client';
-import {
-  subscribeToRealtime as subscribeToRealtimeManager,
-  unsubscribeFromRealtime as unsubscribeFromRealtimeManager,
-  reconnectRealtime as reconnectRealtimeManager
-} from '@/lib/realtime-manager';
 import { supabase } from '@/lib/supabase';
-import type { RealtimePostgresChangesPayload, RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { InAppNotificationContainer, type InAppToastNotification } from '@/components/ui/InAppNotificationToast';
 
@@ -114,6 +109,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     connectionError: null as string | null,
     lastEventTime: null as Date | null
   });
+
+  // reconnectRealtime 호출 시 useEffect를 강제로 재실행하기 위한 트리거
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
 
   // settings를 ref로 유지 - Realtime 채널 핸들러가 항상 최신 settings를 참조하되
   // settings 변경으로 채널이 재구독되어 이벤트를 놓치는 문제 방지
@@ -289,7 +287,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
       userIdRef.current = undefined;
     };
-  }, [user?.id, handleIncomingNotification]);
+  }, [user?.id, handleIncomingNotification, reconnectTrigger]);
 
   // NOTE: task_notifications 테이블이 존재하지 않으므로 RealtimeManager 구독 제거.
   // 연결 상태는 위의 broadcast/postgres_changes 채널(notifications 테이블)이 제어.
@@ -299,168 +297,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const isConnecting = realtimeConnectionState.isConnecting;
   const connectionError = realtimeConnectionState.connectionError;
   const lastEventTime = realtimeConnectionState.lastEventTime;
-
-  // 실시간 알림 처리 함수
-  function handleRealtimeNotification(payload: RealtimePostgresChangesPayload<any>) {
-    try {
-      const { eventType, new: newRecord, old: oldRecord } = payload;
-
-      logger.debug('REALTIME', '알림 이벤트 수신', {
-        eventType,
-        recordId: (newRecord as any)?.id || (oldRecord as any)?.id,
-        timestamp: new Date().toISOString()
-      });
-
-      if (eventType === 'INSERT' && newRecord) {
-        // ✅ FIX: 현재 로그인한 사용자의 알림만 처리
-        if (newRecord.user_id !== user?.id) {
-          logger.debug('REALTIME', 'INSERT: 다른 사용자의 알림 - 무시', {
-            notificationUserId: newRecord.user_id,
-            currentUserId: user?.id
-          });
-          return;
-        }
-
-        logger.debug('REALTIME', 'INSERT: 새 알림 추가');
-
-        // task_notifications 구조에 맞게 새 알림 추가
-        const newNotification: Notification = {
-          id: newRecord.id,
-          title: `업무 알림: ${newRecord.business_name}`,
-          message: newRecord.message,
-          category: (newRecord.notification_type || 'task_updated') as NotificationCategory,
-          priority: newRecord.priority as NotificationPriority,
-          relatedResourceType: 'task',
-          relatedResourceId: newRecord.task_id,
-          relatedUrl: `/admin/tasks/${newRecord.task_id}`,
-          metadata: { business_name: newRecord.business_name, task_id: newRecord.task_id },
-          createdById: newRecord.user_id,
-          createdByName: newRecord.user_name,
-          createdAt: newRecord.created_at,
-          expiresAt: newRecord.expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          isSystemNotification: false,
-          isRead: newRecord.is_read
-        };
-
-        // 중복 방지: 이미 존재하는 알림인지 확인
-        setNotifications(prev => {
-          const exists = prev.some(n => n.id === newRecord.id);
-          if (exists) {
-            logger.debug('REALTIME', 'INSERT: 중복 알림 감지 - 기존 알림 업데이트');
-            return prev.map(n => n.id === newRecord.id ? newNotification : n);
-          }
-          logger.debug('REALTIME', 'INSERT: 새 알림 추가 완료');
-          return [newNotification, ...prev.slice(0, 49)]; // 최대 50개 유지
-        });
-
-        // 브라우저 알림 표시
-        // settings가 로드되지 않았을 때는 기본값 true 사용 (defaultSettings.pushNotificationsEnabled: true)
-        const pushEnabled = settings?.pushNotificationsEnabled ?? true;
-
-        logger.debug('BROWSER-NOTIFICATION', '브라우저 알림 조건 확인:', {
-          pushEnabled,
-          settingsLoaded: settings !== null,
-          notificationSupported: 'Notification' in window,
-          permission: typeof Notification !== 'undefined' ? Notification.permission : 'undefined',
-          title: newNotification.title
-        });
-
-        if (pushEnabled && 'Notification' in window && Notification.permission === 'granted') {
-          try {
-            const notification = new Notification(newNotification.title, {
-              body: newNotification.message,
-              icon: '/icon.png',
-              badge: '/icon.png',
-              tag: newNotification.id,
-              requireInteraction: newNotification.priority === 'critical' || newNotification.priority === 'high',
-              silent: false
-            });
-
-            logger.info('BROWSER-NOTIFICATION', '브라우저 알림 생성 성공');
-
-            notification.onclick = () => {
-              logger.debug('BROWSER-NOTIFICATION', '브라우저 알림 클릭됨');
-              if (newNotification.relatedUrl) {
-                window.focus();
-                window.open(newNotification.relatedUrl, '_blank');
-              }
-              notification.close();
-            };
-          } catch (error) {
-            logger.error('BROWSER-NOTIFICATION', '브라우저 알림 생성 실패', error);
-          }
-        } else {
-          logger.warn('BROWSER-NOTIFICATION', '브라우저 알림 조건 미충족', {
-            pushEnabled,
-            settingsLoaded: settings !== null,
-            hasNotificationAPI: 'Notification' in window,
-            permission: typeof Notification !== 'undefined' ? Notification.permission : 'undefined'
-          });
-        }
-
-        // 인앱 토스트 알림 표시 (Banner 모드 대응)
-        // 브라우저 알림이 활성화되어 있으면 인앱 토스트도 함께 표시
-        if (pushEnabled) {
-          // Priority 매핑: medium -> normal
-          const toastPriority = newNotification.priority === 'medium' ? 'normal' : newNotification.priority;
-
-          const toastNotification: InAppToastNotification = {
-            id: newNotification.id,
-            title: newNotification.title,
-            message: newNotification.message,
-            priority: toastPriority as 'low' | 'normal' | 'high' | 'critical',
-            onClick: newNotification.relatedUrl ? () => {
-              window.open(newNotification.relatedUrl, '_blank');
-            } : undefined
-          };
-
-          setInAppToasts(prev => [toastNotification, ...prev.slice(0, 4)]); // 최대 5개 유지
-        }
-
-        // 소리 알림 (settings가 로드되지 않았을 때는 기본값 true 사용)
-        const soundEnabled = settings?.soundNotificationsEnabled ?? true;
-        if (soundEnabled) {
-          playNotificationSound(newNotification.priority);
-        }
-
-      } else if (eventType === 'UPDATE' && newRecord) {
-        // ✅ FIX: 현재 로그인한 사용자의 알림만 처리
-        if (newRecord.user_id !== user?.id) {
-          logger.debug('REALTIME', 'UPDATE: 다른 사용자의 알림 - 무시', {
-            notificationUserId: newRecord.user_id,
-            currentUserId: user?.id
-          });
-          return;
-        }
-
-        // is_deleted가 true로 변경된 경우 삭제 처리 (소프트 삭제)
-        if (newRecord.is_deleted === true) {
-          logger.debug('REALTIME', 'UPDATE: 소프트 삭제 감지 - UI에서 제거');
-          setNotifications(prev =>
-            prev.filter(notification => notification.id !== newRecord.id)
-          );
-        } else {
-          // 일반 알림 상태 업데이트 (읽음 처리 등)
-          logger.debug('REALTIME', 'UPDATE: 알림 상태 업데이트');
-          setNotifications(prev =>
-            prev.map(notification =>
-              notification.id === newRecord.id
-                ? { ...notification, isRead: newRecord.is_read }
-                : notification
-            )
-          );
-        }
-      } else if (eventType === 'DELETE' && oldRecord) {
-        // 실제 DELETE 이벤트 처리
-        logger.debug('REALTIME', 'DELETE: 알림 삭제');
-        setNotifications(prev =>
-          prev.filter(notification => notification.id !== oldRecord.id)
-        );
-      }
-    } catch (error) {
-      logger.error('REALTIME', '알림 처리 오류', error);
-    }
-  }
 
   // 알림 목록 조회 - Supabase Realtime으로 실시간 업데이트되므로 초기 로드만 담당
   const fetchNotifications = useCallback(async () => {
@@ -772,31 +608,32 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // 모든 알림 읽음 처리 (낙관적 업데이트 + 롤백)
+  // 모든 알림 읽음 처리 (낙관적 업데이트 + 부분 롤백)
   const markAllAsRead = useCallback(async () => {
     if (!user) return;
 
     logger.debug('OPTIMISTIC', '모든 알림 읽음 처리 시작');
 
-    // 이전 상태 백업 (롤백용)
-    const previousNotifications = [...notifications];
+    // 낙관적으로 읽음 처리할 알림 ID 목록 (rollback 대상)
+    let unreadIds: Set<string> = new Set();
 
     // 낙관적 업데이트: 즉시 UI 업데이트
     setNotifications(prev => {
-      const updated = prev.map(notification => ({ ...notification, isRead: true }));
+      unreadIds = new Set(prev.filter(n => !n.isRead).map(n => n.id));
       logger.debug('OPTIMISTIC', '낙관적 UI 업데이트', {
-        before: prev.filter(n => !n.isRead).length,
+        before: unreadIds.size,
         after: 0
       });
-      return updated;
+      return prev.map(notification => ({ ...notification, isRead: true }));
     });
 
     try {
       const token = TokenManager.getToken();
       if (!token || !TokenManager.isTokenValid(token)) {
         logger.warn('OPTIMISTIC', 'markAllAsRead: 토큰이 유효하지 않음 - 롤백');
-        // 롤백
-        setNotifications(previousNotifications);
+        setNotifications(prev => prev.map(n =>
+          unreadIds.has(n.id) ? { ...n, isRead: false } : n
+        ));
         return;
       }
 
@@ -814,9 +651,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        // 실패 시 롤백
-        logger.error('OPTIMISTIC', 'markAllAsRead API 실패 - 롤백');
-        setNotifications(previousNotifications);
+        // 실패 시 부분 롤백 - 낙관적으로 읽음 처리한 것들만 되돌림
+        logger.error('OPTIMISTIC', 'markAllAsRead API 실패 - 부분 롤백');
+        setNotifications(prev => prev.map(n =>
+          unreadIds.has(n.id) ? { ...n, isRead: false } : n
+        ));
         throw new Error(`모든 알림 읽음 처리에 실패했습니다. Status: ${response.status}`);
       }
 
@@ -833,11 +672,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     } catch (error) {
       logger.error('NOTIFICATIONS', '모든 알림 읽음 처리 오류', error);
-      // 오류 발생 시 롤백 (이미 위에서 롤백했지만 안전을 위해 재확인)
-      setNotifications(previousNotifications);
+      // 오류 발생 시 부분 롤백
+      setNotifications(prev => prev.map(n =>
+        unreadIds.has(n.id) ? { ...n, isRead: false } : n
+      ));
       throw error;
     }
-  }, [user, notifications, isConnected, fetchNotifications]);
+  }, [user, isConnected, fetchNotifications]);
 
   // 알림 삭제
   const deleteNotification = useCallback(async (notificationId: string) => {
@@ -1046,15 +887,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const unsubscribeFromRealtime = useCallback(() => {
     logger.debug('REALTIME', '수동 구독 해제 요청');
-    if (user) {
-      const subscriptionId = `notifications-${user.id}`;
-      unsubscribeFromRealtimeManager(subscriptionId);
-    }
-  }, [user]);
-
-  const reconnectRealtime = useCallback(() => {
-    logger.debug('REALTIME', '수동 재연결 - broadcast/pg 채널 재연결');
-    // broadcast/postgres_changes 채널을 재연결하기 위해 기존 채널 정리 후 userIdRef 초기화
     if (broadcastChannelRef.current) {
       supabase.removeChannel(broadcastChannelRef.current);
       broadcastChannelRef.current = null;
@@ -1063,7 +895,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(globalNotifChannelRef.current);
       globalNotifChannelRef.current = null;
     }
-    // userIdRef 초기화로 useEffect가 다시 채널을 생성하도록 트리거
+    userIdRef.current = undefined;
+    setRealtimeConnectionState({ isConnected: false, isConnecting: false, connectionError: null, lastEventTime: null });
+  }, []);
+
+  const reconnectRealtime = useCallback(() => {
+    logger.debug('REALTIME', '수동 재연결 - broadcast/pg 채널 재연결');
+    if (broadcastChannelRef.current) {
+      supabase.removeChannel(broadcastChannelRef.current);
+      broadcastChannelRef.current = null;
+    }
+    if (globalNotifChannelRef.current) {
+      supabase.removeChannel(globalNotifChannelRef.current);
+      globalNotifChannelRef.current = null;
+    }
     userIdRef.current = undefined;
     setRealtimeConnectionState({
       isConnected: false,
@@ -1071,8 +916,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       connectionError: null,
       lastEventTime: null
     });
-    // user.id 의존 useEffect를 직접 트리거할 수 없으므로 강제 재구독
-    // - React 상태 변경으로 리렌더 후 useEffect 조건(userIdRef check)이 통과됨
+    // reconnectTrigger 증가로 useEffect를 강제 재실행
+    setReconnectTrigger(t => t + 1);
   }, []);
 
   // 알림 소리 재생

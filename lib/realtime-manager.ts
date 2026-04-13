@@ -43,10 +43,15 @@ class RealtimeManager {
    * 실제 페이지에서 구독하기 전에 미리 연결을 시작
    */
   async initializeConnection(): Promise<void> {
-    if (this.isInitialized || this.connectionPromise) {
-      return this.connectionPromise || Promise.resolve();
+    // 이미 연결 중이면 기존 promise 재사용
+    if (this.connectionState === 'connecting' && this.connectionPromise) {
+      return this.connectionPromise;
     }
-
+    // 이미 연결됨
+    if (this.connectionState === 'connected') {
+      return Promise.resolve();
+    }
+    // disconnected 또는 초기 상태 → 새로 연결
     this.isInitialized = true;
     logger.info('REALTIME', '백그라운드 연결 초기화 시작');
 

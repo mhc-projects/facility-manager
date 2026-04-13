@@ -367,7 +367,7 @@ export default function NotificationBell() {
             <button
               onClick={() => {
                 setIsOpen(false);
-                window.location.href = '/notifications';
+                router.push('/notifications');
               }}
               className="w-full text-sm text-blue-600 hover:text-blue-800 font-medium py-2 hover:bg-gray-50 rounded-md transition-colors duration-200"
             >
