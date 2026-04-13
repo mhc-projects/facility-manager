@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyTokenString } from '@/utils/auth';
+import { calculateRevenue } from '@/lib/services/revenue-calculator';
 
 // POST: 월 마감 자동 계산 (매출 데이터 자동 생성 포함)
 export async function POST(request: NextRequest) {
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
 
+    const userId = decoded.userId || decoded.id;
     const permissionLevel = decoded.permissionLevel || decoded.permission_level;
     if (!permissionLevel || permissionLevel < 3) {
       return NextResponse.json({
@@ -106,77 +108,48 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // 2-2. 매출 계산 API 호출
+        // 2-2. 매출 계산 서비스 직접 호출 (HTTP 루프 제거)
         try {
-          // 설치 완료일을 calculation_date로 사용
           const calculationDate = business.installation_date;
 
-          // 매출 계산 API 호출
-          const calculateResponse = await fetch(`${request.nextUrl.origin}/api/revenue/calculate`, {
-            method: 'POST',
-            headers: {
-              'Authorization': request.headers.get('authorization') || '',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              business_id: business.id,
-              calculation_date: calculationDate,
-              save_result: true
-            })
+          const calculateResult = await calculateRevenue({
+            business_id: business.id,
+            calculation_date: calculationDate,
+            save_result: true,
+            userId,
+            permissionLevel,
           });
 
-          if (calculateResponse.ok) {
-            const calculateResult = await calculateResponse.json();
+          const revenue = calculateResult.calculation?.total_revenue || 0;
 
-            if (calculateResult.success) {
-              const revenue = calculateResult.data?.total_revenue || 0;
-
-              // 매출이 0원이면 계산 실패로 간주 (원가 데이터 없음 등의 문제)
-              if (revenue === 0 || !calculateResult.data) {
-                results.failedBusinesses++;
-                results.businesses.push({
-                  business_id: business.id,
-                  business_name: business.business_name,
-                  status: 'failed',
-                  message: '매출 계산 결과 없음 (원가 데이터 확인 필요)',
-                  revenue: 0
-                });
-              } else {
-                results.calculatedBusinesses++;
-                results.businesses.push({
-                  business_id: business.id,
-                  business_name: business.business_name,
-                  status: 'success',
-                  message: '계산 완료',
-                  revenue: revenue
-                });
-              }
-            } else {
-              results.failedBusinesses++;
-              results.businesses.push({
-                business_id: business.id,
-                business_name: business.business_name,
-                status: 'failed',
-                message: calculateResult.message || '계산 실패'
-              });
-            }
-          } else {
+          // 매출이 0원이면 계산 실패로 간주 (원가 데이터 없음 등의 문제)
+          if (revenue === 0 || !calculateResult.calculation) {
             results.failedBusinesses++;
             results.businesses.push({
               business_id: business.id,
               business_name: business.business_name,
               status: 'failed',
-              message: `API 호출 실패 (${calculateResponse.status})`
+              message: '매출 계산 결과 없음 (원가 데이터 확인 필요)',
+              revenue: 0
+            });
+          } else {
+            results.calculatedBusinesses++;
+            results.businesses.push({
+              business_id: business.id,
+              business_name: business.business_name,
+              status: 'success',
+              message: '계산 완료',
+              revenue: revenue
             });
           }
-        } catch (apiError) {
-          console.error(`사업장 ${business.business_name} API 호출 오류:`, apiError);
+        } catch (svcError) {
+          console.error(`사업장 ${business.business_name} 계산 오류:`, svcError);
           results.failedBusinesses++;
           results.businesses.push({
             business_id: business.id,
             business_name: business.business_name,
             status: 'failed',
-            message: 'API 호출 중 오류 발생'
+            message: svcError instanceof Error ? svcError.message : '계산 중 오류 발생'
           });
         }
       } catch (error) {
