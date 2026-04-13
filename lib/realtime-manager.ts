@@ -178,26 +178,24 @@ class RealtimeManager {
       statusCallback?.('connecting');
 
       // 채널 재연결 (기존 구독 + 새 구독 모두 포함)
-      this.reconnect().then(() => {
-        statusCallback?.('connected');
-      }).catch((error) => {
+      // 'connected' 콜백은 notifyStatusSubscribers에서만 발생 (채널 실제 SUBSCRIBED 이후)
+      this.reconnectInternal().catch((error) => {
         statusCallback?.('disconnected', error.message);
       });
     } else {
       // 아직 연결 안 된 경우 초기 연결
       statusCallback?.('connecting');
-      this.initializeConnection().then(() => {
-        statusCallback?.('connected');
-      }).catch((error) => {
+      // 'connected' 콜백은 notifyStatusSubscribers에서만 발생 (채널 실제 SUBSCRIBED 이후)
+      this.initializeConnection().catch((error) => {
         statusCallback?.('disconnected', error.message);
       });
     }
   }
 
   /**
-   * 채널 재연결 (모든 리스너 재등록)
+   * 채널 재연결 (모든 리스너 재등록) - 내부용
    */
-  private async reconnect(): Promise<void> {
+  private async reconnectInternal(): Promise<void> {
     logger.info('REALTIME', '채널 재연결 시작');
     this.connectionPromise = this.establishConnection();
     return this.connectionPromise;

@@ -201,6 +201,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       globalNotifChannelRef.current = null;
     }
 
+    // 연결 중 상태로 초기화
+    setRealtimeConnectionState({
+      isConnected: false,
+      isConnecting: true,
+      connectionError: null,
+      lastEventTime: null
+    });
+
     // 1. Broadcast 채널 구독 (결재 반려/승인 즉시 수신)
     // 서버의 reject/approve API에서 supabaseAdmin으로 이 채널에 send함
     const broadcastChannel = supabase
@@ -208,9 +216,25 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .on('broadcast', { event: 'new_notification' }, (payload) => {
         console.log('🚀 [BROADCAST] 결재 알림 수신:', payload.payload);
         handleIncomingNotification(payload.payload);
+        setRealtimeConnectionState(prev => ({ ...prev, lastEventTime: new Date() }));
       })
       .subscribe((status) => {
         console.log('📡 [BROADCAST-CHANNEL] 상태:', status);
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnectionState(prev => ({
+            ...prev,
+            isConnected: true,
+            isConnecting: false,
+            connectionError: null
+          }));
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeConnectionState(prev => ({
+            ...prev,
+            isConnected: false,
+            isConnecting: false,
+            connectionError: status
+          }));
+        }
       });
 
     broadcastChannelRef.current = broadcastChannel;
@@ -248,6 +272,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       )
       .subscribe((status, err) => {
         console.log('📡 [NOTIF-CHANNEL] 상태:', status, err || '');
+        // broadcast 채널이 이미 SUBSCRIBED 상태면 pgChannel 상태로 덮어쓰지 않음
+        // pgChannel은 보조 채널이므로 연결 상태 인디케이터는 broadcastChannel이 제어
       });
 
     globalNotifChannelRef.current = pgChannel;
@@ -265,64 +291,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, handleIncomingNotification]);
 
-  // 🚀 Global Realtime Manager 사용 - 즉시 연결 경험 제공
-  useEffect(() => {
-    if (!user) return;
-
-    const subscriptionId = `notifications-${user.id}`;
-
-    logger.info('NOTIFICATIONS', 'Global Realtime Manager 구독 시작');
-
-    // Optimistic UI: 즉시 연결 상태 표시
-    setRealtimeConnectionState({
-      isConnected: true,
-      isConnecting: false,
-      connectionError: null,
-      lastEventTime: new Date()
-    });
-
-    // Global Manager를 통한 구독
-    subscribeToRealtimeManager(
-      subscriptionId,
-      'task_notifications',
-      ['INSERT', 'UPDATE'],
-      handleRealtimeNotification,
-      (state: 'connected' | 'connecting' | 'disconnected', error?: string) => {
-        logger.debug('REALTIME', `연결 상태 업데이트: ${state}`, error ? { error } : undefined);
-
-        // 연결 상태 업데이트
-        if (state === 'connected') {
-          setRealtimeConnectionState({
-            isConnected: true,
-            isConnecting: false,
-            connectionError: null,
-            lastEventTime: new Date()
-          });
-        } else if (state === 'connecting') {
-          setRealtimeConnectionState(prev => ({
-            ...prev,
-            isConnecting: true,
-            connectionError: null
-          }));
-        } else if (state === 'disconnected') {
-          // 테이블 미존재 오류는 무시 (graceful degradation)
-          if (error && !error.includes('relation')) {
-            setRealtimeConnectionState(prev => ({
-              ...prev,
-              isConnected: false,
-              isConnecting: false,
-              connectionError: error
-            }));
-          }
-        }
-      }
-    );
-
-    return () => {
-      logger.info('NOTIFICATIONS', 'Global Realtime Manager 구독 해제');
-      unsubscribeFromRealtimeManager(subscriptionId);
-    };
-  }, [user]);
+  // NOTE: task_notifications 테이블이 존재하지 않으므로 RealtimeManager 구독 제거.
+  // 연결 상태는 위의 broadcast/postgres_changes 채널(notifications 테이블)이 제어.
 
   // 단순화된 연결 상태 (Optimistic UI 적용)
   const isConnected = realtimeConnectionState.isConnected;
@@ -1083,8 +1053,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const reconnectRealtime = useCallback(() => {
-    logger.debug('REALTIME', '수동 재연결');
-    reconnectRealtimeManager();
+    logger.debug('REALTIME', '수동 재연결 - broadcast/pg 채널 재연결');
+    // broadcast/postgres_changes 채널을 재연결하기 위해 기존 채널 정리 후 userIdRef 초기화
+    if (broadcastChannelRef.current) {
+      supabase.removeChannel(broadcastChannelRef.current);
+      broadcastChannelRef.current = null;
+    }
+    if (globalNotifChannelRef.current) {
+      supabase.removeChannel(globalNotifChannelRef.current);
+      globalNotifChannelRef.current = null;
+    }
+    // userIdRef 초기화로 useEffect가 다시 채널을 생성하도록 트리거
+    userIdRef.current = undefined;
+    setRealtimeConnectionState({
+      isConnected: false,
+      isConnecting: true,
+      connectionError: null,
+      lastEventTime: null
+    });
+    // user.id 의존 useEffect를 직접 트리거할 수 없으므로 강제 재구독
+    // - React 상태 변경으로 리렌더 후 useEffect 조건(userIdRef check)이 통과됨
   }, []);
 
   // 알림 소리 재생
