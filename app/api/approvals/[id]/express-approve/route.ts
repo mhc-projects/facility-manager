@@ -565,8 +565,8 @@ export async function POST(
             WHERE business_id = ANY($1)
               AND payment_type = $2
               AND status = 'pending'
-              AND notes LIKE $3
-          `, [businessIds, closingType, `%${doc.document_number}%`]);
+              AND notes = $3
+          `, [businessIds, closingType, `결재문서: ${doc.document_number}`]);
           console.log(`✅ [EXPRESS-APPROVE] 설치비 마감 자동 지급 처리: ${businessIds.length}건 (${doc.document_number})`);
         }
       } catch (closingErr) {
