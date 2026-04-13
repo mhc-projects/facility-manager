@@ -72,23 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: userData.user
       });
 
-      // 🚀 로그인 성공 후 백그라운드 Realtime 연결 시작 (로그인 흐름과 완전히 분리)
-      // setTimeout으로 감싸서 현재 실행 컨텍스트와 분리
-      setTimeout(() => {
-        import('@/lib/realtime-manager')
-          .then(({ initializeRealtimeConnection }) => {
-            // ✅ 타임아웃 추가: 5초 안에 연결 안되면 무시
-            const realtimeTimeout = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Realtime 연결 시간 초과')), 5000)
-            );
-
-            Promise.race([initializeRealtimeConnection(), realtimeTimeout])
-              .then(() => console.log('⚡ [AUTH] Realtime 연결 성공'))
-              .catch((err) => console.warn('⚠️ [AUTH] Realtime 연결 실패 (무시):', err.message));
-          })
-          .catch((err) => console.warn('⚠️ [AUTH] Realtime 모듈 로드 실패 (무시):', err.message));
-      }, 100);
-
       // loading은 user 설정 이후에 false로 전환
       setLoading(false);
       return { success: true };
@@ -125,17 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isNewUser,
           socialAccounts: response.data.socialAccounts?.length || 0
         });
-
-        // 🚀 로그인 성공 후 백그라운드 Realtime 연결 시작 (로그인 흐름과 완전히 분리)
-        setTimeout(() => {
-          import('@/lib/realtime-manager')
-            .then(({ initializeRealtimeConnection }) => {
-              initializeRealtimeConnection()
-                .then(() => console.log('⚡ [AUTH] Realtime 연결 성공'))
-                .catch((err) => console.warn('⚠️ [AUTH] Realtime 연결 실패 (무시):', err.message));
-            })
-            .catch((err) => console.warn('⚠️ [AUTH] Realtime 모듈 로드 실패 (무시):', err.message));
-        }, 100);
 
         return { success: true };
       } else {
