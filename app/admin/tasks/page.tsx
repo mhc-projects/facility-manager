@@ -992,11 +992,11 @@ function TaskManagementPage() {
       ? kanbanTasks.filter(task => task.progressPercentage === 100)
       : kanbanTasks
 
-    const allTypeSteps = selectedType === 'all' ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps, ...asSteps] :
+    const allTypeSteps = selectedType === 'all' ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps] :
                   selectedType === 'self' ? selfSteps :
                   selectedType === 'subsidy' ? subsidySteps :
                   selectedType === 'dealer' ? dealerSteps :
-                  selectedType === 'etc' ? etcSteps : asSteps
+                  selectedType === 'etc' ? etcSteps : selfSteps
 
     // 완료업무 필터 시: 각 타입의 마지막 단계만 표시
     const steps = showCompletedTasks ? (() => {
@@ -1878,7 +1878,6 @@ function TaskManagementPage() {
                 <option value="subsidy">보조금</option>
                 <option value="dealer">대리점</option>
                 <option value="outsourcing">외주설치</option>
-                <option value="as">AS</option>
                 <option value="etc">기타</option>
               </select>
 
@@ -2671,7 +2670,6 @@ function TaskManagementPage() {
                       <option value="subsidy">보조금</option>
                       <option value="dealer">대리점</option>
                       <option value="outsourcing">외주설치</option>
-                      <option value="as">AS</option>
                       <option value="etc">기타</option>
                     </select>
                   </div>
@@ -2999,7 +2997,6 @@ function TaskManagementPage() {
                       <option value="subsidy">보조금</option>
                       <option value="dealer">대리점</option>
                       <option value="outsourcing">외주설치</option>
-                      <option value="as">AS</option>
                       <option value="etc">기타</option>
                     </select>
                   </div>
