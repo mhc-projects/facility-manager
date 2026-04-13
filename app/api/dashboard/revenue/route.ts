@@ -389,7 +389,9 @@ export async function GET(request: NextRequest) {
           if (Array.isArray(costs)) {
             customCosts = costs.reduce((t: number, c: any) => t + (Number(c.amount) || 0), 0);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[dashboard/revenue] custom_additional_costs 파싱 실패:', e);
+        }
       }
 
       // 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비 - AS비용 - 커스텀비용
