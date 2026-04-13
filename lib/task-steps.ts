@@ -1,5 +1,6 @@
 // lib/task-steps.ts - 업무 단계 정의 공유 모듈 (완전 prefix 적용 버전)
 // admin/tasks 페이지의 단계 정의를 공통 모듈로 추출
+import { getTaskStatusKR } from './task-status-utils'
 
 // 업무 타입 정의
 export type TaskType = 'self' | 'subsidy' | 'etc' | 'as' | 'dealer' | 'outsourcing'
@@ -194,8 +195,8 @@ export function getStatusLabel(type: TaskType, status: TaskStatus): string {
     return foundStep.label
   }
 
-  // 그래도 찾지 못한 경우, status 값을 사람이 읽을 수 있는 형태로 변환
-  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  // 그래도 찾지 못한 경우, 중앙 한글 매핑 사용 (없으면 status 그대로 반환)
+  return getTaskStatusKR(status)
 }
 
 /**
