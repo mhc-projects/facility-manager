@@ -84,7 +84,8 @@ export async function POST(
     );
     const processorName = processor?.name || '알 수 없음';
 
-    // 처리확인 업데이트
+    // 처리확인 업데이트 — 낙관 락: WHERE에 is_processed = FALSE 조건 추가
+    // 동시 요청이 들어올 경우 두 번째 요청은 rowCount = 0 → 409 반환
     const updated = await queryOne(
       `UPDATE approval_documents
        SET is_processed = TRUE,
@@ -93,9 +94,14 @@ export async function POST(
            processed_by_name = $3,
            process_note = $4
        WHERE id = $1
+         AND is_processed = FALSE
        RETURNING id, is_processed, processed_at, processed_by_name, process_note`,
       [params.id, userId, processorName, processNote]
     );
+
+    if (!updated) {
+      return NextResponse.json({ success: false, error: '이미 처리확인된 문서입니다 (동시 처리 감지)' }, { status: 409 });
+    }
 
     await supabaseAdmin.channel(`approval-doc:${params.id}`)
       .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id } });
