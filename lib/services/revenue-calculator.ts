@@ -151,7 +151,7 @@ export async function calculateRevenue(
     throw new Error('가격 정보 조회에 실패했습니다.');
   }
 
-  const officialPriceMap = pricingData?.reduce((acc, item) => {
+  const officialPriceMap = pricingData?.reduce((acc: Record<string, any>, item: any) => {
     acc[item.equipment_type] = item;
     return acc;
   }, {} as Record<string, any>) || {};
@@ -175,7 +175,7 @@ export async function calculateRevenue(
     throw new Error('제조사별 원가 조회에 실패했습니다.');
   }
 
-  const manufacturerCostMap = manufacturerPricing?.reduce((acc, item) => {
+  const manufacturerCostMap = manufacturerPricing?.reduce((acc: Record<string, any>, item: any) => {
     acc[item.equipment_type] = item;
     return acc;
   }, {} as Record<string, any>) || {};
@@ -191,7 +191,7 @@ export async function calculateRevenue(
     console.error('설치비 조회 오류');
   }
 
-  const installationCostMap = installationCosts?.reduce((acc, item) => {
+  const installationCostMap = installationCosts?.reduce((acc: Record<string, number>, item: any) => {
     acc[item.equipment_type] = Number(item.base_installation_cost) || 0;
     return acc;
   }, {} as Record<string, number>) || {};
@@ -209,7 +209,7 @@ export async function calculateRevenue(
     console.error('추가 설치비 조회 오류');
   }
 
-  const additionalCostMap = additionalCosts?.reduce((acc, item) => {
+  const additionalCostMap = additionalCosts?.reduce((acc: Record<string, number>, item: any) => {
     const key = item.equipment_type || 'all';
     if (!acc[key]) acc[key] = 0;
     acc[key] += Number(item.additional_cost) || 0;
@@ -285,7 +285,7 @@ export async function calculateRevenue(
     [true]
   );
 
-  const surveyCostMap = surveyCostsRaw?.reduce((acc, item) => {
+  const surveyCostMap = surveyCostsRaw?.reduce((acc: Record<string, number>, item: any) => {
     acc[item.survey_type] = Number(item.base_cost) || 0;
     return acc;
   }, {} as Record<string, number>) || {
@@ -310,7 +310,7 @@ export async function calculateRevenue(
   );
 
   const totalAdjustments =
-    surveyAdjustments?.reduce((sum, adj) => sum + (Number(adj.adjustment_amount) || 0), 0) || 0;
+    surveyAdjustments?.reduce((sum: number, adj: any) => sum + (Number(adj.adjustment_amount) || 0), 0) || 0;
 
   // 6. 측정기기별 매출/매입 계산
   const equipmentFields = [
