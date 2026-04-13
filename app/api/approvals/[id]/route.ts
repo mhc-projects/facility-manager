@@ -23,6 +23,9 @@ export async function GET(
     if (!decoded) {
       return NextResponse.json({ success: false, error: '유효하지 않은 토큰입니다' }, { status: 401 });
     }
+    const userId = decoded.userId || decoded.id;
+    const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
+    const isSuperAdmin = permissionLevel >= 4;
 
     const doc = await queryOne(
       `SELECT
@@ -42,6 +45,30 @@ export async function GET(
 
     if (!doc) {
       return NextResponse.json({ success: false, error: '문서를 찾을 수 없습니다' }, { status: 404 });
+    }
+
+    // 접근 권한 체크: 슈퍼 관리자, 작성자 본인, 결재선 포함자만 허용
+    if (!isSuperAdmin) {
+      const isRequester = doc.requester_id === userId;
+      const isInApprovalLine =
+        doc.team_leader_id === userId ||
+        doc.executive_id === userId ||
+        doc.ceo_id === userId;
+      if (!isRequester && !isInApprovalLine) {
+        // 총무팀(is_management_support) 직원인지 확인
+        const mgmtMember = await queryOne(
+          `SELECT e.id FROM employees e
+           JOIN teams t ON t.name = e.team
+           JOIN departments d ON d.name = e.department
+           WHERE e.id = $1 AND t.is_management_support = TRUE
+             AND e.is_deleted = FALSE AND e.is_active = TRUE
+           LIMIT 1`,
+          [userId]
+        );
+        if (!mgmtMember) {
+          return NextResponse.json({ success: false, error: '이 문서에 접근할 권한이 없습니다' }, { status: 403 });
+        }
+      }
     }
 
     const steps = await queryAll(
