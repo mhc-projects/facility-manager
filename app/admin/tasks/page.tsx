@@ -15,6 +15,7 @@ import SubsidyActiveBadge from '@/components/tasks/SubsidyActiveBadge'
 import BulkUploadModal from '@/components/tasks/BulkUploadModal'
 import DuplicateTasksModal from '@/components/admin/DuplicateTasksModal'
 import { useTaskNotesRealtime } from '@/hooks/useTaskNotesRealtime'
+import { useBusinessInfoRealtime } from '@/hooks/useBusinessInfoRealtime'
 // 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import
 import {
   TaskType,
@@ -552,6 +553,9 @@ function TaskManagementPage() {
       setIsRefreshing(false)
     }
   }, [loadTasks])
+
+  // 사업장 정보 변경 시 업무 목록 자동 갱신 (사업장관리에서 이름·주소 등 수정 즉시 반영)
+  useBusinessInfoRealtime({ onUpdate: refreshTasks })
 
   // 업무 삭제 핸들러
   const handleDeleteTask = useCallback(async (taskId: string) => {
