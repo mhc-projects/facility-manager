@@ -194,7 +194,7 @@ interface UnifiedBusinessInfo {
   attachment_support_writing_date?: string | null;      // 부착지원신청서 작성일
 
   // 시스템 필드들
-  manufacturer?: '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null;
+  manufacturer?: '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | '위블레스' | null;
   vpn?: 'wired' | 'wireless' | null;
   greenlink_id?: string | null;
   greenlink_pw?: string | null;
@@ -3005,7 +3005,7 @@ function BusinessManagementPage() {
       business_contact: '',
       fax_number: '',
       email: '',
-      manufacturer: null as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null,
+      manufacturer: null as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | '위블레스' | null,
       vpn: null,
       greenlink_id: '',
       greenlink_pw: '',
@@ -3511,7 +3511,9 @@ function BusinessManagementPage() {
           '가이아씨앤에스': '가이아씨앤에스',
           '가이아': '가이아씨앤에스',
           'evs': '이브이에스',
-          '이브이에스': '이브이에스'
+          '이브이에스': '이브이에스',
+          'weblesse': '위블레스',
+          '위블레스': '위블레스'
         }
 
         // 정확한 매칭
@@ -3531,6 +3533,9 @@ function BusinessManagementPage() {
         }
         if (normalized.includes('이브이에스') || normalized.includes('evs')) {
           return '이브이에스'
+        }
+        if (normalized.includes('위블레스') || normalized.includes('weblesse')) {
+          return '위블레스'
         }
 
         // 인식할 수 없는 값은 null 반환
@@ -6066,7 +6071,7 @@ function BusinessManagementPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">제조사</label>
                       <select
                         value={formData.manufacturer || ''}
-                        onChange={(e) => setFormData({...formData, manufacturer: (e.target.value || null) as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null})}
+                        onChange={(e) => setFormData({...formData, manufacturer: (e.target.value || null) as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | '위블레스' | null})}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                       >
                         <option value="">선택하세요</option>
@@ -6074,6 +6079,7 @@ function BusinessManagementPage() {
                         <option value="크린어스">크린어스</option>
                         <option value="가이아씨앤에스">가이아씨앤에스</option>
                         <option value="이브이에스">이브이에스</option>
+                        <option value="위블레스">위블레스</option>
                       </select>
                     </div>
 

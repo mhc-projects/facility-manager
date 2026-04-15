@@ -3,7 +3,8 @@ export const MANUFACTURER_NAMES = {
   ecosense: '에코센스',
   cleanearth: '크린어스',
   gaia_cns: '가이아씨앤에스',
-  evs: '이브이에스'
+  evs: '이브이에스',
+  weblesse: '위블레스'
 } as const;
 
 // 제조사 한글-영어 역매핑 테이블
@@ -11,7 +12,8 @@ export const MANUFACTURER_NAMES_REVERSE = {
   '에코센스': 'ecosense',
   '크린어스': 'cleanearth',
   '가이아씨앤에스': 'gaia_cns',
-  '이브이에스': 'evs'
+  '이브이에스': 'evs',
+  '위블레스': 'weblesse'
 } as const;
 
 export type ManufacturerCode = keyof typeof MANUFACTURER_NAMES;
