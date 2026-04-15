@@ -47,26 +47,36 @@ function formatPrice(amount: number): string {
   return Math.round(amount).toLocaleString('ko-KR');
 }
 
-// 제조사 이름 매핑 함수
-function getManufacturerName(manufacturer: string): string {
-  const names: Record<string, string> = {
-    'ecosense': '에코센스',
-    'cleanearth': '크린어스',
-    'gaia_cns': '가이아씨앤에스',
-    'evs': '이브이에스'
-  };
-  return names[manufacturer] || manufacturer;
+// 영문 코드 → 한글 이름 레거시 매핑 (기존 DB 데이터 호환용)
+const LEGACY_MANUFACTURER_NAMES: Record<string, string> = {
+  'ecosense': '에코센스',
+  'cleanearth': '크린어스',
+  'gaia_cns': '가이아씨앤에스',
+  'evs': '이브이에스',
+  'weblesse': '위블레스',
+};
+
+// 제조사 이름 표시용 (영문 코드면 한글로 변환, 한글이면 그대로)
+function getManufacturerDisplayName(manufacturer: string): string {
+  return LEGACY_MANUFACTURER_NAMES[manufacturer] || manufacturer;
 }
 
-// 제조사별 색상 클래스 함수
-function getManufacturerColorClass(manufacturer: string): string {
-  const colors: Record<string, string> = {
-    'ecosense': 'bg-blue-100 text-blue-800 border-blue-200',
-    'cleanearth': 'bg-green-100 text-green-800 border-green-200',
-    'gaia_cns': 'bg-purple-100 text-purple-800 border-purple-200',
-    'evs': 'bg-orange-100 text-orange-800 border-orange-200'
-  };
-  return colors[manufacturer] || 'bg-gray-100 text-gray-800 border-gray-200';
+// 제조사별 색상 팔레트 (순환 사용)
+const MANUFACTURER_COLOR_PALETTE = [
+  'bg-blue-100 text-blue-800 border-blue-200',
+  'bg-green-100 text-green-800 border-green-200',
+  'bg-purple-100 text-purple-800 border-purple-200',
+  'bg-orange-100 text-orange-800 border-orange-200',
+  'bg-pink-100 text-pink-800 border-pink-200',
+  'bg-teal-100 text-teal-800 border-teal-200',
+  'bg-yellow-100 text-yellow-800 border-yellow-200',
+  'bg-indigo-100 text-indigo-800 border-indigo-200',
+];
+
+function getManufacturerColorClass(manufacturer: string, allManufacturers: string[]): string {
+  const idx = allManufacturers.indexOf(manufacturer);
+  if (idx === -1) return 'bg-gray-100 text-gray-800 border-gray-200';
+  return MANUFACTURER_COLOR_PALETTE[idx % MANUFACTURER_COLOR_PALETTE.length];
 }
 
 interface GovernmentPricing {
@@ -105,7 +115,7 @@ interface ManufacturerPricing {
   id: string;
   equipment_type: string;
   equipment_name: string;
-  manufacturer: 'ecosense' | 'cleanearth' | 'gaia_cns' | 'evs';
+  manufacturer: string;
   cost_price: number;
   effective_from: string;
   effective_to?: string;
@@ -149,6 +159,25 @@ function PricingManagement() {
   const [dealerPricing, setDealerPricing] = useState<DealerPricing[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // 제조사 목록 (동적, /api/settings/manufacturers)
+  const [pricingManufacturers, setPricingManufacturers] = useState<string[]>([]);
+  useEffect(() => {
+    fetch('/api/settings/manufacturers')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setPricingManufacturers(
+            (data.data as { name: string; is_active: boolean }[])
+              .filter(m => m.is_active)
+              .map(m => m.name)
+          );
+        }
+      })
+      .catch(() => {
+        setPricingManufacturers(['에코센스', '크린어스', '가이아씨앤에스', '이브이에스', '위블레스']);
+      });
+  }, []);
 
   // 편집 관련 상태
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -996,9 +1025,9 @@ function PricingManagement() {
                         return (
                           <div key={manufacturer} className="space-y-3">
                             {/* 제조사 헤더 */}
-                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${getManufacturerColorClass(manufacturer)}`}>
+                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${getManufacturerColorClass(manufacturer, manufacturers)}`}>
                               <Building2 className="w-5 h-5" />
-                              <h4 className="font-bold text-lg">{getManufacturerName(manufacturer)}</h4>
+                              <h4 className="font-bold text-lg">{getManufacturerDisplayName(manufacturer)}</h4>
                               <span className="ml-auto text-sm font-medium">({items.length}개 기기)</span>
                             </div>
 
@@ -1624,10 +1653,13 @@ function EditForm({ item, type, onSave, onCancel, saving }: {
               required
             >
               <option value="">선택하세요</option>
-              <option value="ecosense">에코센스</option>
-              <option value="cleanearth">크린어스</option>
-              <option value="gaia_cns">가이아씨앤에스</option>
-              <option value="evs">이브이에스</option>
+              {pricingManufacturers.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+              {/* 기존 데이터에 현재 목록에 없는 제조사가 있을 경우 표시 */}
+              {formData.manufacturer && !pricingManufacturers.includes(formData.manufacturer) && (
+                <option value={formData.manufacturer}>{getManufacturerDisplayName(formData.manufacturer)}</option>
+              )}
             </select>
           </div>
           <div>
