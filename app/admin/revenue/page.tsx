@@ -195,6 +195,7 @@ function RevenueDashboard() {
   const [openCollectionDropdown, setOpenCollectionDropdown] = useState<string | null>(null); // 현재 열린 드롭다운의 businessId
   const [batchTrigger, setBatchTrigger] = useState(0); // batch 미수금 재계산 트리거
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null); // 드롭다운 위치
+  const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]); // 진행구분 정렬 순서 (settings API)
   const [isFilterExpanded, setIsFilterExpanded] = useState(false); // 필터 섹션 접기/펼치기 상태 (기본값: 접힌 상태)
   const [sortField, setSortField] = useState<string>('business_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -220,6 +221,20 @@ function RevenueDashboard() {
     console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 마운트됨');
     // ✅ 통합 초기화 함수 실행
     initializeData();
+
+    // 진행구분 순서 로드 (설정 페이지와 동기화)
+    fetch('/api/settings/progress-categories', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setProgressCategoryOrder(
+            (data.data as { name: string; is_active: boolean; sort_order: number }[])
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map(c => c.name)
+          );
+        }
+      })
+      .catch(() => {});
 
     return () => {
       console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 언마운트됨');
@@ -1492,15 +1507,15 @@ function RevenueDashboard() {
     calc.sales_office.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // 진행구분 필터 옵션: DB 실제 값 기준으로 동적 생성 (하드코딩 대신)
+  // 진행구분 필터 옵션: settings API 순서 기준, DB 실제 값만 표시
   const categoryOptions = useMemo(() => {
-    const preferred = ['자비', '보조금', '보조금 동시진행', '보조금 추가승인', '대리점', 'AS', '외주설치'];
     const fromDB = new Set(businesses.map(b => (b.progress_status || '').trim()).filter(Boolean));
-    // preferred 순서 유지, DB에만 있는 값은 뒤에 추가
-    const result = preferred.filter(v => fromDB.has(v));
-    fromDB.forEach(v => { if (!preferred.includes(v)) result.push(v); });
+    // settings API 순서 우선, DB에만 있는 값(미등록 레거시)은 뒤에 추가
+    const ordered = progressCategoryOrder.length > 0 ? progressCategoryOrder : [];
+    const result = ordered.filter(v => fromDB.has(v));
+    fromDB.forEach(v => { if (!ordered.includes(v)) result.push(v); });
     return result;
-  }, [businesses]);
+  }, [businesses, progressCategoryOrder]);
 
   // 🎯 PricingData 안정화 (객체 참조 변경 방지)
   const pricingData = useMemo<PricingData>(() => ({
