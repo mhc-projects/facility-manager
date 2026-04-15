@@ -21,12 +21,15 @@ import {
   Trash2,
   X,
   GripVertical,
+  Tag,
+  ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
 
 // 탭 타입 정의
-type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers';
+type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers' | 'progress-categories';
 
 // 제조사 타입
 interface Manufacturer {
@@ -34,6 +37,20 @@ interface Manufacturer {
   name: string;
   sort_order: number;
   is_active: boolean;
+}
+
+// 진행구분 타입
+interface ProgressCategory {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+// 진행구분 실사용 현황 타입
+interface ProgressCategoryUsage {
+  progress_status: string;
+  business_count: number;
 }
 
 // 지연/위험 기준 타입 정의
@@ -66,7 +83,7 @@ function AdminSettingsContent() {
 
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers'].includes(tabFromUrl)
+    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers', 'progress-categories'].includes(tabFromUrl)
       ? tabFromUrl
       : 'delay-criteria'
   );
@@ -79,6 +96,21 @@ function AdminSettingsContent() {
   const [editingManufacturer, setEditingManufacturer] = useState<Manufacturer | null>(null);
   const [editingName, setEditingName] = useState('');
   const [isSavingManufacturer, setIsSavingManufacturer] = useState(false);
+
+  // 진행구분 관리 상태
+  const [progressCategories, setProgressCategories] = useState<ProgressCategory[]>([]);
+  const [isLoadingProgressCategories, setIsLoadingProgressCategories] = useState(false);
+  const [newProgressCategoryName, setNewProgressCategoryName] = useState('');
+  const [isAddingProgressCategory, setIsAddingProgressCategory] = useState(false);
+  const [editingProgressCategory, setEditingProgressCategory] = useState<ProgressCategory | null>(null);
+  const [editingProgressName, setEditingProgressName] = useState('');
+  const [isSavingProgressCategory, setIsSavingProgressCategory] = useState(false);
+  // 마이그레이션 상태
+  const [usageList, setUsageList] = useState<ProgressCategoryUsage[]>([]);
+  const [isLoadingUsage, setIsLoadingUsage] = useState(false);
+  const [migrateFrom, setMigrateFrom] = useState('');
+  const [migrateTo, setMigrateTo] = useState('');
+  const [isMigrating, setIsMigrating] = useState(false);
 
   // 지연 기준 설정 상태
   const [criteria, setCriteria] = useState<DelayCriteria>(DEFAULT_CRITERIA);
@@ -193,6 +225,158 @@ function AdminSettingsContent() {
       setMessage({ type: 'error', text: '상태 변경 중 오류가 발생했습니다.' });
     }
   };
+
+  // ─────────── 진행구분 관리 핸들러 ───────────
+
+  useEffect(() => {
+    if (activeTab === 'progress-categories') {
+      if (progressCategories.length === 0) loadProgressCategories();
+      loadUsage();
+    }
+  }, [activeTab]);
+
+  const loadProgressCategories = async () => {
+    setIsLoadingProgressCategories(true);
+    try {
+      const res = await fetch('/api/settings/progress-categories');
+      const data = await res.json();
+      if (data.success) setProgressCategories(data.data);
+    } catch (e) {
+      console.error('진행구분 목록 로드 실패:', e);
+    } finally {
+      setIsLoadingProgressCategories(false);
+    }
+  };
+
+  const loadUsage = async () => {
+    setIsLoadingUsage(true);
+    try {
+      const res = await fetch('/api/settings/progress-categories/migrate');
+      const data = await res.json();
+      if (data.success) setUsageList(data.data);
+    } catch (e) {
+      console.error('진행구분 사용 현황 로드 실패:', e);
+    } finally {
+      setIsLoadingUsage(false);
+    }
+  };
+
+  const handleAddProgressCategory = async () => {
+    const name = newProgressCategoryName.trim();
+    if (!name) return;
+    setIsAddingProgressCategory(true);
+    try {
+      const res = await fetch('/api/settings/progress-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgressCategories(prev => [...prev, data.data]);
+        setNewProgressCategoryName('');
+        setMessage({ type: 'success', text: `'${name}' 진행구분이 추가되었습니다.` });
+      } else {
+        setMessage({ type: 'error', text: data.message || '추가에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '추가 중 오류가 발생했습니다.' });
+    } finally {
+      setIsAddingProgressCategory(false);
+    }
+  };
+
+  const handleUpdateProgressCategory = async () => {
+    if (!editingProgressCategory) return;
+    const name = editingProgressName.trim();
+    if (!name) return;
+    setIsSavingProgressCategory(true);
+    try {
+      const res = await fetch('/api/settings/progress-categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingProgressCategory.id, name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgressCategories(prev => prev.map(c => c.id === editingProgressCategory.id ? data.data : c));
+        setEditingProgressCategory(null);
+        setEditingProgressName('');
+        setMessage({ type: 'success', text: '진행구분이 수정되었습니다.' });
+      } else {
+        setMessage({ type: 'error', text: data.message || '수정에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '수정 중 오류가 발생했습니다.' });
+    } finally {
+      setIsSavingProgressCategory(false);
+    }
+  };
+
+  const handleToggleProgressCategoryActive = async (c: ProgressCategory) => {
+    try {
+      const res = await fetch('/api/settings/progress-categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, is_active: !c.is_active }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgressCategories(prev => prev.map(item => item.id === c.id ? data.data : item));
+      } else {
+        setMessage({ type: 'error', text: data.message || '상태 변경에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '상태 변경 중 오류가 발생했습니다.' });
+    }
+  };
+
+  const handleDeleteProgressCategory = async (c: ProgressCategory) => {
+    if (!confirm(`'${c.name}' 진행구분을 삭제하시겠습니까?\n이미 등록된 사업장 데이터에는 영향을 주지 않습니다.`)) return;
+    try {
+      const res = await fetch(`/api/settings/progress-categories?id=${c.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setProgressCategories(prev => prev.filter(item => item.id !== c.id));
+        setMessage({ type: 'success', text: `'${c.name}' 진행구분이 삭제되었습니다.` });
+      } else {
+        setMessage({ type: 'error', text: data.message || '삭제에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '삭제 중 오류가 발생했습니다.' });
+    }
+  };
+
+  const handleMigrate = async () => {
+    if (!migrateTo) { setMessage({ type: 'error', text: '변경될 진행구분을 선택해주세요.' }); return; }
+    const fromLabel = migrateFrom || '(없음)';
+    const target = usageList.find(u => u.progress_status === migrateFrom);
+    const count = Number(target?.business_count ?? 0);
+    if (!confirm(`'${fromLabel}' 진행구분의 사업장 ${count}개를 '${migrateTo}'로 일괄 변경하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    setIsMigrating(true);
+    try {
+      const res = await fetch('/api/settings/progress-categories/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: migrateFrom, to: migrateTo }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: data.message });
+        setMigrateFrom('');
+        setMigrateTo('');
+        loadUsage(); // 현황 새로고침
+      } else {
+        setMessage({ type: 'error', text: data.message || '변경에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '변경 중 오류가 발생했습니다.' });
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  // ─────────── 제조사 삭제 핸들러 ───────────
 
   const handleDeleteManufacturer = async (m: Manufacturer) => {
     if (!confirm(`'${m.name}' 제조사를 삭제하시겠습니까?\n이미 등록된 사업장 데이터에는 영향을 주지 않습니다.`)) return;
@@ -363,6 +547,12 @@ function AdminSettingsContent() {
       name: '제조사 관리',
       icon: Factory,
       description: '사업장에서 선택 가능한 제조사 목록 관리'
+    },
+    {
+      id: 'progress-categories' as const,
+      name: '진행구분 관리',
+      icon: Tag,
+      description: '사업장 진행구분 항목 관리 및 일괄 변경'
     },
   ];
 
@@ -686,6 +876,229 @@ function AdminSettingsContent() {
                   <p className="text-xs text-blue-800">
                     📌 <strong>숨기기</strong>는 사업장 등록 폼의 제조사 선택 목록에서 해당 제조사를 숨깁니다. 이미 등록된 사업장 데이터에는 영향을 주지 않습니다.
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 진행구분 관리 탭 */}
+          {activeTab === 'progress-categories' && (
+            <div className="p-2 sm:p-6 space-y-8">
+              {/* ① 항목 관리 */}
+              <div className="max-w-lg">
+                <h4 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-blue-600" />
+                  진행구분 항목 관리
+                </h4>
+
+                {/* 추가 폼 */}
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">새 진행구분 추가</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newProgressCategoryName}
+                      onChange={(e) => setNewProgressCategoryName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddProgressCategory()}
+                      placeholder="진행구분 이름 입력"
+                      maxLength={100}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddProgressCategory}
+                      disabled={isAddingProgressCategory || !newProgressCategoryName.trim()}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      {isAddingProgressCategory ? '추가 중...' : '추가'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 목록 */}
+                {isLoadingProgressCategories ? (
+                  <div className="flex items-center justify-center h-24">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                  </div>
+                ) : progressCategories.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-6">등록된 진행구분이 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {progressCategories.map((c) => (
+                      <div
+                        key={c.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                          c.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
+                        }`}
+                      >
+                        <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                        {editingProgressCategory?.id === c.id ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editingProgressName}
+                              onChange={(e) => setEditingProgressName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleUpdateProgressCategory();
+                                if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); }
+                              }}
+                              autoFocus
+                              maxLength={100}
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleUpdateProgressCategory}
+                              disabled={isSavingProgressCategory || !editingProgressName.trim()}
+                              className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >저장</button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); }}
+                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                            ><X className="w-4 h-4" /></button>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`flex-1 text-sm font-medium ${c.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                              {c.name}
+                            </span>
+                            {!c.is_active && (
+                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleProgressCategoryActive(c)}
+                              className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                c.is_active
+                                  ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                  : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                              }`}
+                            >{c.is_active ? '숨기기' : '표시'}</button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); }}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="이름 수정"
+                            ><Pencil className="w-3.5 h-3.5" /></button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProgressCategory(c)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="삭제"
+                            ><Trash2 className="w-3.5 h-3.5" /></button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-800">
+                    📌 <strong>숨기기</strong>는 사업장 등록 폼에서 해당 항목을 숨깁니다. 이미 등록된 사업장 데이터에는 영향을 주지 않습니다.
+                  </p>
+                </div>
+              </div>
+
+              {/* ② 일괄 변경 (마이그레이션) */}
+              <div className="max-w-lg border-t pt-8">
+                <h4 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-orange-500" />
+                  기존 사업장 진행구분 일괄 변경
+                </h4>
+                <p className="text-xs text-gray-500 mb-5">
+                  등록된 사업장의 진행구분을 다른 값으로 일괄 변경합니다. 항목을 정리하거나 이름을 바꿀 때 사용하세요.
+                </p>
+
+                {/* 현황 테이블 */}
+                <div className="mb-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-600">현재 사용 중인 진행구분 현황</span>
+                    <button
+                      type="button"
+                      onClick={loadUsage}
+                      disabled={isLoadingUsage}
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                    >새로고침</button>
+                  </div>
+                  {isLoadingUsage ? (
+                    <div className="flex items-center justify-center h-16">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                    </div>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-gray-600">진행구분</th>
+                            <th className="text-right px-3 py-2 font-medium text-gray-600">사업장 수</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {usageList.length === 0 ? (
+                            <tr><td colSpan={2} className="text-center py-4 text-gray-400">데이터 없음</td></tr>
+                          ) : usageList.map((u, i) => (
+                            <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                              <td className="px-3 py-2 text-gray-800">
+                                {u.progress_status || <span className="text-gray-400 italic">(없음)</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono text-gray-700">{u.business_count}개</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* 변경 폼 */}
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+                  <p className="text-xs font-medium text-orange-800">⚠️ 아래 선택한 진행구분을 가진 모든 사업장이 변경됩니다.</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">변경 전</label>
+                      <select
+                        value={migrateFrom}
+                        onChange={(e) => setMigrateFrom(e.target.value)}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-400 bg-white"
+                      >
+                        <option value="">(없음 / 미지정)</option>
+                        {usageList.filter(u => u.progress_status).map(u => (
+                          <option key={u.progress_status} value={u.progress_status}>
+                            {u.progress_status} ({u.business_count}개)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0 mt-4" />
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">변경 후</label>
+                      <select
+                        value={migrateTo}
+                        onChange={(e) => setMigrateTo(e.target.value)}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-400 bg-white"
+                      >
+                        <option value="">선택하세요</option>
+                        {progressCategories.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleMigrate}
+                    disabled={isMigrating || !migrateTo || migrateFrom === migrateTo}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isMigrating ? (
+                      <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />변경 중...</>
+                    ) : (
+                      <><RefreshCw className="w-4 h-4" />일괄 변경 실행</>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

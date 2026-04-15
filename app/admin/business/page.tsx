@@ -556,13 +556,31 @@ function BusinessManagementPage() {
         }
       })
       .catch(() => {
-        // API 실패 시 constants 폴백
         setManufacturerList([
           { id: 0, name: '에코센스' },
           { id: 1, name: '크린어스' },
           { id: 2, name: '가이아씨앤에스' },
           { id: 3, name: '이브이에스' },
           { id: 4, name: '위블레스' },
+        ])
+      })
+  }, [])
+
+  // 진행구분 목록 (동적)
+  const [progressCategoryList, setProgressCategoryList] = useState<{ id: number; name: string }[]>([])
+  useEffect(() => {
+    fetch('/api/settings/progress-categories')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setProgressCategoryList((data.data as { id: number; name: string; is_active: boolean }[]).filter(c => c.is_active))
+        }
+      })
+      .catch(() => {
+        setProgressCategoryList([
+          { id: 0, name: '자비' }, { id: 1, name: '보조금' }, { id: 2, name: '보조금 동시진행' },
+          { id: 3, name: '보조금 추가승인' }, { id: 4, name: '대리점' }, { id: 5, name: '외주설치' },
+          { id: 6, name: 'AS' }, { id: 7, name: '진행불가' }, { id: 8, name: '확인필요' },
         ])
       })
   }, [])
@@ -5739,15 +5757,13 @@ function BusinessManagementPage() {
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                       >
                         <option value="">선택하세요</option>
-                        <option value="자비">자비</option>
-                        <option value="보조금">보조금</option>
-                        <option value="보조금 동시진행">보조금 동시진행</option>
-                        <option value="보조금 추가승인">보조금 추가승인</option>
-                        <option value="대리점">대리점</option>
-                        <option value="외주설치">외주설치</option>
-                        <option value="AS">AS</option>
-                        <option value="진행불가">진행불가</option>
-                        <option value="확인필요">확인필요</option>
+                        {progressCategoryList.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                        {/* 기존 데이터에 현재 목록에 없는 값이 있을 경우 표시 */}
+                        {formData.progress_status && !progressCategoryList.some(c => c.name === formData.progress_status) && (
+                          <option value={formData.progress_status}>{formData.progress_status}</option>
+                        )}
                       </select>
                     </div>
 
