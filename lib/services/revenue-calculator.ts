@@ -15,6 +15,7 @@
  */
 
 import { queryOne, queryAll } from '@/lib/supabase-direct';
+import { getManufacturerAliases } from '@/constants/manufacturers';
 
 // ─── 타입 정의 ────────────────────────────────────────────────────────────────
 
@@ -194,35 +195,34 @@ export async function calculateRevenue(
   // preloadedMasterData가 있으면 DB 재조회 생략 (제조사별로 필터링)
   let manufacturerCostMap: Record<string, any>;
   if (preloadedMasterData) {
-    // preloaded 데이터에서 해당 제조사 원가 추출
-    // 제조사명 매칭: 한글/영문 코드 양쪽 시도
-    const manufacturerCodeMap: Record<string, string> = {
-      '에코센스': 'ecosense',
-      '크린어스': 'cleanearth',
-      '가이아씨앤에스': 'gaia_cns',
-      '이브이에스': 'evs',
-    };
-    const manufacturerCode = manufacturerCodeMap[manufacturer] || manufacturer.toLowerCase();
-    manufacturerCostMap =
-      preloadedMasterData.manufacturerPricingByManufacturer[manufacturer] ||
-      preloadedMasterData.manufacturerPricingByManufacturer[manufacturerCode] ||
-      {};
+    // 영문코드/한글명 별칭 모두 시도하여 첫 번째 매칭 사용
+    const aliases = [manufacturer, ...getManufacturerAliases(manufacturer), manufacturer.toLowerCase()];
+    manufacturerCostMap = {};
+    for (const alias of aliases) {
+      if (alias && preloadedMasterData.manufacturerPricingByManufacturer[alias]) {
+        manufacturerCostMap = preloadedMasterData.manufacturerPricingByManufacturer[alias];
+        break;
+      }
+    }
   } else {
+    // DB에서 영문코드/한글명 두 형식 모두 조회
+    const aliases = [...new Set([manufacturer, ...getManufacturerAliases(manufacturer)])];
+    const placeholders = aliases.map((_, i) => `$${i + 2}`).join(', ');
     const manufacturerPricing = await queryAll(
       `SELECT * FROM manufacturer_pricing
-       WHERE manufacturer = $1
-       AND is_active = $2`,
-      [manufacturer, true]
+       WHERE manufacturer = ANY(ARRAY[${placeholders}]::text[])
+       AND is_active = $1`,
+      [true, ...aliases]
     );
 
     if (!manufacturerPricing) {
       throw new Error('제조사별 원가 조회에 실패했습니다.');
     }
 
-    manufacturerCostMap = manufacturerPricing?.reduce((acc: Record<string, any>, item: any) => {
+    manufacturerCostMap = manufacturerPricing.reduce((acc: Record<string, any>, item: any) => {
       acc[item.equipment_type] = item;
       return acc;
-    }, {} as Record<string, any>) || {};
+    }, {} as Record<string, any>);
   }
 
   // 2-2. 기기별 기본 설치비 조회
@@ -830,11 +830,15 @@ export async function preloadMasterData(): Promise<PreloadedMasterData> {
   }, {} as Record<string, any>);
 
   // manufacturer_pricing: 제조사명 → { equipment_type → row }
+  // 영문코드/한글명 양쪽 키로 등록하여 어떤 형식으로 조회해도 매칭되도록 처리
   const manufacturerPricingByManufacturer = (manufacturerRows || []).reduce(
     (acc: Record<string, Record<string, any>>, item: any) => {
       const mfr: string = item.manufacturer || '';
-      if (!acc[mfr]) acc[mfr] = {};
-      acc[mfr][item.equipment_type] = item;
+      for (const alias of [mfr, ...getManufacturerAliases(mfr)]) {
+        if (!alias) continue;
+        if (!acc[alias]) acc[alias] = {};
+        acc[alias][item.equipment_type] = item;
+      }
       return acc;
     },
     {} as Record<string, Record<string, any>>

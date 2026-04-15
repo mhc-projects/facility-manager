@@ -46,3 +46,24 @@ export function getManufacturerCode(name: ManufacturerName | ManufacturerCode | 
   // 알 수 없는 값은 그대로 반환
   return name || '';
 }
+
+/**
+ * 제조사 식별자의 모든 별칭(영문코드 + 한글명)을 반환합니다.
+ * 코스트 맵 생성 시 양쪽 키로 등록하여 영문/한글 불일치 문제를 해결합니다.
+ *
+ * 예) '에코센스' → ['에코센스', 'ecosense']
+ *     'ecosense' → ['ecosense', '에코센스']
+ *     '위블레스' → ['위블레스', 'weblesse']
+ *     '알수없음'  → ['알수없음']
+ */
+export function getManufacturerAliases(value: string): string[] {
+  if (!value) return [];
+  const aliases = new Set<string>([value]);
+  // 영문코드 → 한글명
+  const korean = MANUFACTURER_NAMES[value as ManufacturerCode];
+  if (korean) aliases.add(korean);
+  // 한글명 → 영문코드
+  const code = MANUFACTURER_NAMES_REVERSE[value as ManufacturerName];
+  if (code) aliases.add(code);
+  return Array.from(aliases);
+}

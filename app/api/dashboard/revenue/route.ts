@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryAll } from '@/lib/supabase-direct'
+import { getManufacturerAliases } from '@/constants/manufacturers'
 import {
   determineAggregationLevel,
   getAggregationKey,
@@ -113,12 +114,16 @@ export async function GET(request: NextRequest) {
     // 📍 매출 관리 페이지(/admin/revenue/page.tsx Line 211)와 동일한 방식
     const manufacturerCostMap: Record<string, Record<string, number>> = {};
     manufacturerPricingData?.forEach(item => {
-      const normalizedManufacturer = item.manufacturer.toLowerCase().trim();
-      if (!manufacturerCostMap[normalizedManufacturer]) {
-        manufacturerCostMap[normalizedManufacturer] = {};
+      const cost = Number(item.cost_price) || 0;
+      // 영문코드/한글명 양쪽 키로 등록 (어떤 형식으로 저장되어도 매칭되도록)
+      for (const alias of getManufacturerAliases(item.manufacturer)) {
+        if (!manufacturerCostMap[alias]) manufacturerCostMap[alias] = {};
+        manufacturerCostMap[alias][item.equipment_type] = cost;
       }
-      // 🔧 PostgreSQL DECIMAL 타입이 문자열로 반환되므로 Number()로 변환
-      manufacturerCostMap[normalizedManufacturer][item.equipment_type] = Number(item.cost_price) || 0;
+      // 소문자 정규화 키도 추가 (대소문자 차이 대응)
+      const lowerKey = item.manufacturer.toLowerCase().trim();
+      if (!manufacturerCostMap[lowerKey]) manufacturerCostMap[lowerKey] = {};
+      manufacturerCostMap[lowerKey][item.equipment_type] = cost;
     });
 
     console.log('📊 [Dashboard Revenue API] Manufacturer pricing loaded:', Object.keys(manufacturerCostMap).length, 'manufacturers');
@@ -269,21 +274,16 @@ export async function GET(request: NextRequest) {
       // ✅ 제조사 이름 정규화: 소문자 변환 + 공백 제거 (매출 관리와 100% 동일)
       // 📍 revenue-calculator.ts Line 103과 동일한 방식
       const rawManufacturer = business.manufacturer || 'ecosense';
-      const normalizedManufacturer = rawManufacturer.toLowerCase().trim();
 
-      // 제조사 원가 맵에서 정규화된 이름으로 검색
-      let manufacturerCosts = manufacturerCostMap[normalizedManufacturer];
-
-      // 정규화된 이름으로도 못 찾으면 원본 이름으로 시도
-      if (!manufacturerCosts) {
-        manufacturerCosts = manufacturerCostMap[rawManufacturer] || {};
-
-        // 🐛 디버깅: 제조사 매칭 실패 로그
-        if (aggregationKey === '2025-07') {
-          console.log(`[DEBUG] ⚠️ 제조사 매칭 실패: ${business.business_name} (원본: "${rawManufacturer}", 정규화: "${normalizedManufacturer}")`);
-          console.log(`[DEBUG] 사용 가능한 제조사 키:`, Object.keys(manufacturerCostMap).slice(0, 5));
+      // 영문코드/한글명/소문자 순서로 폴백하며 매칭
+      let manufacturerCosts: Record<string, number> | undefined;
+      for (const alias of [rawManufacturer, ...getManufacturerAliases(rawManufacturer), rawManufacturer.toLowerCase().trim()]) {
+        if (alias && manufacturerCostMap[alias]) {
+          manufacturerCosts = manufacturerCostMap[alias];
+          break;
         }
       }
+      if (!manufacturerCosts) manufacturerCosts = {};
 
       // 매출/제조사 매입 계산
       let businessRevenue = 0;
