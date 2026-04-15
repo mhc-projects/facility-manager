@@ -6082,25 +6082,31 @@ function BusinessManagementPage() {
                       <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white flex items-center gap-4">
                         <label className="flex items-center cursor-pointer">
                           <input
-                            type="checkbox"
-                            checked={(formData.vpn_wired || 0) > 0}
-                            onChange={(e) => {
-                              const newValue = e.target.checked ? 1 : 0;
-                              setFormData({...formData, vpn_wired: newValue});
-                            }}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            type="radio"
+                            name="vpn_type"
+                            checked={!formData.vpn}
+                            onChange={() => setFormData({...formData, vpn: null})}
+                            className="w-4 h-4 text-gray-400 border-gray-300 focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="ml-2 text-sm text-gray-500">없음</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="vpn_type"
+                            checked={formData.vpn === 'wired'}
+                            onChange={() => setFormData({...formData, vpn: 'wired'})}
+                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500"
                           />
                           <span className="ml-2 text-sm text-gray-700">🔗 유선</span>
                         </label>
                         <label className="flex items-center cursor-pointer">
                           <input
-                            type="checkbox"
-                            checked={(formData.vpn_wireless || 0) > 0}
-                            onChange={(e) => {
-                              const newValue = e.target.checked ? 1 : 0;
-                              setFormData({...formData, vpn_wireless: newValue});
-                            }}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            type="radio"
+                            name="vpn_type"
+                            checked={formData.vpn === 'wireless'}
+                            onChange={() => setFormData({...formData, vpn: 'wireless'})}
+                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500"
                           />
                           <span className="ml-2 text-sm text-gray-700">📶 무선</span>
                         </label>

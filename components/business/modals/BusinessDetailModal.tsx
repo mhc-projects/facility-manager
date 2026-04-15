@@ -804,8 +804,8 @@ export default function BusinessDetailModal({
                       <div className="text-xs sm:text-sm text-gray-600 mb-2">VPN 연결</div>
                       <div className="space-y-1.5">
                         {(() => {
-                          const hasWired = (business.VPN유선 || business.vpn_wired || 0) > 0;
-                          const hasWireless = (business.VPN무선 || business.vpn_wireless || 0) > 0;
+                          const hasWired = business.vpn === 'wired';
+                          const hasWireless = business.vpn === 'wireless';
 
                           if (!hasWired && !hasWireless) {
                             return <div className="text-xs sm:text-sm font-medium text-gray-400">-</div>;
