@@ -1457,6 +1457,7 @@ function PricingManagement() {
               setEditingItem(null);
             }}
             saving={saving}
+            manufacturers={pricingManufacturers}
           />
         </Modal>
 
@@ -1478,12 +1479,13 @@ function PricingManagement() {
 }
 
 // 편집 폼 컴포넌트
-function EditForm({ item, type, onSave, onCancel, saving }: {
+function EditForm({ item, type, onSave, onCancel, saving, manufacturers }: {
   item: any;
   type: 'government' | 'sales' | 'survey' | 'manufacturer' | 'installation' | 'dealer';
   onSave: (data: any) => void;
   onCancel: () => void;
   saving: boolean;
+  manufacturers: string[];
 }) {
   const [formData, setFormData] = useState<any>({});
 
@@ -1653,11 +1655,11 @@ function EditForm({ item, type, onSave, onCancel, saving }: {
               required
             >
               <option value="">선택하세요</option>
-              {pricingManufacturers.map(name => (
+              {manufacturers.map(name => (
                 <option key={name} value={name}>{name}</option>
               ))}
               {/* 기존 데이터에 현재 목록에 없는 제조사가 있을 경우 표시 */}
-              {formData.manufacturer && !pricingManufacturers.includes(formData.manufacturer) && (
+              {formData.manufacturer && !manufacturers.includes(formData.manufacturer) && (
                 <option value={formData.manufacturer}>{getManufacturerDisplayName(formData.manufacturer)}</option>
               )}
             </select>
