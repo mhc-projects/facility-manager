@@ -23,6 +23,8 @@ import {
   GripVertical,
   Tag,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
   RefreshCw,
 } from 'lucide-react';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
@@ -344,6 +346,39 @@ function AdminSettingsContent() {
       }
     } catch {
       setMessage({ type: 'error', text: '삭제 중 오류가 발생했습니다.' });
+    }
+  };
+
+  const handleReorderProgressCategory = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= progressCategories.length) return;
+
+    const current = progressCategories[index];
+    const target = progressCategories[targetIndex];
+
+    // 로컬 상태 즉시 업데이트 (optimistic)
+    const newList = [...progressCategories];
+    newList[index] = { ...target, sort_order: current.sort_order };
+    newList[targetIndex] = { ...current, sort_order: target.sort_order };
+    setProgressCategories(newList);
+
+    try {
+      await Promise.all([
+        fetch('/api/settings/progress-categories', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: current.id, sort_order: target.sort_order }),
+        }),
+        fetch('/api/settings/progress-categories', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: target.id, sort_order: current.sort_order }),
+        }),
+      ]);
+    } catch {
+      // 실패 시 원래 순서로 복구
+      setProgressCategories(progressCategories);
+      setMessage({ type: 'error', text: '순서 변경 중 오류가 발생했습니다.' });
     }
   };
 
@@ -883,222 +918,240 @@ function AdminSettingsContent() {
 
           {/* 진행구분 관리 탭 */}
           {activeTab === 'progress-categories' && (
-            <div className="p-2 sm:p-6 space-y-8">
-              {/* ① 항목 관리 */}
-              <div className="max-w-lg">
-                <h4 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-blue-600" />
-                  진행구분 항목 관리
-                </h4>
+            <div className="p-2 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* ① 항목 관리 */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-blue-600" />
+                    진행구분 항목 관리
+                  </h4>
 
-                {/* 추가 폼 */}
-                <div className="mb-5">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">새 진행구분 추가</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newProgressCategoryName}
-                      onChange={(e) => setNewProgressCategoryName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddProgressCategory()}
-                      placeholder="진행구분 이름 입력"
-                      maxLength={100}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddProgressCategory}
-                      disabled={isAddingProgressCategory || !newProgressCategoryName.trim()}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      {isAddingProgressCategory ? '추가 중...' : '추가'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 목록 */}
-                {isLoadingProgressCategories ? (
-                  <div className="flex items-center justify-center h-24">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-                  </div>
-                ) : progressCategories.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-6">등록된 진행구분이 없습니다.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {progressCategories.map((c) => (
-                      <div
-                        key={c.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                          c.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
-                        }`}
+                  {/* 추가 폼 */}
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">새 진행구분 추가</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newProgressCategoryName}
+                        onChange={(e) => setNewProgressCategoryName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddProgressCategory()}
+                        placeholder="진행구분 이름 입력"
+                        maxLength={100}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddProgressCategory}
+                        disabled={isAddingProgressCategory || !newProgressCategoryName.trim()}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                        {editingProgressCategory?.id === c.id ? (
-                          <>
-                            <input
-                              type="text"
-                              value={editingProgressName}
-                              onChange={(e) => setEditingProgressName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleUpdateProgressCategory();
-                                if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); }
-                              }}
-                              autoFocus
-                              maxLength={100}
-                              className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleUpdateProgressCategory}
-                              disabled={isSavingProgressCategory || !editingProgressName.trim()}
-                              className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                            >저장</button>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); }}
-                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                            ><X className="w-4 h-4" /></button>
-                          </>
-                        ) : (
-                          <>
-                            <span className={`flex-1 text-sm font-medium ${c.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
-                              {c.name}
-                            </span>
-                            {!c.is_active && (
-                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleProgressCategoryActive(c)}
-                              className={`text-xs px-2 py-1 rounded border transition-colors ${
-                                c.is_active
-                                  ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-                                  : 'border-blue-200 text-blue-600 hover:bg-blue-50'
-                              }`}
-                            >{c.is_active ? '숨기기' : '표시'}</button>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); }}
-                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="이름 수정"
-                            ><Pencil className="w-3.5 h-3.5" /></button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteProgressCategory(c)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="삭제"
-                            ><Trash2 className="w-3.5 h-3.5" /></button>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-800">
-                    📌 <strong>숨기기</strong>는 사업장 등록 폼에서 해당 항목을 숨깁니다. 이미 등록된 사업장 데이터에는 영향을 주지 않습니다.
-                  </p>
-                </div>
-              </div>
-
-              {/* ② 일괄 변경 (마이그레이션) */}
-              <div className="max-w-lg border-t pt-8">
-                <h4 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-orange-500" />
-                  기존 사업장 진행구분 일괄 변경
-                </h4>
-                <p className="text-xs text-gray-500 mb-5">
-                  등록된 사업장의 진행구분을 다른 값으로 일괄 변경합니다. 항목을 정리하거나 이름을 바꿀 때 사용하세요.
-                </p>
-
-                {/* 현황 테이블 */}
-                <div className="mb-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-gray-600">현재 사용 중인 진행구분 현황</span>
-                    <button
-                      type="button"
-                      onClick={loadUsage}
-                      disabled={isLoadingUsage}
-                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
-                    >새로고침</button>
-                  </div>
-                  {isLoadingUsage ? (
-                    <div className="flex items-center justify-center h-16">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                        <Plus className="w-4 h-4" />
+                        {isAddingProgressCategory ? '추가 중...' : '추가'}
+                      </button>
                     </div>
+                  </div>
+
+                  {/* 목록 */}
+                  {isLoadingProgressCategories ? (
+                    <div className="flex items-center justify-center h-24">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                    </div>
+                  ) : progressCategories.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-6">등록된 진행구분이 없습니다.</p>
                   ) : (
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="text-left px-3 py-2 font-medium text-gray-600">진행구분</th>
-                            <th className="text-right px-3 py-2 font-medium text-gray-600">사업장 수</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {usageList.length === 0 ? (
-                            <tr><td colSpan={2} className="text-center py-4 text-gray-400">데이터 없음</td></tr>
-                          ) : usageList.map((u, i) => (
-                            <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
-                              <td className="px-3 py-2 text-gray-800">
-                                {u.progress_status || <span className="text-gray-400 italic">(없음)</span>}
-                              </td>
-                              <td className="px-3 py-2 text-right font-mono text-gray-700">{u.business_count}개</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="space-y-2">
+                      {progressCategories.map((c, idx) => (
+                        <div
+                          key={c.id}
+                          className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
+                            c.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
+                          }`}
+                        >
+                          {/* 순서 버튼 */}
+                          <div className="flex flex-col gap-0.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleReorderProgressCategory(idx, 'up')}
+                              disabled={idx === 0}
+                              className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                              title="위로"
+                            ><ArrowUp className="w-3 h-3" /></button>
+                            <button
+                              type="button"
+                              onClick={() => handleReorderProgressCategory(idx, 'down')}
+                              disabled={idx === progressCategories.length - 1}
+                              className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                              title="아래로"
+                            ><ArrowDown className="w-3 h-3" /></button>
+                          </div>
+                          {editingProgressCategory?.id === c.id ? (
+                            <>
+                              <input
+                                type="text"
+                                value={editingProgressName}
+                                onChange={(e) => setEditingProgressName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleUpdateProgressCategory();
+                                  if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); }
+                                }}
+                                autoFocus
+                                maxLength={100}
+                                className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleUpdateProgressCategory}
+                                disabled={isSavingProgressCategory || !editingProgressName.trim()}
+                                className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                              >저장</button>
+                              <button
+                                type="button"
+                                onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); }}
+                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                              ><X className="w-4 h-4" /></button>
+                            </>
+                          ) : (
+                            <>
+                              <span className={`flex-1 text-sm font-medium ${c.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                                {c.name}
+                              </span>
+                              {!c.is_active && (
+                                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProgressCategoryActive(c)}
+                                className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                  c.is_active
+                                    ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                    : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                                }`}
+                              >{c.is_active ? '숨기기' : '표시'}</button>
+                              <button
+                                type="button"
+                                onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); }}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                title="이름 수정"
+                              ><Pencil className="w-3.5 h-3.5" /></button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteProgressCategory(c)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="삭제"
+                              ><Trash2 className="w-3.5 h-3.5" /></button>
+                            </>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
+
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      📌 <strong>숨기기</strong>는 사업장 등록 폼에서 해당 항목을 숨깁니다. 이미 등록된 사업장 데이터에는 영향을 주지 않습니다.
+                    </p>
+                  </div>
                 </div>
 
-                {/* 변경 폼 */}
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
-                  <p className="text-xs font-medium text-orange-800">⚠️ 아래 선택한 진행구분을 가진 모든 사업장이 변경됩니다.</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">변경 전</label>
-                      <select
-                        value={migrateFrom}
-                        onChange={(e) => setMigrateFrom(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-400 bg-white"
-                      >
-                        <option value="">(없음 / 미지정)</option>
-                        {usageList.filter(u => u.progress_status).map(u => (
-                          <option key={u.progress_status} value={u.progress_status}>
-                            {u.progress_status} ({u.business_count}개)
-                          </option>
-                        ))}
-                      </select>
+                {/* ② 일괄 변경 (마이그레이션) */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-orange-500" />
+                    기존 사업장 진행구분 일괄 변경
+                  </h4>
+                  <p className="text-xs text-gray-500 mb-5">
+                    등록된 사업장의 진행구분을 다른 값으로 일괄 변경합니다. 항목을 정리하거나 이름을 바꿀 때 사용하세요.
+                  </p>
+
+                  {/* 현황 테이블 */}
+                  <div className="mb-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-600">현재 사용 중인 진행구분 현황</span>
+                      <button
+                        type="button"
+                        onClick={loadUsage}
+                        disabled={isLoadingUsage}
+                        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      >새로고침</button>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0 mt-4" />
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">변경 후</label>
-                      <select
-                        value={migrateTo}
-                        onChange={(e) => setMigrateTo(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-400 bg-white"
-                      >
-                        <option value="">선택하세요</option>
-                        {progressCategories.map(c => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleMigrate}
-                    disabled={isMigrating || !migrateTo || migrateFrom === migrateTo}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isMigrating ? (
-                      <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />변경 중...</>
+                    {isLoadingUsage ? (
+                      <div className="flex items-center justify-center h-16">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                      </div>
                     ) : (
-                      <><RefreshCw className="w-4 h-4" />일괄 변경 실행</>
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium text-gray-600">진행구분</th>
+                              <th className="text-right px-3 py-2 font-medium text-gray-600">사업장 수</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usageList.length === 0 ? (
+                              <tr><td colSpan={2} className="text-center py-4 text-gray-400">데이터 없음</td></tr>
+                            ) : usageList.map((u, i) => (
+                              <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                                <td className="px-3 py-2 text-gray-800">
+                                  {u.progress_status || <span className="text-gray-400 italic">(없음)</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-gray-700">{u.business_count}개</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
-                  </button>
+                  </div>
+
+                  {/* 변경 폼 */}
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+                    <p className="text-xs font-medium text-orange-800">⚠️ 아래 선택한 진행구분을 가진 모든 사업장이 변경됩니다.</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">변경 전</label>
+                        <select
+                          value={migrateFrom}
+                          onChange={(e) => setMigrateFrom(e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-400 bg-white"
+                        >
+                          <option value="">(없음 / 미지정)</option>
+                          {usageList.filter(u => u.progress_status).map(u => (
+                            <option key={u.progress_status} value={u.progress_status}>
+                              {u.progress_status} ({u.business_count}개)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0 mt-4" />
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">변경 후</label>
+                        <select
+                          value={migrateTo}
+                          onChange={(e) => setMigrateTo(e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-400 bg-white"
+                        >
+                          <option value="">선택하세요</option>
+                          {progressCategories.map(c => (
+                            <option key={c.id} value={c.name}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleMigrate}
+                      disabled={isMigrating || !migrateTo || migrateFrom === migrateTo}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isMigrating ? (
+                        <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />변경 중...</>
+                      ) : (
+                        <><RefreshCw className="w-4 h-4" />일괄 변경 실행</>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -547,8 +547,10 @@ function BusinessManagementPage() {
 
   // 제조사 목록 (동적)
   const [manufacturerList, setManufacturerList] = useState<{ id: number; name: string }[]>([])
-  useEffect(() => {
-    fetch('/api/settings/manufacturers')
+  const [progressCategoryList, setProgressCategoryList] = useState<{ id: number; name: string }[]>([])
+
+  const fetchManufacturerList = useCallback(() => {
+    fetch('/api/settings/manufacturers', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
@@ -557,19 +559,14 @@ function BusinessManagementPage() {
       })
       .catch(() => {
         setManufacturerList([
-          { id: 0, name: '에코센스' },
-          { id: 1, name: '크린어스' },
-          { id: 2, name: '가이아씨앤에스' },
-          { id: 3, name: '이브이에스' },
-          { id: 4, name: '위블레스' },
+          { id: 0, name: '에코센스' }, { id: 1, name: '크린어스' },
+          { id: 2, name: '가이아씨앤에스' }, { id: 3, name: '이브이에스' }, { id: 4, name: '위블레스' },
         ])
       })
   }, [])
 
-  // 진행구분 목록 (동적)
-  const [progressCategoryList, setProgressCategoryList] = useState<{ id: number; name: string }[]>([])
-  useEffect(() => {
-    fetch('/api/settings/progress-categories')
+  const fetchProgressCategoryList = useCallback(() => {
+    fetch('/api/settings/progress-categories', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
@@ -584,6 +581,12 @@ function BusinessManagementPage() {
         ])
       })
   }, [])
+
+  // 페이지 마운트 시 최초 로드
+  useEffect(() => {
+    fetchManufacturerList()
+    fetchProgressCategoryList()
+  }, [fetchManufacturerList, fetchProgressCategoryList])
 
   // 🗄️ 비즈니스 데이터 캐시 시스템
   const businessCacheRef = useRef<Map<string, {
@@ -3084,6 +3087,8 @@ function BusinessManagementPage() {
       completion_survey_manager: '',
       completion_survey_date: ''
     })
+    fetchManufacturerList()
+    fetchProgressCategoryList()
     setIsModalOpen(true)
   }
 
@@ -3300,6 +3305,8 @@ function BusinessManagementPage() {
       // Use setTimeout to ensure state updates complete before opening edit modal
       setTimeout(() => {
         setInvoiceRefreshTrigger(prev => prev + 1)
+        fetchManufacturerList()
+        fetchProgressCategoryList()
         setIsModalOpen(true)
       }, 0)
 
