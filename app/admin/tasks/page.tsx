@@ -139,6 +139,8 @@ function TaskManagementPage() {
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedType, setSelectedType] = useState<TaskType | 'all'>('all')
+  const [selectedProgressStatus, setSelectedProgressStatus] = useState<string | 'all'>('all') // 진행구분 필터 (설정 연동)
+  const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]) // 설정 API 순서
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all')
@@ -379,6 +381,19 @@ function TaskManagementPage() {
   useEffect(() => {
     loadTasks()
     loadActiveSubsidies()
+    // 진행구분 순서 로드 (설정 페이지와 동기화)
+    fetch('/api/settings/progress-categories', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setProgressCategoryOrder(
+            (data.data as { name: string; sort_order: number }[])
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map(c => c.name)
+          )
+        }
+      })
+      .catch(() => {})
   }, [loadTasks, loadActiveSubsidies])
 
   // 미수금 batch API 호출 (tasks 로드 완료 후)
@@ -627,7 +642,8 @@ function TaskManagementPage() {
 
   // 필터 초기화 함수
   const handleResetFilters = useCallback(() => {
-    setSelectedType('subsidy') // 보조금으로 리셋
+    setSelectedProgressStatus('all')
+    setSelectedType('all')
     setSelectedPriority('all')
     setSelectedAssignee('all')
     setSelectedStatus('all')
@@ -858,6 +874,33 @@ function TaskManagementPage() {
     return result
   }, [tasks, calculateDelayStatus])
 
+  // 진행구분 필터 옵션: 설정 API 순서 기준, 실제 업무에 있는 값만
+  const progressStatusOptions = useMemo(() => {
+    const fromTasks = new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))
+    const ordered = progressCategoryOrder.filter(v => fromTasks.has(v))
+    fromTasks.forEach(v => { if (!progressCategoryOrder.includes(v)) ordered.push(v) })
+    return ordered
+  }, [tasks, progressCategoryOrder])
+
+  // 진행구분 변경 핸들러 — selectedType도 함께 파생
+  const handleProgressStatusChange = useCallback((value: string) => {
+    setSelectedProgressStatus(value)
+    if (value === 'all') {
+      setSelectedType('all')
+    } else {
+      const deriveType = (ps: string): TaskType => {
+        if (ps.includes('보조금')) return 'subsidy'
+        if (ps.includes('자비')) return 'self'
+        if (ps === 'AS') return 'as'
+        if (ps.includes('외주')) return 'outsourcing'
+        if (ps.includes('대리점')) return 'dealer'
+        return 'etc'
+      }
+      setSelectedType(deriveType(value))
+    }
+    setSelectedStatus('all')
+  }, [])
+
   // 필터링된 업무 목록
   const filteredTasks = useMemo(() => {
     console.log('🔍 [FILTER] 필터링 시작... tasksWithDelayStatus.length:', tasksWithDelayStatus.length)
@@ -886,7 +929,8 @@ function TaskManagementPage() {
         task.assignee?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.localGovernment?.toLowerCase().includes(searchTerm.toLowerCase())
 
-      const matchesType = selectedType === 'all' || task.type === selectedType
+      // 진행구분 필터: progressStatus 직접 비교 (설정 연동)
+      const matchesType = selectedProgressStatus === 'all' || task.progressStatus === selectedProgressStatus
       const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority
       // 다중 담당자 지원: assignees 배열과 기존 assignee 필드 모두 확인
       const matchesAssignee = selectedAssignee === 'all' ||
@@ -926,7 +970,7 @@ function TaskManagementPage() {
 
     console.log('🔍 [FILTER] 필터링 완료:', result.length, '개')
     return result
-  }, [tasksWithDelayStatus, searchTerm, selectedType, selectedPriority, selectedAssignee,
+  }, [tasksWithDelayStatus, searchTerm, selectedProgressStatus, selectedType, selectedPriority, selectedAssignee,
       showCompletedTasks, selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
 
   // 칸반 보드용 필터링 (완료 업무도 항상 포함)
@@ -938,7 +982,8 @@ function TaskManagementPage() {
         task.assignee?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.localGovernment?.toLowerCase().includes(searchTerm.toLowerCase())
 
-      const matchesType = selectedType === 'all' || task.type === selectedType
+      // 진행구분 필터: progressStatus 직접 비교 (설정 연동)
+      const matchesType = selectedProgressStatus === 'all' || task.progressStatus === selectedProgressStatus
       const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority
       const matchesAssignee = selectedAssignee === 'all' ||
         task.assignee === selectedAssignee ||
@@ -951,7 +996,7 @@ function TaskManagementPage() {
       return matchesSearch && matchesType && matchesPriority && matchesAssignee &&
              matchesStatus && matchesLocalGov && matchesConstructionReport
     })
-  }, [tasksWithDelayStatus, searchTerm, selectedType, selectedPriority, selectedAssignee,
+  }, [tasksWithDelayStatus, searchTerm, selectedProgressStatus, selectedType, selectedPriority, selectedAssignee,
       selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
 
   // 페이지네이션을 위한 현재 페이지 업무 목록
@@ -967,7 +1012,7 @@ function TaskManagementPage() {
   // 검색/필터 변경 시 첫 페이지로 이동
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, selectedType, selectedPriority, selectedAssignee,
+  }, [searchTerm, selectedProgressStatus, selectedType, selectedPriority, selectedAssignee,
       selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
 
   // 상태별 업무 그룹화 (칸반용: 완료 업무 포함)
@@ -1868,21 +1913,16 @@ function TaskManagementPage() {
           <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 md:gap-3">
             {/* 필터 옵션들 */}
             <div className="flex flex-wrap gap-2 sm:gap-2">
-              {/* 업무 타입 */}
+              {/* 진행구분 (설정 연동 동적 목록) */}
               <select
-                value={selectedType}
-                onChange={(e) => {
-                  setSelectedType(e.target.value as TaskType | 'all')
-                  setSelectedStatus('all') // 타입 변경 시 업무단계 필터 리셋
-                }}
+                value={selectedProgressStatus}
+                onChange={(e) => handleProgressStatusChange(e.target.value)}
                 className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-sm"
               >
-                <option value="all">타입</option>
-                <option value="self">자비</option>
-                <option value="subsidy">보조금</option>
-                <option value="dealer">대리점</option>
-                <option value="outsourcing">외주설치</option>
-                <option value="etc">기타</option>
+                <option value="all">진행구분</option>
+                {progressStatusOptions.map(ps => (
+                  <option key={ps} value={ps}>{ps}</option>
+                ))}
               </select>
 
               {/* 우선순위 */}
@@ -1997,19 +2037,14 @@ function TaskManagementPage() {
           <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
             <div className="flex items-center gap-2 flex-wrap">
               <span>총 {filteredTasks.length}개 업무</span>
-              {/* 타입 필터 라벨 */}
-              {selectedType !== 'all' && (
+              {/* 진행구분 필터 라벨 */}
+              {selectedProgressStatus !== 'all' && (
                 <button
-                  onClick={() => setSelectedType('subsidy')}
+                  onClick={() => handleProgressStatusChange('all')}
                   className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs hover:bg-blue-200 transition-colors"
-                  title="타입 필터 제거"
+                  title="진행구분 필터 제거"
                 >
-                  <span>
-                    {selectedType === 'self' ? '자비' :
-                     selectedType === 'subsidy' ? '보조금' :
-                     selectedType === 'dealer' ? '대리점' :
-                     selectedType === 'etc' ? '기타' : 'AS'}
-                  </span>
+                  <span>{selectedProgressStatus}</span>
                   <X className="w-3 h-3" />
                 </button>
               )}
