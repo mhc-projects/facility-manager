@@ -194,7 +194,7 @@ interface UnifiedBusinessInfo {
   attachment_support_writing_date?: string | null;      // 부착지원신청서 작성일
 
   // 시스템 필드들
-  manufacturer?: '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | '위블레스' | null;
+  manufacturer?: string | null;
   vpn?: 'wired' | 'wireless' | null;
   greenlink_id?: string | null;
   greenlink_pw?: string | null;
@@ -544,6 +544,28 @@ function BusinessManagementPage() {
     manufacturerCosts,
     manufacturerCostsLoading
   } = useRevenueData()
+
+  // 제조사 목록 (동적)
+  const [manufacturerList, setManufacturerList] = useState<{ id: number; name: string }[]>([])
+  useEffect(() => {
+    fetch('/api/settings/manufacturers')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setManufacturerList((data.data as { id: number; name: string; is_active: boolean }[]).filter(m => m.is_active))
+        }
+      })
+      .catch(() => {
+        // API 실패 시 constants 폴백
+        setManufacturerList([
+          { id: 0, name: '에코센스' },
+          { id: 1, name: '크린어스' },
+          { id: 2, name: '가이아씨앤에스' },
+          { id: 3, name: '이브이에스' },
+          { id: 4, name: '위블레스' },
+        ])
+      })
+  }, [])
 
   // 🗄️ 비즈니스 데이터 캐시 시스템
   const businessCacheRef = useRef<Map<string, {
@@ -3005,7 +3027,7 @@ function BusinessManagementPage() {
       business_contact: '',
       fax_number: '',
       email: '',
-      manufacturer: null as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | '위블레스' | null,
+      manufacturer: null as string | null,
       vpn: null,
       greenlink_id: '',
       greenlink_pw: '',
@@ -6071,15 +6093,17 @@ function BusinessManagementPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">제조사</label>
                       <select
                         value={formData.manufacturer || ''}
-                        onChange={(e) => setFormData({...formData, manufacturer: (e.target.value || null) as '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | '위블레스' | null})}
+                        onChange={(e) => setFormData({...formData, manufacturer: (e.target.value || null) as any})}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
                       >
                         <option value="">선택하세요</option>
-                        <option value="에코센스">에코센스</option>
-                        <option value="크린어스">크린어스</option>
-                        <option value="가이아씨앤에스">가이아씨앤에스</option>
-                        <option value="이브이에스">이브이에스</option>
-                        <option value="위블레스">위블레스</option>
+                        {manufacturerList.map(m => (
+                          <option key={m.id} value={m.name}>{m.name}</option>
+                        ))}
+                        {/* 기존 데이터에 현재 목록에 없는 제조사가 있을 경우 표시 */}
+                        {formData.manufacturer && !manufacturerList.some(m => m.name === formData.manufacturer) && (
+                          <option value={formData.manufacturer}>{formData.manufacturer}</option>
+                        )}
                       </select>
                     </div>
 

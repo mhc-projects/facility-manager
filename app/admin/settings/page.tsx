@@ -15,12 +15,26 @@ import {
   Building,
   Sliders,
   ShieldCheck,
+  Factory,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  GripVertical,
 } from 'lucide-react';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
 
 // 탭 타입 정의
-type SettingsTab = 'delay-criteria' | 'organization';
+type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers';
+
+// 제조사 타입
+interface Manufacturer {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+}
 
 // 지연/위험 기준 타입 정의
 interface DelayCriteria {
@@ -52,10 +66,19 @@ function AdminSettingsContent() {
 
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    tabFromUrl && ['delay-criteria', 'organization'].includes(tabFromUrl)
+    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers'].includes(tabFromUrl)
       ? tabFromUrl
       : 'delay-criteria'
   );
+
+  // 제조사 관리 상태
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [isLoadingManufacturers, setIsLoadingManufacturers] = useState(false);
+  const [newManufacturerName, setNewManufacturerName] = useState('');
+  const [isAddingManufacturer, setIsAddingManufacturer] = useState(false);
+  const [editingManufacturer, setEditingManufacturer] = useState<Manufacturer | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [isSavingManufacturer, setIsSavingManufacturer] = useState(false);
 
   // 지연 기준 설정 상태
   const [criteria, setCriteria] = useState<DelayCriteria>(DEFAULT_CRITERIA);
@@ -80,6 +103,112 @@ function AdminSettingsContent() {
   useEffect(() => {
     setMessage({ type: null, text: '' });
   }, [activeTab]);
+
+  // manufacturers 탭 진입 시 제조사 목록 로드
+  useEffect(() => {
+    if (activeTab === 'manufacturers' && manufacturers.length === 0) {
+      loadManufacturers();
+    }
+  }, [activeTab]);
+
+  const loadManufacturers = async () => {
+    setIsLoadingManufacturers(true);
+    try {
+      const res = await fetch('/api/settings/manufacturers');
+      const data = await res.json();
+      if (data.success) setManufacturers(data.data);
+    } catch (e) {
+      console.error('제조사 목록 로드 실패:', e);
+    } finally {
+      setIsLoadingManufacturers(false);
+    }
+  };
+
+  const handleAddManufacturer = async () => {
+    const name = newManufacturerName.trim();
+    if (!name) return;
+    setIsAddingManufacturer(true);
+    try {
+      const res = await fetch('/api/settings/manufacturers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setManufacturers(prev => [...prev, data.data]);
+        setNewManufacturerName('');
+        setMessage({ type: 'success', text: `'${name}' 제조사가 추가되었습니다.` });
+      } else {
+        setMessage({ type: 'error', text: data.message || '추가에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '추가 중 오류가 발생했습니다.' });
+    } finally {
+      setIsAddingManufacturer(false);
+    }
+  };
+
+  const handleUpdateManufacturer = async () => {
+    if (!editingManufacturer) return;
+    const name = editingName.trim();
+    if (!name) return;
+    setIsSavingManufacturer(true);
+    try {
+      const res = await fetch('/api/settings/manufacturers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingManufacturer.id, name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setManufacturers(prev => prev.map(m => m.id === editingManufacturer.id ? data.data : m));
+        setEditingManufacturer(null);
+        setEditingName('');
+        setMessage({ type: 'success', text: '제조사 이름이 수정되었습니다.' });
+      } else {
+        setMessage({ type: 'error', text: data.message || '수정에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '수정 중 오류가 발생했습니다.' });
+    } finally {
+      setIsSavingManufacturer(false);
+    }
+  };
+
+  const handleToggleManufacturerActive = async (m: Manufacturer) => {
+    try {
+      const res = await fetch('/api/settings/manufacturers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: m.id, is_active: !m.is_active }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setManufacturers(prev => prev.map(item => item.id === m.id ? data.data : item));
+      } else {
+        setMessage({ type: 'error', text: data.message || '상태 변경에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '상태 변경 중 오류가 발생했습니다.' });
+    }
+  };
+
+  const handleDeleteManufacturer = async (m: Manufacturer) => {
+    if (!confirm(`'${m.name}' 제조사를 삭제하시겠습니까?\n이미 등록된 사업장 데이터에는 영향을 주지 않습니다.`)) return;
+    try {
+      const res = await fetch(`/api/settings/manufacturers?id=${m.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setManufacturers(prev => prev.filter(item => item.id !== m.id));
+        setMessage({ type: 'success', text: `'${m.name}' 제조사가 삭제되었습니다.` });
+      } else {
+        setMessage({ type: 'error', text: data.message || '삭제에 실패했습니다.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '삭제 중 오류가 발생했습니다.' });
+    }
+  };
 
   // organization 탭 진입 시 부서 + 팀 목록 로드
   useEffect(() => {
@@ -228,6 +357,12 @@ function AdminSettingsContent() {
       name: '조직 관리',
       icon: Building,
       description: '부서 및 팀 구조 관리'
+    },
+    {
+      id: 'manufacturers' as const,
+      name: '제조사 관리',
+      icon: Factory,
+      description: '사업장에서 선택 가능한 제조사 목록 관리'
     },
   ];
 
@@ -423,6 +558,138 @@ function AdminSettingsContent() {
             </div>
           )}
 
+
+          {/* 제조사 관리 탭 */}
+          {activeTab === 'manufacturers' && (
+            <div className="p-2 sm:p-6">
+              <div className="max-w-lg">
+                {/* 추가 폼 */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">새 제조사 추가</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newManufacturerName}
+                      onChange={(e) => setNewManufacturerName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddManufacturer()}
+                      placeholder="제조사 이름 입력"
+                      maxLength={100}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddManufacturer}
+                      disabled={isAddingManufacturer || !newManufacturerName.trim()}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      {isAddingManufacturer ? '추가 중...' : '추가'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 제조사 목록 */}
+                {isLoadingManufacturers ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                  </div>
+                ) : manufacturers.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-8">등록된 제조사가 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {manufacturers.map((m) => (
+                      <div
+                        key={m.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                          m.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
+                        }`}
+                      >
+                        <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
+
+                        {editingManufacturer?.id === m.id ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleUpdateManufacturer();
+                                if (e.key === 'Escape') { setEditingManufacturer(null); setEditingName(''); }
+                              }}
+                              autoFocus
+                              maxLength={100}
+                              className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleUpdateManufacturer}
+                              disabled={isSavingManufacturer || !editingName.trim()}
+                              className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                              저장
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingManufacturer(null); setEditingName(''); }}
+                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`flex-1 text-sm font-medium ${m.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                              {m.name}
+                            </span>
+                            {!m.is_active && (
+                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                            )}
+                            {/* 활성화 토글 */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleManufacturerActive(m)}
+                              className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                m.is_active
+                                  ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                  : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                              }`}
+                              title={m.is_active ? '비활성화' : '활성화'}
+                            >
+                              {m.is_active ? '숨기기' : '표시'}
+                            </button>
+                            {/* 이름 편집 */}
+                            <button
+                              type="button"
+                              onClick={() => { setEditingManufacturer(m); setEditingName(m.name); }}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="이름 수정"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            {/* 삭제 */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteManufacturer(m)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-800">
+                    📌 <strong>숨기기</strong>는 사업장 등록 폼의 제조사 선택 목록에서 해당 제조사를 숨깁니다. 이미 등록된 사업장 데이터에는 영향을 주지 않습니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 조직 관리 탭 */}
           {activeTab === 'organization' && (
