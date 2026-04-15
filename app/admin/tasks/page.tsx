@@ -140,7 +140,7 @@ function TaskManagementPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedType, setSelectedType] = useState<TaskType | 'all'>('all')
   const [selectedProgressStatus, setSelectedProgressStatus] = useState<string | 'all'>('all') // 진행구분 필터 (설정 연동)
-  const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]) // 설정 API 순서
+  const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]) // 설정 API 순서 (활성 항목만)
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all')
@@ -387,7 +387,8 @@ function TaskManagementPage() {
       .then(data => {
         if (data.success) {
           setProgressCategoryOrder(
-            (data.data as { name: string; sort_order: number }[])
+            (data.data as { name: string; is_active: boolean; sort_order: number }[])
+              .filter(c => c.is_active)
               .sort((a, b) => a.sort_order - b.sort_order)
               .map(c => c.name)
           )
@@ -874,12 +875,17 @@ function TaskManagementPage() {
     return result
   }, [tasks, calculateDelayStatus])
 
-  // 진행구분 필터 옵션: 설정 API 순서 기준, 실제 업무에 있는 값만
+  // 진행구분 필터 옵션: 설정 API 활성 항목 전체 표시 (순서 유지)
+  // 설정에 없는 레거시 값은 실제 업무에 있을 경우에만 뒤에 추가
   const progressStatusOptions = useMemo(() => {
-    const fromTasks = new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))
-    const ordered = progressCategoryOrder.filter(v => fromTasks.has(v))
-    fromTasks.forEach(v => { if (!progressCategoryOrder.includes(v)) ordered.push(v) })
-    return ordered
+    if (progressCategoryOrder.length > 0) {
+      const fromTasks = new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))
+      const result = [...progressCategoryOrder] // 설정 활성 항목 전체
+      fromTasks.forEach(v => { if (!progressCategoryOrder.includes(v)) result.push(v) }) // 레거시 값 추가
+      return result
+    }
+    // 설정 미로드 시 실제 업무 값만
+    return [...new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))]
   }, [tasks, progressCategoryOrder])
 
   // 진행구분 변경 핸들러 — selectedType도 함께 파생

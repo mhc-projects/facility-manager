@@ -1507,14 +1507,18 @@ function RevenueDashboard() {
     calc.sales_office.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // 진행구분 필터 옵션: settings API 순서 기준, DB 실제 값만 표시
+  // 진행구분 필터 옵션: settings API 활성 항목 전체 표시 (순서 유지)
+  // 설정에 없는 레거시 값은 사업장에 있을 경우에만 뒤에 추가
   const categoryOptions = useMemo(() => {
+    if (progressCategoryOrder.length > 0) {
+      const fromDB = new Set(businesses.map(b => (b.progress_status || '').trim()).filter(Boolean));
+      const result = [...progressCategoryOrder]; // 설정 활성 항목 전체
+      fromDB.forEach(v => { if (!progressCategoryOrder.includes(v)) result.push(v); }); // 레거시 값 추가
+      return result;
+    }
+    // 설정 미로드 시 사업장 값만
     const fromDB = new Set(businesses.map(b => (b.progress_status || '').trim()).filter(Boolean));
-    // settings API 순서 우선, DB에만 있는 값(미등록 레거시)은 뒤에 추가
-    const ordered = progressCategoryOrder.length > 0 ? progressCategoryOrder : [];
-    const result = ordered.filter(v => fromDB.has(v));
-    fromDB.forEach(v => { if (!ordered.includes(v)) result.push(v); });
-    return result;
+    return [...fromDB];
   }, [businesses, progressCategoryOrder]);
 
   // 🎯 PricingData 안정화 (객체 참조 변경 방지)
