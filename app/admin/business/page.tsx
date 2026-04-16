@@ -4516,6 +4516,20 @@ function BusinessManagementPage() {
       }
     },
     {
+      key: 'receipt_date' as string,
+      title: '접수일',
+      width: '70px',
+      render: (item: any) => {
+        const dateStr = item.receipt_date
+        if (!dateStr) return <div className="flex justify-center"><span className="text-[11px] text-gray-400">-</span></div>
+        const d = new Date(dateStr)
+        const yy = d.getFullYear().toString().slice(-2)
+        const mm = (d.getMonth() + 1).toString().padStart(2, '0')
+        const dd = d.getDate().toString().padStart(2, '0')
+        return <div className="flex justify-center"><span className="text-[11px] text-gray-600 font-medium">{`${yy}.${mm}.${dd}`}</span></div>
+      }
+    },
+    {
       key: '담당자명' as string,
       title: '담당자',
       width: '70px',
