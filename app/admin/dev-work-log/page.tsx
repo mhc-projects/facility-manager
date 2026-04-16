@@ -521,7 +521,6 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
   const [newNote, setNewNote] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // item 또는 isNew 변경 시 폼 전체 리셋 (updated_at 포함하여 저장 후 갱신도 반영)
   useEffect(() => {
     setForm(buildForm(item))
     setNewNote('')
@@ -554,70 +553,160 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
     })
   }
 
-  const inputClass =
-    'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white'
-  const labelClass = 'block text-xs font-medium text-gray-500 mb-1'
+  const fieldClass = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white'
+  const sectionLabelClass = 'block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2'
+
+  const TYPE_CHIP: Record<WorkLog['type'], { bg: string; text: string; activeBg: string; activeText: string }> = {
+    feature: { bg: 'bg-gray-100', text: 'text-gray-600', activeBg: 'bg-violet-600', activeText: 'text-white' },
+    bugfix:  { bg: 'bg-gray-100', text: 'text-gray-600', activeBg: 'bg-red-500',    activeText: 'text-white' },
+    infra:   { bg: 'bg-gray-100', text: 'text-gray-600', activeBg: 'bg-slate-600',  activeText: 'text-white' },
+    other:   { bg: 'bg-gray-100', text: 'text-gray-600', activeBg: 'bg-gray-500',   activeText: 'text-white' },
+  }
+
+  const PRIORITY_CHIP: Record<WorkLog['priority'], { activeBg: string; dot: string }> = {
+    high:   { activeBg: 'bg-red-500 text-white shadow-red-200',     dot: 'bg-red-300' },
+    medium: { activeBg: 'bg-amber-400 text-white shadow-amber-200', dot: 'bg-amber-300' },
+    low:    { activeBg: 'bg-emerald-500 text-white shadow-emerald-200', dot: 'bg-emerald-300' },
+  }
+
+  const STATUS_CHIP: Record<WorkLog['status'], { activeBg: string }> = {
+    in_progress: { activeBg: 'bg-blue-500 text-white' },
+    completed:   { activeBg: 'bg-emerald-500 text-white' },
+    on_hold:     { activeBg: 'bg-amber-400 text-white' },
+    cancelled:   { activeBg: 'bg-gray-400 text-white' },
+  }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* 패널 헤더 */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-        <h3 className="text-sm font-semibold text-gray-900">
-          {isNew ? '새 업무 추가' : '업무 상세'}
-        </h3>
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-          <X size={16} className="text-gray-500" />
+    <div className="h-full flex flex-col bg-white">
+      {/* 헤더 */}
+      <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 pt-5 pb-4 flex items-start justify-between flex-shrink-0">
+        <div>
+          <p className="text-indigo-300 text-[10px] font-bold uppercase tracking-widest mb-0.5">
+            {isNew ? 'NEW TASK' : 'TASK DETAIL'}
+          </p>
+          <h3 className="text-lg font-bold text-white leading-tight">
+            {isNew ? '새 업무 추가' : (item?.title || '업무 상세')}
+          </h3>
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-0.5 p-2 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/35 transition-colors flex-shrink-0"
+        >
+          <X size={18} className="text-white" />
         </button>
       </div>
 
       {/* 스크롤 영역 */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-        {/* 업무명 */}
-        <div>
-          <label className={labelClass}>업무명 *</label>
-          <input
-            type="text"
-            value={form.title}
-            onChange={e => set('title', e.target.value)}
-            placeholder="업무명을 입력하세요"
-            className={inputClass}
-          />
-        </div>
+      <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="px-5 py-5 space-y-6">
 
-        {/* 유형 / 우선순위 */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* 업무명 */}
           <div>
-            <label className={labelClass}>유형</label>
-            <select value={form.type} onChange={e => set('type', e.target.value)} className={inputClass}>
-              <option value="feature">기능개발</option>
-              <option value="bugfix">버그수정</option>
-              <option value="infra">인프라</option>
-              <option value="other">기타</option>
-            </select>
+            <label className={sectionLabelClass}>업무명 <span className="text-red-400">*</span></label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={e => set('title', e.target.value)}
+              placeholder="업무명을 입력하세요"
+              className={fieldClass}
+              autoComplete="off"
+            />
           </div>
-          <div>
-            <label className={labelClass}>우선순위</label>
-            <select value={form.priority} onChange={e => set('priority', e.target.value)} className={inputClass}>
-              <option value="high">높음</option>
-              <option value="medium">보통</option>
-              <option value="low">낮음</option>
-            </select>
-          </div>
-        </div>
 
-        {/* 상태 / 진행률 */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* 유형 — 칩 선택 */}
           <div>
-            <label className={labelClass}>상태</label>
-            <select value={form.status} onChange={e => set('status', e.target.value)} className={inputClass}>
-              <option value="in_progress">진행중</option>
-              <option value="completed">완료</option>
-              <option value="on_hold">보류</option>
-              <option value="cancelled">취소</option>
-            </select>
+            <label className={sectionLabelClass}>유형</label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['feature', 'bugfix', 'infra', 'other'] as const).map(t => {
+                const c = TYPE_CHIP[t]
+                const active = form.type === t
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => set('type', t)}
+                    className={`py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                      active ? `${c.activeBg} ${c.activeText} shadow-sm` : `${c.bg} ${c.text} hover:bg-gray-200`
+                    }`}
+                  >
+                    {TYPE_LABELS[t]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+
+          {/* 우선순위 — 칩 선택 */}
           <div>
-            <label className={labelClass}>진행률 ({form.progress_percent}%)</label>
+            <label className={sectionLabelClass}>우선순위</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['high', 'medium', 'low'] as const).map(p => {
+                const c = PRIORITY_CHIP[p]
+                const active = form.priority === p
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => set('priority', p)}
+                    className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm ${
+                      active ? c.activeBg : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? 'bg-white/70' : c.dot}`} />
+                    {PRIORITY_LABELS[p]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 상태 — 칩 선택 */}
+          <div>
+            <label className={sectionLabelClass}>상태</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['in_progress', 'completed', 'on_hold', 'cancelled'] as const).map(s => {
+                const c = STATUS_CHIP[s]
+                const active = form.status === s
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => set('status', s)}
+                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                      active ? c.activeBg + ' shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {STATUS_ICONS[s]}
+                    {STATUS_LABELS[s]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 진행률 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className={sectionLabelClass + ' mb-0'}>진행률</label>
+              <span className="text-sm font-bold text-indigo-600">{form.progress_percent}%</span>
+            </div>
+            {/* 퀵 프리셋 */}
+            <div className="grid grid-cols-5 gap-1 mb-3">
+              {[0, 25, 50, 75, 100].map(pct => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => set('progress_percent', pct)}
+                  className={`py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
+                    form.progress_percent === pct
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
             <input
               type="range"
               min={0}
@@ -625,170 +714,193 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
               step={5}
               value={form.progress_percent}
               onChange={e => set('progress_percent', Number(e.target.value))}
-              className="w-full mt-2 accent-indigo-600"
+              className="w-full accent-indigo-600"
+              style={{ height: '6px' }}
             />
           </div>
-        </div>
 
-        {/* 날짜 */}
-        <div className="grid grid-cols-1 gap-3">
-          <div>
-            <label className={labelClass}>접수일 *</label>
-            <input type="date" value={form.received_date} onChange={e => set('received_date', e.target.value)} className={inputClass} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          {/* 날짜 */}
+          <div className="space-y-3">
             <div>
-              <label className={labelClass}>예상완료일</label>
-              <input type="date" value={form.expected_date} onChange={e => set('expected_date', e.target.value)} className={inputClass} />
+              <label className={sectionLabelClass}>접수일 <span className="text-red-400">*</span></label>
+              <input
+                type="date"
+                value={form.received_date}
+                onChange={e => set('received_date', e.target.value)}
+                className={fieldClass}
+              />
             </div>
-            <div>
-              <label className={labelClass}>실제완료일</label>
-              <input type="date" value={form.completed_date} onChange={e => set('completed_date', e.target.value)} className={inputClass} />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={sectionLabelClass}>예상완료</label>
+                <input
+                  type="date"
+                  value={form.expected_date}
+                  onChange={e => set('expected_date', e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                />
+              </div>
+              <div>
+                <label className={sectionLabelClass}>실제완료</label>
+                <input
+                  type="date"
+                  value={form.completed_date}
+                  onChange={e => set('completed_date', e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 담당자 */}
-        <div>
-          <label className={labelClass}>담당자</label>
-          <select value={form.assignee_id} onChange={e => set('assignee_id', e.target.value)} className={inputClass}>
-            <option value="">미배정</option>
-            {employees.map(emp => (
-              <option key={emp.id} value={emp.id}>{emp.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* 진행 위치 */}
-        <div>
-          <label className={labelClass}>
-            진행 위치
-            <span className="ml-1.5 text-gray-400 font-normal">(파일 경로 · 페이지 · URL)</span>
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none select-none font-mono text-xs">/</span>
-            <input
-              type="text"
-              value={form.target_location}
-              onChange={e => set('target_location', e.target.value)}
-              placeholder="예: app/admin/tasks/page.tsx · /admin/business · components/ui/Modal"
-              className={`${inputClass} pl-5 font-mono text-xs`}
-            />
-          </div>
-          {form.target_location && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {form.target_location.split(/[\n,;]+/).map(p => p.trim()).filter(Boolean).map((p, i) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
-                  {p}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 설명 */}
-        <div>
-          <label className={labelClass}>설명/내용</label>
-          <textarea
-            value={form.description}
-            onChange={e => set('description', e.target.value)}
-            rows={4}
-            placeholder="업무 내용을 입력하세요"
-            className={`${inputClass} resize-none`}
-          />
-        </div>
-
-        {/* 진행 메모 타임라인 (기존 업무만) */}
-        {!isNew && (
+          {/* 담당자 */}
           <div>
-            <label className={labelClass}>진행 메모</label>
+            <label className={sectionLabelClass}>담당자</label>
+            <div className="relative">
+              <select
+                value={form.assignee_id}
+                onChange={e => set('assignee_id', e.target.value)}
+                className={fieldClass + ' appearance-none pr-10'}
+              >
+                <option value="">미배정</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.name}</option>
+                ))}
+              </select>
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <User size={15} />
+              </span>
+            </div>
+          </div>
 
-            {/* 기존 메모 타임라인 */}
-            {notes.length > 0 && (
-              <div className="mb-3 space-y-2">
-                {[...notes].reverse().map((n, i) => (
-                  <div key={i} className="flex gap-2">
-                    <div className="flex flex-col items-center">
-                      <div className="w-2 h-2 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
-                      {i < notes.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
-                    </div>
-                    <div className="flex-1 pb-2">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-medium text-gray-700">{n.author_name}</span>
-                        <span className="text-xs text-gray-400">
-                          {new Date(n.created_at).toLocaleString('ko-KR', {
-                            month: '2-digit', day: '2-digit',
-                            hour: '2-digit', minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">{n.note}</p>
-                    </div>
-                  </div>
+          {/* 진행 위치 */}
+          <div>
+            <label className={sectionLabelClass}>
+              진행 위치
+              <span className="ml-1.5 text-gray-400 font-normal normal-case">(파일·페이지·URL)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none font-mono text-xs select-none">/</span>
+              <input
+                type="text"
+                value={form.target_location}
+                onChange={e => set('target_location', e.target.value)}
+                placeholder="예: app/admin/tasks/page.tsx"
+                className="w-full border border-gray-200 rounded-xl pl-7 pr-4 py-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              />
+            </div>
+            {form.target_location && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {form.target_location.split(/[\n,;]+/).map(p => p.trim()).filter(Boolean).map((p, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-mono border border-indigo-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                    {p}
+                  </span>
                 ))}
               </div>
             )}
-
-            {/* 새 메모 입력 */}
-            <div className="flex gap-2">
-              <textarea
-                value={newNote}
-                onChange={e => setNewNote(e.target.value)}
-                rows={2}
-                placeholder="진행 상황 메모를 추가하세요..."
-                className={`${inputClass} resize-none flex-1`}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && newNote.trim()) {
-                    handleSubmit()
-                  }
-                }}
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={saving || !newNote.trim()}
-                title="메모만 저장 (Cmd+Enter)"
-                className="self-end flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-40 transition-colors flex-shrink-0"
-              >
-                <MessageSquarePlus size={16} />
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Cmd+Enter로 빠른 저장</p>
           </div>
-        )}
+
+          {/* 설명 */}
+          <div>
+            <label className={sectionLabelClass}>설명/내용</label>
+            <textarea
+              value={form.description}
+              onChange={e => set('description', e.target.value)}
+              rows={4}
+              placeholder="업무 내용을 입력하세요"
+              className={fieldClass + ' resize-none'}
+            />
+          </div>
+
+          {/* 진행 메모 타임라인 (기존 업무만) */}
+          {!isNew && (
+            <div>
+              <label className={sectionLabelClass}>진행 메모</label>
+
+              {notes.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {[...notes].reverse().map((n, i) => (
+                    <div key={i} className="flex gap-2">
+                      <div className="flex flex-col items-center">
+                        <div className="w-2 h-2 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
+                        {i < notes.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+                      </div>
+                      <div className="flex-1 pb-2">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-xs font-medium text-gray-700">{n.author_name}</span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(n.created_at).toLocaleString('ko-KR', {
+                              month: '2-digit', day: '2-digit',
+                              hour: '2-digit', minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">{n.note}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <textarea
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  rows={2}
+                  placeholder="진행 상황 메모를 추가하세요..."
+                  className={fieldClass + ' resize-none flex-1'}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && newNote.trim()) {
+                      handleSubmit()
+                    }
+                  }}
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={saving || !newNote.trim()}
+                  title="메모만 저장 (Cmd+Enter)"
+                  className="self-end flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-40 transition-colors flex-shrink-0"
+                >
+                  <MessageSquarePlus size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">Cmd+Enter로 빠른 저장</p>
+            </div>
+          )}
+
+          {/* 하단 여백 (저장 버튼 가림 방지) */}
+          <div className="h-2" />
+        </div>
       </div>
 
-      {/* 액션 버튼 */}
-      <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0 space-y-2">
-        {/* 완료 처리 버튼 */}
+      {/* 액션 버튼 — 항상 화면 하단에 고정 */}
+      <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0 bg-white space-y-2 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
         {!isNew && item?.status !== 'completed' && (
           <button
             onClick={handleComplete}
             disabled={saving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 active:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             <CheckCircle2 size={16} />
             완료 처리
           </button>
         )}
 
-        {/* 저장 버튼 */}
         <button
           onClick={handleSubmit}
           disabled={saving || !form.title.trim()}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-indigo-600 text-white text-base font-bold hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 transition-colors shadow-sm shadow-indigo-200"
         >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Edit3 size={16} />}
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Edit3 size={18} />}
           {isNew ? '업무 추가' : '변경사항 저장'}
         </button>
 
-        {/* 삭제 버튼 */}
         {!isNew && item && (
           <div>
             {!confirmDelete ? (
               <button
                 onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 active:bg-red-100 transition-colors"
               >
                 <Trash2 size={14} />
                 삭제
@@ -798,13 +910,13 @@ function DetailPanel({ item, isNew, employees, onClose, onSave, onDelete, saving
                 <button
                   onClick={() => onDelete(item.id)}
                   disabled={saving}
-                  className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 px-3 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
                   확인 삭제
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
                 >
                   취소
                 </button>
@@ -1094,8 +1206,48 @@ export default function DevWorkLogPage() {
             }
           } : undefined}
         >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white flex-shrink-0">
+          {/* ── 모바일 히어로 헤더 (sm 미만) ── */}
+          <div className="sm:hidden bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 px-5 pt-5 pb-5 flex-shrink-0">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-indigo-300 text-[10px] font-bold uppercase tracking-widest mb-0.5">DEV ONLY</p>
+                <h1 className="text-xl font-bold text-white leading-tight">개발 업무 일지</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setReportOpen(true)}
+                  className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/35 transition-colors"
+                  title="보고서 생성"
+                >
+                  <FileText size={18} className="text-white" />
+                </button>
+                <button
+                  onClick={openNew}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-indigo-600 text-sm font-bold hover:bg-indigo-50 active:bg-indigo-100 transition-colors shadow-sm"
+                >
+                  <Plus size={16} />
+                  추가
+                </button>
+              </div>
+            </div>
+            {/* 통계 카드 */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: '전체', value: stats.total, valueColor: 'text-white' },
+                { label: '진행중', value: stats.in_progress, valueColor: 'text-blue-200' },
+                { label: '완료', value: stats.completed, valueColor: 'text-emerald-300' },
+                { label: '보류', value: stats.on_hold, valueColor: 'text-amber-300' },
+              ].map(s => (
+                <div key={s.label} className="bg-white/10 rounded-xl px-2 py-2.5 text-center">
+                  <p className="text-[10px] text-indigo-200 mb-0.5">{s.label}</p>
+                  <p className={`text-xl font-bold ${s.valueColor}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 데스크탑 헤더 (sm 이상) ── */}
+          <div className="hidden sm:flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-bold text-gray-900">개발 업무 일지</h1>
               <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-xs font-bold tracking-wide">
@@ -1108,20 +1260,20 @@ export default function DevWorkLogPage() {
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <FileText size={15} />
-                <span className="hidden sm:inline">보고서 생성</span>
+                <span>보고서 생성</span>
               </button>
               <button
                 onClick={openNew}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
                 <Plus size={15} />
-                <span className="hidden sm:inline">새 업무 추가</span>
+                <span>새 업무 추가</span>
               </button>
             </div>
           </div>
 
-          {/* 통계 카드 */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 py-4 bg-white border-b border-gray-100 flex-shrink-0">
+          {/* ── 데스크탑 통계 카드 (sm 이상) ── */}
+          <div className="hidden sm:grid grid-cols-4 gap-3 px-6 py-4 bg-white border-b border-gray-100 flex-shrink-0">
             {[
               { label: '전체', value: stats.total, color: 'text-gray-900' },
               { label: '진행중', value: stats.in_progress, color: 'text-blue-600' },
@@ -1135,9 +1287,74 @@ export default function DevWorkLogPage() {
             ))}
           </div>
 
-          {/* 필터 바 */}
-          <div className="flex flex-wrap items-center gap-2 px-6 py-3 bg-white border-b border-gray-100 flex-shrink-0">
-            {/* 검색 */}
+          {/* ── 모바일 필터 바 (sm 미만) ── */}
+          <div className="sm:hidden bg-white border-b border-gray-100 flex-shrink-0">
+            <div className="px-4 pt-3 pb-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="업무명, 담당자 검색"
+                  className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <X size={14} className="text-gray-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide">
+              {(['all', 'in_progress', 'completed', 'on_hold', 'cancelled'] as FilterStatus[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                    filterStatus === s
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {s === 'all' ? '전체' : STATUS_LABELS[s as WorkLog['status']]}
+                </button>
+              ))}
+              <div className="flex-shrink-0 flex items-center gap-1 ml-1 pl-3 border-l border-gray-200">
+                <select
+                  value={filterPeriod}
+                  onChange={e => setFilterPeriod(e.target.value as FilterPeriod)}
+                  className="text-xs text-gray-600 bg-transparent border-0 focus:outline-none"
+                >
+                  <option value="all">전체</option>
+                  <option value="week">이번 주</option>
+                  <option value="month">이번 달</option>
+                </select>
+              </div>
+              <div className="flex-shrink-0 flex items-center gap-1 pl-2 border-l border-gray-200">
+                <ArrowUpDown size={12} className="text-gray-400" />
+                <select
+                  value={sortKey}
+                  onChange={e => setSortKey(e.target.value as SortKey)}
+                  className="text-xs text-gray-600 bg-transparent border-0 focus:outline-none"
+                >
+                  <option value="received">접수일</option>
+                  <option value="completed">완료일</option>
+                  <option value="priority">우선순위</option>
+                </select>
+              </div>
+              <button
+                onClick={loadItems}
+                className="flex-shrink-0 p-1.5 text-gray-400"
+                title="새로고침"
+              >
+                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          </div>
+
+          {/* ── 데스크탑 필터 바 (sm 이상) ── */}
+          <div className="hidden sm:flex flex-wrap items-center gap-2 px-6 py-3 bg-white border-b border-gray-100 flex-shrink-0">
             <div className="relative flex-1 min-w-[160px] max-w-xs">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -1153,8 +1370,6 @@ export default function DevWorkLogPage() {
                 </button>
               )}
             </div>
-
-            {/* 상태 필터 */}
             <div className="flex items-center gap-1">
               <Filter size={13} className="text-gray-400" />
               {(['all', 'in_progress', 'completed', 'on_hold', 'cancelled'] as FilterStatus[]).map(s => (
@@ -1171,8 +1386,6 @@ export default function DevWorkLogPage() {
                 </button>
               ))}
             </div>
-
-            {/* 기간 필터 */}
             <select
               value={filterPeriod}
               onChange={e => setFilterPeriod(e.target.value as FilterPeriod)}
@@ -1182,8 +1395,6 @@ export default function DevWorkLogPage() {
               <option value="week">이번 주</option>
               <option value="month">이번 달</option>
             </select>
-
-            {/* 정렬 */}
             <div className="flex items-center gap-1 ml-auto">
               <ArrowUpDown size={13} className="text-gray-400" />
               <select
@@ -1205,7 +1416,7 @@ export default function DevWorkLogPage() {
             </div>
           </div>
 
-          {/* 테이블 */}
+          {/* 리스트 영역 */}
           <div className="flex-1 overflow-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48">
@@ -1217,94 +1428,138 @@ export default function DevWorkLogPage() {
                   <FileText size={20} className="text-gray-400" />
                 </div>
                 <p className="text-sm text-gray-500">등록된 업무가 없습니다</p>
-                <button
-                  onClick={openNew}
-                  className="text-sm text-indigo-600 hover:underline"
-                >
+                <button onClick={openNew} className="text-sm text-indigo-600 hover:underline">
                   첫 번째 업무를 추가하세요
                 </button>
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-50 z-10">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-10">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">업무명</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28 hidden md:table-cell">유형</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-20 hidden lg:table-cell">우선순위</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden md:table-cell">접수일</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden xl:table-cell">예상완료</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden xl:table-cell">실제완료</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden lg:table-cell">담당자</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28 hidden md:table-cell">진행률</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24">상태</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <>
+                {/* ── 모바일 카드 목록 (sm 미만) ── */}
+                <div className="sm:hidden divide-y divide-gray-100 pb-20">
                   {items.map((item, i) => (
-                    <tr
+                    <div
                       key={item.id}
                       onClick={() => openDetail(item)}
-                      className={`group border-b border-gray-50 cursor-pointer hover:bg-gray-50 hover:shadow-sm transition-all ${
-                        selectedItem?.id === item.id ? 'border-l-4 border-l-indigo-500 bg-indigo-50/30' : 'border-l-4 border-l-transparent'
+                      className={`px-4 py-4 cursor-pointer active:bg-gray-50 transition-colors ${
+                        selectedItem?.id === item.id
+                          ? 'border-l-[3px] border-l-indigo-500 bg-indigo-50/40 pl-[13px]'
+                          : 'border-l-[3px] border-l-transparent'
                       }`}
                     >
-                      <td className="px-4 py-3 text-xs text-gray-400">{i + 1}</td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900 group-hover:text-indigo-700 transition-colors line-clamp-1">
-                          {item.title}
-                        </span>
-                        {item.target_location && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
-                            <span className="text-xs text-indigo-500 font-mono truncate max-w-[220px]">
-                              {item.target_location.split(/[\n,;]+/)[0].trim()}
-                            </span>
-                          </div>
-                        )}
-                        {/* 모바일: 부가 정보 */}
-                        <div className="flex items-center gap-2 mt-1 md:hidden">
-                          <TypeBadge type={item.type} />
-                          <span className="text-xs text-gray-400">{formatDate(item.received_date)}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
+                      {/* 유형 + 우선순위 + 날짜 */}
+                      <div className="flex items-center gap-1.5 mb-1.5">
                         <TypeBadge type={item.type} />
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
                         <PriorityDot priority={item.priority} />
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-600 hidden md:table-cell">
-                        {formatDate(item.received_date)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-600 hidden xl:table-cell">
-                        {formatDate(item.expected_date)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-600 hidden xl:table-cell">
-                        {formatDate(item.completed_date)}
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {item.assignee_name ? (
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                              {item.assignee_name[0]}
-                            </div>
-                            <span className="text-xs text-gray-700">{item.assignee_name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">미배정</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <ProgressBar percent={item.progress_percent} />
-                      </td>
-                      <td className="px-4 py-3">
+                        <span className="text-xs text-gray-400 ml-auto">{formatDate(item.received_date)}</span>
+                      </div>
+                      {/* 제목 + 상태 */}
+                      <div className="flex items-start gap-2 mb-1.5">
+                        <p className="flex-1 text-sm font-semibold text-gray-900 leading-snug line-clamp-2">
+                          {item.title}
+                        </p>
                         <StatusBadge status={item.status} />
-                      </td>
-                    </tr>
+                      </div>
+                      {/* 파일 위치 */}
+                      {item.target_location && (
+                        <div className="flex items-center gap-1 mb-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
+                          <span className="text-xs text-indigo-500 font-mono truncate">
+                            {item.target_location.split(/[\n,;]+/)[0].trim()}
+                          </span>
+                        </div>
+                      )}
+                      {/* 진행률 */}
+                      <ProgressBar percent={item.progress_percent} />
+                      {/* 담당자 */}
+                      {item.assignee_name && (
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700 flex-shrink-0">
+                            {item.assignee_name[0]}
+                          </div>
+                          <span className="text-xs text-gray-500">{item.assignee_name}</span>
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+
+                {/* ── 데스크탑 테이블 (sm 이상) ── */}
+                <table className="hidden sm:table w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-10">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">업무명</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28 hidden md:table-cell">유형</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-20 hidden lg:table-cell">우선순위</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden md:table-cell">접수일</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden xl:table-cell">예상완료</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden xl:table-cell">실제완료</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24 hidden lg:table-cell">담당자</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28 hidden md:table-cell">진행률</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, i) => (
+                      <tr
+                        key={item.id}
+                        onClick={() => openDetail(item)}
+                        className={`group border-b border-gray-50 cursor-pointer hover:bg-gray-50 hover:shadow-sm transition-all ${
+                          selectedItem?.id === item.id ? 'border-l-4 border-l-indigo-500 bg-indigo-50/30' : 'border-l-4 border-l-transparent'
+                        }`}
+                      >
+                        <td className="px-4 py-3 text-xs text-gray-400">{i + 1}</td>
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-gray-900 group-hover:text-indigo-700 transition-colors line-clamp-1">
+                            {item.title}
+                          </span>
+                          {item.target_location && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
+                              <span className="text-xs text-indigo-500 font-mono truncate max-w-[220px]">
+                                {item.target_location.split(/[\n,;]+/)[0].trim()}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <TypeBadge type={item.type} />
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <PriorityDot priority={item.priority} />
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 hidden md:table-cell">
+                          {formatDate(item.received_date)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 hidden xl:table-cell">
+                          {formatDate(item.expected_date)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 hidden xl:table-cell">
+                          {formatDate(item.completed_date)}
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {item.assignee_name ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                                {item.assignee_name[0]}
+                              </div>
+                              <span className="text-xs text-gray-700">{item.assignee_name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">미배정</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <ProgressBar percent={item.progress_percent} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={item.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             )}
           </div>
 
@@ -1317,12 +1572,21 @@ export default function DevWorkLogPage() {
               </p>
             </div>
           )}
+
+          {/* 모바일 FAB — 새 업무 추가 */}
+          <button
+            onClick={openNew}
+            className="sm:hidden fixed bottom-6 right-5 z-40 w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-300 flex items-center justify-center hover:bg-indigo-700 active:scale-95 transition-all"
+            aria-label="새 업무 추가"
+          >
+            <Plus size={24} />
+          </button>
         </div>
 
-        {/* 슬라이드 패널 */}
+        {/* 데스크탑 슬라이드 패널 (sm 이상) */}
         <div
-          className={`flex-shrink-0 border-l border-gray-200 bg-white transition-all duration-300 overflow-hidden ${
-            panelOpen ? 'w-full sm:w-80 lg:w-96' : 'w-0'
+          className={`hidden sm:block flex-shrink-0 border-l border-gray-200 bg-white transition-all duration-300 overflow-hidden ${
+            panelOpen ? 'sm:w-80 lg:w-96' : 'w-0'
           }`}
           style={{ maxHeight: '100%' }}
         >
@@ -1331,13 +1595,28 @@ export default function DevWorkLogPage() {
               item={selectedItem}
               isNew={isNew}
               employees={employees}
-              onClose={() => { setPanelOpen(false); setSelectedItem(null) }}
+              onClose={() => { setPanelOpen(false); setSelectedItem(null); setIsNew(false) }}
               onSave={handleSave}
               onDelete={handleDelete}
               saving={saving}
             />
           )}
         </div>
+
+        {/* 모바일 풀스크린 오버레이 (sm 미만) */}
+        {panelOpen && (
+          <div className="sm:hidden fixed inset-0 z-50 bg-white flex flex-col animate-slide-up">
+            <DetailPanel
+              item={selectedItem}
+              isNew={isNew}
+              employees={employees}
+              onClose={() => { setPanelOpen(false); setSelectedItem(null); setIsNew(false) }}
+              onSave={handleSave}
+              onDelete={handleDelete}
+              saving={saving}
+            />
+          </div>
+        )}
       </div>
 
       {/* 보고서 모달 */}
