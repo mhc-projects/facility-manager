@@ -155,6 +155,7 @@ function TaskManagementPage() {
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [showCompletedTasks, setShowCompletedTasks] = useState(false) // 🆕 완료된 업무 표시 여부
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createProgressStatus, setCreateProgressStatus] = useState('') // 등록 모달 진행구분 표시용
   const [showEditModal, setShowEditModal] = useState(false)
   const [showEditHistory, setShowEditHistory] = useState(false)
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
@@ -786,11 +787,17 @@ function TaskManagementPage() {
       setShowEditBusinessDropdown(false)
       setEditSelectedBusinessIndex(-1)
     } else {
+      setCreateProgressStatus(business.progress_status || '') // 사업장 진행구분 자동 표시
       setCreateTaskForm(prev => ({
         ...prev,
         businessName: business.name,
         businessId: business.id,
-        type: uiType
+        type: uiType,
+        // 타입에 맞게 초기 단계도 재설정
+        status: uiType === 'self' ? 'customer_contact' :
+                uiType === 'subsidy' ? 'customer_contact' :
+                uiType === 'dealer' ? 'dealer_order_received' :
+                uiType === 'as' ? 'as_customer_contact' : 'etc_status'
       }))
       setBusinessSearchTerm(business.name)
       setShowBusinessDropdown(false)
@@ -887,6 +894,33 @@ function TaskManagementPage() {
     // 설정 미로드 시 실제 업무 값만
     return [...new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))]
   }, [tasks, progressCategoryOrder])
+
+  // 새 업무 등록 모달 진행구분 변경 핸들러
+  const handleCreateProgressStatusChange = useCallback((value: string) => {
+    const deriveType = (ps: string): TaskType => {
+      if (ps.includes('보조금')) return 'subsidy'
+      if (ps.includes('자비')) return 'self'
+      if (ps === 'AS') return 'as'
+      if (ps.includes('외주')) return 'outsourcing'
+      if (ps.includes('대리점')) return 'dealer'
+      return 'etc'
+    }
+    const derivedType = deriveType(value)
+    setCreateProgressStatus(value)
+    setCreateTaskForm(prev => ({
+      ...prev,
+      type: derivedType,
+      status: derivedType === 'self' ? 'customer_contact' :
+              derivedType === 'subsidy' ? 'customer_contact' :
+              derivedType === 'dealer' ? 'dealer_order_received' :
+              derivedType === 'as' ? 'as_customer_contact' :
+              'etc_status'
+    }))
+    // 진행구분 변경 시 사업장 검색어 초기화 (기타 선택 시 사업장 불필요)
+    if (derivedType === 'etc') {
+      setBusinessSearchTerm('')
+    }
+  }, [])
 
   // 진행구분 변경 핸들러 — selectedType도 함께 파생
   const handleProgressStatusChange = useCallback((value: string) => {
@@ -1366,7 +1400,12 @@ function TaskManagementPage() {
   // 새 업무 생성 핸들러
   const handleCreateTask = useCallback(async () => {
     try {
-      // 필수 필드 검증 (기타 타입은 사업장 선택 불필요)
+      // 필수 필드 검증
+      if (!createProgressStatus) {
+        alert('진행구분을 선택해주세요.')
+        return
+      }
+      // 기타 타입 외에는 사업장 선택 필요
       if (createTaskForm.type !== 'etc' && !businessSearchTerm.trim()) {
         alert('사업장을 선택해주세요.')
         return
@@ -1489,11 +1528,12 @@ function TaskManagementPage() {
       console.log('📡 [EVENT] 업무 생성 이벤트 발송:', result.data.task.business_name)
 
       // 폼 초기화
+      setCreateProgressStatus('')
       setCreateTaskForm({
         title: '',
         businessName: '',
-        type: 'self',
-        status: 'customer_contact',
+        type: 'etc',
+        status: 'etc_status',
         priority: 'medium',
         assignee: '',
         assignees: [],
@@ -1542,11 +1582,12 @@ function TaskManagementPage() {
   // 모달 열기 핸들러
   const handleOpenCreateModal = useCallback(() => {
     const today = new Date().toISOString().split('T')[0]
+    setCreateProgressStatus('') // 진행구분 초기화 (미선택 상태)
     setCreateTaskForm({
       title: '',
       businessName: '',
-      type: 'self',
-      status: 'customer_contact',
+      type: 'etc', // 진행구분 미선택 시 기본값
+      status: 'etc_status',
       priority: 'medium',
       assignee: '',
       assignees: [],
@@ -2575,11 +2616,7 @@ function TaskManagementPage() {
                       ? 'bg-gray-100 text-gray-800'
                       : 'bg-orange-100 text-orange-800'
                   }`}>
-                    {createTaskForm.type === 'self' ? '자비' :
-                     createTaskForm.type === 'subsidy' ? '보조금' :
-                     createTaskForm.type === 'dealer' ? '대리점' :
-                     createTaskForm.type === 'outsourcing' ? '외주설치' :
-                     createTaskForm.type === 'etc' ? '기타' : 'AS'}
+                    {createProgressStatus || '진행구분 미선택'}
                   </span>
 
                   {/* 액션 버튼들 */}
@@ -2614,11 +2651,7 @@ function TaskManagementPage() {
                   </div>
                   <div>
                     <p className="text-xs sm:text-xs font-medium text-gray-900 truncate">
-                      {createTaskForm.type === 'self' ? '자비' :
-                       createTaskForm.type === 'subsidy' ? '보조금' :
-                       createTaskForm.type === 'dealer' ? '대리점' :
-                       createTaskForm.type === 'outsourcing' ? '외주설치' :
-                       createTaskForm.type === 'etc' ? '기타' : 'AS'}
+                      {createProgressStatus || '미선택'}
                     </p>
                   </div>
                 </div>
@@ -2703,19 +2736,23 @@ function TaskManagementPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 업무 타입 */}
+                  {/* 진행구분 */}
                   <div>
-                    <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">업무 타입</label>
+                    <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">
+                      진행구분 <span className="text-red-500">*</span>
+                    </label>
                     <select
-                      value={createTaskForm.type}
-                      onChange={(e) => setCreateTaskForm(prev => ({ ...prev, type: e.target.value as TaskType }))}
+                      value={createProgressStatus}
+                      onChange={(e) => handleCreateProgressStatusChange(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
                     >
-                      <option value="self">자비</option>
-                      <option value="subsidy">보조금</option>
-                      <option value="dealer">대리점</option>
-                      <option value="outsourcing">외주설치</option>
-                      <option value="etc">기타</option>
+                      <option value="" disabled>진행구분 선택</option>
+                      {progressCategoryOrder.map(ps => (
+                        <option key={ps} value={ps}>{ps}</option>
+                      ))}
+                      {!progressCategoryOrder.includes('기타') && (
+                        <option value="기타">기타 (사업장 없음)</option>
+                      )}
                     </select>
                   </div>
 
