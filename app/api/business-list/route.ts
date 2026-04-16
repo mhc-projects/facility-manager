@@ -28,24 +28,31 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       console.log('🏢 [BUSINESS-LIST] 전체 사업장 목록 조회 (includeAll=true)');
 
       // Direct PostgreSQL로 전체 조회 (LIMIT 없음)
+      // business_photo_categories의 최신 데이터를 우선 사용하고, 없으면 business_info 컬럼 사용
       const allBusinesses = await queryAll(
         `SELECT
-          id,
-          business_name,
-          local_government,
-          address,
-          business_registration_number,
-          presurvey_inspector_name,
-          presurvey_inspector_date,
-          postinstall_installer_name,
-          postinstall_installer_date,
-          aftersales_technician_name,
-          aftersales_technician_date
-        FROM business_info
-        WHERE is_active = $1
-          AND is_deleted = $2
-          AND business_name IS NOT NULL
-        ORDER BY updated_at DESC`,
+          bi.id,
+          bi.business_name,
+          bi.local_government,
+          bi.address,
+          bi.business_registration_number,
+          COALESCE(bpc_pre.inspector_name, bi.presurvey_inspector_name) AS presurvey_inspector_name,
+          COALESCE(bpc_pre.inspector_date, bi.presurvey_inspector_date) AS presurvey_inspector_date,
+          COALESCE(bpc_post.inspector_name, bi.postinstall_installer_name) AS postinstall_installer_name,
+          COALESCE(bpc_post.inspector_date, bi.postinstall_installer_date) AS postinstall_installer_date,
+          COALESCE(bpc_as.inspector_name, bi.aftersales_technician_name) AS aftersales_technician_name,
+          COALESCE(bpc_as.inspector_date, bi.aftersales_technician_date) AS aftersales_technician_date
+        FROM business_info bi
+        LEFT JOIN business_photo_categories bpc_pre
+          ON bpc_pre.business_id = bi.id AND bpc_pre.category_key = 'presurvey'
+        LEFT JOIN business_photo_categories bpc_post
+          ON bpc_post.business_id = bi.id AND bpc_post.category_key = 'postinstall'
+        LEFT JOIN business_photo_categories bpc_as
+          ON bpc_as.business_id = bi.id AND bpc_as.category_key = 'aftersales'
+        WHERE bi.is_active = $1
+          AND bi.is_deleted = $2
+          AND bi.business_name IS NOT NULL
+        ORDER BY bi.updated_at DESC`,
         [true, false]
       )
 
@@ -154,21 +161,27 @@ export const GET = withApiHandler(async (request: NextRequest) => {
     try {
       businessWithPermits = await queryAll(
         `SELECT
-          id,
-          business_name,
-          address,
-          presurvey_inspector_name,
-          presurvey_inspector_date,
-          postinstall_installer_name,
-          postinstall_installer_date,
-          aftersales_technician_name,
-          aftersales_technician_date
-        FROM business_info
-        WHERE id = ANY($1)
-          AND is_active = true
-          AND is_deleted = false
-          AND business_name IS NOT NULL
-        ORDER BY updated_at DESC`,
+          bi.id,
+          bi.business_name,
+          bi.address,
+          COALESCE(bpc_pre.inspector_name, bi.presurvey_inspector_name) AS presurvey_inspector_name,
+          COALESCE(bpc_pre.inspector_date, bi.presurvey_inspector_date) AS presurvey_inspector_date,
+          COALESCE(bpc_post.inspector_name, bi.postinstall_installer_name) AS postinstall_installer_name,
+          COALESCE(bpc_post.inspector_date, bi.postinstall_installer_date) AS postinstall_installer_date,
+          COALESCE(bpc_as.inspector_name, bi.aftersales_technician_name) AS aftersales_technician_name,
+          COALESCE(bpc_as.inspector_date, bi.aftersales_technician_date) AS aftersales_technician_date
+        FROM business_info bi
+        LEFT JOIN business_photo_categories bpc_pre
+          ON bpc_pre.business_id = bi.id AND bpc_pre.category_key = 'presurvey'
+        LEFT JOIN business_photo_categories bpc_post
+          ON bpc_post.business_id = bi.id AND bpc_post.category_key = 'postinstall'
+        LEFT JOIN business_photo_categories bpc_as
+          ON bpc_as.business_id = bi.id AND bpc_as.category_key = 'aftersales'
+        WHERE bi.id = ANY($1)
+          AND bi.is_active = true
+          AND bi.is_deleted = false
+          AND bi.business_name IS NOT NULL
+        ORDER BY bi.updated_at DESC`,
         [businessIds]
       );
     } catch (error) {
