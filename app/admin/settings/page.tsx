@@ -411,6 +411,41 @@ function AdminSettingsContent() {
     }
   };
 
+  // ─────────── 제조사 순서 변경 핸들러 ───────────
+
+  const handleReorderManufacturer = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= manufacturers.length) return;
+
+    const current = manufacturers[index];
+    const target = manufacturers[targetIndex];
+
+    // 로컬 상태 즉시 업데이트 (optimistic)
+    const newList = [...manufacturers];
+    newList[index] = { ...target, sort_order: current.sort_order };
+    newList[targetIndex] = { ...current, sort_order: target.sort_order };
+    setManufacturers(newList);
+
+    try {
+      await Promise.all([
+        fetch('/api/settings/manufacturers', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: current.id, sort_order: target.sort_order }),
+        }),
+        fetch('/api/settings/manufacturers', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: target.id, sort_order: current.sort_order }),
+        }),
+      ]);
+    } catch {
+      // 실패 시 원래 순서로 복구
+      setManufacturers(manufacturers);
+      setMessage({ type: 'error', text: '순서 변경 중 오류가 발생했습니다.' });
+    }
+  };
+
   // ─────────── 제조사 삭제 핸들러 ───────────
 
   const handleDeleteManufacturer = async (m: Manufacturer) => {
@@ -822,14 +857,30 @@ function AdminSettingsContent() {
                   <p className="text-sm text-gray-500 text-center py-8">등록된 제조사가 없습니다.</p>
                 ) : (
                   <div className="space-y-2">
-                    {manufacturers.map((m) => (
+                    {manufacturers.map((m, idx) => (
                       <div
                         key={m.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                           m.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
                         }`}
                       >
-                        <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                        {/* 순서 버튼 */}
+                        <div className="flex flex-col gap-0.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleReorderManufacturer(idx, 'up')}
+                            disabled={idx === 0}
+                            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            title="위로"
+                          ><ArrowUp className="w-3 h-3" /></button>
+                          <button
+                            type="button"
+                            onClick={() => handleReorderManufacturer(idx, 'down')}
+                            disabled={idx === manufacturers.length - 1}
+                            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            title="아래로"
+                          ><ArrowDown className="w-3 h-3" /></button>
+                        </div>
 
                         {editingManufacturer?.id === m.id ? (
                           <>
