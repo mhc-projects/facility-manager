@@ -100,7 +100,7 @@ export default function TiptapEditor({
         },
       }),
       Table.configure({
-        resizable: false,
+        resizable: true,
         HTMLAttributes: {
           class: 'tiptap-table',
         },

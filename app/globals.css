@@ -650,17 +650,36 @@ input[type="date"]:focus {
 }
 
 /* Tiptap Table Styles */
-.tiptap-editor-content table.tiptap-table,
+.tiptap-editor-content table,
 .tiptap-readonly table {
   border-collapse: collapse;
   width: 100%;
   margin: 0.75em 0;
   table-layout: fixed;
-  overflow: hidden;
 }
 
-.tiptap-editor-content table.tiptap-table td,
-.tiptap-editor-content table.tiptap-table th,
+/* Column resize handle */
+.column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #3b82f6;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.resize-cursor {
+  cursor: col-resize;
+}
+
+.tiptap-editor-content table td,
+.tiptap-editor-content table th,
 .tiptap-readonly table td,
 .tiptap-readonly table th {
   border: 1px solid #d1d5db;
@@ -670,14 +689,14 @@ input[type="date"]:focus {
   min-width: 60px;
 }
 
-.tiptap-editor-content table.tiptap-table th,
+.tiptap-editor-content table th,
 .tiptap-readonly table th {
   background-color: #f3f4f6;
   font-weight: 600;
 }
 
 /* Selected cell highlight */
-.tiptap-editor-content table.tiptap-table .selectedCell::after {
+.tiptap-editor-content table .selectedCell::after {
   content: '';
   position: absolute;
   top: 0;
