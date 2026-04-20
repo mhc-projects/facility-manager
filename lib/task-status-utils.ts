@@ -30,8 +30,10 @@ export const TASK_STATUS_KR: { [key: string]: string } = {
   'self_product_order': '제품 발주',
   'self_product_shipment': '제품 출고',
   'self_installation_schedule': '설치예정',
-  'self_installation': '설치 완료',
+  'self_installation': '설치완료',
+  'self_installation_doc_needed': '설치완료(준공서작성필요)',
   'self_completion_document': '준공서류 작성필요',
+  'self_completion_doc_done': '준공서류 작성완료(입금안내)',
   'self_balance_payment': '잔금 입금',
   'self_document_complete': '서류 발송 완료',
 
@@ -224,9 +226,11 @@ export function getStatusProgress(status: string): number {
     'self_product_order': 55,
     'self_product_shipment': 65,
     'self_installation_schedule': 75,
-    'self_installation': 80,
+    'self_installation': 78,
+    'self_installation_doc_needed': 83,
     'self_completion_document': 87,
-    'self_balance_payment': 93,
+    'self_completion_doc_done': 91,
+    'self_balance_payment': 95,
     'self_document_complete': 100,
 
     // 레거시 호환성
@@ -279,7 +283,9 @@ export function getStatusColor(status: string): string {
     'self_product_shipment': 'bg-cyan-100 text-cyan-800',
     'self_installation_schedule': 'bg-teal-100 text-teal-800',
     'self_installation': 'bg-green-100 text-green-800',
-    'self_completion_document': 'bg-amber-100 text-amber-800',
+    'self_installation_doc_needed': 'bg-amber-100 text-amber-800',
+    'self_completion_document': 'bg-orange-100 text-orange-800',
+    'self_completion_doc_done': 'bg-lime-100 text-lime-800',
     'self_balance_payment': 'bg-emerald-100 text-emerald-800',
     'self_document_complete': 'bg-green-200 text-green-900',
 
