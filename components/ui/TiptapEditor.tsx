@@ -84,9 +84,11 @@ export default function TiptapEditor({
   onSubmitShortcut,
 }: TiptapEditorProps) {
   // ref 패턴: 최신 콜백을 ref에 저장하여 editor 이벤트 핸들러 재등록 없이 항상 최신 콜백 호출
+  const onChangeRef = useRef<(html: string) => void>(onChange)
   const onFocusRef = useRef<(() => void) | undefined>(onFocus)
   const onBlurRef = useRef<(() => void) | undefined>(onBlur)
   const onSubmitShortcutRef = useRef<(() => void) | undefined>(onSubmitShortcut)
+  useEffect(() => { onChangeRef.current = onChange }, [onChange])
   useEffect(() => { onFocusRef.current = onFocus }, [onFocus])
   useEffect(() => { onBlurRef.current = onBlur }, [onBlur])
   useEffect(() => { onSubmitShortcutRef.current = onSubmitShortcut }, [onSubmitShortcut])
@@ -121,9 +123,9 @@ export default function TiptapEditor({
       const html = editor.getHTML()
       // Tiptap returns <p></p> for empty content; normalize to empty string
       if (html === '<p></p>') {
-        onChange('')
+        onChangeRef.current('')
       } else {
-        onChange(html)
+        onChangeRef.current(html)
       }
     },
     onFocus: () => {
