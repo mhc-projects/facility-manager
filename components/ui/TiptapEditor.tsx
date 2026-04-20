@@ -157,13 +157,15 @@ export default function TiptapEditor({
   }, [editor, disabled])
 
   // Sync content from outside when it changes (e.g., form reset)
+  // emitUpdate: false → onUpdate를 트리거하지 않음.
+  // resizable:true 일 때 editor.getHTML()이 colgroup을 포함해 저장값과 달라지는데,
+  // setContent가 onUpdate를 emit하면 onChange → setAgenda 루프가 발생해 사용자 변경값이 덮어써짐.
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      // Only update if the external content is genuinely different
       const currentHtml = editor.getHTML()
       const normalized = currentHtml === '<p></p>' ? '' : currentHtml
       if (content !== normalized) {
-        editor.commands.setContent(content || '')
+        editor.commands.setContent(content || '', false)
       }
     }
   }, [content, editor])
