@@ -752,6 +752,13 @@ input[type="date"]:focus {
   margin: 0;
 }
 
+/* dangerouslySetInnerHTML 로 직접 렌더링될 때(ProseMirror 래퍼 없음)도 빈 단락이
+   높이를 가지도록 보정. Tiptap 에디터 내부에서는 한 줄 비움을 `<p></p>` 로 저장하지만
+   빈 p는 기본적으로 높이 0이라 상세 페이지에서 빈 줄이 사라져 보인다. */
+.tiptap-readonly p:empty::before {
+  content: "\00a0";
+}
+
 /* Presentation mode overrides (dark background) */
 .tiptap-presentation table {
   border-color: rgba(255, 255, 255, 0.2);

@@ -18,6 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { MeetingMinute, AgendaItem, BusinessIssue } from '@/types/meeting-minutes'
+import { sanitizeLegacyEscapedHtml } from '@/lib/rich-text'
 
 // ─────────────────────────────────────────────
 // 슬라이드 타입
@@ -260,16 +261,20 @@ function SlideAgenda({ slide }: { slide: Extract<Slide, { type: 'agenda' }> }) {
 
       {/* 설명 */}
       <div className="flex-1 overflow-auto">
-        {item.description && /<[a-z][\s\S]*>/i.test(item.description) ? (
-          <div
-            className="tiptap-readonly tiptap-presentation text-slate-200 text-lg leading-relaxed mb-6"
-            dangerouslySetInnerHTML={{ __html: item.description }}
-          />
-        ) : (
-          <p className="text-slate-200 text-lg leading-relaxed whitespace-pre-wrap mb-6">
-            {item.description}
-          </p>
-        )}
+        {(() => {
+          if (!item.description) return null
+          const desc = sanitizeLegacyEscapedHtml(item.description)
+          return /<[a-z][\s\S]*>/i.test(desc) ? (
+            <div
+              className="tiptap-readonly tiptap-presentation text-slate-200 text-lg leading-relaxed mb-6"
+              dangerouslySetInnerHTML={{ __html: desc }}
+            />
+          ) : (
+            <p className="text-slate-200 text-lg leading-relaxed whitespace-pre-wrap mb-6">
+              {desc}
+            </p>
+          )
+        })()}
 
         {/* 메타 정보 */}
         <div className="flex flex-wrap gap-4 mb-6">
@@ -426,7 +431,7 @@ function SlideBusinessIssues({ minute }: { minute: MeetingMinute }) {
                   )
                 }
               </div>
-              <p className={`text-sm leading-relaxed ${issue.is_completed ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
+              <p className={`text-sm leading-relaxed whitespace-pre-wrap ${issue.is_completed ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
                 {issue.issue_description}
               </p>
             </div>

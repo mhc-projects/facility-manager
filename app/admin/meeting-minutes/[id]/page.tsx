@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { MeetingMinute, ActionItem } from '@/types/meeting-minutes'
 import PresentationMode from '@/components/meeting-minutes/PresentationMode'
+import { sanitizeLegacyEscapedHtml } from '@/lib/rich-text'
 
 export default function MeetingMinuteDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -43,6 +44,16 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
       .catch(() => {})
     loadMeetingMinute()
   }, [updated])  // updated 파라미터 변경 시 재실행
+
+  // 브라우저 뒤로가기/앞으로가기로 상세 페이지에 복귀했을 때 최신 데이터 재로드
+  // (Next.js Router Cache 때문에 URL이 동일하면 useEffect가 재발동되지 않을 수 있음)
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) loadMeetingMinute()
+    }
+    window.addEventListener('pageshow', handlePageShow)
+    return () => window.removeEventListener('pageshow', handlePageShow)
+  }, [])
 
   const loadMeetingMinute = async () => {
     try {
@@ -326,14 +337,20 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                             </div>
                             <div className="flex-1">
                               <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                              {item.description && /<[a-z][\s\S]*>/i.test(item.description) ? (
-                                <div
-                                  className="tiptap-readonly text-sm text-gray-600 mb-2"
-                                  dangerouslySetInnerHTML={{ __html: item.description }}
-                                />
-                              ) : (
-                                <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{item.description}</p>
-                              )}
+                              {(() => {
+                                if (!item.description) return null
+                                // 레거시 버그: Tiptap 에디터에 HTML 텍스트를 plain-text paste 한 경우
+                                // `<p>&lt;p&gt;...&lt;/p&gt;</p>` 형태로 저장된 데이터가 있음. 디코딩해 정상 HTML로 복원.
+                                const desc = sanitizeLegacyEscapedHtml(item.description)
+                                return /<[a-z][\s\S]*>/i.test(desc) ? (
+                                  <div
+                                    className="tiptap-readonly text-sm text-gray-600 mb-2"
+                                    dangerouslySetInnerHTML={{ __html: desc }}
+                                  />
+                                ) : (
+                                  <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{desc}</p>
+                                )
+                              })()}
                               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                                 {/* 다중 담당자 우선, 없으면 단일 담당자 폴백 */}
                                 {(item.assignees && item.assignees.length > 0) ? (
@@ -404,7 +421,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
         {minute.content.summary && (
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">회의 요약</h2>
-            <div className="prose max-w-none text-gray-700">
+            <div className="prose max-w-none text-gray-700 whitespace-pre-wrap">
               {minute.content.summary}
             </div>
           </div>
@@ -651,7 +668,7 @@ function BusinessIssueCard({ issue, meetingId, onToggle }: BusinessIssueCardProp
             <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">완료</span>
           )}
         </div>
-        <div className={`font-medium mb-2 ${issue.is_completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+        <div className={`font-medium mb-2 whitespace-pre-wrap ${issue.is_completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
           {issue.issue_description}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">

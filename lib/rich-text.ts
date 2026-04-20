@@ -40,13 +40,33 @@ export function plainTextToHtml(text: string): string {
 }
 
 /**
+ * 레거시 데이터에서 HTML 태그가 entity로 이스케이프된 채 저장된 경우 디코딩한다.
+ * Tiptap 에디터에 HTML 텍스트를 plain-text paste 할 때 `<`, `>` 가 자동으로
+ * `&lt;`, `&gt;` 로 이스케이프되어 저장되는 케이스가 실제로 발견되었음.
+ * (예: `<p>&lt;p&gt;abc&lt;/p&gt;</p>` 형태의 이중 래핑)
+ */
+export function sanitizeLegacyEscapedHtml(value: string): string {
+  // 태그 모양을 가진 HTML entity(`&lt;a`, `&lt;/` 등)가 있을 때만 디코딩.
+  // 단순히 `&lt;` 만 있는 경우(의도적인 escape)는 건드리지 않는다.
+  if (!/&lt;\/?[a-zA-Z]/.test(value)) return value
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+/**
  * Tiptap 에디터에 주입할 content 를 정규화한다.
  * - 이미 HTML이면 그대로 반환.
  * - plain text(레거시 데이터)이면 `<p>` 단락 HTML 로 변환.
+ * - HTML entity로 이스케이프된 태그가 포함되면 디코딩.
  * - 빈 값은 빈 문자열 반환.
  */
 export function normalizeTiptapContent(value: string | null | undefined): string {
   if (!value) return ''
-  if (isHtmlContent(value)) return value
-  return plainTextToHtml(value)
+  const unescaped = sanitizeLegacyEscapedHtml(value)
+  if (isHtmlContent(unescaped)) return unescaped
+  return plainTextToHtml(unescaped)
 }

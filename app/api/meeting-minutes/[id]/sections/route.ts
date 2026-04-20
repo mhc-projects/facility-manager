@@ -207,6 +207,108 @@ export async function PATCH(
         break
       }
 
+      // ── bulk: 여러 operation을 한 번의 read → modify → write 로 처리 ──
+      // 섹션별 PATCH 를 병렬로 날리면 동일 컬럼을 덮어쓰는 lost-update 가 발생하고,
+      // 순차로 날리면 요청 수만큼 왕복 지연이 누적된다. bulk 로 묶어 한 번에 처리.
+      case 'bulk': {
+        const operations: Array<{ section: string; itemId?: string; data?: any }> = body.operations || []
+        if (!Array.isArray(operations) || operations.length === 0) {
+          return NextResponse.json({ success: false, error: 'operations는 필수입니다.' }, { status: 400 })
+        }
+
+        let agenda: any[] = Array.isArray(minute.agenda) ? [...minute.agenda] : []
+        let content: any = { ...(minute.content || {}) }
+        let participants: any = minute.participants
+        let participantsTouched = false
+        let metaUpdates: Record<string, any> = {}
+        let statusUpdate: string | undefined
+
+        for (const op of operations) {
+          switch (op.section) {
+            case 'meta': {
+              const { title, meeting_date, meeting_type, location, location_type } = op.data || {}
+              if (title !== undefined) {
+                if (!String(title).trim()) {
+                  return NextResponse.json({ success: false, error: '제목은 필수입니다.' }, { status: 400 })
+                }
+                metaUpdates.title = title
+              }
+              if (meeting_date !== undefined) metaUpdates.meeting_date = meeting_date
+              if (meeting_type !== undefined) metaUpdates.meeting_type = meeting_type
+              if (location !== undefined) metaUpdates.location = location
+              if (location_type !== undefined) metaUpdates.location_type = location_type
+              break
+            }
+            case 'participants': {
+              participants = op.data?.participants ?? []
+              participantsTouched = true
+              break
+            }
+            case 'summary': {
+              content = { ...content, summary: op.data?.summary ?? '' }
+              break
+            }
+            case 'agenda': {
+              if (!op.itemId) continue
+              const idx = agenda.findIndex(a => a.id === op.itemId)
+              if (idx !== -1) agenda[idx] = { ...agenda[idx], ...(op.data || {}) }
+              break
+            }
+            case 'agenda-add': {
+              if (op.data) agenda.push(op.data)
+              break
+            }
+            case 'agenda-delete': {
+              if (!op.itemId) continue
+              agenda = agenda.filter(a => a.id !== op.itemId)
+              break
+            }
+            case 'business': {
+              if (!op.itemId) continue
+              const issues: any[] = Array.isArray(content.business_issues) ? [...content.business_issues] : []
+              const idx = issues.findIndex(b => b.id === op.itemId)
+              if (idx !== -1) {
+                issues[idx] = { ...issues[idx], ...(op.data || {}) }
+                content = { ...content, business_issues: issues }
+              }
+              break
+            }
+            case 'business-add': {
+              const issues: any[] = Array.isArray(content.business_issues) ? [...content.business_issues] : []
+              if (op.data) issues.push(op.data)
+              content = { ...content, business_issues: issues }
+              break
+            }
+            case 'business-delete': {
+              if (!op.itemId) continue
+              const issues: any[] = Array.isArray(content.business_issues) ? [...content.business_issues] : []
+              content = { ...content, business_issues: issues.filter(b => b.id !== op.itemId) }
+              break
+            }
+            case 'status': {
+              const s = op.data?.status
+              if (!['draft', 'completed', 'archived'].includes(s)) {
+                return NextResponse.json({ success: false, error: '유효하지 않은 상태값입니다.' }, { status: 400 })
+              }
+              statusUpdate = s
+              break
+            }
+            default:
+              return NextResponse.json({ success: false, error: `알 수 없는 bulk operation: ${op.section}` }, { status: 400 })
+          }
+        }
+
+        updatePayload = {
+          ...updatePayload,
+          ...metaUpdates,
+          agenda,
+          content,
+          ...(participantsTouched && { participants }),
+          ...(statusUpdate !== undefined && { status: statusUpdate }),
+        }
+        break
+      }
+
       default:
         return NextResponse.json({ success: false, error: `알 수 없는 섹션: ${section}` }, { status: 400 })
     }

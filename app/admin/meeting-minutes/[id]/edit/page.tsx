@@ -391,12 +391,19 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   }
 
   const handleUpdateAgenda = (index: number, field: keyof AgendaItem, value: any) => {
-    const updated = [...agenda]
-    updated[index] = { ...updated[index], [field]: value }
-    setAgenda(updated)
-    // 신규 추가 항목이면 agenda-add- 키를 유지 (agenda- 키 추가하지 않음)
-    if (!dirtySections.has(`agenda-add-${agenda[index].id}`)) {
-      markDirty(`agenda-${agenda[index].id}`)
+    // 함수형 업데이트: onChangeRef 클로저가 오래됐더라도 항상 최신 agenda에 적용
+    // (column resize plugin이 초기화 시 onUpdate를 발생시켜 stale 클로저 문제 유발)
+    let itemId = agenda[index]?.id
+    setAgenda(prev => {
+      const updated = [...prev]
+      if (updated[index]) {
+        itemId = updated[index].id
+        updated[index] = { ...updated[index], [field]: value }
+      }
+      return updated
+    })
+    if (itemId && !dirtySections.has(`agenda-add-${itemId}`)) {
+      markDirty(`agenda-${itemId}`)
     }
   }
 
@@ -427,10 +434,16 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   }
 
   const handleUpdateBusinessIssue = (index: number, field: keyof BusinessIssue, value: any) => {
-    const updated = [...businessIssues]
-    updated[index] = { ...updated[index], [field]: value }
-    setBusinessIssues(updated)
-    markDirty(`business-${businessIssues[index].id}`)
+    let issueId = businessIssues[index]?.id
+    setBusinessIssues(prev => {
+      const updated = [...prev]
+      if (updated[index]) {
+        issueId = updated[index].id
+        updated[index] = { ...updated[index], [field]: value }
+      }
+      return updated
+    })
+    if (issueId) markDirty(`business-${issueId}`)
   }
 
   const handleToggleComplete = (index: number) => {
@@ -474,19 +487,13 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         }))
       ]
 
-      // 변경된 섹션만 수집해서 병렬 PATCH
-      const patches: Promise<Response>[] = []
+      // 모든 변경사항을 하나의 bulk PATCH 로 묶어 전송한다.
+      // (기존: 변경된 항목 수만큼 순차 HTTP 왕복 → 최대 수 초 소요)
+      // (개선: 한 번의 요청 + 서버에서 한 번의 read-modify-write)
+      const operations: Array<{ section: string; itemId?: string; data?: any }> = []
 
-      const patch = (body: object) =>
-        fetch(sectionUrl, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          cache: 'no-store',
-        })
-
-      // meta 섹션 (제목, 날짜, 유형, 장소) — 항상 포함 (필수 필드 포함)
-      patches.push(patch({
+      // meta (필수 필드 포함, 항상 전송)
+      operations.push({
         section: 'meta',
         data: {
           title,
@@ -495,107 +502,85 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
           location,
           location_type: locationType,
         }
-      }))
+      })
 
-      // participants: 변경됐거나 완료 저장 시 항상 전송
       if (dirtySections.has('participants') || newStatus === 'completed') {
-        patches.push(patch({ section: 'participants', data: { participants: allParticipants } }))
+        operations.push({ section: 'participants', data: { participants: allParticipants } })
       }
 
-      // summary: 변경됐거나 완료 저장 시
       if (dirtySections.has('summary') || newStatus === 'completed') {
-        patches.push(patch({ section: 'summary', data: { summary } }))
+        operations.push({ section: 'summary', data: { summary } })
       }
 
-      // 안건 항목: 변경된 것만
       for (const item of agenda) {
         if (dirtySections.has(`agenda-${item.id}`)) {
-          patches.push(patch({ section: 'agenda', itemId: item.id, data: item }))
+          operations.push({ section: 'agenda', itemId: item.id, data: item })
         }
       }
-      // 새로 추가된 안건 (add)
       for (const item of agenda) {
         if (dirtySections.has(`agenda-add-${item.id}`)) {
-          patches.push(patch({ section: 'agenda-add', data: item }))
+          operations.push({ section: 'agenda-add', data: item })
         }
       }
-      // 삭제된 안건
       for (const sectionId of dirtySections) {
         if (sectionId.startsWith('agenda-delete-')) {
-          const itemId = sectionId.replace('agenda-delete-', '')
-          patches.push(patch({ section: 'agenda-delete', itemId }))
+          operations.push({ section: 'agenda-delete', itemId: sectionId.replace('agenda-delete-', '') })
         }
       }
 
-      // 사업장 이슈: 변경된 것만
       for (const issue of businessIssues) {
         if (dirtySections.has(`business-${issue.id}`)) {
-          patches.push(patch({ section: 'business', itemId: issue.id, data: issue }))
+          operations.push({ section: 'business', itemId: issue.id, data: issue })
         }
       }
-      // 삭제된 이슈
       for (const sectionId of dirtySections) {
         if (sectionId.startsWith('business-delete-')) {
-          const itemId = sectionId.replace('business-delete-', '')
-          patches.push(patch({ section: 'business-delete', itemId }))
+          operations.push({ section: 'business-delete', itemId: sectionId.replace('business-delete-', '') })
         }
       }
 
-      // status 변경
       if (newStatus && newStatus !== status) {
-        patches.push(patch({ section: 'status', data: { status: newStatus } }))
+        operations.push({ section: 'status', data: { status: newStatus } })
       }
 
-      // 완료 저장 시 모든 섹션 강제 포함 (최종 상태 보장)
       if (newStatus === 'completed') {
-        // 위에서 participants, summary 이미 포함됨
-        // agenda 전체도 포함 (변경 여부 무관)
         for (const item of agenda) {
           if (!dirtySections.has(`agenda-${item.id}`)) {
-            patches.push(patch({ section: 'agenda', itemId: item.id, data: item }))
+            operations.push({ section: 'agenda', itemId: item.id, data: item })
           }
         }
-        // 사업장 이슈 전체 포함
         for (const issue of businessIssues) {
           if (!dirtySections.has(`business-${issue.id}`)) {
-            patches.push(patch({ section: 'business', itemId: issue.id, data: issue }))
+            operations.push({ section: 'business', itemId: issue.id, data: issue })
           }
         }
       }
 
-      // 병렬 전송
-      const results = await Promise.all(patches)
+      const response = await fetch(sectionUrl, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section: 'bulk', operations }),
+        cache: 'no-store',
+      })
 
-      // HTTP 상태 코드 체크 (5xx, 4xx 등 비정상 응답을 json() 호출 전에 잡음)
-      const httpFailed = results.filter(r => !r.ok)
-      if (httpFailed.length > 0) {
-        console.error('[MEETING-MINUTE] HTTP error responses:', httpFailed.map(r => r.status))
-        alert(`저장 중 서버 오류가 발생했습니다. (HTTP ${httpFailed[0].status})\n잠시 후 다시 시도해 주세요.`)
+      if (!response.ok) {
+        console.error('[MEETING-MINUTE] HTTP error:', response.status)
+        alert(`저장 중 서버 오류가 발생했습니다. (HTTP ${response.status})\n잠시 후 다시 시도해 주세요.`)
         return
       }
 
-      // JSON 파싱 (HTTP 200이 보장된 상태에서만 실행)
-      let responses: { success: boolean; error?: string }[]
+      let result: { success: boolean; error?: string }
       try {
-        responses = await Promise.all(results.map(r => r.json()))
+        result = await response.json()
       } catch (parseError) {
         console.error('[MEETING-MINUTE] JSON parse error:', parseError)
         alert('서버 응답을 읽는 중 오류가 발생했습니다. 변경 내용은 유지됩니다.\n잠시 후 다시 시도해 주세요.')
         return
       }
 
-      const failed = responses.filter(r => !r.success)
-      const succeeded = responses.filter(r => r.success)
-
-      if (failed.length > 0 && succeeded.length > 0) {
-        console.error('[MEETING-MINUTE] Partial failure:', failed)
-        alert(`일부 항목이 저장되지 않았습니다 (${succeeded.length}개 성공, ${failed.length}개 실패).\n실패한 항목: ${failed[0].error ?? '알 수 없는 오류'}\n변경 내용은 유지됩니다.`)
-        return
-      }
-
-      if (failed.length > 0) {
-        console.error('[MEETING-MINUTE] All patches failed:', failed)
-        alert(`저장 중 오류가 발생했습니다: ${failed[0].error ?? '알 수 없는 오류'}\n변경 내용은 유지됩니다.`)
+      if (!result.success) {
+        console.error('[MEETING-MINUTE] Save failed:', result.error)
+        alert(`저장 중 오류가 발생했습니다: ${result.error ?? '알 수 없는 오류'}\n변경 내용은 유지됩니다.`)
         return
       }
 
@@ -604,6 +589,8 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       if (newStatus === 'draft' || !newStatus) {
         alert('임시 저장되었습니다.')
         setIsDirty(false)
+        // 뒤로가기로 상세 페이지에 돌아갔을 때 stale 데이터가 보이지 않도록 Router Cache 무효화
+        router.refresh()
       } else {
         alert('회의록이 수정되었습니다.')
         const timestamp = Date.now()
@@ -618,10 +605,12 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   }
 
   const handleCancel = () => {
+    // 임시저장 후 취소/돌아가기로 상세 페이지 이동 시에도 최신 데이터를 불러오도록 timestamp 부여
+    const targetUrl = `/admin/meeting-minutes/${params.id}?updated=${Date.now()}`
     if (!isDirty) {
-      router.push(`/admin/meeting-minutes/${params.id}`)
+      router.push(targetUrl)
     } else if (confirm('수정 중인 내용이 저장되지 않습니다. 취소하시겠습니까?')) {
-      router.push(`/admin/meeting-minutes/${params.id}`)
+      router.push(targetUrl)
     }
   }
 
@@ -1087,6 +1076,9 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                                     ]
                                                   }
                                                   setAgenda(updated)
+                                                  if (!dirtySections.has(`agenda-add-${agenda[index].id}`)) {
+                                                    markDirty(`agenda-${agenda[index].id}`)
+                                                  }
                                                 }}
                                                 options={activeEmployees
                                                   .filter(emp => !(item.assignee_ids || []).includes(emp.id))
@@ -1118,6 +1110,9 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                                         assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
                                                       }
                                                       setAgenda(updated)
+                                                      if (!dirtySections.has(`agenda-add-${agenda[index].id}`)) {
+                                                        markDirty(`agenda-${agenda[index].id}`)
+                                                      }
                                                     }}
                                                     className="hover:text-blue-900"
                                                   >
@@ -1299,6 +1294,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                 ]
                               }
                               setBusinessIssues(updated)
+                              markDirty(`business-${businessIssues[index].id}`)
                             }}
                             options={activeEmployees
                               .filter(emp => !(issue.assignee_ids || []).includes(emp.id))
@@ -1331,6 +1327,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                       assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
                                     }
                                     setBusinessIssues(updated)
+                                    markDirty(`business-${businessIssues[index].id}`)
                                   }}
                                   className="hover:bg-blue-200 rounded"
                                 >
