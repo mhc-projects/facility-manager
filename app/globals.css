@@ -709,6 +709,11 @@ input[type="date"]:focus {
 }
 
 /* Read-only / disabled mode styling */
+/* .tiptap-readonly 는 두 가지 방식으로 렌더링된다:
+   (1) TiptapEditor 의 disabled 모드 → 내부에 .ProseMirror 래퍼가 생김
+   (2) dangerouslySetInnerHTML 로 저장된 HTML 을 직접 주입 → 래퍼 없음
+   두 경우 모두 일관된 간격으로 보이도록 `.tiptap-readonly 하위 요소` 로 규칙을 완화. */
+.tiptap-readonly,
 .tiptap-readonly .tiptap-editor-content,
 .tiptap-readonly .ProseMirror {
   font-size: 0.875rem;
@@ -716,45 +721,43 @@ input[type="date"]:focus {
   color: #374151;
 }
 
-.tiptap-readonly .ProseMirror p {
+.tiptap-readonly p {
   margin: 0.25em 0;
 }
 
-.tiptap-readonly .ProseMirror h2 {
+.tiptap-readonly h2 {
   font-size: 1.25rem;
   font-weight: 700;
   margin: 0.75em 0 0.25em;
 }
 
-.tiptap-readonly .ProseMirror h3 {
+.tiptap-readonly h3 {
   font-size: 1.1rem;
   font-weight: 600;
   margin: 0.5em 0 0.25em;
 }
 
-.tiptap-readonly .ProseMirror ul {
+.tiptap-readonly ul {
   list-style-type: disc;
   padding-left: 1.5em;
   margin: 0.25em 0;
 }
 
-.tiptap-readonly .ProseMirror ol {
+.tiptap-readonly ol {
   list-style-type: decimal;
   padding-left: 1.5em;
   margin: 0.25em 0;
 }
 
-.tiptap-readonly .ProseMirror li {
+.tiptap-readonly li {
   margin: 0.125em 0;
 }
 
-.tiptap-readonly .ProseMirror li p {
+.tiptap-readonly li p {
   margin: 0;
 }
 
-/* dangerouslySetInnerHTML 로 직접 렌더링될 때(ProseMirror 래퍼 없음)도 빈 단락이
-   높이를 가지도록 보정. Tiptap 에디터 내부에서는 한 줄 비움을 `<p></p>` 로 저장하지만
-   빈 p는 기본적으로 높이 0이라 상세 페이지에서 빈 줄이 사라져 보인다. */
+/* 빈 단락(<p></p>) 이 높이 0 으로 축소되어 빈 줄이 사라지는 것 방지. */
 .tiptap-readonly p:empty::before {
   content: "\00a0";
 }
