@@ -44,17 +44,24 @@ export function plainTextToHtml(text: string): string {
  * Tiptap 에디터에 HTML 텍스트를 plain-text paste 할 때 `<`, `>` 가 자동으로
  * `&lt;`, `&gt;` 로 이스케이프되어 저장되는 케이스가 실제로 발견되었음.
  * (예: `<p>&lt;p&gt;abc&lt;/p&gt;</p>` 형태의 이중 래핑)
+ *
+ * 디코딩 후 외부 `<p>...</p>` 래핑이 남아 있으면서 내부에 block 태그가 포함되면
+ * 중첩된 잘못된 HTML이 되어 브라우저 파서가 outer p 를 자동으로 닫아 빈 단락이
+ * 추가로 생긴다. 이 경우 외부 p 를 제거해 평탄화한다.
  */
 export function sanitizeLegacyEscapedHtml(value: string): string {
-  // 태그 모양을 가진 HTML entity(`&lt;a`, `&lt;/` 등)가 있을 때만 디코딩.
-  // 단순히 `&lt;` 만 있는 경우(의도적인 escape)는 건드리지 않는다.
   if (!/&lt;\/?[a-zA-Z]/.test(value)) return value
-  return value
+  let decoded = value
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&')
+  const outerMatch = decoded.match(/^\s*<p[^>]*>([\s\S]*)<\/p>\s*$/i)
+  if (outerMatch && /<(p|div|h[1-6]|ul|ol|li|table|blockquote)[\s>]/i.test(outerMatch[1])) {
+    decoded = outerMatch[1]
+  }
+  return decoded
 }
 
 /**
