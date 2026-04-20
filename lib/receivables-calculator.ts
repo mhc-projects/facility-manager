@@ -55,9 +55,9 @@ export function calculateReceivables(params: {
 }): number {
   const { installationDate, totalRevenueWithTax, totalPayments, revenueAdjustments = 0 } = params;
 
-  // 설치일 없고 입금도 없으면 미수금 0 (아직 매출 미발생)
-  // 단, 설치일 없어도 입금이 있으면 실제 거래가 발생한 것이므로 미수금 계산
-  if (!installationDate && totalPayments === 0) return 0;
+  // 설치일 없고 입금도 없고 매출 기준도 없으면 미수금 0 (아직 매출 미발생)
+  // 단, 설치일 없어도 입금이 있거나 계산서가 발행된 경우(totalRevenueWithTax > 0)는 미수금 계산
+  if (!installationDate && totalPayments === 0 && totalRevenueWithTax <= 0) return 0;
 
   const raw = totalRevenueWithTax + revenueAdjustments - totalPayments;
   // 10원 이하 양수는 부가세 반올림 오차로 간주하여 0 처리
