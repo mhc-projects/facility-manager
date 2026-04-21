@@ -2996,12 +2996,13 @@ function BusinessManagementPage() {
             body: JSON.stringify({ business_id: targetBusinessId, calculation_date: new Date().toISOString().split('T')[0], save_result: false })
           })
           const data = await res.json()
-          if (data.success && data.data?.calculation?.total_revenue) {
-            setDetailModalRevenueCache({ businessId: targetBusinessId, value: Math.round(Number(data.data.calculation.total_revenue) * 1.1) })
+          if (data.success && data.data?.calculation != null) {
+            setDetailModalRevenueCache({ businessId: targetBusinessId, value: Math.round(Number(data.data.calculation.total_revenue ?? 0) * 1.1) })
+          } else {
+            setDetailModalRevenueCache({ businessId: targetBusinessId, value: 0 })
           }
-          // 실패 시 null 유지 → InvoiceDisplay 로딩 상태 유지
         } catch {
-          // 실패 시 null 유지
+          setDetailModalRevenueCache({ businessId: targetBusinessId, value: 0 })
         }
       }
     } catch (error) {
@@ -3331,12 +3332,13 @@ function BusinessManagementPage() {
             body: JSON.stringify({ business_id: targetBusinessId, calculation_date: new Date().toISOString().split('T')[0], save_result: false })
           })
           const revenueData = await revenueRes.json()
-          if (revenueData.success && revenueData.data?.calculation?.total_revenue) {
-            setEditModalRevenueCache({ businessId: targetBusinessId, value: Math.round(Number(revenueData.data.calculation.total_revenue) * 1.1) })
+          if (revenueData.success && revenueData.data?.calculation != null) {
+            setEditModalRevenueCache({ businessId: targetBusinessId, value: Math.round(Number(revenueData.data.calculation.total_revenue ?? 0) * 1.1) })
+          } else {
+            setEditModalRevenueCache({ businessId: targetBusinessId, value: 0 })
           }
-          // 실패해도 null 유지 → 계산서 섹션이 로딩 상태 유지 (잘못된 값 표시 방지)
         } catch {
-          // 실패해도 null 유지
+          setEditModalRevenueCache({ businessId: targetBusinessId, value: 0 })
         }
       }
     } catch (error) {
@@ -4079,16 +4081,13 @@ function BusinessManagementPage() {
             })
           }).then(calcResponse => calcResponse.json())
             .then(calcData => {
-              if (calcData.success) {
-                console.log('✅ [AUTO-RECALCULATE] 매출 재계산 완료:', calcData.data.calculation.total_revenue);
-                // 수정 모달이 열려있는 경우 미수금 즉시 업데이트 (백그라운드 재계산이므로 businessId 무관)
-                const newTotalRevenue = calcData.data.calculation.total_revenue;
-                if (newTotalRevenue && businessId) {
-                  const revenueWithVat = Math.round(Number(newTotalRevenue) * 1.1);
-                  setEditModalRevenueCache({ businessId, value: revenueWithVat });
-                  // 상세모달도 동일한 값으로 업데이트 (저장 후 상세모달 재진입 시 최신 값 즉시 반영)
-                  setDetailModalRevenueCache({ businessId, value: revenueWithVat });
-                }
+              if (calcData.success && calcData.data?.calculation != null && businessId) {
+                const newTotalRevenue = calcData.data.calculation.total_revenue ?? 0;
+                console.log('✅ [AUTO-RECALCULATE] 매출 재계산 완료:', newTotalRevenue);
+                const revenueWithVat = Math.round(Number(newTotalRevenue) * 1.1);
+                setEditModalRevenueCache({ businessId, value: revenueWithVat });
+                // 상세모달도 동일한 값으로 업데이트 (저장 후 상세모달 재진입 시 최신 값 즉시 반영)
+                setDetailModalRevenueCache({ businessId, value: revenueWithVat });
               } else {
                 console.warn('⚠️ [AUTO-RECALCULATE] 매출 재계산 실패:', calcData.message);
               }
@@ -4451,8 +4450,8 @@ function BusinessManagementPage() {
               body: JSON.stringify({ business_id: result.data.id, calculation_date: new Date().toISOString().split('T')[0], save_result: false })
             });
             const revenueCalc = await revenueRes.json();
-            if (revenueCalc.success && revenueCalc.data?.calculation?.total_revenue && result.data.id) {
-              setEditModalRevenueCache({ businessId: result.data.id, value: Math.round(Number(revenueCalc.data.calculation.total_revenue) * 1.1) });
+            if (revenueCalc.success && revenueCalc.data?.calculation != null && result.data.id) {
+              setEditModalRevenueCache({ businessId: result.data.id, value: Math.round(Number(revenueCalc.data.calculation.total_revenue ?? 0) * 1.1) });
             }
           } catch { /* 실패 시 기존값 유지 */ }
         }
