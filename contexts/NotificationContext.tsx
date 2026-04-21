@@ -213,6 +213,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .channel(`approval-notify:${user.id}`)
       .on('broadcast', { event: 'new_notification' }, (payload) => {
         console.log('🚀 [BROADCAST] 결재 알림 수신:', payload.payload);
+        if (payload.payload?.silent) return;
         handleIncomingNotification(payload.payload);
         setRealtimeConnectionState(prev => ({ ...prev, lastEventTime: new Date() }));
       })
