@@ -574,7 +574,7 @@ function ApprovalDetailContent() {
                     <span className="text-sm font-medium text-red-700">{h.rejected_by} ({h.role_label})</span>
                     <span className="text-xs text-gray-400">{formatDate(h.rejected_at)}</span>
                   </div>
-                  <p className="text-sm text-gray-700">{h.reason}</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{h.reason}</p>
                 </div>
               ))}
             </div>
@@ -594,7 +594,7 @@ function ApprovalDetailContent() {
                       <span className="text-sm font-medium text-blue-700">{s.approver_name_live || s.approver_name} ({s.role_label})</span>
                       <span className="text-xs text-gray-400">{formatDate(s.approved_at)}</span>
                     </div>
-                    <p className="text-sm text-gray-700">{s.comment}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{s.comment}</p>
                   </div>
                 ))}
             </div>
