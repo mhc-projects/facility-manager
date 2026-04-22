@@ -423,9 +423,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: '사용자를 찾을 수 없습니다' }, { status: 403 });
     }
 
-    // 중역(executive)만 전결 가능
-    if (currentUser.role !== 'executive') {
-      return NextResponse.json({ success: false, error: '전결은 중역만 처리할 수 있습니다' }, { status: 403 });
+    // 중역(executive) 또는 부사장(vice_president)만 전결 가능
+    if (!['executive', 'vice_president'].includes(currentUser.role)) {
+      return NextResponse.json({ success: false, error: '전결은 중역 또는 부사장만 처리할 수 있습니다' }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -440,9 +440,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: '문서를 찾을 수 없습니다' }, { status: 404 });
     }
 
-    // 해당 문서의 결재선에 현재 사용자가 중역으로 지정되어 있는지 확인
-    if (doc.executive_id !== userId) {
-      return NextResponse.json({ success: false, error: '이 문서의 결재선에 포함되지 않은 중역입니다' }, { status: 403 });
+    // 해당 문서의 결재선에 현재 사용자가 중역 또는 부사장으로 지정되어 있는지 확인
+    if (doc.executive_id !== userId && doc.vice_president_id !== userId) {
+      return NextResponse.json({ success: false, error: '이 문서의 결재선에 포함되지 않은 중역/부사장입니다' }, { status: 403 });
     }
 
     // 진행 중인 문서여야 함
@@ -502,7 +502,7 @@ export async function POST(
     await queryOne(
       `UPDATE approval_documents
        SET status = 'approved',
-           current_step = 4,
+           current_step = 5,
            completed_at = $1,
            updated_at = $1,
            is_express_approved = TRUE,
@@ -512,11 +512,13 @@ export async function POST(
       [now, userId, params.id]
     );
 
+    const roleLabel = currentUser.role === 'vice_president' ? '부사장' : '중역';
+
     // 4. 요청자에게 전결 완료 알림
     await sendNotification({
       targetUserId: doc.requester_id,
       title: '[전결 처리 완료]',
-      message: `${typeLabel}(${doc.document_number})이 ${currentUser.name} 중역에 의해 전결 처리되었습니다.`,
+      message: `${typeLabel}(${doc.document_number})이 ${currentUser.name} ${roleLabel}에 의해 전결 처리되었습니다.`,
       category: 'report_approved',
       documentId: params.id,
       documentNumber: doc.document_number,

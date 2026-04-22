@@ -273,7 +273,7 @@ export async function PUT(
 
     // role 수정 (권한 레벨 4만 가능)
     if (role !== undefined) {
-      const validRoles = ['staff', 'team_leader', 'executive', 'ceo']
+      const validRoles = ['staff', 'team_leader', 'executive', 'vice_president', 'ceo']
       if (!validRoles.includes(role)) {
         return NextResponse.json(
           { success: false, message: '유효하지 않은 role 값입니다.' },

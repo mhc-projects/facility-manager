@@ -164,8 +164,9 @@ export async function POST(
 
     // role별 필수 결재자 검증
     const requesterRole = doc.requester_role as string | null;
-    const needTeamLeader = requesterRole !== 'executive' && requesterRole !== 'team_leader';
-    const needExecutive  = requesterRole !== 'executive';
+    const needTeamLeader    = requesterRole !== 'executive' && requesterRole !== 'team_leader' && requesterRole !== 'vice_president';
+    const needExecutive     = requesterRole !== 'executive' && requesterRole !== 'vice_president';
+    const needVicePresident = requesterRole !== 'vice_president';
 
     if (needTeamLeader && !doc.team_leader_id) {
       return NextResponse.json({ success: false, error: '팀장을 선택해 주세요' }, { status: 400 });
@@ -173,12 +174,15 @@ export async function POST(
     if (needExecutive && !doc.executive_id) {
       return NextResponse.json({ success: false, error: '중역을 선택해 주세요' }, { status: 400 });
     }
+    if (needVicePresident && !doc.vice_president_id) {
+      return NextResponse.json({ success: false, error: '부사장을 선택해 주세요' }, { status: 400 });
+    }
     if (!doc.ceo_id) {
       return NextResponse.json({ success: false, error: '대표이사를 선택해 주세요' }, { status: 400 });
     }
 
     // 결재자 이름 조회 (null 제외)
-    const approverIds = [doc.requester_id, doc.team_leader_id, doc.executive_id, doc.ceo_id].filter(Boolean);
+    const approverIds = [doc.requester_id, doc.team_leader_id, doc.executive_id, doc.vice_president_id, doc.ceo_id].filter(Boolean);
     const approverNames = await queryAll(
       `SELECT id, name FROM employees WHERE id = ANY($1::UUID[])`,
       [approverIds]
@@ -194,13 +198,14 @@ export async function POST(
       );
     }
 
-    // 결재 단계 생성 (4단계)
+    // 결재 단계 생성 (5단계)
     // approver_id가 null(role로 인해 스킵된 단계)이거나 작성자와 동일하면 자동 승인
     const steps = [
-      { order: 1, label: '담당',     approver_id: doc.requester_id,   name: nameMap[doc.requester_id] },
-      { order: 2, label: '팀장',     approver_id: doc.team_leader_id, name: nameMap[doc.team_leader_id] ?? '' },
-      { order: 3, label: '중역',     approver_id: doc.executive_id,   name: nameMap[doc.executive_id] ?? '' },
-      { order: 4, label: '대표이사', approver_id: doc.ceo_id,         name: nameMap[doc.ceo_id] },
+      { order: 1, label: '담당',     approver_id: doc.requester_id,        name: nameMap[doc.requester_id] },
+      { order: 2, label: '팀장',     approver_id: doc.team_leader_id,      name: nameMap[doc.team_leader_id] ?? '' },
+      { order: 3, label: '중역',     approver_id: doc.executive_id,        name: nameMap[doc.executive_id] ?? '' },
+      { order: 4, label: '부사장',   approver_id: doc.vice_president_id,   name: nameMap[doc.vice_president_id] ?? '' },
+      { order: 5, label: '대표이사', approver_id: doc.ceo_id,              name: nameMap[doc.ceo_id] },
     ];
 
     // approver_id가 null이거나, 1단계이거나, 작성자와 동일하면 자동 승인(스킵)
@@ -208,7 +213,7 @@ export async function POST(
       step.order === 1 || !step.approver_id || step.approver_id === doc.requester_id;
 
     for (const step of steps) {
-      // approver_id가 null인 단계(role로 스킵된 팀장/중역)는 INSERT 자체를 건너뜀
+      // approver_id가 null인 단계(role로 스킵된 팀장/중역/부사장)는 INSERT 자체를 건너뜀
       if (!step.approver_id) continue;
       const auto = isAutoApproved(step);
       const status = auto ? 'approved' : 'pending';
@@ -235,6 +240,7 @@ export async function POST(
        SET status = '${newStatus}',
            current_step = $2,
            submitted_at = COALESCE(submitted_at, NOW()),
+           ${isResubmit ? 'resubmitted_at = NOW(),' : ''}
            completed_at = ${completedAt},
            updated_at = NOW()
        WHERE id = $1`,

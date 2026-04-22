@@ -32,6 +32,8 @@ interface ApprovalDoc {
   team_leader_name: string | null
   executive_id: string | null
   executive_name: string | null
+  vice_president_id: string | null
+  vice_president_name: string | null
   ceo_id: string | null
   ceo_name: string | null
   form_data: any
@@ -107,6 +109,7 @@ function ApprovalDetailContent() {
   const [editFormData, setEditFormData] = useState<any>(null)
   const [editTeamLeader, setEditTeamLeader] = useState('')
   const [editExecutive, setEditExecutive] = useState('')
+  const [editVicePresident, setEditVicePresident] = useState('')
   const [editCeo, setEditCeo] = useState('')
   const [editTitle, setEditTitle] = useState('')
 
@@ -146,6 +149,7 @@ function ApprovalDetailContent() {
         setEditFormData(data.data.form_data)
         setEditTeamLeader(data.data.team_leader_id || '')
         setEditExecutive(data.data.executive_id || '')
+        setEditVicePresident(data.data.vice_president_id || '')
         setEditCeo(data.data.ceo_id || '')
         setEditTitle(data.data.title)
       }
@@ -225,11 +229,11 @@ function ApprovalDetailContent() {
   )
   const canApprove = !!myPendingStep && doc?.status === 'pending'
 
-  // 전결 조건: 결재선의 중역으로 지정된 사람 + pending + 전결 미처리
+  // 전결 조건: 결재선의 중역 또는 부사장으로 지정된 사람 + pending + 전결 미처리
   // role 체크는 API에서 수행 (Employee 타입의 role은 숫자형 permission_level)
   const canExpressApprove =
     !!user?.id &&
-    doc?.executive_id === user?.id &&
+    (doc?.executive_id === user?.id || (doc as any)?.vice_president_id === user?.id) &&
     doc?.status === 'pending' &&
     !doc?.is_express_approved
 
@@ -274,7 +278,7 @@ function ApprovalDetailContent() {
       const res = await fetch(`/api/approvals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-        body: JSON.stringify({ title: editTitle, team_leader_id: editTeamLeader || null, executive_id: editExecutive || null, ceo_id: editCeo || null, form_data: editFormData })
+        body: JSON.stringify({ title: editTitle, team_leader_id: editTeamLeader || null, executive_id: editExecutive || null, vice_president_id: editVicePresident || null, ceo_id: editCeo || null, form_data: editFormData })
       })
       const data = await res.json()
       if (data.success) { setEditing(false); fetchDoc() }
@@ -284,12 +288,14 @@ function ApprovalDetailContent() {
 
   const handleSubmit = async () => {
     const requesterRole = user?.approval_role
-    const needTeamLeader = requesterRole !== 'executive' && requesterRole !== 'team_leader'
-    const needExecutive  = requesterRole !== 'executive'
-    if ((needTeamLeader && !editTeamLeader) || (needExecutive && !editExecutive) || !editCeo) {
+    const needTeamLeader    = requesterRole !== 'executive' && requesterRole !== 'team_leader' && requesterRole !== 'vice_president'
+    const needExecutive     = requesterRole !== 'executive' && requesterRole !== 'vice_president'
+    const needVicePresident = requesterRole !== 'vice_president'
+    if ((needTeamLeader && !editTeamLeader) || (needExecutive && !editExecutive) || (needVicePresident && !editVicePresident) || !editCeo) {
       const missing = [
         needTeamLeader && !editTeamLeader && '팀장',
         needExecutive && !editExecutive && '중역',
+        needVicePresident && !editVicePresident && '부사장',
         !editCeo && '대표이사',
       ].filter(Boolean).join(', ')
       alert(`${missing}을(를) 선택해 주세요`)
@@ -554,9 +560,11 @@ function ApprovalDetailContent() {
             <ApproverSelector
               teamLeaderId={editTeamLeader}
               executiveId={editExecutive}
+              vicePresidentId={editVicePresident}
               ceoId={editCeo}
               onTeamLeaderChange={setEditTeamLeader}
               onExecutiveChange={setEditExecutive}
+              onVicePresidentChange={setEditVicePresident}
               onCeoChange={setEditCeo}
               requesterRole={user?.approval_role}
             />

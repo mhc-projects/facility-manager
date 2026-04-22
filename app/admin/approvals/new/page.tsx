@@ -54,6 +54,7 @@ export default function NewApprovalPage() {
   const [title, setTitle] = useState('')
   const [teamLeaderId, setTeamLeaderId] = useState('')
   const [executiveId, setExecutiveId] = useState('')
+  const [vicePresidentId, setVicePresidentId] = useState('')
   const [ceoId, setCeoId] = useState('')
   const [formData, setFormData] = useState<any>(null)
   const [saving, setSaving] = useState(false)
@@ -129,7 +130,7 @@ export default function NewApprovalPage() {
       const method = isUpdate ? 'PUT' : 'POST'
       const url = isUpdate ? `/api/approvals/${savedId}` : '/api/approvals'
       const defaultTitle = docType === 'overtime_log' ? THIS_MONTH_TITLE : `${DOC_TYPES.find(d => d.value === docType)?.label} - ${TODAY}`
-      const body: any = { document_type: docType, title: title || defaultTitle, team_leader_id: teamLeaderId || null, executive_id: executiveId || null, ceo_id: ceoId || null, form_data: formData, department: formData.department || '' }
+      const body: any = { document_type: docType, title: title || defaultTitle, team_leader_id: teamLeaderId || null, executive_id: executiveId || null, vice_president_id: vicePresidentId || null, ceo_id: ceoId || null, form_data: formData, department: formData.department || '' }
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
       const data = await res.json()
       if (data.success) {
@@ -150,8 +151,9 @@ export default function NewApprovalPage() {
   // role에 따라 필수 결재자 검증
   const validateApprovers = () => {
     if (!ceoId) return '대표이사를 선택해 주세요'
-    if (requesterRole !== 'executive' && requesterRole !== 'team_leader' && !teamLeaderId) return '팀장을 선택해 주세요'
-    if (requesterRole !== 'executive' && !executiveId) return '중역을 선택해 주세요'
+    if (requesterRole !== 'executive' && requesterRole !== 'team_leader' && requesterRole !== 'vice_president' && !teamLeaderId) return '팀장을 선택해 주세요'
+    if (requesterRole !== 'executive' && requesterRole !== 'vice_president' && !executiveId) return '중역을 선택해 주세요'
+    if (requesterRole !== 'vice_president' && !vicePresidentId) return '부사장을 선택해 주세요'
     return null
   }
 
@@ -233,9 +235,11 @@ export default function NewApprovalPage() {
           <ApproverSelector
             teamLeaderId={teamLeaderId}
             executiveId={executiveId}
+            vicePresidentId={vicePresidentId}
             ceoId={ceoId}
             onTeamLeaderChange={setTeamLeaderId}
             onExecutiveChange={setExecutiveId}
+            onVicePresidentChange={setVicePresidentId}
             onCeoChange={setCeoId}
             requesterRole={user?.approval_role}
           />
@@ -251,6 +255,7 @@ export default function NewApprovalPage() {
                 requester: user?.name,
                 teamLeader: undefined,
                 executive: undefined,
+                vicePresident: undefined,
                 ceo: undefined,
               }}
               requesterRole={user?.approval_role}

@@ -39,8 +39,11 @@ export async function GET(request: NextRequest) {
            -- 중역: current_step = 2
            (s.step_order = 3 AND d.current_step = 2)
            OR
-           -- 대표이사: current_step = 3
+           -- 부사장: current_step = 3
            (s.step_order = 4 AND d.current_step = 3)
+           OR
+           -- 대표이사: current_step = 4
+           (s.step_order = 5 AND d.current_step = 4)
          )`,
       [userId]
     );

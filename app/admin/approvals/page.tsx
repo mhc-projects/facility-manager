@@ -47,7 +47,7 @@ function formatDate(dateStr?: string | null): string {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
 
-const STEP_LABEL = ['', '팀장 결재중', '중역 결재중', '대표이사 결재중', '완료']
+const STEP_LABEL = ['', '팀장 결재중', '중역 결재중', '부사장 결재중', '대표이사 결재중', '완료']
 
 const STATUS_BORDER: Record<string, string> = {
   draft:     'border-l-gray-300',

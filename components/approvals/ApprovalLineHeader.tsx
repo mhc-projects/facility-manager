@@ -20,6 +20,7 @@ interface ApprovalLineHeaderProps {
     requester?: string
     teamLeader?: string
     executive?: string
+    vicePresident?: string
     ceo?: string
   }
   /** 작성자 role — 불필요한 결재 칸 숨김 처리 */
@@ -42,10 +43,13 @@ export default function ApprovalLineHeader({
   // steps가 없는 draft 상태에서는 requesterRole 기준으로 결정
   const showTeamLeader = steps && steps.length > 0
     ? steps.some(s => s.step_order === 2)
-    : requesterRole !== 'executive' && requesterRole !== 'team_leader'
+    : requesterRole !== 'executive' && requesterRole !== 'team_leader' && requesterRole !== 'vice_president'
   const showExecutive = steps && steps.length > 0
     ? steps.some(s => s.step_order === 3)
-    : requesterRole !== 'executive'
+    : requesterRole !== 'executive' && requesterRole !== 'vice_president'
+  const showVicePresident = steps && steps.length > 0
+    ? steps.some(s => s.step_order === 4)
+    : requesterRole !== 'vice_president'
 
   const getCell = (stepOrder: number, label: string, previewName?: string | null) => {
     if (steps && steps.length > 0) {
@@ -69,7 +73,8 @@ export default function ApprovalLineHeader({
     { cell: getCell(1, '담당',     previewNames?.requester), show: true },
     { cell: getCell(2, '팀장',     previewNames?.teamLeader), show: showTeamLeader },
     { cell: getCell(3, '중역',     previewNames?.executive), show: showExecutive },
-    { cell: getCell(4, '대표이사', previewNames?.ceo), show: true },
+    { cell: getCell(4, '부사장',   previewNames?.vicePresident), show: showVicePresident },
+    { cell: getCell(5, '대표이사', previewNames?.ceo), show: true },
   ]
   const cells = allCells.filter(c => c.show).map(c => c.cell)
 

@@ -1564,6 +1564,7 @@ function UsersManagementPage() {
                         <option value="staff">일반 직원 (담당자)</option>
                         <option value="team_leader">팀장</option>
                         <option value="executive">중역</option>
+                        <option value="vice_president">부사장</option>
                         <option value="ceo">대표이사</option>
                       </select>
                       <p className="text-[8px] sm:text-[9px] md:text-xs text-gray-500 mt-1">

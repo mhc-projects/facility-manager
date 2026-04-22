@@ -465,7 +465,7 @@ export async function POST(
     }
 
     // 현재 단계가 맞는지 확인 (step_order와 current_step 매핑)
-    // current_step=1 → step_order=2(팀장), current_step=2 → step_order=3(중역), current_step=3 → step_order=4(대표이사)
+    // current_step=1 → step_order=2(팀장), current_step=2 → step_order=3(중역), current_step=3 → step_order=4(부사장), current_step=4 → step_order=5(대표이사)
     const expectedStepOrder = doc.current_step + 1;
     if (currentStep.step_order !== expectedStepOrder) {
       return NextResponse.json({ success: false, error: '아직 내 결재 차례가 아닙니다' }, { status: 403 });
@@ -499,7 +499,7 @@ export async function POST(
       // 모든 step 처리 완료 → 최종 승인
       await queryOne(
         `UPDATE approval_documents
-         SET status = 'approved', current_step = 4, completed_at = NOW(), updated_at = NOW()
+         SET status = 'approved', current_step = 5, completed_at = NOW(), updated_at = NOW()
          WHERE id = $1`,
         [params.id]
       );
@@ -580,7 +580,7 @@ export async function POST(
     );
 
     // 다음 결재자에게 알림
-    const stepOrderMap: Record<number, string> = { 2: '팀장', 3: '중역', 4: '대표이사' }
+    const stepOrderMap: Record<number, string> = { 2: '팀장', 3: '중역', 4: '부사장', 5: '대표이사' }
     const stepLabel = nextPendingStep.role_label || stepOrderMap[nextPendingStep.step_order] || '결재자'
     await sendNotification({
       targetUserId: nextPendingStep.approver_id,

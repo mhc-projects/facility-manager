@@ -33,11 +33,13 @@ export async function GET(
         e.name   AS requester_name,
         tl.name  AS team_leader_name,
         ex.name  AS executive_name,
+        vp.name  AS vice_president_name,
         ceo.name AS ceo_name
        FROM approval_documents d
        LEFT JOIN employees e   ON e.id = d.requester_id
        LEFT JOIN employees tl  ON tl.id = d.team_leader_id
        LEFT JOIN employees ex  ON ex.id = d.executive_id
+       LEFT JOIN employees vp  ON vp.id = d.vice_president_id
        LEFT JOIN employees ceo ON ceo.id = d.ceo_id
        WHERE d.id = $1 AND d.is_deleted = FALSE`,
       [params.id]
@@ -53,6 +55,7 @@ export async function GET(
       const isInApprovalLine =
         doc.team_leader_id === userId ||
         doc.executive_id === userId ||
+        doc.vice_president_id === userId ||
         doc.ceo_id === userId;
       if (!isRequester && !isInApprovalLine) {
         // 총무팀(is_management_support) 직원인지 확인
@@ -135,7 +138,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { title, team_leader_id, executive_id, ceo_id, form_data, department } = body;
+    const { title, team_leader_id, executive_id, vice_president_id, ceo_id, form_data, department } = body;
 
     // pending 상태에서 수정 시: draft로 되돌리고 결재 단계 초기화 (재상신 필요)
     const wasPending = doc.status === 'pending';
@@ -146,17 +149,19 @@ export async function PUT(
            department = COALESCE($2, department),
            team_leader_id = $3,
            executive_id = $4,
-           ceo_id = $5,
-           form_data = COALESCE($6, form_data),
+           vice_president_id = $5,
+           ceo_id = $6,
+           form_data = COALESCE($7, form_data),
            ${wasPending ? "status = 'draft', current_step = 0," : ''}
            updated_at = NOW()
-       WHERE id = $7
+       WHERE id = $8
        RETURNING *`,
       [
         title || null,
         department || null,
         team_leader_id || null,
         executive_id || null,
+        vice_president_id || null,
         ceo_id || null,
         form_data ? JSON.stringify(form_data) : null,
         params.id

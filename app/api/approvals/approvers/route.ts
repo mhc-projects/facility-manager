@@ -24,20 +24,21 @@ export async function GET(request: NextRequest) {
       `SELECT id, name, department, position, role
        FROM employees
        WHERE is_active = TRUE AND is_deleted = FALSE
-         AND role IN ('team_leader', 'executive', 'ceo')
+         AND role IN ('team_leader', 'executive', 'vice_president', 'ceo')
        ORDER BY
-         CASE role WHEN 'team_leader' THEN 1 WHEN 'executive' THEN 2 WHEN 'ceo' THEN 3 END,
+         CASE role WHEN 'team_leader' THEN 1 WHEN 'executive' THEN 2 WHEN 'vice_president' THEN 3 WHEN 'ceo' THEN 4 END,
          name ASC`,
       []
     );
 
-    const teamLeaders = rows.filter((r: any) => r.role === 'team_leader');
-    const executives  = rows.filter((r: any) => r.role === 'executive');
-    const ceoList     = rows.filter((r: any) => r.role === 'ceo');
+    const teamLeaders        = rows.filter((r: any) => r.role === 'team_leader');
+    const executives         = rows.filter((r: any) => r.role === 'executive');
+    const vicePresidentList  = rows.filter((r: any) => r.role === 'vice_president');
+    const ceoList            = rows.filter((r: any) => r.role === 'ceo');
 
     return NextResponse.json({
       success: true,
-      data: { teamLeaders, executives, ceoList }
+      data: { teamLeaders, executives, vicePresidentList, ceoList }
     });
   } catch (error: any) {
     console.error('[API] /approvals/approvers error:', error);
