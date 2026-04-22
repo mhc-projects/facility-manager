@@ -293,6 +293,38 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   // NOTE: task_notifications 테이블이 존재하지 않으므로 RealtimeManager 구독 제거.
   // 연결 상태는 위의 broadcast/postgres_changes 채널(notifications 테이블)이 제어.
 
+  // 연결 끊김 시 자동 재연결 (최대 5회, 지수 백오프)
+  const autoReconnectAttemptsRef = useRef(0);
+  const autoReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    if (realtimeConnectionState.isConnected || realtimeConnectionState.isConnecting) {
+      autoReconnectAttemptsRef.current = 0;
+      if (autoReconnectTimerRef.current) {
+        clearTimeout(autoReconnectTimerRef.current);
+        autoReconnectTimerRef.current = null;
+      }
+      return;
+    }
+    if (autoReconnectAttemptsRef.current >= 5) return;
+
+    const delay = Math.min(5000 * Math.pow(2, autoReconnectAttemptsRef.current), 60000);
+    autoReconnectTimerRef.current = setTimeout(() => {
+      if (!realtimeConnectionState.isConnected && !realtimeConnectionState.isConnecting) {
+        autoReconnectAttemptsRef.current += 1;
+        setReconnectTrigger(t => t + 1);
+      }
+    }, delay);
+
+    return () => {
+      if (autoReconnectTimerRef.current) {
+        clearTimeout(autoReconnectTimerRef.current);
+        autoReconnectTimerRef.current = null;
+      }
+    };
+  }, [user, realtimeConnectionState.isConnected, realtimeConnectionState.isConnecting]);
+
   // 단순화된 연결 상태 (Optimistic UI 적용)
   const isConnected = realtimeConnectionState.isConnected;
   const isConnecting = realtimeConnectionState.isConnecting;
