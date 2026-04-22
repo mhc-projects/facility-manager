@@ -158,6 +158,7 @@ function TaskManagementPage() {
   const [createProgressStatus, setCreateProgressStatus] = useState('') // 등록 모달 진행구분 표시용
   const [showEditModal, setShowEditModal] = useState(false)
   const [showEditHistory, setShowEditHistory] = useState(false)
+  const [mobileEditTab, setMobileEditTab] = useState<'task' | 'business'>('task')
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [duplicateGroups, setDuplicateGroups] = useState<any[]>([])
@@ -533,6 +534,7 @@ function TaskManagementPage() {
     }
 
     if (showEditModal && editingTask) {
+      setMobileEditTab('task')
       // Delay to ensure DOM is ready
       setTimeout(() => {
         // 업무 설명: 저장된 높이가 있으면 복원, 없으면 내용에 맞춰 자동 조정
@@ -2918,9 +2920,9 @@ function TaskManagementPage() {
       {/* 업무 상세/수정 모달 */}
       {showEditModal && editingTask && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4">
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-7xl max-h-[98vh] sm:max-h-[95vh] overflow-hidden">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-7xl max-h-[98vh] sm:max-h-[95vh] overflow-hidden flex flex-col">
             {/* 세련된 헤더 섹션 */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 py-3 sm:py-4 text-white">
+            <div className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 py-3 sm:py-4 text-white">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                   <div className="bg-white bg-opacity-20 rounded-xl p-2 sm:p-2.5 flex-shrink-0">
@@ -2983,10 +2985,34 @@ function TaskManagementPage() {
               </div>
             </div>
 
+            {/* 모바일 탭 바 */}
+            <div className="flex-shrink-0 flex lg:hidden border-b border-gray-200 bg-white">
+              <button
+                onClick={() => setMobileEditTab('task')}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                  mobileEditTab === 'task'
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                업무 정보
+              </button>
+              <button
+                onClick={() => setMobileEditTab('business')}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                  mobileEditTab === 'business'
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                사업장 정보
+              </button>
+            </div>
+
             {/* 2컬럼 레이아웃 (2:1 비율) */}
-            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] h-[calc(98vh-120px)] sm:h-[calc(95vh-120px)] overflow-hidden">
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[2fr_1fr] overflow-hidden">
               {/* 왼쪽: 업무 수정 폼 */}
-              <div className="p-3 sm:p-6 overflow-y-auto border-r border-gray-200 h-full">
+              <div className={`p-3 sm:p-6 overflow-y-auto border-r border-gray-200 h-full ${mobileEditTab === 'business' ? 'hidden lg:block' : ''}`}>
               {/* 핵심 정보 카드들 */}
               <div className="grid grid-cols-3 gap-1 sm:gap-2 mb-3 sm:mb-3">
                 {/* 진행 상태 카드 */}
@@ -3279,7 +3305,7 @@ function TaskManagementPage() {
               </div>
 
               {/* 오른쪽: 사업장 정보 패널 */}
-              <div className="overflow-y-auto bg-gray-50 h-full">
+              <div className={`overflow-y-auto bg-gray-50 h-full ${mobileEditTab === 'task' ? 'hidden lg:block' : ''}`}>
                 <BusinessInfoPanel
                   key={editingTask.businessId || 'empty'}
                   businessId={editingTask.businessId || null}
