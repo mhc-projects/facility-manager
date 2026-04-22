@@ -124,6 +124,7 @@ export default function TaskCardList({
           onEdit={onTaskEdit}
           onComplete={onComplete}
           activeSubsidies={activeSubsidies}
+          variant="list"
         />
       ))}
     </div>

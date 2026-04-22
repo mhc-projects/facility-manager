@@ -2559,11 +2559,12 @@ function TaskManagementPage() {
                 )}
               </button>
             </div>
-            <div key={`kanban-${selectedType}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-2 sm:pb-3 md:pb-4">
+            <div className="relative">
+              <div key={`kanban-${selectedType}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-3 md:pb-4 scroll-smooth">
               {tasksByStatus.steps.map((step) => (
                 <div
                   key={step.status}
-                  className="flex-shrink-0 w-48 sm:w-56 md:w-64 bg-gray-50 rounded-lg p-2 sm:p-3"
+                  className="flex-shrink-0 w-52 sm:w-60 md:w-64 bg-gray-50 rounded-lg p-2 sm:p-3"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDrop(step.status)}
                 >
@@ -2606,6 +2607,9 @@ function TaskManagementPage() {
                   </div>
                 </div>
               ))}
+              </div>
+              {/* 우측 페이드 — 가로 스크롤 가능함을 시각적으로 표시 */}
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent rounded-r-xl" />
             </div>
           </div>
         )}
