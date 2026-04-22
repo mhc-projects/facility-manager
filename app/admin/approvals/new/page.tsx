@@ -175,7 +175,7 @@ export default function NewApprovalPage() {
       })
       const data = await res.json()
       if (data.success) {
-        router.push(`/admin/approvals/${id}?submitted=1`)
+        router.push(`/admin/approvals/${id}?submitted=1&from=my`)
       } else {
         alert(data.error || '상신 실패')
       }
@@ -191,7 +191,7 @@ export default function NewApprovalPage() {
       title="새 결재 문서"
       description="결재 문서를 작성하고 상신하세요"
       actions={
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm">
+        <button onClick={() => router.push(`/admin/approvals?tab=my&_t=${Date.now()}`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm">
           <ChevronLeft className="w-4 h-4" />목록
         </button>
       }

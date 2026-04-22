@@ -483,7 +483,7 @@ function ApprovalDetailContent() {
       description={doc.document_number}
       actions={
         <div className="flex items-center gap-2">
-          <button onClick={() => router.back()} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
+          <button onClick={() => router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
             <ChevronLeft className="w-4 h-4" />목록
           </button>
           {canEdit && !editing && (
