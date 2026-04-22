@@ -1314,6 +1314,28 @@ function TaskManagementPage() {
     }
   }, [draggedTask])
 
+  const handleMoveStage = useCallback(async (taskId: string, newStatus: string) => {
+    try {
+      const token = TokenManager.getToken()
+      const response = await fetch('/api/facility-tasks', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ id: taskId, status: newStatus })
+      })
+      if (!response.ok) throw new Error('업무 상태 업데이트에 실패했습니다.')
+      setTasks(prev => prev.map(task => task.id === taskId ? { ...task, status: newStatus as TaskStatus } : task))
+      setMobileSelectedTask(prev => prev?.id === taskId ? { ...prev, status: newStatus as TaskStatus } : prev)
+    } catch (error) {
+      console.error('Failed to update task status:', error)
+      alert('업무 상태 업데이트에 실패했습니다. 다시 시도해주세요.')
+    }
+  }, [])
+
+  const mobileTaskSteps = useMemo(() => {
+    if (!mobileSelectedTask) return []
+    return getStepsForType(mobileSelectedTask.type as TaskType)
+  }, [mobileSelectedTask])
+
   // 헬퍼 함수들
   const getColorClasses = useCallback((color: string) => {
     const colorMap = {
@@ -2497,6 +2519,8 @@ function TaskManagementPage() {
             await handleDeleteTask(task.id)
           }}
           activeSubsidies={activeSubsidies}
+          availableSteps={mobileTaskSteps as any}
+          onMoveStage={handleMoveStage}
         />
       </div>
 
@@ -2535,11 +2559,12 @@ function TaskManagementPage() {
                 )}
               </button>
             </div>
-            <div key={`kanban-${selectedType}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-2 sm:pb-3 md:pb-4">
+            <div className="relative">
+              <div key={`kanban-${selectedType}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-3 md:pb-4 scroll-smooth">
               {tasksByStatus.steps.map((step) => (
                 <div
                   key={step.status}
-                  className="flex-shrink-0 w-48 sm:w-56 md:w-64 bg-gray-50 rounded-lg p-2 sm:p-3"
+                  className="flex-shrink-0 w-52 sm:w-60 md:w-64 bg-gray-50 rounded-lg p-2 sm:p-3"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDrop(step.status)}
                 >
@@ -2582,6 +2607,9 @@ function TaskManagementPage() {
                   </div>
                 </div>
               ))}
+              </div>
+              {/* 우측 페이드 힌트 — 가로 스크롤 가능함을 시각적으로 표시 */}
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent rounded-r-xl" />
             </div>
           </div>
         )}
