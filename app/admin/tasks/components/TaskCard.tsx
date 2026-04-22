@@ -169,12 +169,15 @@ export default function TaskCard({ task, onClick, onEdit, onComplete, activeSubs
         </span>
       </div>
 
-      {/* 사업장명 + 제조사 */}
+      {/* 사업장명 + 제조사 + 보조금뱃지 */}
       <div className="mb-2">
-        <div className="flex items-center gap-1">
-          <h3 className="font-semibold text-xs sm:text-sm text-gray-900 line-clamp-2 leading-tight">
-            {task.businessName || task.title}
-          </h3>
+        <h3 className="font-semibold text-xs sm:text-sm text-gray-900 line-clamp-2 leading-tight">
+          {task.businessName || task.title}
+        </h3>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {task.manufacturer && (
+            <span className="text-[10px] text-gray-400 shrink-0">{getManufacturerName(task.manufacturer)}</span>
+          )}
           <SubsidyActiveBadge
             localGovernment={task.localGovernment}
             activeSubsidies={activeSubsidies}
@@ -182,9 +185,6 @@ export default function TaskCard({ task, onClick, onEdit, onComplete, activeSubs
             taskType={task.type}
           />
         </div>
-        {task.manufacturer && (
-          <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{getManufacturerName(task.manufacturer)}</div>
-        )}
       </div>
 
       {/* 정보 그리드 */}
