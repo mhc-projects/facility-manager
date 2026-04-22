@@ -59,8 +59,11 @@ facility-manager/
 - `notifications` — 시스템 전역 알림 (title, message, category, priority, related_resource_type, expires_at)
 - `task_notifications` — 개인 업무 알림 (user_id, task_id, business_name, message, notification_type, is_read)
 
-### 대기환경 (현재 미활성)
-- `air_permit_info` / `discharge_outlets` / `discharge_facilities` / `prevention_facilities` — 대기필증·배출구·방지시설 (현재 사용 안 함)
+### 대기환경
+- `air_permit_info` — 대기필증 메인 테이블 (업종, 최초신고일, 가동개시일, 사업장 연결)
+- `discharge_outlets` — 배출구 (배출구 번호/이름, Gateway 정보, air_permit_id)
+- `discharge_facilities` — 배출시설 (시설명, 용량, 수량, outlet_id)
+- `prevention_facilities` — 방지시설 (시설명, 용량, 수량, outlet_id)
 - `measurement_devices` / `measurement_history` — IoT 측정기기·데이터 (미구현)
 
 ## 개발 규칙

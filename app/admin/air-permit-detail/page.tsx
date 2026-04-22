@@ -1377,10 +1377,10 @@ function AirPermitDetailContent() {
       )}
 
       <AdminLayout
-        title={urlParams.mode?.includes('create') ? '새 대기필증 추가' : `필증보기 - ${permitDetail.business?.business_name || '대기필증'}`}
-        description={urlParams.mode?.includes('create') ? '새로운 대기필증을 추가합니다' : `업종: ${permitDetail.business_type || '-'} | 배출구 ${permitDetail.outlets?.length || 0}개`}
+        title={urlParams.mode?.includes('create') ? '새 대기필증 추가' : `대기필증 상세`}
+        description={urlParams.mode?.includes('create') ? '새로운 대기필증을 추가합니다' : `${permitDetail.business?.business_name || ''} · 배출구 ${permitDetail.outlets?.length || 0}개`}
         actions={(
-        <div className="flex gap-3">
+        <div className="flex gap-1.5 sm:gap-2">
           <button
             onClick={() => {
               const businessId = permitDetail?.business_id
@@ -1390,91 +1390,99 @@ function AirPermitDetailContent() {
                 router.push('/admin/air-permit')
               }
             }}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors min-h-[40px]"
+            title="목록으로"
           >
-            <ArrowLeft className="w-4 h-4" />
-            목록으로
+            <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline text-sm">목록으로</span>
           </button>
-          
-          {/* PDF 출력 버튼 */}
+
           <button
             onClick={generatePDF}
             disabled={isGeneratingPdf}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 min-h-[40px]"
+            title="PDF 출력"
           >
-            <FileDown className="w-4 h-4" />
-            {isGeneratingPdf ? 'PDF 생성 중...' : 'PDF 출력'}
+            <FileDown className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline text-sm">{isGeneratingPdf ? 'PDF 생성 중...' : 'PDF 출력'}</span>
           </button>
 
-          {/* 항상 편집모드이므로 저장 버튼만 표시 */}
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 min-h-[40px]"
+            title="저장"
           >
-            <Save className="w-4 h-4" />
-            {isSaving ? '저장 중...' : '저장'}
+            <Save className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm">{isSaving ? '저장 중...' : '저장'}</span>
           </button>
         </div>
       )}
     >
       {/* 대기필증 기본 정보 - Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-gray-300 shadow-lg">
-        <div className="px-4 py-2">
+      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-md">
+        <div className="px-3 sm:px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold text-gray-900">기본 정보</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">기본 정보</h2>
+              {permitDetail.business?.business_name && (
+                <span className="text-xs text-gray-500 truncate max-w-[150px] sm:max-w-none">
+                  {permitDetail.business.business_name}
+                </span>
+              )}
+            </div>
             <button
               onClick={() => {
                 const element = document.getElementById('outlet-section')
                 element?.scrollIntoView({ behavior: 'smooth' })
               }}
-              className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap flex-shrink-0"
             >
-              ↓ 배출구 정보
+              ↓ 배출구
             </button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             <div>
-              <span className="text-gray-500 text-xs">사업장명</span>
-              <div className="font-medium text-gray-900 truncate" title={permitDetail.business?.business_name || permitDetail.additional_info?.business_name}>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">사업장명</span>
+              <div className="font-semibold text-gray-900 text-sm truncate mt-0.5" title={permitDetail.business?.business_name || permitDetail.additional_info?.business_name}>
                 {permitDetail.business?.business_name ||
                  permitDetail.additional_info?.business_name || '-'}
               </div>
             </div>
             <div>
-              <span className="text-gray-500 text-xs">사업장관리코드</span>
-              <div className="font-medium text-gray-700 truncate" title={permitDetail.business?.business_management_code}>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">관리코드</span>
+              <div className="font-medium text-gray-700 text-sm truncate mt-0.5" title={permitDetail.business?.business_management_code ?? undefined}>
                 {permitDetail.business?.business_management_code || '-'}
               </div>
             </div>
             <div>
-              <span className="text-gray-500 text-xs">지자체</span>
-              <div className="font-medium text-gray-700 truncate" title={(permitDetail.business as any)?.local_government}>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">지자체</span>
+              <div className="font-medium text-gray-700 text-sm truncate mt-0.5" title={(permitDetail.business as any)?.local_government}>
                 {(permitDetail.business as any)?.local_government || '-'}
               </div>
             </div>
             <div>
-              <span className="text-gray-500 text-xs">업종</span>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">업종</span>
               <input
                 type="text"
                 value={permitDetail.business_type || ''}
                 onChange={(e) => handleBasicInfoChange('business_type', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full mt-0.5 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="업종"
               />
             </div>
             <div>
-              <span className="text-gray-500 text-xs">종별</span>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">종별</span>
               <input
                 type="text"
                 value={permitDetail.additional_info?.category || ''}
                 onChange={(e) => handleBasicInfoChange('category', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full mt-0.5 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="종별"
               />
             </div>
             <div>
-              <span className="text-gray-500 text-xs">최초신고일</span>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">최초신고일</span>
               <input
                 type="date"
                 value={toKSTDateString(permitDetail.first_report_date) || ''}
@@ -1493,11 +1501,11 @@ function AirPermitDetailContent() {
                     }
                   }
                 }}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full mt-0.5 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div>
-              <span className="text-gray-500 text-xs">가동개시일</span>
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide">가동개시일</span>
               <input
                 type="date"
                 value={toKSTDateString(permitDetail.operation_start_date) || ''}
@@ -1516,7 +1524,7 @@ function AirPermitDetailContent() {
                     }
                   }
                 }}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full mt-0.5 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
@@ -1576,31 +1584,36 @@ function AirPermitDetailContent() {
                 className={`rounded-lg shadow-sm border-2 p-3 ${gatewayColor} border-opacity-50`}
               >
                 {/* 배출구 헤더 */}
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-semibold">
-                      배출구 #{outlet.outlet_number}
-                    </h2>
-                    {outlet.outlet_name && (
-                      <span className="text-xs text-gray-600">({fixKoreanText(outlet.outlet_name)})</span>
-                    )}
-                    {/* 게이트웨이 정보 항상 표시 */}
+                <div className="mb-3 space-y-2">
+                  {/* 1행: 배출구 번호 + 삭제 버튼 */}
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">게이트웨이:</span>
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${gatewayColor}`}>
-                        {generateGatewayInfo(currentGateway).name}
-                      </span>
+                      <h2 className="text-base font-bold">
+                        배출구 #{outlet.outlet_number}
+                      </h2>
+                      {outlet.outlet_name && (
+                        <span className="text-sm text-gray-600">({fixKoreanText(outlet.outlet_name)})</span>
+                      )}
                     </div>
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => deleteOutlet(outlet.id)}
+                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+                        title="배출구 삭제"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-
-                  {/* 게이트웨이 할당 및 배출구 삭제 버튼 */}
-                  {isEditing && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium">게이트웨이:</span>
+                  {/* 2행: 게이트웨이 (편집 시 선택, 아닐 때 뱃지) */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 font-medium">게이트웨이:</span>
+                    {isEditing ? (
                       <select
                         value={currentGateway}
                         onChange={(e) => handleGatewayChange(outlet.id, e.target.value)}
-                        className="px-2 py-1 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 max-w-[180px] px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 min-h-[36px]"
                       >
                         {generateGatewayOptions(gatewayAssignments).map((gw) => (
                           <option key={gw.value} value={gw.value}>
@@ -1608,18 +1621,12 @@ function AirPermitDetailContent() {
                           </option>
                         ))}
                       </select>
-                      
-                      {/* 배출구 삭제 버튼 */}
-                      <button
-                        type="button"
-                        onClick={() => deleteOutlet(outlet.id)}
-                        className="ml-2 p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
-                        title="배출구 삭제"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
+                    ) : (
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${gatewayColor}`}>
+                        {generateGatewayInfo(currentGateway).name}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* 시설 정보 테이블 - 데스크톱 전용 */}
@@ -1991,18 +1998,17 @@ function AirPermitDetailContent() {
                 <div className="lg:hidden space-y-3">
                   {/* 배출시설 섹션 */}
                   {outlet.discharge_facilities && outlet.discharge_facilities.length > 0 && (
-                    <div className="bg-red-50 rounded-lg p-2">
-                      <h4 className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                    <div className="bg-red-50 rounded-xl p-3">
+                      <h4 className="text-sm font-bold text-red-700 mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-500 rounded-full"></span>
                         배출시설
                       </h4>
-                      <div className="space-y-2">
-                        {/* 입력한 순서대로 위에서 아래로 표시 */}
+                      <div className="space-y-3">
                         {outlet.discharge_facilities.map((facility, idx) => (
-                          <div key={facility.id} className="bg-white rounded-lg p-2 shadow-sm border border-red-100">
-                            <div className="flex items-start justify-between mb-1.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1 py-0.5 rounded">배{idx + 1}</span>
+                          <div key={facility.id} className="bg-white rounded-xl p-3 shadow-sm border border-red-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">배{idx + 1}</span>
                                 {(() => {
                                   if (!facilityNumbering) return null
                                   const facilityNumbers = facilityNumbering.outlets
@@ -2015,7 +2021,7 @@ function AirPermitDetailContent() {
                                       ? `${facilityNumbers[0]}-${facilityNumbers[facilityNumbers.length - 1]}`
                                       : null
                                   return rangeDisplay ? (
-                                    <span className="text-[10px] font-medium text-red-700 bg-red-100 px-1 py-0.5 rounded">{rangeDisplay}</span>
+                                    <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{rangeDisplay}</span>
                                   ) : null
                                 })()}
                               </div>
@@ -2023,29 +2029,29 @@ function AirPermitDetailContent() {
                                 <button
                                   type="button"
                                   onClick={() => deleteFacility(outlet.id, 'discharge', facility.id)}
-                                  className="text-red-500 hover:text-red-700 p-0.5"
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg min-w-[32px] min-h-[32px] flex items-center justify-center"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
 
                             {isEditing ? (
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 <input
                                   type="text"
                                   value={facility.facility_name}
                                   onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'facility_name', e.target.value)}
                                   placeholder="시설명"
-                                  className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-300 focus:border-red-400"
                                 />
-                                <div className="grid grid-cols-2 gap-1.5">
+                                <div className="grid grid-cols-2 gap-2">
                                   <UnitInput
                                     value={facility.capacity || ''}
                                     onChange={(value) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'capacity', value)}
                                     placeholder="용량"
                                     unit="m³"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                   />
                                   <input
                                     type="number"
@@ -2053,23 +2059,23 @@ function AirPermitDetailContent() {
                                     value={facility.quantity}
                                     onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'quantity', parseInt(e.target.value) || 1)}
                                     placeholder="수량"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded text-center"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-center"
                                   />
                                 </div>
-                                <div className="grid grid-cols-2 gap-1.5">
+                                <div className="grid grid-cols-2 gap-2">
                                   <input
                                     type="text"
                                     value={facility.additional_info?.facility_number || ''}
                                     onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'facility_number', e.target.value)}
                                     placeholder="시설번호"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                   />
                                   <input
                                     type="text"
                                     value={facility.additional_info?.green_link_code ?? ''}
                                     onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'green_link_code', e.target.value)}
                                     placeholder="그린링크"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                   />
                                 </div>
                                 <input
@@ -2077,24 +2083,24 @@ function AirPermitDetailContent() {
                                   value={facility.additional_info?.memo || ''}
                                   onChange={(e) => handleFacilityEdit(outlet.id, 'discharge', facility.id, 'memo', e.target.value)}
                                   placeholder="메모"
-                                  className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                 />
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <p className="text-xs font-medium text-gray-900">{facility.facility_name}</p>
-                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-600">
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-gray-900">{facility.facility_name}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-600">
                                   <span>용량: {facility.capacity || '-'}</span>
-                                  <span>수량: {facility.quantity}</span>
+                                  <span>수량: {facility.quantity}대</span>
                                 </div>
                                 {(facility.additional_info?.facility_number || facility.additional_info?.green_link_code) && (
-                                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-500">
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
                                     {facility.additional_info?.facility_number && <span>시설번호: {facility.additional_info.facility_number}</span>}
                                     {facility.additional_info?.green_link_code && <span>그린링크: {facility.additional_info.green_link_code}</span>}
                                   </div>
                                 )}
                                 {facility.additional_info?.memo && (
-                                  <p className="text-[10px] text-gray-500 mt-0.5">메모: {facility.additional_info.memo}</p>
+                                  <p className="text-xs text-gray-500">메모: {facility.additional_info.memo}</p>
                                 )}
                               </div>
                             )}
@@ -2106,18 +2112,17 @@ function AirPermitDetailContent() {
 
                   {/* 방지시설 섹션 */}
                   {outlet.prevention_facilities && outlet.prevention_facilities.length > 0 && (
-                    <div className="bg-blue-50 rounded-lg p-2">
-                      <h4 className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                    <div className="bg-blue-50 rounded-xl p-3">
+                      <h4 className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                         방지시설
                       </h4>
-                      <div className="space-y-2">
-                        {/* 입력한 순서대로 위에서 아래로 표시 */}
+                      <div className="space-y-3">
                         {outlet.prevention_facilities.map((facility, idx) => (
-                          <div key={facility.id} className="bg-white rounded-lg p-2 shadow-sm border border-blue-100">
-                            <div className="flex items-start justify-between mb-1.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-medium text-blue-600 bg-blue-100 px-1 py-0.5 rounded">방{idx + 1}</span>
+                          <div key={facility.id} className="bg-white rounded-xl p-3 shadow-sm border border-blue-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">방{idx + 1}</span>
                                 {(() => {
                                   if (!facilityNumbering) return null
                                   const facilityNumbers = facilityNumbering.outlets
@@ -2130,7 +2135,7 @@ function AirPermitDetailContent() {
                                       ? `${facilityNumbers[0]}-${facilityNumbers[facilityNumbers.length - 1]}`
                                       : null
                                   return rangeDisplay ? (
-                                    <span className="text-[10px] font-medium text-blue-700 bg-blue-100 px-1 py-0.5 rounded">{rangeDisplay}</span>
+                                    <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">{rangeDisplay}</span>
                                   ) : null
                                 })()}
                               </div>
@@ -2138,29 +2143,29 @@ function AirPermitDetailContent() {
                                 <button
                                   type="button"
                                   onClick={() => deleteFacility(outlet.id, 'prevention', facility.id)}
-                                  className="text-red-500 hover:text-red-700 p-0.5"
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg min-w-[32px] min-h-[32px] flex items-center justify-center"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
 
                             {isEditing ? (
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 <input
                                   type="text"
                                   value={facility.facility_name}
                                   onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'facility_name', e.target.value)}
                                   placeholder="시설명"
-                                  className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
                                 />
-                                <div className="grid grid-cols-2 gap-1.5">
+                                <div className="grid grid-cols-2 gap-2">
                                   <UnitInput
                                     value={facility.capacity || ''}
                                     onChange={(value) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'capacity', value)}
                                     placeholder="용량"
                                     unit="m³/분"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                   />
                                   <input
                                     type="number"
@@ -2168,23 +2173,23 @@ function AirPermitDetailContent() {
                                     value={facility.quantity}
                                     onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'quantity', parseInt(e.target.value) || 1)}
                                     placeholder="수량"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded text-center"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-center"
                                   />
                                 </div>
-                                <div className="grid grid-cols-2 gap-1.5">
+                                <div className="grid grid-cols-2 gap-2">
                                   <input
                                     type="text"
                                     value={facility.additional_info?.facility_number || ''}
                                     onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'facility_number', e.target.value)}
                                     placeholder="시설번호"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                   />
                                   <input
                                     type="text"
                                     value={facility.additional_info?.green_link_code ?? ''}
                                     onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'green_link_code', e.target.value.toUpperCase())}
                                     placeholder="그린링크"
-                                    className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                   />
                                 </div>
                                 <input
@@ -2192,24 +2197,24 @@ function AirPermitDetailContent() {
                                   value={facility.additional_info?.memo || ''}
                                   onChange={(e) => handleFacilityEdit(outlet.id, 'prevention', facility.id, 'memo', e.target.value)}
                                   placeholder="메모"
-                                  className="w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded"
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
                                 />
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <p className="text-xs font-medium text-gray-900">{facility.facility_name}</p>
-                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-600">
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-gray-900">{facility.facility_name}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-600">
                                   <span>용량: {facility.capacity || '-'}</span>
-                                  <span>수량: {facility.quantity}</span>
+                                  <span>수량: {facility.quantity}대</span>
                                 </div>
                                 {(facility.additional_info?.facility_number || facility.additional_info?.green_link_code) && (
-                                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-500">
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
                                     {facility.additional_info?.facility_number && <span>시설번호: {facility.additional_info.facility_number}</span>}
                                     {facility.additional_info?.green_link_code && <span>그린링크: {facility.additional_info.green_link_code}</span>}
                                   </div>
                                 )}
                                 {facility.additional_info?.memo && (
-                                  <p className="text-[10px] text-gray-500 mt-0.5">메모: {facility.additional_info.memo}</p>
+                                  <p className="text-xs text-gray-500">메모: {facility.additional_info.memo}</p>
                                 )}
                               </div>
                             )}

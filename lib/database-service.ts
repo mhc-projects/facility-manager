@@ -223,6 +223,7 @@ export interface AirPermitWithOutlets extends AirPermitInfo {
   outlets: OutletWithFacilities[]
   business?: {
     business_name: string
+    business_management_code?: string | null
     local_government: string | null
   }
 }

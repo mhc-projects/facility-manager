@@ -19,7 +19,9 @@ import {
   Eye,
   Factory,
   Search,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { UnitInput } from '@/components/ui/UnitInput'
 import { formatKSTDate } from '@/utils/date-utils'
@@ -266,6 +268,9 @@ function AirPermitManagementPage() {
 
   // 가상 스크롤 컨테이너 높이 상태
   const [containerHeight, setContainerHeight] = useState(600)
+
+  // 모바일 뷰 상태 ('list': 사업장 목록, 'detail': 필증 상세)
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
 
   // 대기필증이 등록된 사업장만 필터링 (선택 리스트용)
   const filteredBusinessesWithPermits = useMemo(() => {
@@ -843,6 +848,7 @@ function AirPermitManagementPage() {
     setSelectedBusiness(business)
     setSelectedPermit(null) // 사업장 변경시 선택된 필증 초기화
     loadAirPermits(business.id)
+    setMobileView('detail') // 모바일: 상세 패널로 전환
   }
 
   // 필증 선택 핸들러
@@ -1006,15 +1012,15 @@ function AirPermitManagementPage() {
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-[23%_77%] gap-3 sm:gap-4 lg:gap-6">
-        {/* Business Selection Panel */}
-        <div>
+        {/* Business Selection Panel - 모바일에서는 mobileView==='list'일 때만 표시 */}
+        <div className={mobileView === 'detail' ? 'hidden lg:block' : ''}>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-2 sm:mb-2 flex items-center justify-between">
               <div className="flex items-center gap-1">
-                <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-600" />
+                <Building2 className="w-4 h-4 text-blue-600" />
                 <span className="whitespace-nowrap">대기필증 보유 사업장</span>
               </div>
-              <span className="text-[8px] sm:text-[9px] md:text-[10px] font-normal bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+              <span className="text-xs font-normal bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full whitespace-nowrap">
                 {businessListSearchTerm ? (
                   `검색 ${filteredBusinessesWithPermits.length}개`
                 ) : (
@@ -1064,10 +1070,10 @@ function AirPermitManagementPage() {
                         role="button"
                         tabIndex={0}
                         aria-label={`사업장: ${business.business_name}`}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors flex items-center justify-between min-h-[64px] ${
                           isSelected
                             ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                         onClick={() => handleBusinessSelect(business)}
                         onKeyDown={(e) => {
@@ -1077,12 +1083,15 @@ function AirPermitManagementPage() {
                           }
                         }}
                       >
-                        <h3 className="font-medium text-gray-900 text-sm">
-                          {businessListSearchTerm ? highlightBusinessSearchTerm(business.business_name, businessListSearchTerm) : business.business_name}
-                        </h3>
-                        <p className="text-[9px] sm:text-[10px] md:text-xs text-gray-600 mt-1">
-                          {business.business_registration_number || '등록번호 미등록'}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-gray-900 text-sm truncate">
+                            {businessListSearchTerm ? highlightBusinessSearchTerm(business.business_name, businessListSearchTerm) : business.business_name}
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">
+                            {business.business_registration_number || '등록번호 미등록'}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2 lg:hidden" />
                       </div>
                     </div>
                   )
@@ -1099,8 +1108,25 @@ function AirPermitManagementPage() {
           </div>
         </div>
 
-        {/* Air Permit Detail Panel */}
-        <div>
+        {/* Air Permit Detail Panel - 모바일에서는 mobileView==='detail'일 때만 표시 */}
+        <div className={mobileView === 'list' ? 'hidden lg:block' : ''}>
+          {/* 모바일 뒤로가기 헤더 */}
+          {selectedBusiness && (
+            <div className="flex items-center gap-3 mb-3 lg:hidden">
+              <button
+                onClick={() => {
+                  setMobileView('list')
+                  setSelectedBusiness(null)
+                  setSelectedPermit(null)
+                }}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors min-h-[44px]"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                사업장 목록
+              </button>
+              <span className="text-sm font-semibold text-gray-900 truncate">{selectedBusiness.business_name}</span>
+            </div>
+          )}
           {!selectedBusiness ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
               <div className="text-center text-gray-500">
@@ -1163,19 +1189,19 @@ function AirPermitManagementPage() {
                             `대기필증 #${permit.id}`
                           )}
                         </h3>
-                        <div className="text-[9px] sm:text-[10px] md:text-xs text-gray-600 mt-1 space-y-1">
-                          <div className="grid grid-cols-2 gap-4">
+                        <div className="text-xs text-gray-600 mt-1 space-y-1">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
                             <div>
                               <span className="font-medium">업종: </span>
-                              {permitSearchQuery ? 
-                                highlightPermitSearchTerm(permit.business_type || '미지정', permitSearchQuery) : 
+                              {permitSearchQuery ?
+                                highlightPermitSearchTerm(permit.business_type || '미지정', permitSearchQuery) :
                                 (permit.business_type || '미지정')
                               }
                             </div>
                             <div>
                               <span className="font-medium">종별: </span>
-                              {permitSearchQuery ? 
-                                highlightPermitSearchTerm(permit.additional_info?.category || '미지정', permitSearchQuery) : 
+                              {permitSearchQuery ?
+                                highlightPermitSearchTerm(permit.additional_info?.category || '미지정', permitSearchQuery) :
                                 (permit.additional_info?.category || '미지정')
                               }
                             </div>
@@ -1188,22 +1214,21 @@ function AirPermitManagementPage() {
 
                             return (
                               <div className="mt-2 p-2 bg-gray-50 rounded border">
-                                <div className="text-[9px] sm:text-[10px] md:text-xs font-medium text-gray-600 mb-1">시설 번호 현황</div>
+                                <div className="text-xs font-medium text-gray-600 mb-1">시설 번호 현황</div>
                                 <div className="space-y-1">
                                   {facilityNumbering.outlets.map(outlet => {
                                     const summary = generateOutletFacilitySummary(outlet)
                                     if (!summary) return null
 
-                                    // 게이트웨이 정보 가져오기
                                     const outletData = permit.outlets?.find((o: any) => o.id === outlet.outletId) as any
                                     const gateway = outletData?.additional_info?.gateway || ''
                                     const gatewayColorClass = getGatewayColorClass(gateway)
 
                                     return (
-                                      <div key={outlet.outletId} className="text-[8px] sm:text-[9px] md:text-[10px] text-gray-700 flex items-center gap-1">
+                                      <div key={outlet.outletId} className="text-xs text-gray-700 flex items-center gap-1 flex-wrap">
                                         <span className="font-medium">배출구 {outlet.outletNumber}:</span>
                                         {gateway && (
-                                          <span className={`text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-full border ${gatewayColorClass}`}>
+                                          <span className={`text-[11px] px-1.5 py-0.5 rounded-full border ${gatewayColorClass}`}>
                                             GW{gateway.replace('gateway', '')}
                                           </span>
                                         )}
@@ -1212,7 +1237,7 @@ function AirPermitManagementPage() {
                                     )
                                   })}
                                 </div>
-                                <div className="text-[8px] sm:text-[9px] md:text-[10px] text-gray-500 mt-1">
+                                <div className="text-xs text-gray-500 mt-1">
                                   배출시설 {facilityNumbering.totalDischargeFacilities}개,
                                   방지시설 {facilityNumbering.totalPreventionFacilities}개
                                 </div>
@@ -1221,36 +1246,36 @@ function AirPermitManagementPage() {
                           })()}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 sm:gap-2">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             setSelectedPermit(permit)
                           }}
-                          className="p-1 sm:p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="상세보기"
                         >
-                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             router.push(`/admin/air-permit-detail?permitId=${permit.id}&edit=true`)
                           }}
-                          className="p-1 sm:p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          className="p-2.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="편집"
                         >
-                          <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <Edit className="w-4 h-4" />
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             confirmDelete(permit)
                           }}
-                          className="p-1 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="삭제"
                         >
-                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -1296,28 +1321,28 @@ function AirPermitManagementPage() {
                     <Factory className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-600" />
                     기본 정보
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2 md:gap-3 bg-gray-50 rounded-lg p-2 sm:p-3 md:p-3">
+                  <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3">
                     <div>
-                      <label className="block text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm font-medium text-gray-700">업종</label>
-                      <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] md:text-xs lg:text-sm text-gray-900">
+                      <label className="block text-xs font-medium text-gray-500">업종</label>
+                      <p className="mt-1 text-sm font-medium text-gray-900">
                         {selectedPermit.business_type || '미지정'}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm font-medium text-gray-700">종별</label>
-                      <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] md:text-xs lg:text-sm text-gray-900">
+                      <label className="block text-xs font-medium text-gray-500">종별</label>
+                      <p className="mt-1 text-sm font-medium text-gray-900">
                         {selectedPermit.additional_info?.category || '미지정'}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm font-medium text-gray-700">최초신고일</label>
-                      <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] md:text-xs lg:text-sm text-gray-900">
+                      <label className="block text-xs font-medium text-gray-500">최초신고일</label>
+                      <p className="mt-1 text-sm font-medium text-gray-900">
                         {formatKSTDate((selectedPermit as any).first_report_date) || '미지정'}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm font-medium text-gray-700">가동개시일</label>
-                      <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] md:text-xs lg:text-sm text-gray-900">
+                      <label className="block text-xs font-medium text-gray-500">가동개시일</label>
+                      <p className="mt-1 text-sm font-medium text-gray-900">
                         {formatKSTDate((selectedPermit as any).operation_start_date) || '미지정'}
                       </p>
                     </div>
@@ -1336,161 +1361,203 @@ function AirPermitManagementPage() {
                     console.log('🔍 selectedPermit.outlets:', selectedPermit.outlets)
                     return selectedPermit.outlets && selectedPermit.outlets.length > 0
                   })() ? (
-                    <div className="space-y-2 sm:space-y-3 md:space-y-4">
+                    <div className="space-y-4">
                       {selectedPermit.outlets?.map((outlet: any, index: number) => {
-                        // 게이트웨이 색상 결정 (동적 생성 함수 사용)
                         const gateway = outlet.additional_info?.gateway || ''
                         const colorClass = getGatewayColorClass(gateway)
-                        
+                        const facilityNumbering = facilityNumberingMap.get(selectedPermit.id)
+                        const outletNumbering = facilityNumbering?.outlets.find(o => o.outletId === outlet.id)
+                        const maxRows = Math.max(
+                          outlet.discharge_facilities?.length || 0,
+                          outlet.prevention_facilities?.length || 0,
+                          1
+                        )
+
+                        const getDischargeFacilityNumbers = (dischargeFacility: any) => {
+                          if (!dischargeFacility || !outletNumbering) return '-'
+                          const nums = outletNumbering.dischargeFacilities
+                            .filter((f: any) => f.facilityId === dischargeFacility.id)
+                            .map((f: any) => f.displayNumber)
+                          if (nums.length === 0) return '-'
+                          if (nums.length === 1) return nums[0]
+                          return `${nums[0]}-${nums[nums.length - 1]}`
+                        }
+
+                        const getPreventionFacilityNumbers = (preventionFacility: any) => {
+                          if (!preventionFacility || !outletNumbering) return '-'
+                          const nums = outletNumbering.preventionFacilities
+                            .filter((f: any) => f.facilityId === preventionFacility.id)
+                            .map((f: any) => f.displayNumber)
+                          if (nums.length === 0) return '-'
+                          if (nums.length === 1) return nums[0]
+                          return `${nums[0]}-${nums[nums.length - 1]}`
+                        }
+
                         return (
-                          <div key={index} className={`border-2 rounded-lg p-2 sm:p-3 md:p-4 ${colorClass}`}>
+                          <div key={index} className={`border-2 rounded-xl p-3 md:p-4 ${colorClass}`}>
                             {/* 배출구 헤더 */}
-                            <div className="flex justify-between items-center mb-2 sm:mb-3 md:mb-4">
-                              <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
-                                <h4 className="text-[9px] sm:text-[10px] md:text-xs lg:text-lg font-semibold">
-                                  배출구 #{outlet.outlet_number || index + 1}
-                                </h4>
-                                {outlet.outlet_name && (
-                                  <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-sm text-gray-600">({outlet.outlet_name})</span>
-                                )}
-                                {gateway && (
-                                  <span className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-xs px-1 sm:px-2 py-0.5 sm:py-1 rounded-full bg-white bg-opacity-70">
-                                    Gateway {gateway.replace('gateway', '')}
-                                  </span>
-                                )}
-                              </div>
+                            <div className="flex items-center gap-2 mb-3">
+                              <h4 className="text-base font-bold">
+                                배출구 #{outlet.outlet_number || index + 1}
+                              </h4>
+                              {outlet.outlet_name && (
+                                <span className="text-sm text-gray-600">({outlet.outlet_name})</span>
+                              )}
+                              {gateway && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-white bg-opacity-70 font-medium">
+                                  GW {gateway.replace('gateway', '')}
+                                </span>
+                              )}
                             </div>
 
-                            {/* 시설 정보 테이블 */}
-                            <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-                              <table className="w-full text-[9px] sm:text-[10px] md:text-xs lg:text-sm">
+                            {/* 모바일 카드 뷰 (md 미만) */}
+                            <div className="md:hidden space-y-3">
+                              {Array.from({ length: maxRows }, (_, rowIndex) => {
+                                const dischargeFacility = outlet.discharge_facilities?.[rowIndex]
+                                const preventionFacility = outlet.prevention_facilities?.[rowIndex]
+                                return (
+                                  <div key={rowIndex} className="bg-white rounded-lg p-3 shadow-sm space-y-3">
+                                    <div className="text-xs font-semibold text-gray-400 border-b pb-1">
+                                      시설 {rowIndex + 1}
+                                    </div>
+                                    {/* 배출시설 */}
+                                    {dischargeFacility && (
+                                      <div>
+                                        <div className="flex items-center gap-1 mb-1.5">
+                                          <span className="text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded">배출시설</span>
+                                          <span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 text-xs font-medium rounded">
+                                            {getDischargeFacilityNumbers(dischargeFacility)}
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                          <div>
+                                            <span className="text-xs text-gray-500">시설명</span>
+                                            <p className="font-medium text-gray-900 truncate">{dischargeFacility.facility_name || '-'}</p>
+                                          </div>
+                                          <div>
+                                            <span className="text-xs text-gray-500">용량 / 수량</span>
+                                            <p className="font-medium text-gray-900">{dischargeFacility.capacity || '-'} / {dischargeFacility.quantity || '-'}대</p>
+                                          </div>
+                                          {dischargeFacility.additional_info?.green_link_code && (
+                                            <div>
+                                              <span className="text-xs text-gray-500">그린링크</span>
+                                              <p className="font-medium text-gray-900">{dischargeFacility.additional_info.green_link_code}</p>
+                                            </div>
+                                          )}
+                                          {dischargeFacility.additional_info?.memo && (
+                                            <div className="col-span-2">
+                                              <span className="text-xs text-gray-500">메모</span>
+                                              <p className="text-gray-700">{dischargeFacility.additional_info.memo}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* 방지시설 */}
+                                    {preventionFacility && (
+                                      <div>
+                                        <div className="flex items-center gap-1 mb-1.5">
+                                          <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">방지시설</span>
+                                          <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                                            {getPreventionFacilityNumbers(preventionFacility)}
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                          <div>
+                                            <span className="text-xs text-gray-500">시설명</span>
+                                            <p className="font-medium text-gray-900 truncate">{preventionFacility.facility_name || '-'}</p>
+                                          </div>
+                                          <div>
+                                            <span className="text-xs text-gray-500">용량 / 수량</span>
+                                            <p className="font-medium text-gray-900">{preventionFacility.capacity || '-'} / {preventionFacility.quantity || '-'}대</p>
+                                          </div>
+                                          {preventionFacility.additional_info?.green_link_code && (
+                                            <div>
+                                              <span className="text-xs text-gray-500">그린링크</span>
+                                              <p className="font-medium text-gray-900">{preventionFacility.additional_info.green_link_code}</p>
+                                            </div>
+                                          )}
+                                          {preventionFacility.additional_info?.memo && (
+                                            <div className="col-span-2">
+                                              <span className="text-xs text-gray-500">메모</span>
+                                              <p className="text-gray-700">{preventionFacility.additional_info.memo}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {!dischargeFacility && !preventionFacility && (
+                                      <p className="text-sm text-gray-400 text-center py-2">시설 정보 없음</p>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {/* 데스크톱 테이블 뷰 (md 이상) */}
+                            <div className="hidden md:block bg-white rounded-lg overflow-hidden shadow-sm">
+                              <table className="w-full text-xs">
                                 <thead className="bg-gray-50">
                                   <tr>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-left font-medium text-gray-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">구분</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-left font-medium text-red-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">배출시설</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-red-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">용량</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-red-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">수량</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-red-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">시설번호</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-red-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">그린링크</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-left font-medium text-red-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">메모</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-left font-medium text-blue-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">방지시설</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-blue-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">용량</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-blue-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">수량</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-blue-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">시설번호</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center font-medium text-blue-700 border-r text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">그린링크</th>
-                                    <th className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-left font-medium text-blue-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">메모</th>
+                                    <th className="px-2 md:px-3 py-2 text-left font-medium text-gray-700 border-r">#</th>
+                                    <th className="px-2 md:px-3 py-2 text-left font-medium text-red-700 border-r">배출시설</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-red-700 border-r">용량</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-red-700 border-r">수량</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-red-700 border-r">시설번호</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-red-700 border-r">그린링크</th>
+                                    <th className="px-2 md:px-3 py-2 text-left font-medium text-red-700 border-r">메모</th>
+                                    <th className="px-2 md:px-3 py-2 text-left font-medium text-blue-700 border-r">방지시설</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-blue-700 border-r">용량</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-blue-700 border-r">수량</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-blue-700 border-r">시설번호</th>
+                                    <th className="px-2 md:px-3 py-2 text-center font-medium text-blue-700 border-r">그린링크</th>
+                                    <th className="px-2 md:px-3 py-2 text-left font-medium text-blue-700">메모</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {(() => {
-                                    const maxRows = Math.max(
-                                      outlet.discharge_facilities?.length || 0,
-                                      outlet.prevention_facilities?.length || 0,
-                                      1
+                                  {Array.from({ length: maxRows }, (_, rowIndex) => {
+                                    const dischargeFacility = outlet.discharge_facilities?.[rowIndex]
+                                    const preventionFacility = outlet.prevention_facilities?.[rowIndex]
+                                    return (
+                                      <tr key={rowIndex} className="border-t hover:bg-gray-50">
+                                        <td className="px-2 md:px-3 py-2 text-center text-gray-500 border-r font-medium">{rowIndex + 1}</td>
+                                        <td className="px-2 md:px-3 py-2 border-r">
+                                          <div className="font-medium text-gray-900">{dischargeFacility?.facility_name || '-'}</div>
+                                          {dischargeFacility?.additional_info?.facility_number && (
+                                            <div className="text-[10px] text-gray-500 mt-0.5">#{dischargeFacility.additional_info.facility_number}</div>
+                                          )}
+                                        </td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r text-gray-700">{dischargeFacility?.capacity || '-'}</td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r font-medium">{dischargeFacility?.quantity || '-'}</td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r">
+                                          <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-800 text-[11px] font-medium rounded">
+                                            {getDischargeFacilityNumbers(dischargeFacility)}
+                                          </span>
+                                        </td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r text-gray-700">{dischargeFacility?.additional_info?.green_link_code || '-'}</td>
+                                        <td className="px-2 md:px-3 py-2 border-r text-gray-700">
+                                          <div className="max-w-[120px] truncate" title={dischargeFacility?.additional_info?.memo || ''}>{dischargeFacility?.additional_info?.memo || '-'}</div>
+                                        </td>
+                                        <td className="px-2 md:px-3 py-2 border-r">
+                                          <div className="font-medium text-gray-900">{preventionFacility?.facility_name || '-'}</div>
+                                          {preventionFacility?.additional_info?.facility_number && (
+                                            <div className="text-[10px] text-gray-500 mt-0.5">#{preventionFacility.additional_info.facility_number}</div>
+                                          )}
+                                        </td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r text-gray-700">{preventionFacility?.capacity || '-'}</td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r font-medium">{preventionFacility?.quantity || '-'}</td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r">
+                                          <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-medium rounded">
+                                            {getPreventionFacilityNumbers(preventionFacility)}
+                                          </span>
+                                        </td>
+                                        <td className="px-2 md:px-3 py-2 text-center border-r text-gray-700">{preventionFacility?.additional_info?.green_link_code || '-'}</td>
+                                        <td className="px-2 md:px-3 py-2 text-gray-700">
+                                          <div className="max-w-[120px] truncate" title={preventionFacility?.additional_info?.memo || ''}>{preventionFacility?.additional_info?.memo || '-'}</div>
+                                        </td>
+                                      </tr>
                                     )
-                                    
-                                    // 시설 번호 정보 가져오기
-                                    const facilityNumbering = facilityNumberingMap.get(selectedPermit.id)
-                                    const outletNumbering = facilityNumbering?.outlets.find(o => o.outletId === outlet.id)
-                                    
-                                    return Array.from({ length: maxRows }, (_, rowIndex) => {
-                                      const dischargeFacility = outlet.discharge_facilities?.[rowIndex]
-                                      const preventionFacility = outlet.prevention_facilities?.[rowIndex]
-                                      
-                                      // 시설별 번호 표시 로직
-                                      const getDischargeFacilityNumbers = () => {
-                                        if (!dischargeFacility || !outletNumbering) return '-'
-                                        const facilityNumbers = outletNumbering.dischargeFacilities
-                                          .filter(f => f.facilityId === dischargeFacility.id)
-                                          .map(f => f.displayNumber)
-                                        
-                                        if (facilityNumbers.length === 0) return '-'
-                                        if (facilityNumbers.length === 1) return facilityNumbers[0]
-                                        return `${facilityNumbers[0]}-${facilityNumbers[facilityNumbers.length - 1]}`
-                                      }
-                                      
-                                      const getPreventionFacilityNumbers = () => {
-                                        if (!preventionFacility || !outletNumbering) return '-'
-                                        const facilityNumbers = outletNumbering.preventionFacilities
-                                          .filter(f => f.facilityId === preventionFacility.id)
-                                          .map(f => f.displayNumber)
-                                        
-                                        if (facilityNumbers.length === 0) return '-'
-                                        if (facilityNumbers.length === 1) return facilityNumbers[0]
-                                        return `${facilityNumbers[0]}-${facilityNumbers[facilityNumbers.length - 1]}`
-                                      }
-                                      
-                                      return (
-                                        <tr key={rowIndex} className="border-t hover:bg-gray-50">
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center text-gray-500 border-r font-medium text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {rowIndex + 1}
-                                          </td>
-
-                                          {/* 배출시설 정보 */}
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 border-r">
-                                            <div className="font-medium text-gray-900 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                              {dischargeFacility?.facility_name || '-'}
-                                            </div>
-                                            {dischargeFacility?.additional_info?.facility_number && (
-                                              <div className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-gray-500 mt-1">
-                                                #{dischargeFacility.additional_info.facility_number}
-                                              </div>
-                                            )}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r text-gray-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {dischargeFacility?.capacity || '-'}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r font-medium text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {dischargeFacility?.quantity || '-'}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r">
-                                            <span className="inline-block px-1 sm:px-2 py-0.5 sm:py-1 bg-red-100 text-red-800 text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] font-medium rounded">
-                                              {getDischargeFacilityNumbers()}
-                                            </span>
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r text-gray-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {dischargeFacility?.additional_info?.green_link_code || '-'}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 border-r text-gray-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            <div className="max-w-[120px] truncate" title={dischargeFacility?.additional_info?.memo || ''}>
-                                              {dischargeFacility?.additional_info?.memo || '-'}
-                                            </div>
-                                          </td>
-
-                                          {/* 방지시설 정보 */}
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 border-r">
-                                            <div className="font-medium text-gray-900 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                              {preventionFacility?.facility_name || '-'}
-                                            </div>
-                                            {preventionFacility?.additional_info?.facility_number && (
-                                              <div className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-gray-500 mt-1">
-                                                #{preventionFacility.additional_info.facility_number}
-                                              </div>
-                                            )}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r text-gray-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {preventionFacility?.capacity || '-'}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r font-medium text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {preventionFacility?.quantity || '-'}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r">
-                                            <span className="inline-block px-1 sm:px-2 py-0.5 sm:py-1 bg-blue-100 text-blue-800 text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] font-medium rounded">
-                                              {getPreventionFacilityNumbers()}
-                                            </span>
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-center border-r text-gray-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            {preventionFacility?.additional_info?.green_link_code || '-'}
-                                          </td>
-                                          <td className="px-1 sm:px-2 md:px-3 py-1 sm:py-2 text-gray-700 text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs">
-                                            <div className="max-w-[120px] truncate" title={preventionFacility?.additional_info?.memo || ''}>
-                                              {preventionFacility?.additional_info?.memo || '-'}
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      )
-                                    })
-                                  })()}
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -1510,9 +1577,10 @@ function AirPermitManagementPage() {
               </div>
 
               {/* Fixed FAB 버튼 - 스크롤해도 고정 위치 유지 */}
+              {/* 모바일: 하단 고정 버튼, 데스크톱: 상단 고정 버튼 */}
               <button
                 onClick={() => router.push(`/admin/air-permit-detail?permitId=${selectedPermit.id}&edit=true`)}
-                className="fixed top-[170px] right-[90px] z-30 flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium hover:scale-105"
+                className="fixed bottom-6 right-4 z-30 flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium min-h-[48px] md:bottom-auto md:top-[170px] md:right-[90px] md:py-2.5"
               >
                 <Edit className="w-4 h-4" />
                 상세관리
