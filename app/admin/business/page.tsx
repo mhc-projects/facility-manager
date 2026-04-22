@@ -20,6 +20,7 @@ import AutocompleteInput from '@/components/ui/AutocompleteInput'
 import DateInput from '@/components/ui/DateInput'
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown'
 import AdminManagerPicker from '@/components/ui/AdminManagerPicker'
+import ContactsListEditor from '@/components/ui/ContactsListEditor'
 import { formatMobilePhone, formatLandlinePhone } from '@/utils/phone-formatter'
 import { useToast } from '@/contexts/ToastContext'
 import { CacheManager } from '@/utils/cache-manager'
@@ -5586,43 +5587,10 @@ function BusinessManagementPage() {
                     </div>
                     <div className="border-t border-gray-200 mb-3" />
                     {/* 담당자 다중 입력 */}
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-sm font-medium text-gray-700">담당자</label>
-                        <button type="button"
-                          onClick={() => setFormData(prev => ({...prev, contacts_list: [...(prev.contacts_list || []), {name:'',position:'',phone:'',email:''}]}))}
-                          className="text-xs text-blue-600 hover:text-blue-800">+ 추가</button>
-                      </div>
-                      <div className="space-y-1.5">
-                        {(formData.contacts_list || []).map((c: ContactPerson, i: number) => (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <input type="text" lang="ko" inputMode="text" placeholder="이름"
-                              value={c.name}
-                              onChange={e => { const val=e.target.value; setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],name:val}; return {...prev,contacts_list:next} }) }}
-                              className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
-                            <input type="text" lang="ko" inputMode="text" placeholder="직급"
-                              value={c.position}
-                              onChange={e => { const val=e.target.value; setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],position:val}; return {...prev,contacts_list:next} }) }}
-                              className="w-16 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
-                            <input type="tel" placeholder="전화번호"
-                              value={c.phone}
-                              onChange={e => { const formatted=formatMobilePhone(e.target.value); setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],phone:formatted}; return {...prev,contacts_list:next} }) }}
-                              maxLength={14}
-                              className="w-32 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 shrink-0" />
-                            <input type="email" placeholder="이메일"
-                              value={c.email}
-                              onChange={e => { const val=e.target.value; setFormData(prev => { const next=[...(prev.contacts_list||[])]; next[i]={...next[i],email:val}; return {...prev,contacts_list:next} }) }}
-                              className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
-                            <button type="button"
-                              onClick={() => setFormData(prev => ({...prev, contacts_list: (prev.contacts_list||[]).filter((_:ContactPerson, idx:number)=>idx!==i)}))}
-                              className="text-gray-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5"/></button>
-                          </div>
-                        ))}
-                        {(formData.contacts_list || []).length === 0 && (
-                          <p className="text-xs text-gray-400">담당자를 추가하세요</p>
-                        )}
-                      </div>
-                    </div>
+                    <ContactsListEditor
+                      value={formData.contacts_list || []}
+                      onChange={(val) => setFormData(prev => ({ ...prev, contacts_list: val }))}
+                    />
                     {/* 사업장 연락처 / 팩스 (사업장 공통 정보) */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 pt-3 border-t border-gray-200">
                     <div>

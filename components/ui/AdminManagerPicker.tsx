@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, UserCheck, Loader2, Building2, Plus, Shield } from 'lucide-react';
+import { Search, X, UserCheck, Loader2, Building2, Plus, Shield, GripVertical } from 'lucide-react';
 
 export interface AdminManagerValue {
   id: string;
@@ -44,6 +44,8 @@ export default function AdminManagerPicker({
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +127,33 @@ export default function AdminManagerPicker({
     onChange(value.filter(v => v.id !== id));
   };
 
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(idx);
+  };
+
+  const handleDrop = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === idx) return;
+    const next = [...value];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(idx, 0, moved);
+    onChange(next);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // 검색 목록 중 아직 선택 안 된 항목만 키보드 탐색
     const navigable = employees.filter(emp => !selectedIds.has(emp.id));
@@ -159,8 +188,27 @@ export default function AdminManagerPicker({
         {value.map((person, idx) => (
           <span
             key={person.id || `${person.name}-${idx}`}
-            className="inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700 group"
+            draggable={!disabled && value.length > 1}
+            onDragStart={e => handleDragStart(e, idx)}
+            onDragOver={e => handleDragOver(e, idx)}
+            onDrop={e => handleDrop(e, idx)}
+            onDragEnd={handleDragEnd}
+            className={`
+              inline-flex items-center gap-1 pl-1 pr-1 py-0.5 rounded-full text-xs font-medium transition-all
+              ${idx === 0 ? 'bg-blue-100 border-2 border-blue-400 text-blue-800' : 'bg-blue-50 border border-blue-200 text-blue-700'}
+              ${dragOverIndex === idx && dragIndex !== idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}
+              ${dragIndex === idx ? 'opacity-40' : ''}
+              ${!disabled && value.length > 1 ? 'cursor-grab active:cursor-grabbing' : ''}
+            `}
           >
+            {/* 드래그 핸들 (여러 명일 때만) */}
+            {!disabled && value.length > 1 && (
+              <GripVertical className="w-3 h-3 text-blue-300 flex-shrink-0" />
+            )}
+            {/* 첫 번째 항목 표시 배지 */}
+            {idx === 0 && value.length > 1 && (
+              <span className="text-[8px] font-bold text-blue-500 flex-shrink-0 leading-none">1st</span>
+            )}
             {/* 아바타 이니셜 */}
             <span className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0">
               {person.name.charAt(0)}
