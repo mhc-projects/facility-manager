@@ -262,7 +262,8 @@ function TaskManagementPage() {
           title: dbTask.title,
           businessName: dbTask.business_name,
           businessId: dbTask.business_id, // businessId 매핑 추가
-          localGovernment: dbTask.local_government, // 지자체 매핑 추가
+          localGovernment: dbTask.local_government,
+          manufacturer: dbTask.manufacturer || undefined,
           constructionReportDate: dbTask.construction_report_date, // 착공신고서 제출일 매핑 추가
           type: dbTask.task_type,
           status: dbTask.status,

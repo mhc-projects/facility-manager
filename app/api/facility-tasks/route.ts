@@ -177,6 +177,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ftb.manager_name,
         ftb.manager_contact,
         ftb.local_government,
+        ftb.manufacturer,
         ftb.construction_report_date,
         ftb.installation_date,
         ftb.order_date,

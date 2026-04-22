@@ -15,6 +15,7 @@ import {
   FileText
 } from 'lucide-react'
 import SubsidyActiveBadge from '@/components/tasks/SubsidyActiveBadge'
+import { getManufacturerName } from '@/constants/manufacturers'
 
 // Task 타입 (부모에서 import할 예정)
 interface SelectedAssignee {
@@ -168,7 +169,7 @@ export default function TaskCard({ task, onClick, onEdit, onComplete, activeSubs
         </span>
       </div>
 
-      {/* 사업장명 */}
+      {/* 사업장명 + 제조사 */}
       <div className="mb-2">
         <div className="flex items-center gap-1">
           <h3 className="font-semibold text-xs sm:text-sm text-gray-900 line-clamp-2 leading-tight">
@@ -181,6 +182,9 @@ export default function TaskCard({ task, onClick, onEdit, onComplete, activeSubs
             taskType={task.type}
           />
         </div>
+        {task.manufacturer && (
+          <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{getManufacturerName(task.manufacturer)}</div>
+        )}
       </div>
 
       {/* 정보 그리드 */}

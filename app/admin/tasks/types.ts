@@ -64,6 +64,7 @@ export interface Task {
   // 사업장 정보 연동 필드
   businessId?: string
   localGovernment?: string
+  manufacturer?: string
   constructionReportDate?: string
   progressStatus?: string
   installationDate?: string

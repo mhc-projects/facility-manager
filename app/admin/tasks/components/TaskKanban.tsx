@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { Task, TaskStatus, StepInfo, getStepsByType, TaskType } from '../types'
+import { getManufacturerName } from '@/constants/manufacturers'
 
 interface TaskKanbanProps {
   tasks: Task[]
@@ -194,10 +195,15 @@ function TaskCard({ task, isCompact, onClick, onDragStart, onDragEnd }: TaskCard
 
       {!isCompact && (
         <>
-          {/* 사업장명 */}
-          {task.businessName && (
-            <div className="text-xs text-gray-600 mb-2 line-clamp-1">
-              {task.businessName}
+          {/* 사업장명 + 제조사 */}
+          {(task.businessName || task.manufacturer) && (
+            <div className="mb-2">
+              {task.businessName && (
+                <div className="text-xs text-gray-600 line-clamp-1">{task.businessName}</div>
+              )}
+              {task.manufacturer && (
+                <div className="text-[10px] text-gray-400 line-clamp-1">{getManufacturerName(task.manufacturer)}</div>
+              )}
             </div>
           )}
 
