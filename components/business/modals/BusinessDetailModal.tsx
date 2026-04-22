@@ -1402,11 +1402,19 @@ export default function BusinessDetailModal({
 
                 {/* Invoice Management Section */}
                 <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 border border-purple-200">
-                  <div className="flex items-center mb-3 sm:mb-4">
-                    <div className="p-1.5 sm:p-2 bg-purple-600 rounded-lg mr-2 sm:mr-3">
-                      <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                  <div className="flex items-center justify-between mb-3 sm:mb-4">
+                    <div className="flex items-center">
+                      <div className="p-1.5 sm:p-2 bg-purple-600 rounded-lg mr-2 sm:mr-3">
+                        <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      </div>
+                      <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">계산서 및 입금 현황</h3>
                     </div>
-                    <h3 className="text-sm sm:text-sm md:text-base font-semibold text-slate-800">계산서 및 입금 현황</h3>
+                    {totalRevenueOverride !== undefined && totalRevenueOverride > 0 && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-100 border border-purple-300 rounded-full">
+                        <span className="text-[10px] text-purple-500 font-medium whitespace-nowrap">최종매출</span>
+                        <span className="text-xs font-bold text-purple-700 whitespace-nowrap">{totalRevenueOverride.toLocaleString()}원</span>
+                      </div>
+                    )}
                   </div>
                   {(() => {
                     // progress_status(진행구분)을 우선 사용. business_category는 대기필증 종별이므로 사용하지 않음
