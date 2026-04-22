@@ -133,20 +133,43 @@ interface BusinessOption {
 
 // 🔄 단계 정의 및 헬퍼 함수는 공유 모듈에서 import (lib/task-steps.ts)
 
+// progressStatus 문자열에서 TaskType 파생 (단일 출처)
+function deriveTypeFromPS(ps: string): TaskType {
+  if (ps.includes('보조금') || ps.startsWith('보조(')) return 'subsidy'
+  if (ps.includes('자비')) return 'self'
+  if (ps === 'AS') return 'as'
+  if (ps.includes('외주')) return 'outsourcing'
+  if (ps.includes('대리점')) return 'dealer'
+  return 'etc'
+}
+
 function TaskManagementPage() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
-  const [selectedType, setSelectedType] = useState<TaskType | 'all'>('all')
-  const [selectedProgressStatus, setSelectedProgressStatus] = useState<string | 'all'>('all') // 진행구분 필터 (설정 연동)
+  const [selectedProgressStatuses, setSelectedProgressStatuses] = useState<string[]>([]) // 진행구분 다중 선택 필터
+  const [progressFilterOpen, setProgressFilterOpen] = useState(false) // 진행구분 드롭다운 열림 여부
   const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]) // 설정 API 순서 (활성 항목만)
+
+  // selectedProgressStatuses에서 대표 TaskType 파생 (단일 타입이면 그 타입, 혼합이면 'all')
+  const selectedType = useMemo<TaskType | 'all'>(() => {
+    if (selectedProgressStatuses.length === 0) return 'all'
+    const types = new Set(selectedProgressStatuses.map(deriveTypeFromPS))
+    if (types.size === 1) return [...types][0]
+    return 'all'
+  }, [selectedProgressStatuses])
+
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all')
-  const [selectedAssignee, setSelectedAssignee] = useState<string | 'all'>('all')
-  const [selectedStatus, setSelectedStatus] = useState<TaskStatus | 'all'>('all') // 업무단계 필터
-  const [selectedLocalGov, setSelectedLocalGov] = useState<string | 'all'>('all') // 지자체 필터
+  const [selectedPriorities, setSelectedPriorities] = useState<Priority[]>([])
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>([])
+  const [selectedLocalGovs, setSelectedLocalGovs] = useState<string[]>([])
+  const [priorityFilterOpen, setPriorityFilterOpen] = useState(false)
+  const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false)
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false)
+  const [localGovFilterOpen, setLocalGovFilterOpen] = useState(false)
   const [showOnlyNoConstructionReport, setShowOnlyNoConstructionReport] = useState(false) // 착공신고서 미제출 필터
   const [assigneeFilterInitialized, setAssigneeFilterInitialized] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -203,6 +226,11 @@ function TaskManagementPage() {
   const searchTimeoutRef = useRef<NodeJS.Timeout>()
   const refreshIntervalRef = useRef<NodeJS.Timeout>()
   const businessSearchTimeoutRef = useRef<NodeJS.Timeout>()
+  const progressFilterRef = useRef<HTMLDivElement>(null)
+  const priorityFilterRef = useRef<HTMLDivElement>(null)
+  const assigneeFilterRef = useRef<HTMLDivElement>(null)
+  const statusFilterRef = useRef<HTMLDivElement>(null)
+  const localGovFilterRef = useRef<HTMLDivElement>(null)
 
   // Textarea refs for auto-resize
   const editDescriptionRef = useRef<HTMLTextAreaElement>(null)
@@ -507,6 +535,25 @@ function TaskManagementPage() {
     }
   }, [])
 
+  // 필터 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    const openFilters = [
+      { open: progressFilterOpen, ref: progressFilterRef, close: () => setProgressFilterOpen(false) },
+      { open: priorityFilterOpen, ref: priorityFilterRef, close: () => setPriorityFilterOpen(false) },
+      { open: assigneeFilterOpen, ref: assigneeFilterRef, close: () => setAssigneeFilterOpen(false) },
+      { open: statusFilterOpen, ref: statusFilterRef, close: () => setStatusFilterOpen(false) },
+      { open: localGovFilterOpen, ref: localGovFilterRef, close: () => setLocalGovFilterOpen(false) },
+    ].filter(f => f.open)
+    if (openFilters.length === 0) return
+    const handler = (e: MouseEvent) => {
+      openFilters.forEach(({ ref, close }) => {
+        if (ref.current && !ref.current.contains(e.target as Node)) close()
+      })
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [progressFilterOpen, priorityFilterOpen, assigneeFilterOpen, statusFilterOpen, localGovFilterOpen])
+
   // 초기 로딩
   useEffect(() => {
     loadBusinesses()
@@ -647,12 +694,11 @@ function TaskManagementPage() {
 
   // 필터 초기화 함수
   const handleResetFilters = useCallback(() => {
-    setSelectedProgressStatus('all')
-    setSelectedType('all')
-    setSelectedPriority('all')
-    setSelectedAssignee('all')
-    setSelectedStatus('all')
-    setSelectedLocalGov('all')
+    setSelectedProgressStatuses([])
+    setSelectedPriorities([])
+    setSelectedAssignees([])
+    setSelectedStatuses([])
+    setSelectedLocalGovs([])
     setShowOnlyNoConstructionReport(false)
     setShowCompletedTasks(false)
     setSearchTerm('')
@@ -888,14 +934,18 @@ function TaskManagementPage() {
   // 진행구분 필터 옵션: 설정 API 활성 항목 전체 표시 (순서 유지)
   // 설정에 없는 레거시 값은 실제 업무에 있을 경우에만 뒤에 추가
   const progressStatusOptions = useMemo(() => {
+    const hasEtcTasks = tasks.some(t => t.type === 'etc' || !t.progressStatus)
     if (progressCategoryOrder.length > 0) {
       const fromTasks = new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))
-      const result = [...progressCategoryOrder] // 설정 활성 항목 전체
-      fromTasks.forEach(v => { if (!progressCategoryOrder.includes(v)) result.push(v) }) // 레거시 값 추가
+      const result = [...progressCategoryOrder]
+      fromTasks.forEach(v => { if (!progressCategoryOrder.includes(v)) result.push(v) })
+      // '기타' 타입 업무가 있고 목록에 없으면 마지막에 추가
+      if (hasEtcTasks && !result.includes('기타')) result.push('기타')
       return result
     }
-    // 설정 미로드 시 실제 업무 값만
-    return [...new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))]
+    const base = [...new Set(tasks.map(t => t.progressStatus || '').filter(Boolean))]
+    if (hasEtcTasks && !base.includes('기타')) base.push('기타')
+    return base
   }, [tasks, progressCategoryOrder])
 
   // 새 업무 등록 모달 진행구분 변경 핸들러
@@ -925,23 +975,13 @@ function TaskManagementPage() {
     }
   }, [])
 
-  // 진행구분 변경 핸들러 — selectedType도 함께 파생
-  const handleProgressStatusChange = useCallback((value: string) => {
-    setSelectedProgressStatus(value)
-    if (value === 'all') {
-      setSelectedType('all')
-    } else {
-      const deriveType = (ps: string): TaskType => {
-        if (ps.includes('보조금')) return 'subsidy'
-        if (ps.includes('자비')) return 'self'
-        if (ps === 'AS') return 'as'
-        if (ps.includes('외주')) return 'outsourcing'
-        if (ps.includes('대리점')) return 'dealer'
-        return 'etc'
-      }
-      setSelectedType(deriveType(value))
-    }
-    setSelectedStatus('all')
+  // 진행구분 토글 핸들러 (다중 선택)
+  const toggleProgressStatus = useCallback((value: string) => {
+    setSelectedProgressStatuses(prev => {
+      const next = prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+      return next
+    })
+    setSelectedStatuses([])
   }, [])
 
   // 필터링된 업무 목록
@@ -949,10 +989,10 @@ function TaskManagementPage() {
     console.log('🔍 [FILTER] 필터링 시작... tasksWithDelayStatus.length:', tasksWithDelayStatus.length)
     console.log('🔍 [FILTER] 필터 조건:', {
       selectedType,
-      selectedPriority,
-      selectedAssignee,
-      selectedStatus,
-      selectedLocalGov,
+      selectedPriorities,
+      selectedAssignees,
+      selectedStatuses,
+      selectedLocalGovs,
       showCompletedTasks,
       showOnlyNoConstructionReport
     })
@@ -972,49 +1012,28 @@ function TaskManagementPage() {
         task.assignee?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.localGovernment?.toLowerCase().includes(searchTerm.toLowerCase())
 
-      // 진행구분 필터: progressStatus 직접 비교 (설정 연동)
-      const matchesType = selectedProgressStatus === 'all' || task.progressStatus === selectedProgressStatus
-      const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority
-      // 다중 담당자 지원: assignees 배열과 기존 assignee 필드 모두 확인
-      const matchesAssignee = selectedAssignee === 'all' ||
-        task.assignee === selectedAssignee ||
+      // 진행구분 필터: 선택된 항목 중 하나라도 일치하면 통과 (빈 배열 = 전체)
+      const matchesType = selectedProgressStatuses.length === 0 ||
+        selectedProgressStatuses.includes(task.progressStatus || '') ||
+        (selectedProgressStatuses.includes('기타') && (task.type === 'etc' || !task.progressStatus))
+      const matchesPriority = selectedPriorities.length === 0 || selectedPriorities.includes(task.priority as Priority)
+      const matchesAssignee = selectedAssignees.length === 0 ||
+        selectedAssignees.includes(task.assignee || '') ||
         (task.assignees && Array.isArray(task.assignees) &&
-         task.assignees.some((assignee: any) => assignee.name === selectedAssignee))
-
-      // 업무단계 필터
-      const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus
-
-      // 지자체 필터
-      const matchesLocalGov = selectedLocalGov === 'all' || task.localGovernment === selectedLocalGov
-
-      // 착공신고서 미제출 필터
+         task.assignees.some((a: any) => selectedAssignees.includes(a.name)))
+      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status as TaskStatus)
+      const matchesLocalGov = selectedLocalGovs.length === 0 || selectedLocalGovs.includes(task.localGovernment || '')
       const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
 
       const passed = matchesSearch && matchesType && matchesPriority && matchesAssignee &&
                      matchesStatus && matchesLocalGov && matchesConstructionReport
 
-      // 디버깅: 자비 타입이고 필터링에 실패한 경우 로그
-      if (task.type === 'self' && !passed) {
-        console.log('❌ [FILTER] 자비 업무 필터링 실패:', {
-          id: task.id.slice(0, 8),
-          business: task.businessName,
-          progress: task.progressPercentage,
-          matchesType,
-          matchesPriority,
-          matchesAssignee,
-          matchesStatus,
-          matchesLocalGov,
-          matchesConstructionReport
-        })
-      }
-
       return passed
     })
 
-    console.log('🔍 [FILTER] 필터링 완료:', result.length, '개')
     return result
-  }, [tasksWithDelayStatus, searchTerm, selectedProgressStatus, selectedType, selectedPriority, selectedAssignee,
-      showCompletedTasks, selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
+  }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
+      showCompletedTasks, selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 칸반 보드용 필터링 (완료 업무도 항상 포함)
   const kanbanTasks = useMemo(() => {
@@ -1026,21 +1045,23 @@ function TaskManagementPage() {
         task.localGovernment?.toLowerCase().includes(searchTerm.toLowerCase())
 
       // 진행구분 필터: progressStatus 직접 비교 (설정 연동)
-      const matchesType = selectedProgressStatus === 'all' || task.progressStatus === selectedProgressStatus
-      const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority
-      const matchesAssignee = selectedAssignee === 'all' ||
-        task.assignee === selectedAssignee ||
+      const matchesType = selectedProgressStatuses.length === 0 ||
+        selectedProgressStatuses.includes(task.progressStatus || '') ||
+        (selectedProgressStatuses.includes('기타') && (task.type === 'etc' || !task.progressStatus))
+      const matchesPriority = selectedPriorities.length === 0 || selectedPriorities.includes(task.priority as Priority)
+      const matchesAssignee = selectedAssignees.length === 0 ||
+        selectedAssignees.includes(task.assignee || '') ||
         (task.assignees && Array.isArray(task.assignees) &&
-         task.assignees.some((assignee: any) => assignee.name === selectedAssignee))
-      const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus
-      const matchesLocalGov = selectedLocalGov === 'all' || task.localGovernment === selectedLocalGov
+         task.assignees.some((a: any) => selectedAssignees.includes(a.name)))
+      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status as TaskStatus)
+      const matchesLocalGov = selectedLocalGovs.length === 0 || selectedLocalGovs.includes(task.localGovernment || '')
       const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
 
       return matchesSearch && matchesType && matchesPriority && matchesAssignee &&
              matchesStatus && matchesLocalGov && matchesConstructionReport
     })
-  }, [tasksWithDelayStatus, searchTerm, selectedProgressStatus, selectedType, selectedPriority, selectedAssignee,
-      selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
+  }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
+      selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 페이지네이션을 위한 현재 페이지 업무 목록
   const paginatedTasks = useMemo(() => {
@@ -1055,8 +1076,8 @@ function TaskManagementPage() {
   // 검색/필터 변경 시 첫 페이지로 이동
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, selectedProgressStatus, selectedType, selectedPriority, selectedAssignee,
-      selectedStatus, selectedLocalGov, showOnlyNoConstructionReport])
+  }, [searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
+      selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 상태별 업무 그룹화 (칸반용: 완료 업무 포함)
   const tasksByStatus = useMemo(() => {
@@ -1084,11 +1105,10 @@ function TaskManagementPage() {
       ? kanbanTasks.filter(task => task.progressPercentage === 100)
       : kanbanTasks
 
-    const allTypeSteps = selectedType === 'all' ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps] :
-                  selectedType === 'self' ? selfSteps :
-                  selectedType === 'subsidy' ? subsidySteps :
-                  selectedType === 'dealer' ? dealerSteps :
-                  selectedType === 'etc' ? etcSteps : selfSteps
+    // 선택된 진행구분들의 TaskType 집합에 따라 표시할 단계 결정 (getStepsForType 활용)
+    const allTypeSteps = selectedType === 'all'
+      ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
+      : getStepsForType(selectedType)
 
     // 완료업무 필터 시: 각 타입의 마지막 단계만 표시
     const steps = showCompletedTasks ? (() => {
@@ -1098,6 +1118,7 @@ function TaskManagementPage() {
           selfSteps[selfSteps.length - 1],
           subsidySteps[subsidySteps.length - 1],
           dealerSteps[dealerSteps.length - 1],
+          outsourcingSteps[outsourcingSteps.length - 1],
           etcSteps[etcSteps.length - 1],
           asSteps[asSteps.length - 1],
         ]
@@ -1127,10 +1148,7 @@ function TaskManagementPage() {
 
         activeTasks.forEach(task => {
           // 업무의 실제 타입에 맞는 단계 정보를 찾기
-          const correctSteps = task.type === 'self' ? selfSteps :
-                             task.type === 'subsidy' ? subsidySteps :
-                             task.type === 'dealer' ? dealerSteps :
-                             task.type === 'etc' ? etcSteps : asSteps
+          const correctSteps = getStepsForType(task.type)
 
           // 해당 타입의 단계 중에서 현재 상태와 일치하는 단계 찾기
           const correctStep = correctSteps.find(s => s.status === task.status)
@@ -1256,8 +1274,8 @@ function TaskManagementPage() {
         statusSet.add(task.status)
       })
 
-      // 모든 단계 정의에서 라벨 가져오기
-      const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...etcSteps, ...asSteps]
+      // 모든 단계 정의에서 라벨 가져오기 (outsourcingSteps 포함)
+      const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
       const uniqueSteps = Array.from(statusSet).map(status => {
         const step = allSteps.find(s => s.status === status)
         return step || { status, label: status }
@@ -1265,10 +1283,7 @@ function TaskManagementPage() {
 
       return uniqueSteps
     }
-    return selectedType === 'self' ? selfSteps :
-           selectedType === 'subsidy' ? subsidySteps :
-           selectedType === 'dealer' ? dealerSteps :
-           selectedType === 'etc' ? etcSteps : asSteps
+    return getStepsForType(selectedType)
   }, [selectedType, tasks])
 
   // 드래그 앤 드롭 핸들러
@@ -1985,67 +2000,170 @@ function TaskManagementPage() {
           <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 md:gap-3">
             {/* 필터 옵션들 */}
             <div className="flex flex-wrap gap-2 sm:gap-2">
-              {/* 진행구분 (설정 연동 동적 목록) */}
-              <select
-                value={selectedProgressStatus}
-                onChange={(e) => handleProgressStatusChange(e.target.value)}
-                className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-sm"
-              >
-                <option value="all">진행구분</option>
-                {progressStatusOptions.map(ps => (
-                  <option key={ps} value={ps}>{ps}</option>
-                ))}
-              </select>
+              {/* 진행구분 다중 선택 드롭다운 */}
+              <div className="relative" ref={progressFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setProgressFilterOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors ${
+                    selectedProgressStatuses.length > 0
+                      ? 'border-blue-400 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>진행구분{selectedProgressStatuses.length > 0 ? ` (${selectedProgressStatuses.length})` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${progressFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {progressFilterOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[160px] max-h-64 overflow-y-auto">
+                    <div className="p-1">
+                      {selectedProgressStatuses.length > 0 && (
+                        <button
+                          onClick={() => { setSelectedProgressStatuses([]); setSelectedStatuses([]) }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded"
+                        >
+                          전체 해제
+                        </button>
+                      )}
+                      {progressStatusOptions.map(ps => (
+                        <label key={ps} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedProgressStatuses.includes(ps)}
+                            onChange={() => toggleProgressStatus(ps)}
+                            className="w-3.5 h-3.5 accent-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{ps}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              {/* 우선순위 */}
-              <select
-                value={selectedPriority}
-                onChange={(e) => setSelectedPriority(e.target.value as Priority | 'all')}
-                className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-sm"
-              >
-                <option value="all">우선순위</option>
-                <option value="high">높음</option>
-                <option value="medium">보통</option>
-                <option value="low">낮음</option>
-              </select>
+              {/* 우선순위 다중 선택 */}
+              <div className="relative" ref={priorityFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setPriorityFilterOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors ${
+                    selectedPriorities.length > 0
+                      ? 'border-yellow-400 bg-yellow-50 text-yellow-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>우선순위{selectedPriorities.length > 0 ? ` (${selectedPriorities.length})` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${priorityFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {priorityFilterOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[120px]">
+                    <div className="p-1">
+                      {selectedPriorities.length > 0 && (
+                        <button onClick={() => setSelectedPriorities([])} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded">전체 해제</button>
+                      )}
+                      {([['high', '높음'], ['medium', '보통'], ['low', '낮음']] as [Priority, string][]).map(([val, label]) => (
+                        <label key={val} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input type="checkbox" checked={selectedPriorities.includes(val)} onChange={() => setSelectedPriorities(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])} className="w-3.5 h-3.5 accent-yellow-500" />
+                          <span className="text-sm text-gray-700">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              {/* 담당자 */}
-              <select
-                value={selectedAssignee}
-                onChange={(e) => setSelectedAssignee(e.target.value)}
-                className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-sm"
-              >
-                <option value="all">담당자</option>
-                {assignees.map(assignee => (
-                  <option key={assignee} value={assignee}>{assignee}</option>
-                ))}
-              </select>
+              {/* 담당자 다중 선택 */}
+              <div className="relative" ref={assigneeFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setAssigneeFilterOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors ${
+                    selectedAssignees.length > 0
+                      ? 'border-green-400 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>담당자{selectedAssignees.length > 0 ? ` (${selectedAssignees.length})` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${assigneeFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {assigneeFilterOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[140px] max-h-56 overflow-y-auto">
+                    <div className="p-1">
+                      {selectedAssignees.length > 0 && (
+                        <button onClick={() => setSelectedAssignees([])} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded">전체 해제</button>
+                      )}
+                      {assignees.map(name => (
+                        <label key={name} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input type="checkbox" checked={selectedAssignees.includes(name)} onChange={() => setSelectedAssignees(prev => prev.includes(name) ? prev.filter(v => v !== name) : [...prev, name])} className="w-3.5 h-3.5 accent-green-500" />
+                          <span className="text-sm text-gray-700">{name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              {/* 업무단계 */}
-              <select
-                value={selectedStatus}
-                onChange={(e) => {
-                  setSelectedStatus(e.target.value as TaskStatus | 'all')
-                }}
-                className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-sm"
-              >
-                <option value="all">단계</option>
-                {currentSteps.map(step => (
-                  <option key={step.status} value={step.status}>{step.label}</option>
-                ))}
-              </select>
+              {/* 업무단계 다중 선택 */}
+              <div className="relative" ref={statusFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilterOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors ${
+                    selectedStatuses.length > 0
+                      ? 'border-purple-400 bg-purple-50 text-purple-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>단계{selectedStatuses.length > 0 ? ` (${selectedStatuses.length})` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${statusFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {statusFilterOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[180px] max-h-64 overflow-y-auto">
+                    <div className="p-1">
+                      {selectedStatuses.length > 0 && (
+                        <button onClick={() => setSelectedStatuses([])} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded">전체 해제</button>
+                      )}
+                      {currentSteps.map(step => (
+                        <label key={step.status} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input type="checkbox" checked={selectedStatuses.includes(step.status as TaskStatus)} onChange={() => setSelectedStatuses(prev => prev.includes(step.status as TaskStatus) ? prev.filter(v => v !== step.status) : [...prev, step.status as TaskStatus])} className="w-3.5 h-3.5 accent-purple-500" />
+                          <span className="text-sm text-gray-700">{step.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              {/* 지자체 */}
-              <select
-                value={selectedLocalGov}
-                onChange={(e) => setSelectedLocalGov(e.target.value)}
-                className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-sm"
-              >
-                <option value="all">지자체</option>
-                {localGovList.map(localGov => (
-                  <option key={localGov} value={localGov}>{localGov}</option>
-                ))}
-              </select>
+              {/* 지자체 다중 선택 */}
+              <div className="relative" ref={localGovFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setLocalGovFilterOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors ${
+                    selectedLocalGovs.length > 0
+                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>지자체{selectedLocalGovs.length > 0 ? ` (${selectedLocalGovs.length})` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${localGovFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {localGovFilterOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[140px] max-h-56 overflow-y-auto">
+                    <div className="p-1">
+                      {selectedLocalGovs.length > 0 && (
+                        <button onClick={() => setSelectedLocalGovs([])} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded">전체 해제</button>
+                      )}
+                      {localGovList.map(lg => (
+                        <label key={lg} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input type="checkbox" checked={selectedLocalGovs.includes(lg)} onChange={() => setSelectedLocalGovs(prev => prev.includes(lg) ? prev.filter(v => v !== lg) : [...prev, lg])} className="w-3.5 h-3.5 accent-indigo-500" />
+                          <span className="text-sm text-gray-700">{lg}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* 착공신고서 미제출 필터 버튼 */}
               <button
@@ -2109,67 +2227,53 @@ function TaskManagementPage() {
           <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
             <div className="flex items-center gap-2 flex-wrap">
               <span>총 {filteredTasks.length}개 업무</span>
-              {/* 진행구분 필터 라벨 */}
-              {selectedProgressStatus !== 'all' && (
+              {/* 진행구분 필터 태그 (다중) */}
+              {selectedProgressStatuses.map(ps => (
                 <button
-                  onClick={() => handleProgressStatusChange('all')}
+                  key={ps}
+                  onClick={() => toggleProgressStatus(ps)}
                   className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs hover:bg-blue-200 transition-colors"
                   title="진행구분 필터 제거"
                 >
-                  <span>{selectedProgressStatus}</span>
+                  <span>{ps}</span>
                   <X className="w-3 h-3" />
                 </button>
-              )}
-              {/* 우선순위 필터 라벨 */}
-              {selectedPriority !== 'all' && (
-                <button
-                  onClick={() => setSelectedPriority('all')}
-                  className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs hover:bg-yellow-200 transition-colors"
-                  title="우선순위 필터 제거"
-                >
-                  <span>
-                    {selectedPriority === 'high' ? '높음' :
-                     selectedPriority === 'medium' ? '보통' : '낮음'}
-                  </span>
+              ))}
+              {/* 우선순위 태그 */}
+              {selectedPriorities.map(p => (
+                <button key={p} onClick={() => setSelectedPriorities(prev => prev.filter(v => v !== p))}
+                  className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs hover:bg-yellow-200 transition-colors">
+                  <span>{p === 'high' ? '높음' : p === 'medium' ? '보통' : '낮음'}</span>
                   <X className="w-3 h-3" />
                 </button>
-              )}
-              {/* 담당자 필터 라벨 */}
-              {selectedAssignee !== 'all' && (
-                <button
-                  onClick={() => setSelectedAssignee('all')}
-                  className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs hover:bg-purple-200 transition-colors"
-                  title="담당자 필터 제거"
-                >
-                  <span>{selectedAssignee}</span>
+              ))}
+              {/* 담당자 태그 */}
+              {selectedAssignees.map(name => (
+                <button key={name} onClick={() => setSelectedAssignees(prev => prev.filter(v => v !== name))}
+                  className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-xs hover:bg-green-200 transition-colors">
+                  <span>{name}</span>
                   <X className="w-3 h-3" />
                 </button>
-              )}
-              {/* 업무단계 필터 라벨 */}
-              {selectedStatus !== 'all' && (
-                <button
-                  onClick={() => setSelectedStatus('all')}
-                  className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-xs hover:bg-green-200 transition-colors"
-                  title="업무단계 필터 제거"
-                >
-                  <span>{currentSteps.find(step => step.status === selectedStatus)?.label || selectedStatus}</span>
+              ))}
+              {/* 업무단계 태그 */}
+              {selectedStatuses.map(s => (
+                <button key={s} onClick={() => setSelectedStatuses(prev => prev.filter(v => v !== s))}
+                  className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs hover:bg-purple-200 transition-colors">
+                  <span>{currentSteps.find(step => step.status === s)?.label || s}</span>
                   <X className="w-3 h-3" />
                 </button>
-              )}
-              {/* 지자체 필터 라벨 */}
-              {selectedLocalGov !== 'all' && (
-                <button
-                  onClick={() => setSelectedLocalGov('all')}
-                  className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs hover:bg-indigo-200 transition-colors"
-                  title="지자체 필터 제거"
-                >
-                  <span>{selectedLocalGov}</span>
+              ))}
+              {/* 지자체 태그 */}
+              {selectedLocalGovs.map(lg => (
+                <button key={lg} onClick={() => setSelectedLocalGovs(prev => prev.filter(v => v !== lg))}
+                  className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs hover:bg-indigo-200 transition-colors">
+                  <span>{lg}</span>
                   <X className="w-3 h-3" />
                 </button>
-              )}
+              ))}
               {/* 전체 필터 초기화 버튼 */}
-              {(selectedType !== 'subsidy' || selectedPriority !== 'all' || selectedAssignee !== 'all' ||
-                selectedStatus !== 'all' || selectedLocalGov !== 'all' || showOnlyNoConstructionReport ||
+              {(selectedProgressStatuses.length > 0 || selectedPriorities.length > 0 || selectedAssignees.length > 0 ||
+                selectedStatuses.length > 0 || selectedLocalGovs.length > 0 || showOnlyNoConstructionReport ||
                 showCompletedTasks || searchTerm) && (
                 <button
                   onClick={handleResetFilters}
