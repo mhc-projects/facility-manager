@@ -1412,7 +1412,7 @@ export default function BusinessDetailModal({
                     {totalRevenueOverride !== undefined && totalRevenueOverride > 0 && (
                       <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-100 border border-purple-300 rounded-full">
                         <span className="text-[10px] text-purple-500 font-medium whitespace-nowrap">최종매출</span>
-                        <span className="text-xs font-bold text-purple-700 whitespace-nowrap">{totalRevenueOverride.toLocaleString()}원</span>
+                        <span className="text-xs font-bold text-purple-700 whitespace-nowrap">{Math.round(totalRevenueOverride / 1.1).toLocaleString()}원</span>
                       </div>
                     )}
                   </div>
