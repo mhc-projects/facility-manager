@@ -223,6 +223,10 @@ function TaskManagementPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10) // 업무 목록 페이지당 10개
 
+  // 정렬 상태
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
   const searchTimeoutRef = useRef<NodeJS.Timeout>()
   const refreshIntervalRef = useRef<NodeJS.Timeout>()
   const businessSearchTimeoutRef = useRef<NodeJS.Timeout>()
@@ -1063,12 +1067,63 @@ function TaskManagementPage() {
   }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
       selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
 
+  // 정렬 핸들러
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+    setCurrentPage(1)
+  }
+
+  // 정렬된 업무 목록
+  const sortedTasks = useMemo(() => {
+    if (!sortColumn) return filteredTasks
+    return [...filteredTasks].sort((a, b) => {
+      let aVal: string | number = ''
+      let bVal: string | number = ''
+      if (sortColumn === 'businessName') {
+        aVal = a.businessName || ''
+        bVal = b.businessName || ''
+      } else if (sortColumn === 'localGovernment') {
+        aVal = a.localGovernment || ''
+        bVal = b.localGovernment || ''
+      } else if (sortColumn === 'status') {
+        aVal = a.status || ''
+        bVal = b.status || ''
+      } else if (sortColumn === 'assignee') {
+        aVal = (a.assignees && a.assignees.length > 0) ? a.assignees[0].name : (a.assignee || '')
+        bVal = (b.assignees && b.assignees.length > 0) ? b.assignees[0].name : (b.assignee || '')
+      } else if (sortColumn === 'type') {
+        aVal = a.type || ''
+        bVal = b.type || ''
+      } else if (sortColumn === 'installationDate') {
+        aVal = a.installationDate || ''
+        bVal = b.installationDate || ''
+      } else if (sortColumn === 'attachmentCompletionSubmittedAt') {
+        aVal = a.attachmentCompletionSubmittedAt || ''
+        bVal = b.attachmentCompletionSubmittedAt || ''
+      } else if (sortColumn === 'greenlinkConfirmationSubmittedAt') {
+        aVal = a.greenlinkConfirmationSubmittedAt || ''
+        bVal = b.greenlinkConfirmationSubmittedAt || ''
+      } else if (sortColumn === 'receivables') {
+        aVal = taskReceivables[a.businessId || ''] ?? 0
+        bVal = taskReceivables[b.businessId || ''] ?? 0
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [filteredTasks, sortColumn, sortDirection, taskReceivables])
+
   // 페이지네이션을 위한 현재 페이지 업무 목록
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage
     const endIndex = startIndex + itemsPerPage
-    return filteredTasks.slice(startIndex, endIndex)
-  }, [filteredTasks, currentPage, itemsPerPage])
+    return sortedTasks.slice(startIndex, endIndex)
+  }, [sortedTasks, currentPage, itemsPerPage])
 
   // 전체 페이지 수 계산
   const totalPages = Math.ceil(filteredTasks.length / itemsPerPage)
@@ -2331,16 +2386,38 @@ function TaskManagementPage() {
               <table className="w-full min-w-[800px]">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">사업장</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">지자체</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800 w-28 sm:w-40 max-w-28 sm:max-w-40">업무 설명</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">업무 단계</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">담당자</th>
-                    <th className="text-left py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800">업무 타입</th>
-                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">설치완료</th>
-                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">부착통보</th>
-                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">그린링크</th>
-                    <th className="text-center py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs font-semibold text-gray-800">미수금</th>
+                    {[
+                      { key: 'businessName', label: '사업장', align: 'left' },
+                      { key: 'localGovernment', label: '지자체', align: 'left' },
+                      { key: null, label: '업무 설명', align: 'left', className: 'w-28 sm:w-40 max-w-28 sm:max-w-40' },
+                      { key: 'status', label: '업무 단계', align: 'left' },
+                      { key: 'assignee', label: '담당자', align: 'left' },
+                      { key: 'type', label: '업무 타입', align: 'left' },
+                      { key: 'installationDate', label: '설치완료', align: 'center' },
+                      { key: 'attachmentCompletionSubmittedAt', label: '부착통보', align: 'center' },
+                      { key: 'greenlinkConfirmationSubmittedAt', label: '그린링크', align: 'center' },
+                      { key: 'receivables', label: '미수금', align: 'center' },
+                    ].map(({ key, label, align, className }) => (
+                      <th
+                        key={label}
+                        onClick={key ? () => handleSort(key) : undefined}
+                        className={[
+                          `text-${align} py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-semibold text-gray-800`,
+                          align === 'center' ? 'px-1 sm:px-2' : '',
+                          className || '',
+                          key ? 'cursor-pointer select-none hover:bg-gray-100' : '',
+                        ].join(' ')}
+                      >
+                        <span className="inline-flex items-center gap-0.5">
+                          {label}
+                          {key && (
+                            <span className="text-gray-400 text-[10px]">
+                              {sortColumn === key ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+                            </span>
+                          )}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
