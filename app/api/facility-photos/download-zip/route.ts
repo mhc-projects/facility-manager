@@ -37,9 +37,10 @@ export async function POST(request: NextRequest) {
 
     // 사업장 조회 - uploaded_files 테이블 사용을 위해 business_id 필요
     const { data: business, error: businessError } = await supabase
-      .from('businesses')
+      .from('business_info')
       .select('id')
-      .eq('name', businessName)
+      .eq('business_name', businessName)
+      .eq('is_deleted', false)
       .single();
 
     if (businessError || !business) {
