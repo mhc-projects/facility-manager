@@ -109,6 +109,8 @@ export interface Task {
   orderDate?: string
   attachmentCompletionSubmittedAt?: string
   greenlinkConfirmationSubmittedAt?: string
+  attachmentSupportWritingDate?: string
+  attachmentSupportApplicationDate?: string
 }
 
 interface CreateTaskForm {
@@ -317,6 +319,8 @@ function TaskManagementPage() {
           orderDate: dbTask.order_date || undefined,
           attachmentCompletionSubmittedAt: dbTask.attachment_completion_submitted_at || undefined,
           greenlinkConfirmationSubmittedAt: dbTask.greenlink_confirmation_submitted_at || undefined,
+          attachmentSupportWritingDate: dbTask.attachment_support_writing_date || undefined,
+          attachmentSupportApplicationDate: dbTask.attachment_support_application_date || undefined,
         }))
 
         console.log('✅ [STATE] setTasks 호출:', convertedTasks.length, '개')
@@ -1108,6 +1112,12 @@ function TaskManagementPage() {
       } else if (sortColumn === 'greenlinkConfirmationSubmittedAt') {
         aVal = a.greenlinkConfirmationSubmittedAt || ''
         bVal = b.greenlinkConfirmationSubmittedAt || ''
+      } else if (sortColumn === 'attachmentSupportWritingDate') {
+        aVal = a.attachmentSupportWritingDate || ''
+        bVal = b.attachmentSupportWritingDate || ''
+      } else if (sortColumn === 'attachmentSupportApplicationDate') {
+        aVal = a.attachmentSupportApplicationDate || ''
+        bVal = b.attachmentSupportApplicationDate || ''
       } else if (sortColumn === 'receivables') {
         aVal = taskReceivables[a.businessId || ''] ?? 0
         bVal = taskReceivables[b.businessId || ''] ?? 0
@@ -2393,9 +2403,11 @@ function TaskManagementPage() {
                       { key: 'status', label: '업무 단계', align: 'left' },
                       { key: 'assignee', label: '담당자', align: 'left' },
                       { key: 'type', label: '업무 타입', align: 'left' },
-                      { key: 'installationDate', label: '설치완료', align: 'center' },
-                      { key: 'attachmentCompletionSubmittedAt', label: '부착통보', align: 'center' },
-                      { key: 'greenlinkConfirmationSubmittedAt', label: '그린링크', align: 'center' },
+                      { key: 'attachmentSupportWritingDate', label: '부착지원\n작성일', align: 'center', className: 'w-24' },
+                      { key: 'attachmentSupportApplicationDate', label: '부착지원\n신청일', align: 'center', className: 'w-24' },
+                      { key: 'installationDate', label: '설치완료', align: 'center', className: 'w-24' },
+                      { key: 'attachmentCompletionSubmittedAt', label: '부착통보', align: 'center', className: 'w-24' },
+                      { key: 'greenlinkConfirmationSubmittedAt', label: '그린링크', align: 'center', className: 'w-24' },
                       { key: 'receivables', label: '미수금', align: 'center' },
                     ].map(({ key, label, align, className }) => (
                       <th
@@ -2409,7 +2421,11 @@ function TaskManagementPage() {
                         ].join(' ')}
                       >
                         <span className="inline-flex items-center gap-0.5">
-                          {label}
+                          <span>
+                            {label.split('\n').map((line, i, arr) => (
+                              <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+                            ))}
+                          </span>
                           {key && (
                             <span className="text-gray-400 text-[10px]">
                               {sortColumn === key ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
@@ -2511,6 +2527,20 @@ function TaskManagementPage() {
                              task.type === 'outsourcing' ? '외주설치' :
                              task.type === 'etc' ? '기타' : 'AS'}
                           </span>
+                        </td>
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.attachmentSupportWritingDate ? (
+                            <span className="text-violet-600 font-medium">
+                              {(() => { const d = new Date(task.attachmentSupportWritingDate); return `${d.getFullYear().toString().slice(-2)}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')}` })()}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.attachmentSupportApplicationDate ? (
+                            <span className="text-orange-600 font-medium">
+                              {(() => { const d = new Date(task.attachmentSupportApplicationDate); return `${d.getFullYear().toString().slice(-2)}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')}` })()}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
                           {(() => {
