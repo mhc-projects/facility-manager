@@ -36,7 +36,8 @@ import {
   Calculator,
   Megaphone,
   Radar,
-  FileOutput
+  FileOutput,
+  Truck
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -152,6 +153,36 @@ const navigationConfig: NavigationEntry[] = [
           icon: FileOutput,
           description: '문서 생성 및 자동화 설정',
           requiredLevel: 1
+        },
+      ]
+    }
+  },
+  // DPF 관리 그룹
+  {
+    type: 'group',
+    group: {
+      label: 'DPF업무',
+      items: [
+        {
+          name: '차량 관리',
+          href: '/dpf',
+          icon: Truck,
+          description: '매연저감장치 부착 차량 조회 및 서식 출력',
+          requiredLevel: 1
+        },
+        {
+          name: '업무 지침',
+          href: '/dpf/wiki',
+          icon: FileText,
+          description: '운행차 배출가스 저감사업 업무처리지침 Wiki',
+          requiredLevel: 1
+        },
+        {
+          name: '데이터 임포트',
+          href: '/dpf/import',
+          icon: Package,
+          description: '후지노 차량정보 엑셀 일괄 임포트 (관리자)',
+          requiredLevel: 3
         },
       ]
     }
