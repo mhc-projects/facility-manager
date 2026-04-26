@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     const departmentFilter= searchParams.get('department') || null;
     const limit           = parseInt(searchParams.get('limit') || '50');
     const offset          = parseInt(searchParams.get('offset') || '0');
+    const sortBy          = searchParams.get('sort_by') === 'completed_at' ? 'completed_at' : 'submitted_at';
 
     // ── 결재완료 탭: 총무팀 또는 권한4 전용 ──
     if (completedTab) {
@@ -280,7 +281,7 @@ export async function GET(request: NextRequest) {
        LEFT JOIN employees vp  ON vp.id = d.vice_president_id
        LEFT JOIN employees ceo ON ceo.id = d.ceo_id
        WHERE ${whereClause}
-       ORDER BY d.submitted_at DESC NULLS LAST, d.created_at DESC
+       ORDER BY d.${sortBy} DESC NULLS LAST, d.created_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,
       values
     );

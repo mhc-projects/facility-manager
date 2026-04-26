@@ -177,6 +177,7 @@ function ApprovalsContent() {
   // 일반 탭 필터
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const allSortBy = searchParams?.get('sort_by') === 'completed_at' ? 'completed_at' as const : 'submitted_at' as const
 
   // 결재완료 탭 필터
   const [searchQuery, setSearchQuery] = useState('')
@@ -239,6 +240,7 @@ function ApprovalsContent() {
         if (tab === 'pending') params.set('pending_mine', 'true')
         if (typeFilter) params.set('type', typeFilter)
         if (tab !== 'my' && statusFilter) params.set('status', statusFilter)
+        if (tab === 'all' && allSortBy !== 'submitted_at') params.set('sort_by', allSortBy)
       }
       params.set('limit', '100')
 
@@ -256,7 +258,7 @@ function ApprovalsContent() {
     } finally {
       setLoading(false)
     }
-  }, [tab, mySubTab, typeFilter, statusFilter, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
+  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
@@ -510,7 +512,7 @@ function ApprovalsContent() {
                 >
                   <button
                     className="w-full text-left"
-                    onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
+                    onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0 flex-1">
@@ -582,7 +584,7 @@ function ApprovalsContent() {
                     <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
                       <td
                         className="px-4 py-3 text-xs text-gray-500 font-mono cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
+                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
                       >
                         {doc.document_number}
                       </td>
@@ -593,7 +595,7 @@ function ApprovalsContent() {
                       </td>
                       <td
                         className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[180px] truncate cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
+                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
                       >
                         {doc.title}
                       </td>
@@ -734,6 +736,20 @@ function ApprovalsContent() {
                   <option value="returned">재상신필요</option>
                 </select>
               )}
+              {tab === 'all' && (
+                <select
+                  value={allSortBy}
+                  onChange={e => router.push(
+                    e.target.value === 'completed_at'
+                      ? '/admin/approvals?tab=all&sort_by=completed_at'
+                      : '/admin/approvals?tab=all'
+                  )}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="submitted_at">제출일순</option>
+                  <option value="completed_at">최종 결재일순</option>
+                </select>
+              )}
             </div>
 
             {/* 모바일: 카드형 목록 */}
@@ -749,7 +765,7 @@ function ApprovalsContent() {
                   {docs.map(doc => (
                     <button
                       key={doc.id}
-                      onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
+                      onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
                       className={`w-full text-left bg-white rounded-xl border border-gray-200 border-l-4 ${STATUS_BORDER[doc.status] || 'border-l-gray-300'} px-4 py-3.5 active:bg-gray-50 transition-colors`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -811,7 +827,7 @@ function ApprovalsContent() {
                       {docs.map(doc => (
                         <tr
                           key={doc.id}
-                          onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}`)}
+                          onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
                           className="hover:bg-blue-50 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3 text-xs text-gray-500 font-mono">{doc.document_number}</td>

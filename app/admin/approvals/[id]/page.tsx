@@ -102,6 +102,8 @@ function ApprovalDetailContent() {
   const { user } = useAuth()
   const id = params?.id as string
   const fromTab = searchParams?.get('from') || 'my'
+  const fromSortBy = searchParams?.get('sort_by') || ''
+  const backUrl = `/admin/approvals?tab=${fromTab}${fromSortBy ? `&sort_by=${fromSortBy}` : ''}`
 
   const [doc, setDoc] = useState<ApprovalDoc | null>(null)
   const [loading, setLoading] = useState(true)
@@ -181,7 +183,7 @@ function ApprovalDetailContent() {
       .on('broadcast', { event: 'doc_updated' }, (payload) => {
         // 삭제된 문서면 목록으로 이동
         if (payload.payload?.status === 'deleted') {
-          router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
+          router.push(`${backUrl}&_t=${Date.now()}`)
           return
         }
         // ref로 최신 editing 상태 확인 — 편집 중이 아닐 때만 갱신
@@ -330,7 +332,7 @@ function ApprovalDetailContent() {
         setApproveSheetOpen(false)
         setApproveComment('')
         await fetchDoc()
-        router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
+        router.push(`${backUrl}&_t=${Date.now()}`)
       } else {
         alert(data.error || '승인 실패')
       }
@@ -352,7 +354,7 @@ function ApprovalDetailContent() {
         setRejectSheetOpen(false)
         setRejectComment('')
         await fetchDoc()
-        router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
+        router.push(`${backUrl}&_t=${Date.now()}`)
       } else {
         alert(data.error || '반려 실패')
       }
@@ -373,7 +375,7 @@ function ApprovalDetailContent() {
         setExpressModalOpen(false)
         setExpressComment('')
         await fetchDoc()
-        router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
+        router.push(`${backUrl}&_t=${Date.now()}`)
       } else {
         alert(data.error || '전결 처리 실패')
       }
@@ -455,7 +457,7 @@ function ApprovalDetailContent() {
     const t = token()
     const res = await fetch(`/api/approvals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } })
     const data = await res.json()
-    if (data.success) router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)
+    if (data.success) router.push(`${backUrl}&_t=${Date.now()}`)
     else alert(data.error || '삭제 실패')
   }
 
@@ -483,7 +485,7 @@ function ApprovalDetailContent() {
       description={doc.document_number}
       actions={
         <div className="flex items-center gap-2">
-          <button onClick={() => router.push(`/admin/approvals?tab=${fromTab}&_t=${Date.now()}`)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
+          <button onClick={() => router.push(`${backUrl}&_t=${Date.now()}`)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
             <ChevronLeft className="w-4 h-4" />목록
           </button>
           {canEdit && !editing && (
