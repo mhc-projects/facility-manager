@@ -110,6 +110,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     lastEventTime: null as Date | null
   });
 
+  // API 폴링 성공 여부 - WebSocket 연결 실패해도 API 가 작동하면 "연결됨" 표시
+  const [isApiReachable, setIsApiReachable] = useState(false);
+
   // reconnectRealtime 호출 시 useEffect를 강제로 재실행하기 위한 트리거
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
 
@@ -239,9 +242,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     broadcastChannelRef.current = broadcastChannel;
 
     // 2. postgres_changes 채널 구독 (공지 등 일반 알림 fallback)
-    const token = TokenManager.getToken();
-    if (token) supabase.realtime.setAuth(token);
-
+    // setAuth는 호출하지 않음 - 커스텀 JWT로 setAuth를 호출하면 WebSocket 재연결이 발생해
+    // 이미 구독 중인 broadcast 채널 연결을 끊어버리는 문제가 있음
     const userPermLevel = (user as any).permission_level ?? (user as any).role ?? 1;
     const pgChannel = supabase
       .channel(`notif-personal:${user.id}`)
@@ -313,6 +315,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     autoReconnectTimerRef.current = setTimeout(() => {
       if (!realtimeConnectionState.isConnected && !realtimeConnectionState.isConnecting) {
         autoReconnectAttemptsRef.current += 1;
+        // 재연결 effect의 early-return 조건을 통과하도록 refs를 초기화 후 트리거
+        if (broadcastChannelRef.current) {
+          supabase.removeChannel(broadcastChannelRef.current);
+          broadcastChannelRef.current = null;
+        }
+        if (globalNotifChannelRef.current) {
+          supabase.removeChannel(globalNotifChannelRef.current);
+          globalNotifChannelRef.current = null;
+        }
+        userIdRef.current = undefined;
         setReconnectTrigger(t => t + 1);
       }
     }, delay);
@@ -325,9 +337,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
   }, [user, realtimeConnectionState.isConnected, realtimeConnectionState.isConnecting]);
 
-  // 단순화된 연결 상태 (Optimistic UI 적용)
-  const isConnected = realtimeConnectionState.isConnected;
-  const isConnecting = realtimeConnectionState.isConnecting;
+  // 연결 상태: WebSocket OR API 폴링 중 하나라도 동작하면 "연결됨"
+  const isConnected = realtimeConnectionState.isConnected || isApiReachable;
+  const isConnecting = !isApiReachable && realtimeConnectionState.isConnecting;
   const connectionError = realtimeConnectionState.connectionError;
   const lastEventTime = realtimeConnectionState.lastEventTime;
 
@@ -512,6 +524,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         generalApiOk: generalResponse.ok,
         taskApiOk: taskResponse.ok
       });
+
+      // API 성공 시 연결 가능 상태로 표시
+      if (generalResponse.ok) setIsApiReachable(true);
     } catch (error) {
       logger.error('NOTIFICATIONS', '알림 조회 오류', error);
     } finally {
@@ -695,8 +710,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       logger.info('NOTIFICATIONS', '서버 응답', data);
 
-      // Realtime 연결이 없는 경우에만 서버 상태 재확인
-      if (!isConnected) {
+      // WebSocket Realtime 연결이 없는 경우에만 서버 상태 재확인 (API 연결은 충분하지 않음)
+      if (!realtimeConnectionState.isConnected) {
         logger.warn('NOTIFICATIONS', 'Realtime 연결 없음 - 서버에서 최신 상태 확인');
         setTimeout(() => {
           fetchNotifications();
