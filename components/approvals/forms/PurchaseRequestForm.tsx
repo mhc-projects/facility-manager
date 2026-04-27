@@ -3,6 +3,11 @@
 import { useCallback, useRef } from 'react'
 import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
 
+function autoResize(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
 export interface PurchaseItem {
   seq: number
   name: string
@@ -260,8 +265,17 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
                   <td className="border-r border-black">
                     <div className="px-2 py-1.5 text-sm text-right">{(item.estimated_amount || 0).toLocaleString()}</div>
                   </td>
-                  <td className={`p-0 ${!disabled ? 'border-r border-black' : ''}`}>
-                    <input className={cellInput} value={item.reason} onChange={e => updateItem(idx, 'reason', e.target.value)} disabled={disabled} placeholder="구매사유" />
+                  <td className={`p-0 align-top ${!disabled ? 'border-r border-black' : ''}`}>
+                    <textarea
+                      className={`${cellInput} resize-none overflow-hidden leading-snug`}
+                      rows={1}
+                      value={item.reason}
+                      onChange={e => { updateItem(idx, 'reason', e.target.value); autoResize(e.target) }}
+                      onFocus={e => autoResize(e.target)}
+                      ref={el => { if (el) autoResize(el) }}
+                      disabled={disabled}
+                      placeholder="구매사유"
+                    />
                   </td>
                   {!disabled && (
                     <td className="text-center">
@@ -379,7 +393,16 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">구매 사유</label>
-                <input className={mobileInput} value={item.reason} onChange={e => updateItem(idx, 'reason', e.target.value)} disabled={disabled} placeholder="구매 사유" />
+                <textarea
+                  className={`${mobileInput} resize-none overflow-hidden leading-snug`}
+                  rows={2}
+                  value={item.reason}
+                  onChange={e => { updateItem(idx, 'reason', e.target.value); autoResize(e.target) }}
+                  onFocus={e => autoResize(e.target)}
+                  ref={el => { if (el) autoResize(el) }}
+                  disabled={disabled}
+                  placeholder="구매 사유를 입력하세요"
+                />
               </div>
             </div>
           ))}
