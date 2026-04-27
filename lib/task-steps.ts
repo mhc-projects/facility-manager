@@ -59,7 +59,6 @@ export const selfSteps: TaskStep[] = [
   { status: 'self_installation_schedule', label: '설치예정', color: 'teal' },
   { status: 'self_installation', label: '설치완료', color: 'green' },
   { status: 'self_installation_doc_needed', label: '설치완료(준공서작성필요)', color: 'amber' },
-  { status: 'self_completion_document', label: '준공서류 작성필요', color: 'orange' },
   { status: 'self_completion_doc_done', label: '준공서류 작성완료(입금안내)', color: 'lime' },
   { status: 'self_balance_payment', label: '잔금 입금', color: 'emerald' },
   { status: 'self_document_complete', label: '서류 발송 완료', color: 'green' }
