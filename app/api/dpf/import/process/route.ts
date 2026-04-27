@@ -1,10 +1,11 @@
 // app/api/dpf/import/process/route.ts
-// 스테이징 → dpf_vehicles 본 테이블 처리
+// 스테이징 → dpf_vehicles 본 테이블 처리 (벌크 UPSERT via RPC)
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60; // Vercel 함수 최대 실행 시간 60초
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '처리할 데이터가 없습니다' }, { status: 400 });
     }
 
-    // PostgreSQL 함수 호출
+    // 벌크 UPSERT PostgreSQL 함수 호출
     const { data, error } = await supabaseAdmin
       .rpc('process_dpf_staging', { p_batch_id: batchId });
 

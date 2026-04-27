@@ -14,16 +14,16 @@ interface VehicleDetail {
   callMonitoring: DpfCallMonitoring[];
 }
 
-const TABS = [
-  { key: 'basic', label: '기본정보' },
-  { key: 'installation', label: '설치이력' },
-  { key: 'inspection', label: '성능검사' },
-  { key: 'subsidy', label: '보조금' },
-  { key: 'documents', label: '서식출력' },
-  { key: 'call', label: '콜모니터링' },
+const ALL_TABS = [
+  { key: 'basic',        label: '기본정보',  vendors: ['fujino', 'mz'] },
+  { key: 'installation', label: '설치이력',  vendors: ['fujino'] },
+  { key: 'inspection',   label: '성능검사',  vendors: ['fujino'] },
+  { key: 'subsidy',      label: '보조금',    vendors: ['fujino'] },
+  { key: 'documents',    label: '서식출력',  vendors: ['fujino', 'mz'] },
+  { key: 'call',         label: '콜모니터링', vendors: ['fujino', 'mz'] },
 ] as const;
 
-type TabKey = typeof TABS[number]['key'];
+type TabKey = typeof ALL_TABS[number]['key'];
 
 export default function DpfVehicleDetailPage({ params }: { params: { vin: string } }) {
   const vin = decodeURIComponent(params.vin);
@@ -71,6 +71,7 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
   }
 
   const { vehicle, installations, inspections, subsidies, callMonitoring } = detail;
+  const tabs = ALL_TABS.filter(t => t.vendors.includes(vehicle.vendor ?? 'fujino'));
 
   const breadcrumb = (
     <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -109,10 +110,10 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
 
         <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            ['소유자', vehicle.owner_name],
-            ['연락처', vehicle.owner_contact],
-            ['장치 시리얼', vehicle.device_serial],
-            ['구변일자', vehicle.installation_date?.split('T')[0]],
+            ['현재 업체명', vehicle.owner_name],
+            ['최종연락처', vehicle.owner_contact],
+            ['일련번호(후)', vehicle.device_serial],
+            ['구조변경일자', vehicle.installation_date?.split('T')[0]],
           ].map(([label, value]) => (
             <div key={label} className="bg-gray-50 rounded-lg px-3 py-2">
               <div className="text-xs text-gray-500">{label}</div>
@@ -127,9 +128,20 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
         )}
       </div>
 
+      {/* 벤더 배지 */}
+      <div className="mt-2 mb-1">
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          vehicle.vendor === 'mz'
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-blue-100 text-blue-700'
+        }`}>
+          {vehicle.vendor === 'mz' ? '엠즈 · 사후관리' : '후지노 · 사후관리+설치'}
+        </span>
+      </div>
+
       {/* 탭 */}
       <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -148,6 +160,11 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
             {tab.key === 'inspection' && inspections.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
                 {inspections.length}
+              </span>
+            )}
+            {tab.key === 'call' && callMonitoring.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                {callMonitoring.length}
               </span>
             )}
           </button>
@@ -170,22 +187,39 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
 // ─── 탭 컴포넌트들 ──────────────────────────────────────────
 
 function BasicInfoTab({ vehicle }: { vehicle: DpfVehicle }) {
-  const rows = [
-    ['차대번호 (VIN)', vehicle.vin],
-    ['차량번호', vehicle.plate_number],
-    ['차명', vehicle.vehicle_name],
-    ['소유자성명', vehicle.owner_name],
-    ['주소', vehicle.owner_address],
-    ['연락처', vehicle.owner_contact],
-    ['접수지자체명', vehicle.local_government],
-    ['장치시리얼번호', vehicle.device_serial],
-    ['구변일자', vehicle.installation_date?.split('T')[0]],
+  const rd = (vehicle.raw_data ?? {}) as Record<string, unknown>;
+  const r = (key: string) => {
+    const v = rd[key];
+    return v != null && v !== '' ? String(v) : '-';
+  };
+
+  const primaryRows: [string, string | null | undefined][] = [
+    ['차대번호 (VIN)',   vehicle.vin],
+    ['현재 차량번호',    vehicle.plate_number],
+    ['이전 차량번호',    r('이전 차량번호')],
+    ['차명',            vehicle.vehicle_name],
+    ['현재 업체명',      vehicle.owner_name],
+    ['이전 업체명',      r('이전 업체명')],
+    ['최종연락처',       vehicle.owner_contact],
+    ['주소',            vehicle.owner_address],
+    ['제작사',          r('제작사')],
+    ['부착장치',         r('부착장치')],
+    ['지자체(대)',       vehicle.local_government],
+    ['지자체(소)',       r('지자체(소)')],
+    ['구조변경일자',     vehicle.installation_date?.split('T')[0]],
+    ['최종실시일자',     r('최종실시일자')],
+    ['청구년월',         r('청구년월')],
+    ['조치공업사',       r('조치공업사')],
+    ['장소',            r('장소')],
+    ['일련번호(전)',     r('일련번호(전)')],
+    ['일련번호(후)',     vehicle.device_serial],
   ];
+
   return (
     <div>
       <h3 className="font-semibold text-gray-800 mb-3">기본 정보</h3>
       <dl className="divide-y divide-gray-100">
-        {rows.map(([label, value]) => (
+        {primaryRows.map(([label, value]) => (
           <div key={label} className="py-2.5 grid grid-cols-3 gap-3 text-sm">
             <dt className="text-gray-500 font-medium">{label}</dt>
             <dd className="col-span-2 text-gray-900">{value || '-'}</dd>

@@ -14,9 +14,21 @@ interface Props {
   onComplete?: (stats: ImportStats) => void;
 }
 
-const CHUNK_SIZE = 1000;
+type Vendor = 'fujino' | 'mz';
+
+const VENDOR_LABELS: Record<Vendor, { name: string; desc: string; color: string; sheetHint: string }> = {
+  fujino: { name: '후지노', desc: '사후관리 + 설치', color: 'blue',   sheetHint: '첫 번째 시트' },
+  mz:     { name: '엠즈',   desc: '사후관리만',       color: 'purple', sheetHint: '1종 시트' },
+};
+
+/** 엠즈 파일에서 데이터 시트 이름 우선순위 */
+const MZ_SHEET_PRIORITY = ['1종', '2종', '3종'];
+
+// 청크 크기: 4MB 제한 고려해 200행으로 제한
+const CHUNK_SIZE = 200;
 
 export default function DpfImportUploader({ onComplete }: Props) {
+  const [vendor, setVendor] = useState<Vendor>('fujino');
   const [status, setStatus] = useState<'idle' | 'parsing' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
@@ -33,30 +45,61 @@ export default function DpfImportUploader({ onComplete }: Props) {
     setStatusText('엑셀 파일 파싱 중...');
 
     try {
-      const { read, utils } = await import('xlsx');
-      const buffer = await file.arrayBuffer();
-      const wb = read(buffer, { type: 'array', cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rawRows: Record<string, unknown>[] = utils.sheet_to_json(ws, { defval: null });
+      // xlsx 동적 임포트 및 파싱
+      const XLSX = await import('xlsx');
+
+      let rawRows: Record<string, unknown>[];
+      try {
+        const buffer = await file.arrayBuffer();
+        // Uint8Array로 변환해서 전달 (ArrayBuffer 호환성 문제 방지)
+        const wb = XLSX.read(new Uint8Array(buffer), {
+          type: 'array',
+          cellDates: false, // Date 객체 대신 문자열로 받음
+          raw: false,       // 모든 값을 포맷된 문자열로
+          dateNF: 'yyyy-mm-dd',
+        });
+
+        // 엠즈: 1종/2종/3종 시트 우선, 없으면 첫 번째 시트
+        // 후지노: 첫 번째 시트
+        let sheetName = wb.SheetNames[0];
+        if (vendor === 'mz') {
+          const found = MZ_SHEET_PRIORITY.find(n => wb.SheetNames.includes(n));
+          if (found) sheetName = found;
+        }
+
+        const ws = wb.Sheets[sheetName];
+        rawRows = XLSX.utils.sheet_to_json(ws, {
+          defval: null,
+          raw: false,       // 날짜·숫자 등 모두 문자열로 통일
+        });
+      } catch (xlsxErr) {
+        throw new Error(`엑셀 파일 파싱 실패: ${xlsxErr instanceof Error ? xlsxErr.message : '파일 형식을 확인하세요'}`);
+      }
 
       const totalRows = rawRows.length;
       if (totalRows === 0) {
         setStatus('error');
-        setStatusText('데이터가 없습니다.');
+        setStatusText('데이터가 없습니다. 파일을 확인하세요.');
         return;
       }
 
       setStatusText(`총 ${totalRows.toLocaleString()}행 변환 중...`);
 
-      // 컬럼 매핑 변환
-      const transformed = rawRows.map(transformDpfRow);
+      // 컬럼 매핑 변환 (vendor별 다른 매핑 적용)
+      const transformed = rawRows.map(row => transformDpfRow(row, vendor));
 
       // vin 없는 행 제거
       const validRows = transformed.filter(r => r.vin && r.vin.length > 0);
       const skippedCount = totalRows - validRows.length;
 
+      if (validRows.length === 0) {
+        setStatus('error');
+        setStatusText('차대번호(VIN)가 있는 행이 없습니다. 헤더명을 확인하세요.');
+        return;
+      }
+
       const batchId = crypto.randomUUID();
-      const chunks = [];
+      const chunks: typeof validRows[] = [];
       for (let i = 0; i < validRows.length; i += CHUNK_SIZE) {
         chunks.push(validRows.slice(i, i + CHUNK_SIZE));
       }
@@ -66,19 +109,31 @@ export default function DpfImportUploader({ onComplete }: Props) {
 
       // 청크별 순차 업로드
       for (let i = 0; i < chunks.length; i++) {
-        const res = await fetch('/api/dpf/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            batchId,
-            rows: chunks[i],
-            chunkIndex: i,
-          }),
-        });
+        let res: Response;
+        try {
+          res = await fetch('/api/dpf/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              batchId,
+              rows: chunks[i],
+              chunkIndex: i,
+              vendor,
+            }),
+          });
+        } catch (fetchErr) {
+          throw new Error(`네트워크 오류: ${fetchErr instanceof Error ? fetchErr.message : '연결을 확인하세요'}`);
+        }
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? '업로드 실패');
+          let errMsg = `업로드 실패 (HTTP ${res.status})`;
+          try {
+            const errData = await res.json();
+            if (typeof errData.error === 'string') errMsg = errData.error;
+          } catch {
+            // JSON 파싱 실패 시 기본 메시지 사용
+          }
+          throw new Error(errMsg);
         }
 
         setProgress(Math.round(((i + 1) / chunks.length) * 80));
@@ -90,15 +145,26 @@ export default function DpfImportUploader({ onComplete }: Props) {
       setStatusText('데이터 처리 중 (잠시 기다려주세요)...');
       setProgress(85);
 
-      const processRes = await fetch('/api/dpf/import/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchId }),
-      });
+      let processRes: Response;
+      try {
+        processRes = await fetch('/api/dpf/import/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batchId }),
+        });
+      } catch (fetchErr) {
+        throw new Error(`처리 요청 실패: ${fetchErr instanceof Error ? fetchErr.message : '연결을 확인하세요'}`);
+      }
 
       if (!processRes.ok) {
-        const err = await processRes.json();
-        throw new Error(err.error ?? '처리 실패');
+        let errMsg = `처리 실패 (HTTP ${processRes.status})`;
+        try {
+          const errData = await processRes.json();
+          if (typeof errData.error === 'string') errMsg = errData.error;
+        } catch {
+          // JSON 파싱 실패 시 기본 메시지 사용
+        }
+        throw new Error(errMsg);
       }
 
       const result = await processRes.json();
@@ -107,9 +173,9 @@ export default function DpfImportUploader({ onComplete }: Props) {
 
       const finalStats: ImportStats = {
         totalRows: validRows.length,
-        processedCount: result.processedCount,
-        errorCount: result.errorCount + skippedCount,
-        errors: result.errors ?? [],
+        processedCount: result.processedCount ?? 0,
+        errorCount: (result.errorCount ?? 0) + skippedCount,
+        errors: Array.isArray(result.errors) ? result.errors : [],
       };
 
       if (skippedCount > 0) {
@@ -119,13 +185,14 @@ export default function DpfImportUploader({ onComplete }: Props) {
         });
       }
 
-      setStats(finalStats);
       setStatusText(`완료: ${finalStats.processedCount.toLocaleString()}건 처리, ${finalStats.errorCount}건 오류`);
       onComplete?.(finalStats);
+      setStats(finalStats);
 
     } catch (err) {
       setStatus('error');
-      setStatusText(err instanceof Error ? err.message : '알 수 없는 오류');
+      const msg = err instanceof Error ? err.message : String(err);
+      setStatusText(msg || '알 수 없는 오류가 발생했습니다.');
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
@@ -135,6 +202,27 @@ export default function DpfImportUploader({ onComplete }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* 벤더 선택 */}
+      <div className="flex gap-3">
+        {(Object.entries(VENDOR_LABELS) as [Vendor, typeof VENDOR_LABELS[Vendor]][]).map(([key, v]) => (
+          <button
+            key={key}
+            onClick={() => !isWorking && setVendor(key)}
+            disabled={isWorking}
+            className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl border-2 transition-all ${
+              vendor === key
+                ? key === 'fujino'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-purple-500 bg-purple-50 text-purple-700'
+                : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+            } ${isWorking ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <span className="font-semibold text-sm">{v.name}</span>
+            <span className="text-xs opacity-75">{v.desc}</span>
+          </button>
+        ))}
+      </div>
+
       {/* 파일 선택 */}
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
         <input
@@ -157,7 +245,11 @@ export default function DpfImportUploader({ onComplete }: Props) {
           <span className="text-sm font-medium text-gray-700">
             {isWorking ? '처리 중...' : '엑셀 파일 선택 (.xlsx)'}
           </span>
-          <span className="text-xs text-gray-500">후지노 차량정보 파일을 선택하세요</span>
+          <span className="text-xs text-gray-500">
+            {vendor === 'mz'
+              ? '엠즈 DB 파일을 선택하세요 (1종 시트 자동 인식)'
+              : '후지노 차량정보 파일을 선택하세요'}
+          </span>
         </label>
       </div>
 
@@ -208,7 +300,7 @@ export default function DpfImportUploader({ onComplete }: Props) {
               <div className="mt-2 max-h-40 overflow-y-auto text-xs text-gray-600 space-y-1">
                 {stats.errors.map((e, i) => (
                   <div key={i} className="flex gap-2">
-                    <span className="text-gray-400 w-12">행 {e.rowIndex < 0 ? '-' : e.rowIndex}</span>
+                    <span className="text-gray-400 w-12 shrink-0">행 {e.rowIndex < 0 ? '-' : e.rowIndex}</span>
                     {e.vin && <span className="text-gray-500">[{e.vin}]</span>}
                     <span>{e.message}</span>
                   </div>
@@ -235,8 +327,18 @@ export default function DpfImportUploader({ onComplete }: Props) {
       {/* 주의사항 */}
       <div className="text-xs text-gray-500 space-y-1">
         <p>• 차대번호(VIN)가 같으면 기존 데이터를 덮어씁니다 (upsert)</p>
-        <p>• 노란색 헤더 9개 컬럼만 표시됩니다. 나머지는 내부 보관됩니다.</p>
-        <p>• 18,789건 기준 약 30~60초 소요됩니다.</p>
+        {vendor === 'mz' ? (
+          <>
+            <p>• 엠즈: 현재 차량번호·현재 업체명·지자체(대)·최종연락처·일련번호(후)·구조변경일자 인식</p>
+            <p>• 이전 차량번호, 이전 업체명, 제작사 등 나머지 컬럼은 내부 보관됩니다.</p>
+          </>
+        ) : (
+          <>
+            <p>• 후지노: 차량번호·소유자성명·접수지자체명·연락처·장치시리얼번호·구변일자 인식</p>
+            <p>• 나머지 컬럼은 내부 보관됩니다.</p>
+          </>
+        )}
+        <p>• 대량 데이터 기준 약 2~3분 소요됩니다.</p>
       </div>
     </div>
   );

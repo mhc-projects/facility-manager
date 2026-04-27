@@ -10,28 +10,27 @@ interface ImportChunkBody {
   batchId: string;
   rows: Record<string, unknown>[];
   chunkIndex: number;
+  vendor: 'fujino' | 'mz';
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: ImportChunkBody = await request.json();
-    const { batchId, rows, chunkIndex } = body;
+    const { batchId, rows, chunkIndex, vendor = 'fujino' } = body;
 
     if (!batchId || !rows?.length) {
       return NextResponse.json({ error: 'batchId와 rows가 필요합니다' }, { status: 400 });
     }
 
-    // 관리자 권한 확인
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
-    }
+    const validVendor = vendor === 'mz' ? 'mz' : 'fujino';
 
+    // 미들웨어에서 JWT 검증이 완료된 상태 — supabaseAdmin은 서비스키로 RLS 우회
     const staging = rows.map((row, i) => ({
       import_batch_id: batchId,
       row_index: chunkIndex * 1000 + i,
       raw_data: row,
       vin: row['vin'] ? String(row['vin']) : null,
+      vendor: validVendor,
       status: 'pending' as const,
     }));
 

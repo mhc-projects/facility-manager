@@ -11,6 +11,7 @@ export interface DpfVehicle {
   local_government?: string | null;
   device_serial?: string | null;
   installation_date?: string | null;
+  vendor: 'fujino' | 'mz';
   raw_data?: Record<string, unknown>;
   is_active: boolean;
   is_deleted: boolean;
