@@ -501,20 +501,18 @@ export async function PUT(request: Request) {
       // normalizeUTF8은 NFC 정규화를 적용하므로, DB의 NFD 저장값과 다를 수 있어 normalize('NFC')로 비교
       const dbNormalizedName = business.business_name ? business.business_name.normalize('NFC').trim() : '';
       if (normalizedName !== dbNormalizedName) {
-        // is_deleted 포함 전체 행 검사 (soft-delete된 행도 unique constraint 대상이므로)
+        // partial unique index와 일치하게 활성 행(is_deleted=false)만 중복 검사
+        // soft-delete된 행은 DB 제약도 없으므로 이름 재사용 허용
         const existingWithSameName = await queryOne(
-          'SELECT id, is_deleted FROM business_info WHERE business_name = $1 AND id != $2',
+          'SELECT id FROM business_info WHERE business_name = $1 AND is_deleted = false AND id != $2',
           [normalizedName, id]
         );
 
         if (existingWithSameName) {
-          const isDuplicate = !existingWithSameName.is_deleted;
-          logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명:', normalizedName, '(삭제됨:', existingWithSameName.is_deleted, ')');
+          logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명(활성):', normalizedName);
           return NextResponse.json({
             success: false,
-            error: isDuplicate
-              ? `이미 동일한 사업장명이 존재합니다: ${normalizedName}`
-              : `삭제된 사업장과 이름이 중복됩니다: ${normalizedName}. 다른 이름을 사용하거나 삭제된 사업장을 완전히 제거해주세요.`
+            error: `이미 동일한 사업장명이 존재합니다. 다른 이름을 사용해주세요.`
           }, { status: 409 });
         }
 
