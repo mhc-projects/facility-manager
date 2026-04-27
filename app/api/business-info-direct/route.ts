@@ -496,18 +496,24 @@ export async function PUT(request: Request) {
       const normalizedName = normalizeUTF8(updateData.business_name || '').trim();
 
       // 현재 저장된 이름과 다른 경우에만 중복 체크 및 업데이트
-      if (normalizedName !== business.business_name?.trim()) {
+      // normalizeUTF8은 NFC 정규화를 적용하므로, DB의 NFD 저장값과 다를 수 있어 normalize('NFC')로 비교
+      const dbNormalizedName = business.business_name ? business.business_name.normalize('NFC').trim() : '';
+      if (normalizedName !== dbNormalizedName) {
+        // is_deleted 포함 전체 행 검사 (soft-delete된 행도 unique constraint 대상이므로)
         const existingWithSameName = await queryOne(
-          'SELECT id FROM business_info WHERE business_name = $1 AND is_deleted = false AND id != $2',
+          'SELECT id, is_deleted FROM business_info WHERE business_name = $1 AND id != $2',
           [normalizedName, id]
         );
 
         if (existingWithSameName) {
-          logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명:', normalizedName);
+          const isDuplicate = !existingWithSameName.is_deleted;
+          logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명:', normalizedName, '(삭제됨:', existingWithSameName.is_deleted, ')');
           return NextResponse.json({
             success: false,
-            error: `이미 동일한 사업장명이 존재합니다: ${normalizedName}`
-          }, { status: 409 });  // Conflict
+            error: isDuplicate
+              ? `이미 동일한 사업장명이 존재합니다: ${normalizedName}`
+              : `삭제된 사업장과 이름이 중복됩니다: ${normalizedName}. 다른 이름을 사용하거나 삭제된 사업장을 완전히 제거해주세요.`
+          }, { status: 409 });
         }
 
         // Only update business_name if it actually changed
@@ -1052,9 +1058,17 @@ export async function PUT(request: Request) {
 
   } catch (error) {
     logError('❌ [BUSINESS-INFO-DIRECT] PUT 실패:', error);
+    const msg = error instanceof Error ? error.message : '알 수 없는 오류';
+    // unique constraint 위반은 친절한 메시지로 전환
+    if (msg.includes('unique constraint') || msg.includes('duplicate key')) {
+      return NextResponse.json({
+        success: false,
+        error: '이미 동일한 사업장명이 존재합니다. 다른 이름을 사용해주세요.'
+      }, { status: 409 });
+    }
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : '알 수 없는 오류'
+      error: msg
     }, { status: 500 });
   }
 }

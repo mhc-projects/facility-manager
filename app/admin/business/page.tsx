@@ -2378,16 +2378,17 @@ function BusinessManagementPage() {
 
   // ✅ 페이지별 지연 로딩 구현 완료 - 백그라운드 로딩 제거됨
 
-  // selectedBusiness 동기화를 위한 별도 useEffect (완전 최적화)
+  // selectedBusiness 동기화를 위한 별도 useEffect
+  // allBusinesses 내용 변경(수정) 시에도 selectedBusiness가 최신 데이터를 반영하도록 동기화
   useEffect(() => {
-    if (selectedBusiness && allBusinesses.length > 0) {
-      const updatedSelected = allBusinesses.find(b => b.id === selectedBusiness.id)
-      if (updatedSelected && updatedSelected.수정일 !== selectedBusiness.수정일) {
-        console.log('🔄 selectedBusiness 동기화:', updatedSelected.사업장명, '담당자:', updatedSelected.담당자명)
-        setSelectedBusiness(updatedSelected)
-      }
+    if (!selectedBusiness || allBusinesses.length === 0) return;
+    const updatedSelected = allBusinesses.find(b => b.id === selectedBusiness.id)
+    if (!updatedSelected) return;
+    // 수정일 또는 사업장명이 다를 때만 동기화 (불필요한 re-render 방지)
+    if (updatedSelected.수정일 !== selectedBusiness.수정일 || updatedSelected.사업장명 !== selectedBusiness.사업장명) {
+      setSelectedBusiness(updatedSelected)
     }
-  }, [allBusinesses.length, selectedBusiness?.id]) // length 변화만 감지
+  }, [allBusinesses, selectedBusiness?.id]) // allBusinesses 내용 변화 감지
 
   // URL 파라미터 처리 - 알림에서 사업장으로 직접 이동
   useEffect(() => {
@@ -4001,9 +4002,10 @@ function BusinessManagementPage() {
           수정일: invoiceSavedAt ?? new Date().toISOString()
         };
 
-        // Optimistic Update: selectedBusiness 즉시 업데이트 (상세 모달은 닫기 버튼 후 열림)
+        // Optimistic Update: selectedBusiness + 테이블 동시 즉시 업데이트
         setSelectedBusiness(optimisticUpdate);
         updateBusinessState(optimisticUpdate, editingBusiness.id);
+        patchBusiness(editingBusiness.id, optimisticUpdate); // 테이블 행 즉시 반영
 
         // ✅ [SYNC-CHECK] Optimistic Update 완료 로깅
         console.log('✅ [SYNC-CHECK-AFTER] Optimistic Update 완료:', {
