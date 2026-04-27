@@ -2550,10 +2550,15 @@ function BusinessManagementPage() {
       setReturnPath(null);
       setShowLocalGovSuggestions(false);
       if (selectedBusiness) {
+        // allBusinesses에서 최신 데이터로 selectedBusiness 갱신 후 상세 모달 열기
+        const latestBusiness = allBusinesses.find(b => b.id === selectedBusiness.id);
+        if (latestBusiness) {
+          setSelectedBusiness(latestBusiness);
+        }
         setIsDetailModalOpen(true);
       }
     }
-  }, [returnPath, selectedBusiness, router]);
+  }, [returnPath, selectedBusiness, allBusinesses, router]);
 
   // 🗄️ 캐시 관리 함수들
 

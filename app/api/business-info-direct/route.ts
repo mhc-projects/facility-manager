@@ -443,6 +443,8 @@ export async function GET(request: Request) {
       count: businesses?.length || 0,
       totalCount: businesses?.length || 0,
       requestedLimit: limit
+    }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
     });
 
   } catch (error) {
