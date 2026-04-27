@@ -2,7 +2,7 @@
 // Gemini AI Verification System
 // ============================================================
 // Purpose: Verify subsidy announcement relevance using Google Gemini
-// Model: gemini-1.5-flash (cost-effective, fast)
+// Model: gemini-2.0-flash (free tier, replaces retired gemini-1.5-flash)
 // Integration: Works alongside existing keyword matching system
 // ============================================================
 
@@ -12,7 +12,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Gemini model configuration
-const MODEL_NAME = 'gemini-1.5-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 const GENERATION_CONFIG = {
   temperature: 0.3, // Lower temperature for more consistent results
   topP: 0.8,

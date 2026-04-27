@@ -2,27 +2,40 @@
 
 import { useState, useEffect, useRef } from 'react';
 import AdminLayout from '@/components/ui/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { GuidelineUpload } from '@/types/dpf';
-import { supabase } from '@/lib/supabase';
-import { Upload, RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, BookOpen } from 'lucide-react';
+import { Upload, RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, BookOpen, Trash2, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function WikiAdminPage() {
+  const { user } = useAuth();
+  const isSystemAdmin = user?.permission_level === 4;
+
   const [uploads, setUploads] = useState<GuidelineUpload[]>([]);
   const [uploading, setUploading] = useState(false);
   const [versionLabel, setVersionLabel] = useState('');
   const [reindexing, setReindexing] = useState(false);
   const [reindexResult, setReindexResult] = useState<string>('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadUploads(); }, []);
+  useEffect(() => {
+    loadUploads();
+    // 분석 중인 항목이 있으면 5초마다 자동 갱신
+    const interval = setInterval(async () => {
+      const res = await fetch('/api/wiki/guideline-uploads');
+      const rows: GuidelineUpload[] = res.ok ? await res.json() : [];
+      setUploads(rows);
+      if (!rows.some(r => r.status === 'analyzing')) {
+        clearInterval(interval);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function loadUploads() {
-    const { data } = await supabase
-      .from('guideline_uploads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setUploads((data ?? []) as GuidelineUpload[]);
+    const res = await fetch('/api/wiki/guideline-uploads');
+    if (res.ok) setUploads(await res.json() as GuidelineUpload[]);
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -47,6 +60,25 @@ export default function WikiAdminPage() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function handleDelete(upload: GuidelineUpload) {
+    if (!confirm(`"${upload.version_label}" 업로드 이력을 삭제합니다.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`)) return;
+    setDeletingId(upload.id);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const res = await fetch(`/api/wiki/guideline-uploads/${upload.id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUploads(prev => prev.filter(u => u.id !== upload.id));
+    } catch (err) {
+      alert(`삭제 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -76,6 +108,11 @@ export default function WikiAdminPage() {
   return (
     <AdminLayout title="DPF 지침 관리" description="지침서 업로드, AI 분석, Wiki 재인덱싱">
       <div className="space-y-6 max-w-3xl">
+        <div>
+          <Link href="/dpf/wiki" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" /> Wiki로 돌아가기
+          </Link>
+        </div>
 
         {/* 1. 지침서 업로드 */}
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
@@ -121,10 +158,17 @@ export default function WikiAdminPage() {
         {/* 2. 업로드 이력 */}
         {uploads.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-            <h2 className="font-semibold text-gray-800 mb-4">업로드 이력</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-800">업로드 이력</h2>
+              <button onClick={loadUploads}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+                <RefreshCw className="w-3.5 h-3.5" /> 새로고침
+              </button>
+            </div>
             <div className="space-y-3">
               {uploads.map(upload => {
                 const st = statusConfig[upload.status];
+                const isDeleting = deletingId === upload.id;
                 return (
                   <div key={upload.id} className="border border-gray-200 rounded-lg p-3">
                     <div className="flex items-start justify-between gap-2">
@@ -137,11 +181,26 @@ export default function WikiAdminPage() {
                           <p className="mt-2 text-sm text-gray-600">{upload.diff_summary}</p>
                         )}
                       </div>
-                      {st && (
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${st.color}`}>
-                          {st.icon} {st.label}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {st && (
+                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${st.color}`}>
+                            {st.icon} {st.label}
+                          </span>
+                        )}
+                        {isSystemAdmin && (
+                          <button
+                            onClick={() => handleDelete(upload)}
+                            disabled={isDeleting}
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                            title="이력 삭제"
+                          >
+                            {isDeleting
+                              ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />
+                            }
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Wiki 변경사항 미리보기 */}
@@ -180,7 +239,6 @@ export default function WikiAdminPage() {
           </h2>
           <p className="text-sm text-gray-600 mb-4">
             Wiki 내용이 변경되면 AI Q&A가 최신 내용을 반영하도록 임베딩을 다시 생성해야 합니다.
-            HuggingFace API 한도(무료 ~100건/분)로 인해 시간이 걸릴 수 있습니다.
           </p>
           <button
             onClick={handleReindex}

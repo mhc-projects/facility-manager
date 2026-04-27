@@ -26,7 +26,7 @@ interface PageTypeResult {
  * HTML 구조를 Gemini로 분석하여 최적의 selector 찾기
  */
 async function findBestSelectorWithGemini(html: string): Promise<string[]> {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `
 다음은 한국 정부/지자체 보조금 공고 웹페이지의 HTML입니다.

@@ -22,7 +22,7 @@ export async function analyzeAnnouncement(
   sourceUrl?: string
 ): Promise<GeminiAnalysisResult> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `당신은 환경 관련 보조금 공고를 분석하는 전문가입니다.
 

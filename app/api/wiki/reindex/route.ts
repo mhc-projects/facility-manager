@@ -13,10 +13,10 @@ export async function POST(request: NextRequest) {
   try {
     const { nodeId } = await request.json().catch(() => ({}));
 
-    // 재인덱싱할 노드 조회
+    // 재인덱싱할 노드 조회 (parent title 포함)
     let query = supabaseAdmin
       .from('wiki_nodes')
-      .select('id, title, content_md')
+      .select('id, title, content_md, parent_id')
       .eq('is_published', true);
 
     if (nodeId) {
@@ -25,7 +25,10 @@ export async function POST(request: NextRequest) {
 
     const { data: nodes, error: nodesError } = await query;
     if (nodesError) return NextResponse.json({ error: nodesError.message }, { status: 500 });
-    if (!nodes?.length) return NextResponse.json({ message: '인덱싱할 노드가 없습니다', count: 0 });
+    if (!nodes?.length) return NextResponse.json({ success: true, indexed: 0, errors: 0, nodeCount: 0 });
+
+    // parent title 조회용 맵
+    const nodeMap = new Map(nodes.map(n => [n.id, n.title]));
 
     let indexed = 0;
     let errors = 0;
@@ -33,7 +36,9 @@ export async function POST(request: NextRequest) {
     for (const node of nodes) {
       if (!node.content_md) continue;
 
-      const fullText = `${node.title}\n\n${node.content_md}`;
+      const parentTitle = node.parent_id ? nodeMap.get(node.parent_id) : null;
+      const contextPrefix = parentTitle ? `[${parentTitle} > ${node.title}]\n\n` : `[${node.title}]\n\n`;
+      const fullText = `${contextPrefix}${node.title}\n\n${node.content_md}`;
       const chunks = splitIntoChunks(fullText);
 
       // 기존 청크 삭제
