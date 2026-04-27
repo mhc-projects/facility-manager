@@ -196,6 +196,7 @@ function ApprovalsContent() {
   const isSuperAdmin = (user?.role ?? 0) >= 4
   const showCompletedTab = isSuperAdmin || isManagementSupport
 
+  const [submitToast, setSubmitToast] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const tabRef = useRef<TabType>(tab)
 
@@ -291,6 +292,13 @@ function ApprovalsContent() {
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
   useEffect(() => { fetchPendingCount() }, [fetchPendingCount])
+
+  useEffect(() => {
+    if (searchParams?.get('submitted') === '1') {
+      setSubmitToast(true)
+      setTimeout(() => setSubmitToast(false), 3000)
+    }
+  }, [])
 
   // 상세 페이지에서 결재/반려 후 목록으로 복귀 시 즉시 갱신
   useEffect(() => {
@@ -865,6 +873,16 @@ function ApprovalsContent() {
           processing={processing}
         />
       )}
+
+      {/* 상신 완료 토스트 */}
+      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${submitToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+        <div className="flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg">
+          <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          결재 상신이 완료되었습니다
+        </div>
+      </div>
     </AdminLayout>
   )
 }

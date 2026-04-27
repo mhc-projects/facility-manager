@@ -313,7 +313,7 @@ function ApprovalDetailContent() {
         body: JSON.stringify({ resubmit: isResubmit })
       })
       const data = await res.json()
-      if (data.success) fetchDoc()
+      if (data.success) router.push(`/admin/approvals?tab=my&submitted=1&_t=${Date.now()}`)
       else alert(data.error || '상신 실패')
     } finally { setProcessing(false) }
   }
