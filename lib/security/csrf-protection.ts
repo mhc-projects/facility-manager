@@ -168,7 +168,9 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/business-task-status',  // 업무 상태 조회 API (JWT 인증 사용)
     '/api/approvals',  // 전자결재 API (JWT 인증 사용)
     '/api/approvals/*',  // 전자결재 하위 API 전체 제외 (JWT 인증 사용)
-    '/api/settings/*'  // 관리자 설정 API 전체 제외 (withApiHandler 보안 사용)
+    '/api/settings/*',  // 관리자 설정 API 전체 제외 (withApiHandler 보안 사용)
+    '/api/dpf/*',  // DPF 차량 관리 API 전체 제외 (JWT 인증 사용)
+    '/api/wiki/*',  // DPF Wiki API 전체 제외 (JWT 인증 사용)
   ];
 
   if (excludePaths.includes(request.nextUrl.pathname)) {

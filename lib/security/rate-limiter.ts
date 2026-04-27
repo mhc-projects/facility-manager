@@ -69,6 +69,14 @@ export class RateLimiter {
     '/api/approvals/pending-count': {
       windowMs: 15 * 60 * 1000, // 15분
       maxRequests: process.env.NODE_ENV === 'development' ? 2000 : 300 // 60초 폴링이지만 복수 유저 여유분
+    },
+    '/api/dpf/import': {
+      windowMs: 60 * 60 * 1000, // 1시간
+      maxRequests: 1000 // 청크 업로드: 18,789행 ÷ 200행/청크 = 최대 94회, 여유분 포함
+    },
+    '/api/dpf': {
+      windowMs: 15 * 60 * 1000, // 15분
+      maxRequests: 500 // 차량 검색/조회
     }
   };
 
