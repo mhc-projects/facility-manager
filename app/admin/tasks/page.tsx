@@ -32,6 +32,7 @@ import {
   getStatusLabel,
   getStatusColorClass
 } from '@/lib/task-steps'
+import { parseLocalGov } from '@/lib/korean-admin-divisions'
 import {
   Plus,
   Search,
@@ -168,10 +169,12 @@ function TaskManagementPage() {
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
   const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>([])
   const [selectedLocalGovs, setSelectedLocalGovs] = useState<string[]>([])
+  const [selectedSidos, setSelectedSidos] = useState<string[]>([])
   const [priorityFilterOpen, setPriorityFilterOpen] = useState(false)
   const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false)
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
   const [localGovFilterOpen, setLocalGovFilterOpen] = useState(false)
+  const [sidoFilterOpen, setSidoFilterOpen] = useState(false)
   const [showOnlyNoConstructionReport, setShowOnlyNoConstructionReport] = useState(false) // 착공신고서 미제출 필터
   const [assigneeFilterInitialized, setAssigneeFilterInitialized] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -237,6 +240,7 @@ function TaskManagementPage() {
   const assigneeFilterRef = useRef<HTMLDivElement>(null)
   const statusFilterRef = useRef<HTMLDivElement>(null)
   const localGovFilterRef = useRef<HTMLDivElement>(null)
+  const sidoFilterRef = useRef<HTMLDivElement>(null)
 
   // Textarea refs for auto-resize
   const editDescriptionRef = useRef<HTMLTextAreaElement>(null)
@@ -551,6 +555,7 @@ function TaskManagementPage() {
       { open: assigneeFilterOpen, ref: assigneeFilterRef, close: () => setAssigneeFilterOpen(false) },
       { open: statusFilterOpen, ref: statusFilterRef, close: () => setStatusFilterOpen(false) },
       { open: localGovFilterOpen, ref: localGovFilterRef, close: () => setLocalGovFilterOpen(false) },
+      { open: sidoFilterOpen, ref: sidoFilterRef, close: () => setSidoFilterOpen(false) },
     ].filter(f => f.open)
     if (openFilters.length === 0) return
     const handler = (e: MouseEvent) => {
@@ -560,7 +565,7 @@ function TaskManagementPage() {
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [progressFilterOpen, priorityFilterOpen, assigneeFilterOpen, statusFilterOpen, localGovFilterOpen])
+  }, [progressFilterOpen, priorityFilterOpen, assigneeFilterOpen, statusFilterOpen, localGovFilterOpen, sidoFilterOpen])
 
   // 초기 로딩
   useEffect(() => {
@@ -706,6 +711,7 @@ function TaskManagementPage() {
     setSelectedPriorities([])
     setSelectedAssignees([])
     setSelectedStatuses([])
+    setSelectedSidos([])
     setSelectedLocalGovs([])
     setShowOnlyNoConstructionReport(false)
     setShowCompletedTasks(false)
@@ -1030,18 +1036,20 @@ function TaskManagementPage() {
         (task.assignees && Array.isArray(task.assignees) &&
          task.assignees.some((a: any) => selectedAssignees.includes(a.name)))
       const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status as TaskStatus)
+      const { sido: taskSido } = parseLocalGov(task.localGovernment)
+      const matchesSido = selectedSidos.length === 0 || selectedSidos.includes(taskSido)
       const matchesLocalGov = selectedLocalGovs.length === 0 || selectedLocalGovs.includes(task.localGovernment || '')
       const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
 
       const passed = matchesSearch && matchesType && matchesPriority && matchesAssignee &&
-                     matchesStatus && matchesLocalGov && matchesConstructionReport
+                     matchesStatus && matchesSido && matchesLocalGov && matchesConstructionReport
 
       return passed
     })
 
     return result
   }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      showCompletedTasks, selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
+      showCompletedTasks, selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 칸반 보드용 필터링 (완료 업무도 항상 포함)
   const kanbanTasks = useMemo(() => {
@@ -1062,14 +1070,16 @@ function TaskManagementPage() {
         (task.assignees && Array.isArray(task.assignees) &&
          task.assignees.some((a: any) => selectedAssignees.includes(a.name)))
       const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(task.status as TaskStatus)
+      const { sido: taskSido } = parseLocalGov(task.localGovernment)
+      const matchesSido = selectedSidos.length === 0 || selectedSidos.includes(taskSido)
       const matchesLocalGov = selectedLocalGovs.length === 0 || selectedLocalGovs.includes(task.localGovernment || '')
       const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
 
       return matchesSearch && matchesType && matchesPriority && matchesAssignee &&
-             matchesStatus && matchesLocalGov && matchesConstructionReport
+             matchesStatus && matchesSido && matchesLocalGov && matchesConstructionReport
     })
   }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
+      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 정렬 핸들러
   const handleSort = (column: string) => {
@@ -1142,7 +1152,7 @@ function TaskManagementPage() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      selectedStatuses, selectedLocalGovs, showOnlyNoConstructionReport])
+      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 상태별 업무 그룹화 (칸반용: 완료 업무 포함)
   const tasksByStatus = useMemo(() => {
@@ -1319,16 +1329,33 @@ function TaskManagementPage() {
     return Array.from(assigneeSet).sort()
   }, [tasks])
 
-  // 지자체 목록
+  // 시/도 목록 (tasks에서 추출)
+  const sidoList = useMemo(() => {
+    const sidoSet = new Set<string>()
+    tasks.forEach(task => {
+      if (task.localGovernment) {
+        const { sido } = parseLocalGov(task.localGovernment)
+        if (sido) sidoSet.add(sido)
+      }
+    })
+    return Array.from(sidoSet).sort()
+  }, [tasks])
+
+  // 시/군/구 목록 (선택된 시/도로 좁힘)
   const localGovList = useMemo(() => {
     const localGovSet = new Set<string>()
     tasks.forEach(task => {
       if (task.localGovernment) {
-        localGovSet.add(task.localGovernment)
+        if (selectedSidos.length === 0) {
+          localGovSet.add(task.localGovernment)
+        } else {
+          const { sido } = parseLocalGov(task.localGovernment)
+          if (selectedSidos.includes(sido)) localGovSet.add(task.localGovernment)
+        }
       }
     })
     return Array.from(localGovSet).sort()
-  }, [tasks])
+  }, [tasks, selectedSidos])
 
   // 현재 선택된 타입의 업무단계 목록
   const currentSteps = useMemo(() => {
@@ -2199,7 +2226,50 @@ function TaskManagementPage() {
                 )}
               </div>
 
-              {/* 지자체 다중 선택 */}
+              {/* 시/도 필터 */}
+              <div className="relative" ref={sidoFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setSidoFilterOpen(v => !v)}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors ${
+                    selectedSidos.length > 0
+                      ? 'border-violet-400 bg-violet-50 text-violet-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>시/도{selectedSidos.length > 0 ? ` (${selectedSidos.length})` : ''}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${sidoFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {sidoFilterOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[150px] max-h-56 overflow-y-auto">
+                    <div className="p-1">
+                      {selectedSidos.length > 0 && (
+                        <button onClick={() => { setSelectedSidos([]); setSelectedLocalGovs([]) }} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded">전체 해제</button>
+                      )}
+                      {sidoList.map(sido => (
+                        <label key={sido} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                          <input type="checkbox" checked={selectedSidos.includes(sido)}
+                            onChange={() => {
+                              const next = selectedSidos.includes(sido)
+                                ? selectedSidos.filter(v => v !== sido)
+                                : [...selectedSidos, sido]
+                              setSelectedSidos(next)
+                              // 해제된 시/도의 세부 지자체 선택도 함께 제거
+                              setSelectedLocalGovs(prev => prev.filter(lg => {
+                                const { sido: lgSido } = parseLocalGov(lg)
+                                return next.includes(lgSido) || next.length === 0
+                              }))
+                            }}
+                            className="w-3.5 h-3.5 accent-violet-500" />
+                          <span className="text-sm text-gray-700">{sido}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 시/군/구 지자체 다중 선택 */}
               <div className="relative" ref={localGovFilterRef}>
                 <button
                   type="button"
@@ -2210,21 +2280,25 @@ function TaskManagementPage() {
                       : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  <span>지자체{selectedLocalGovs.length > 0 ? ` (${selectedLocalGovs.length})` : ''}</span>
+                  <span>시/군/구{selectedLocalGovs.length > 0 ? ` (${selectedLocalGovs.length})` : ''}</span>
                   <ChevronDown className={`w-3 h-3 transition-transform ${localGovFilterOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {localGovFilterOpen && (
-                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[140px] max-h-56 overflow-y-auto">
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[160px] max-h-56 overflow-y-auto">
                     <div className="p-1">
                       {selectedLocalGovs.length > 0 && (
                         <button onClick={() => setSelectedLocalGovs([])} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded">전체 해제</button>
                       )}
-                      {localGovList.map(lg => (
-                        <label key={lg} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
-                          <input type="checkbox" checked={selectedLocalGovs.includes(lg)} onChange={() => setSelectedLocalGovs(prev => prev.includes(lg) ? prev.filter(v => v !== lg) : [...prev, lg])} className="w-3.5 h-3.5 accent-indigo-500" />
-                          <span className="text-sm text-gray-700">{lg}</span>
-                        </label>
-                      ))}
+                      {localGovList.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-gray-400">{selectedSidos.length > 0 ? '해당 시/도에 업무 없음' : '등록된 지자체 없음'}</p>
+                      ) : (
+                        localGovList.map(lg => (
+                          <label key={lg} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" checked={selectedLocalGovs.includes(lg)} onChange={() => setSelectedLocalGovs(prev => prev.includes(lg) ? prev.filter(v => v !== lg) : [...prev, lg])} className="w-3.5 h-3.5 accent-indigo-500" />
+                            <span className="text-sm text-gray-700">{lg}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -2328,7 +2402,22 @@ function TaskManagementPage() {
                   <X className="w-3 h-3" />
                 </button>
               ))}
-              {/* 지자체 태그 */}
+              {/* 시/도 태그 */}
+              {selectedSidos.map(sido => (
+                <button key={sido} onClick={() => {
+                  const next = selectedSidos.filter(v => v !== sido)
+                  setSelectedSidos(next)
+                  setSelectedLocalGovs(prev => prev.filter(lg => {
+                    const { sido: lgSido } = parseLocalGov(lg)
+                    return next.includes(lgSido)
+                  }))
+                }}
+                  className="flex items-center gap-1 px-2 py-1 bg-violet-100 text-violet-800 rounded text-xs hover:bg-violet-200 transition-colors">
+                  <span>{sido}</span>
+                  <X className="w-3 h-3" />
+                </button>
+              ))}
+              {/* 시/군/구 태그 */}
               {selectedLocalGovs.map(lg => (
                 <button key={lg} onClick={() => setSelectedLocalGovs(prev => prev.filter(v => v !== lg))}
                   className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs hover:bg-indigo-200 transition-colors">
@@ -2338,8 +2427,8 @@ function TaskManagementPage() {
               ))}
               {/* 전체 필터 초기화 버튼 */}
               {(selectedProgressStatuses.length > 0 || selectedPriorities.length > 0 || selectedAssignees.length > 0 ||
-                selectedStatuses.length > 0 || selectedLocalGovs.length > 0 || showOnlyNoConstructionReport ||
-                showCompletedTasks || searchTerm) && (
+                selectedStatuses.length > 0 || selectedSidos.length > 0 || selectedLocalGovs.length > 0 ||
+                showOnlyNoConstructionReport || showCompletedTasks || searchTerm) && (
                 <button
                   onClick={handleResetFilters}
                   className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded text-xs hover:bg-red-200 transition-colors font-medium"

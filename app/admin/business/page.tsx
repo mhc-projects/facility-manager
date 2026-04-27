@@ -24,6 +24,7 @@ import ContactsListEditor from '@/components/ui/ContactsListEditor'
 import { formatMobilePhone, formatLandlinePhone } from '@/utils/phone-formatter'
 import { useToast } from '@/contexts/ToastContext'
 import { CacheManager } from '@/utils/cache-manager'
+import { KOREAN_ADMIN_DIVISIONS, SIDO_LIST, parseLocalGov, buildLocalGov } from '@/lib/korean-admin-divisions'
 // ⚡ 커스텀 훅 임포트 (Phase 2.1 성능 최적화)
 import { useBusinessData } from './hooks/useBusinessData'
 import { useFacilityStats } from './hooks/useFacilityStats'
@@ -347,21 +348,6 @@ import {
   Check
 } from 'lucide-react'
 
-// 대한민국 지자체 목록
-const KOREAN_LOCAL_GOVERNMENTS = [
-  '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', '울산광역시', '세종특별자치시',
-  '경기도', '강원도', '충청북도', '충청남도', '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도',
-  '서울시 종로구', '서울시 중구', '서울시 용산구', '서울시 성동구', '서울시 광진구', '서울시 동대문구',
-  '서울시 중랑구', '서울시 성북구', '서울시 강북구', '서울시 도봉구', '서울시 노원구', '서울시 은평구',
-  '서울시 서대문구', '서울시 마포구', '서울시 양천구', '서울시 강서구', '서울시 구로구', '서울시 금천구',
-  '서울시 영등포구', '서울시 동작구', '서울시 관악구', '서울시 서초구', '서울시 강남구', '서울시 송파구',
-  '서울시 강동구', '부산시 중구', '부산시 서구', '부산시 동구', '부산시 영도구', '부산시 부산진구',
-  '부산시 동래구', '부산시 남구', '부산시 북구', '부산시 해운대구', '부산시 사하구', '부산시 금정구',
-  '부산시 강서구', '부산시 연제구', '부산시 수영구', '부산시 사상구', '대구시 중구', '대구시 동구',
-  '대구시 서구', '대구시 남구', '대구시 북구', '대구시 수성구', '대구시 달서구', '대구시 달성군',
-  '인천시 중구', '인천시 동구', '인천시 미추홀구', '인천시 연수구', '인천시 남동구', '인천시 부평구',
-  '인천시 계양구', '인천시 서구', '인천시 강화군', '인천시 옹진군'
-].sort()
 
 // 진행구분을 보조금/자비로 매핑하는 헬퍼 함수
 const mapCategoryToInvoiceType = (category: string | null | undefined): '보조금' | '자비' => {
@@ -469,7 +455,6 @@ function BusinessManagementPage() {
   const [adjPurchaseAmountInputs, setAdjPurchaseAmountInputs] = useState<string[]>([])
   const invoiceTabRef = useRef<InvoiceTabSectionHandle>(null)
   const [invoiceRefreshTrigger, setInvoiceRefreshTrigger] = useState(0)
-  const [localGovSuggestions, setLocalGovSuggestions] = useState<string[]>([])
   const [showLocalGovSuggestions, setShowLocalGovSuggestions] = useState(false)
   const [selectedBusiness, setSelectedBusiness] = useState<UnifiedBusinessInfo | null>(null)
   const [facilityData, setFacilityData] = useState<BusinessFacilityData | null>(null)
@@ -5464,47 +5449,36 @@ function BusinessManagementPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">지자체</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          lang="ko"
-                          inputMode="text"
-                          value={formData.local_government || ''}
+                      <div className="flex gap-1.5">
+                        {/* 1단계: 시/도 */}
+                        <select
+                          value={parseLocalGov(formData.local_government).sido}
                           onChange={(e) => {
-                            const value = e.target.value
-                            setFormData({...formData, local_government: value})
-                            
-                            if (value.length > 0) {
-                              const suggestions = KOREAN_LOCAL_GOVERNMENTS.filter(gov => 
-                                gov.toLowerCase().includes(value.toLowerCase())
-                              ).slice(0, 5)
-                              setLocalGovSuggestions(suggestions)
-                              setShowLocalGovSuggestions(true)
-                            } else {
-                              setShowLocalGovSuggestions(false)
-                            }
+                            const sido = e.target.value
+                            setFormData({ ...formData, local_government: buildLocalGov(sido, '') })
                           }}
-                          className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                          placeholder="예: 서울특별시, 부산광역시..."
-                        />
-                        
-                        {showLocalGovSuggestions && localGovSuggestions.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                            {localGovSuggestions.map((gov, index) => (
-                              <button
-                                key={index}
-                                type="button"
-                                onClick={() => {
-                                  setFormData({...formData, local_government: gov})
-                                  setShowLocalGovSuggestions(false)
-                                }}
-                                className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm"
-                              >
-                                {gov}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                        >
+                          <option value="">시/도 선택</option>
+                          {SIDO_LIST.map(sido => (
+                            <option key={sido} value={sido}>{sido}</option>
+                          ))}
+                        </select>
+                        {/* 2단계: 시/군/구 */}
+                        <select
+                          value={parseLocalGov(formData.local_government).sigungu}
+                          onChange={(e) => {
+                            const sido = parseLocalGov(formData.local_government).sido
+                            setFormData({ ...formData, local_government: buildLocalGov(sido, e.target.value) })
+                          }}
+                          disabled={!parseLocalGov(formData.local_government).sido}
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                        >
+                          <option value="">시/군/구 선택</option>
+                          {(KOREAN_ADMIN_DIVISIONS[parseLocalGov(formData.local_government).sido] || []).map(sg => (
+                            <option key={sg} value={sg}>{sg}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
