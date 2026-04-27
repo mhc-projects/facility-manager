@@ -154,6 +154,13 @@ const navigationConfig: NavigationEntry[] = [
           description: '문서 생성 및 자동화 설정',
           requiredLevel: 1
         },
+        {
+          name: 'AS 관리',
+          href: '/admin/as-management',
+          icon: Wrench,
+          description: 'AS 접수, 진행 현황 및 단가표 관리',
+          requiredLevel: 1
+        },
       ]
     }
   },
@@ -185,17 +192,6 @@ const navigationConfig: NavigationEntry[] = [
           requiredLevel: 3
         },
       ]
-    }
-  },
-  // AS 관리 (단독 - IoT업무 바로 다음)
-  {
-    type: 'item',
-    item: {
-      name: 'AS 관리',
-      href: '/admin/as-management',
-      icon: Wrench,
-      description: 'AS 접수, 진행 현황 및 단가표 관리',
-      requiredLevel: 1
     }
   },
   // 공통업무 그룹
@@ -352,7 +348,17 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
   // 단일 메뉴 아이템 렌더링
   const renderItem = (item: NavigationItem, isChild = false) => {
     if (!isItemVisible(item)) return null
-    const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href + '/') && !item.children)
+    const hasMoreSpecificMatch = getAllItems(navigationConfig).some(
+      other => other.href !== item.href &&
+               other.href.startsWith(item.href + '/') &&
+               (pathname === other.href || pathname.startsWith(other.href + '/'))
+    )
+    const isActive = pathname === item.href || (
+      item.href !== '/admin' &&
+      pathname.startsWith(item.href + '/') &&
+      !item.children &&
+      !hasMoreSpecificMatch
+    )
     const hasChildren = item.children && item.children.some(isItemVisible)
     const isExpanded = expandedMenus.has(item.href)
     const Icon = item.icon
