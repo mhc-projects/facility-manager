@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { AdminDataProvider } from '@/contexts/AdminDataContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { Toaster } from 'react-hot-toast';
@@ -30,6 +31,7 @@ export default function ClientProviders({
     <ErrorBoundary>
       <ReactQueryProvider>
         <AuthProvider>
+          <AdminDataProvider>
           <NotificationProvider>
             <ToastProvider>
               {children}
@@ -63,6 +65,7 @@ export default function ClientProviders({
               )}
             </ToastProvider>
           </NotificationProvider>
+          </AdminDataProvider>
         </AuthProvider>
       </ReactQueryProvider>
     </ErrorBoundary>

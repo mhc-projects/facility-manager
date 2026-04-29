@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import { isPathHiddenForAccount } from '@/lib/auth/special-accounts';
 import {
   Settings,
@@ -23,15 +24,31 @@ import {
   GripVertical,
   Tag,
   ArrowRight,
-  ArrowUp,
-  ArrowDown,
   RefreshCw,
+  ListOrdered,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { SortableItem } from '@/components/admin/SortableItem';
+import TaskStagesTab from '@/components/admin/TaskStagesTab';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
 import { TokenManager } from '@/lib/api-client';
 
 // 탭 타입 정의
-type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers' | 'progress-categories';
+type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers' | 'progress-categories' | 'task-stages';
 
 // 제조사 타입
 interface Manufacturer {
@@ -83,11 +100,19 @@ function AdminSettingsContent() {
     }
   }, [user, permissions]);
 
+  const { refreshManufacturers, refreshProgressCategories } = useAdminData();
+
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers', 'progress-categories'].includes(tabFromUrl)
+    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers', 'progress-categories', 'task-stages'].includes(tabFromUrl)
       ? tabFromUrl
       : 'delay-criteria'
+  );
+
+  // DnD 센서 (제조사/진행구분 탭 공유)
+  const dndSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   // 제조사 관리 상태
@@ -349,34 +374,27 @@ function AdminSettingsContent() {
     }
   };
 
-  const handleReorderProgressCategory = async (index: number, direction: 'up' | 'down') => {
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= progressCategories.length) return;
+  const handleProgressCategoryDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const current = progressCategories[index];
-    const target = progressCategories[targetIndex];
+    const oldIndex = progressCategories.findIndex(c => String(c.id) === active.id);
+    const newIndex = progressCategories.findIndex(c => String(c.id) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    // 로컬 상태 즉시 업데이트 (optimistic)
-    const newList = [...progressCategories];
-    newList[index] = { ...target, sort_order: current.sort_order };
-    newList[targetIndex] = { ...current, sort_order: target.sort_order };
-    setProgressCategories(newList);
+    const reordered = arrayMove(progressCategories, oldIndex, newIndex);
+    setProgressCategories(reordered); // 낙관적 업데이트
 
     try {
-      await Promise.all([
-        fetch('/api/settings/progress-categories', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: current.id, sort_order: target.sort_order }),
-        }),
-        fetch('/api/settings/progress-categories', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: target.id, sort_order: current.sort_order }),
-        }),
-      ]);
+      const res = await fetch('/api/settings/progress-categories/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: reordered.map(c => c.id) }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      await refreshProgressCategories();
     } catch {
-      // 실패 시 원래 순서로 복구
       setProgressCategories(progressCategories);
       setMessage({ type: 'error', text: '순서 변경 중 오류가 발생했습니다.' });
     }
@@ -411,34 +429,28 @@ function AdminSettingsContent() {
     }
   };
 
-  // ─────────── 제조사 순서 변경 핸들러 ───────────
+  // ─────────── 제조사 DnD 순서 변경 핸들러 ───────────
 
-  const handleReorderManufacturer = async (index: number, direction: 'up' | 'down') => {
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= manufacturers.length) return;
+  const handleManufacturerDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const current = manufacturers[index];
-    const target = manufacturers[targetIndex];
+    const oldIndex = manufacturers.findIndex(m => String(m.id) === active.id);
+    const newIndex = manufacturers.findIndex(m => String(m.id) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    // 로컬 상태 즉시 업데이트 (optimistic)
-    const newList = [...manufacturers];
-    newList[index] = { ...target, sort_order: current.sort_order };
-    newList[targetIndex] = { ...current, sort_order: target.sort_order };
-    setManufacturers(newList);
+    const reordered = arrayMove(manufacturers, oldIndex, newIndex);
+    setManufacturers(reordered); // 낙관적 업데이트
 
     try {
-      await Promise.all([
-        fetch('/api/settings/manufacturers', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: current.id, sort_order: target.sort_order }),
-        }),
-        fetch('/api/settings/manufacturers', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: target.id, sort_order: current.sort_order }),
-        }),
-      ]);
+      const res = await fetch('/api/settings/manufacturers/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: reordered.map(m => m.id) }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      await refreshManufacturers();
     } catch {
       // 실패 시 원래 순서로 복구
       setManufacturers(manufacturers);
@@ -623,6 +635,12 @@ function AdminSettingsContent() {
       name: '진행구분 관리',
       icon: Tag,
       description: '사업장 진행구분 항목 관리 및 일괄 변경'
+    },
+    {
+      id: 'task-stages' as const,
+      name: '업무단계 관리',
+      icon: ListOrdered,
+      description: '진행구분별 업무 단계 항목 관리 및 순서 설정'
     },
   ];
 
@@ -856,106 +874,90 @@ function AdminSettingsContent() {
                 ) : manufacturers.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-8">등록된 제조사가 없습니다.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {manufacturers.map((m, idx) => (
-                      <div
-                        key={m.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                          m.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
-                        }`}
-                      >
-                        {/* 순서 버튼 */}
-                        <div className="flex flex-col gap-0.5 flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleReorderManufacturer(idx, 'up')}
-                            disabled={idx === 0}
-                            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                            title="위로"
-                          ><ArrowUp className="w-3 h-3" /></button>
-                          <button
-                            type="button"
-                            onClick={() => handleReorderManufacturer(idx, 'down')}
-                            disabled={idx === manufacturers.length - 1}
-                            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                            title="아래로"
-                          ><ArrowDown className="w-3 h-3" /></button>
-                        </div>
-
-                        {editingManufacturer?.id === m.id ? (
-                          <>
-                            <input
-                              type="text"
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleUpdateManufacturer();
-                                if (e.key === 'Escape') { setEditingManufacturer(null); setEditingName(''); }
-                              }}
-                              autoFocus
-                              maxLength={100}
-                              className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleUpdateManufacturer}
-                              disabled={isSavingManufacturer || !editingName.trim()}
-                              className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                            >
-                              저장
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingManufacturer(null); setEditingName(''); }}
-                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <span className={`flex-1 text-sm font-medium ${m.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
-                              {m.name}
-                            </span>
-                            {!m.is_active && (
-                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                  <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleManufacturerDragEnd}>
+                    <SortableContext items={manufacturers.map(m => String(m.id))} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-2">
+                        {manufacturers.map((m) => (
+                          <SortableItem
+                            key={m.id}
+                            id={m.id}
+                            className={`p-3 rounded-lg border transition-colors ${
+                              m.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
+                            }`}
+                          >
+                            {editingManufacturer?.id === m.id ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={editingName}
+                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleUpdateManufacturer();
+                                    if (e.key === 'Escape') { setEditingManufacturer(null); setEditingName(''); }
+                                  }}
+                                  autoFocus
+                                  maxLength={100}
+                                  className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleUpdateManufacturer}
+                                  disabled={isSavingManufacturer || !editingName.trim()}
+                                  className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingManufacturer(null); setEditingName(''); }}
+                                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span className={`flex-1 text-sm font-medium ${m.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                                  {m.name}
+                                </span>
+                                {!m.is_active && (
+                                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleManufacturerActive(m)}
+                                  className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                    m.is_active
+                                      ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                      : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                                  }`}
+                                  title={m.is_active ? '비활성화' : '활성화'}
+                                >
+                                  {m.is_active ? '숨기기' : '표시'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingManufacturer(m); setEditingName(m.name); }}
+                                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="이름 수정"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteManufacturer(m)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="삭제"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
                             )}
-                            {/* 활성화 토글 */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleManufacturerActive(m)}
-                              className={`text-xs px-2 py-1 rounded border transition-colors ${
-                                m.is_active
-                                  ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-                                  : 'border-blue-200 text-blue-600 hover:bg-blue-50'
-                              }`}
-                              title={m.is_active ? '비활성화' : '활성화'}
-                            >
-                              {m.is_active ? '숨기기' : '표시'}
-                            </button>
-                            {/* 이름 편집 */}
-                            <button
-                              type="button"
-                              onClick={() => { setEditingManufacturer(m); setEditingName(m.name); }}
-                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="이름 수정"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            {/* 삭제 */}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteManufacturer(m)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
+                          </SortableItem>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </SortableContext>
+                  </DndContext>
                 )}
 
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1011,91 +1013,79 @@ function AdminSettingsContent() {
                   ) : progressCategories.length === 0 ? (
                     <p className="text-sm text-gray-500 text-center py-6">등록된 진행구분이 없습니다.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {progressCategories.map((c, idx) => (
-                        <div
-                          key={c.id}
-                          className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            c.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
-                          }`}
-                        >
-                          {/* 순서 버튼 */}
-                          <div className="flex flex-col gap-0.5 flex-shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleReorderProgressCategory(idx, 'up')}
-                              disabled={idx === 0}
-                              className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                              title="위로"
-                            ><ArrowUp className="w-3 h-3" /></button>
-                            <button
-                              type="button"
-                              onClick={() => handleReorderProgressCategory(idx, 'down')}
-                              disabled={idx === progressCategories.length - 1}
-                              className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                              title="아래로"
-                            ><ArrowDown className="w-3 h-3" /></button>
-                          </div>
-                          {editingProgressCategory?.id === c.id ? (
-                            <>
-                              <input
-                                type="text"
-                                value={editingProgressName}
-                                onChange={(e) => setEditingProgressName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleUpdateProgressCategory();
-                                  if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); }
-                                }}
-                                autoFocus
-                                maxLength={100}
-                                className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                              />
-                              <button
-                                type="button"
-                                onClick={handleUpdateProgressCategory}
-                                disabled={isSavingProgressCategory || !editingProgressName.trim()}
-                                className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                              >저장</button>
-                              <button
-                                type="button"
-                                onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); }}
-                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                              ><X className="w-4 h-4" /></button>
-                            </>
-                          ) : (
-                            <>
-                              <span className={`flex-1 text-sm font-medium ${c.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
-                                {c.name}
-                              </span>
-                              {!c.is_active && (
-                                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleProgressCategoryDragEnd}>
+                      <SortableContext items={progressCategories.map(c => String(c.id))} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {progressCategories.map((c) => (
+                            <SortableItem
+                              key={c.id}
+                              id={c.id}
+                              className={`p-3 rounded-lg border transition-colors ${
+                                c.is_active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'
+                              }`}
+                            >
+                              {editingProgressCategory?.id === c.id ? (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={editingProgressName}
+                                    onChange={(e) => setEditingProgressName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleUpdateProgressCategory();
+                                      if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); }
+                                    }}
+                                    autoFocus
+                                    maxLength={100}
+                                    className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleUpdateProgressCategory}
+                                    disabled={isSavingProgressCategory || !editingProgressName.trim()}
+                                    className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                  >저장</button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); }}
+                                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                  ><X className="w-4 h-4" /></button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`flex-1 text-sm font-medium ${c.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                                    {c.name}
+                                  </span>
+                                  {!c.is_active && (
+                                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleProgressCategoryActive(c)}
+                                    className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                      c.is_active
+                                        ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                        : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                                    }`}
+                                  >{c.is_active ? '숨기기' : '표시'}</button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); }}
+                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    title="이름 수정"
+                                  ><Pencil className="w-3.5 h-3.5" /></button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteProgressCategory(c)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="삭제"
+                                  ><Trash2 className="w-3.5 h-3.5" /></button>
+                                </>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleProgressCategoryActive(c)}
-                                className={`text-xs px-2 py-1 rounded border transition-colors ${
-                                  c.is_active
-                                    ? 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-                                    : 'border-blue-200 text-blue-600 hover:bg-blue-50'
-                                }`}
-                              >{c.is_active ? '숨기기' : '표시'}</button>
-                              <button
-                                type="button"
-                                onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); }}
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                title="이름 수정"
-                              ><Pencil className="w-3.5 h-3.5" /></button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteProgressCategory(c)}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                title="삭제"
-                              ><Trash2 className="w-3.5 h-3.5" /></button>
-                            </>
-                          )}
+                            </SortableItem>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
                   )}
 
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1206,6 +1196,13 @@ function AdminSettingsContent() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* 업무단계 관리 탭 */}
+          {activeTab === 'task-stages' && (
+            <TaskStagesTab
+              onMessage={(type, text) => setMessage({ type, text })}
+            />
           )}
 
           {/* 조직 관리 탭 */}
