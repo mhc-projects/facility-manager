@@ -51,7 +51,6 @@ import {
   ArrowRight,
   Edit,
   Trash2,
-  Eye,
   FileX,
   X,
   ChevronDown,
@@ -183,7 +182,6 @@ function TaskManagementPage() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [taskReceivables, setTaskReceivables] = useState<Record<string, number>>({})
   const [isCompactMode, setIsCompactMode] = useState(false)
-  const [showCompletedTasks, setShowCompletedTasks] = useState(false) // 🆕 완료된 업무 표시 여부
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createProgressStatus, setCreateProgressStatus] = useState('') // 등록 모달 진행구분 표시용
   const [showEditModal, setShowEditModal] = useState(false)
@@ -716,7 +714,6 @@ function TaskManagementPage() {
     setSelectedSidos([])
     setSelectedLocalGovs([])
     setShowOnlyNoConstructionReport(false)
-    setShowCompletedTasks(false)
     setSearchTerm('')
   }, [])
 
@@ -1009,19 +1006,10 @@ function TaskManagementPage() {
       selectedAssignees,
       selectedStatuses,
       selectedLocalGovs,
-      showCompletedTasks,
       showOnlyNoConstructionReport
     })
 
-    // 일반 필터링 (완료업무 필터에 따라 완료/미완료 업무 표시)
     const result = tasksWithDelayStatus.filter(task => {
-      // 완료 업무 필터: true면 완료된 업무만, false면 미완료 업무만
-      if (showCompletedTasks) {
-        if (task.progressPercentage !== 100) return false
-      } else {
-        if (task.progressPercentage === 100) return false
-      }
-
       const matchesSearch = searchTerm === '' ||
         task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1051,7 +1039,7 @@ function TaskManagementPage() {
 
     return result
   }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      showCompletedTasks, selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
+      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
 
   // 칸반 보드용 필터링 (완료 업무도 항상 포함)
   const kanbanTasks = useMemo(() => {
@@ -1177,10 +1165,7 @@ function TaskManagementPage() {
     }
     console.log('==================')
 
-    // 완료업무 필터 활성화 시: 완료 업무만 표시, 기본: 전체 표시 (완료 포함)
-    const activeTasks = showCompletedTasks
-      ? kanbanTasks.filter(task => task.progressPercentage === 100)
-      : kanbanTasks
+    const activeTasks = kanbanTasks
 
     // DB sort_order 기반 단계 목록 사용 (DB에 없으면 hardcoded fallback)
     const getSteps = (type: string) => {
@@ -1193,20 +1178,10 @@ function TaskManagementPage() {
       ? ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].flatMap(t => getSteps(t))
       : getSteps(selectedType)
 
-    // 완료업무 필터 시: 각 타입의 마지막 단계만 표시
-    const steps = showCompletedTasks ? (() => {
-      if (selectedType === 'all') {
-        return ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].map(t => {
-          const ts = getSteps(t)
-          return ts[ts.length - 1]
-        }).filter(Boolean)
-      } else {
-        return [allTypeSteps[allTypeSteps.length - 1]]
-      }
-    })() : allTypeSteps
+    const steps = allTypeSteps
 
     // 전체 보기일 때 중복 단계 제거
-    const uniqueSteps = selectedType === 'all' && !showCompletedTasks ? (() => {
+    const uniqueSteps = selectedType === 'all' ? (() => {
       const stepMap = new Map<string, typeof steps[0]>()
       steps.forEach(step => {
         if (!stepMap.has(step.label)) {
@@ -1309,7 +1284,7 @@ function TaskManagementPage() {
     }
 
     return { grouped, steps: uniqueSteps }
-  }, [kanbanTasks, selectedType, showCompletedTasks])
+  }, [kanbanTasks, selectedType])
 
   // 동적 통계 계산
   const dynamicStats = useMemo(() => {
@@ -2334,32 +2309,6 @@ function TaskManagementPage() {
                 </div>
               </button>
 
-              {/* 🆕 완료된 업무 토글 버튼 */}
-              <button
-                onClick={() => setShowCompletedTasks(!showCompletedTasks)}
-                className={`
-                  px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap
-                  ${showCompletedTasks
-                    ? 'bg-green-100 text-green-700 border-2 border-green-300 shadow-sm'
-                    : 'bg-gray-100 text-gray-600 border-2 border-gray-200 hover:bg-gray-200'
-                  }
-                `}
-                title="완료된 업무만 표시"
-              >
-                <div className="flex items-center gap-1">
-                  {showCompletedTasks ? (
-                    <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  ) : (
-                    <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  )}
-                  <span>완료업무</span>
-                  {showCompletedTasks && (
-                    <span className="ml-0.5 px-1 py-0.5 bg-green-200 text-green-800 rounded text-xs font-semibold">
-                      {tasks.filter(t => t.progressPercentage === 100).length}
-                    </span>
-                  )}
-                </div>
-              </button>
             </div>
 
             {/* 검색창 */}
@@ -2440,7 +2389,7 @@ function TaskManagementPage() {
               {/* 전체 필터 초기화 버튼 */}
               {(selectedProgressStatuses.length > 0 || selectedPriorities.length > 0 || selectedAssignees.length > 0 ||
                 selectedStatuses.length > 0 || selectedSidos.length > 0 || selectedLocalGovs.length > 0 ||
-                showOnlyNoConstructionReport || showCompletedTasks || searchTerm) && (
+                showOnlyNoConstructionReport || searchTerm) && (
                 <button
                   onClick={handleResetFilters}
                   className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded text-xs hover:bg-red-200 transition-colors font-medium"
