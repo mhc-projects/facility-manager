@@ -149,7 +149,7 @@ function deriveTypeFromPS(ps: string): TaskType {
 
 function TaskManagementPage() {
   const { user } = useAuth()
-  const { getStagesByTaskType, getStageLabel, taskStages: dbTaskStages } = useAdminData()
+  const { getStagesByTaskType, getStageLabel, taskStages: dbTaskStages, progressCategories } = useAdminData()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -3215,7 +3215,7 @@ function TaskManagementPage() {
                     <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   <div className="min-w-0 flex-1 max-w-[200px] sm:max-w-[300px]">
-                    <h1 className="text-base sm:text-xl font-bold truncate" title={editingTask.title}>{editingTask.title}</h1>
+                    <h1 className="text-base sm:text-xl font-bold truncate" title={getStageLabel(editingTask.title)}>{getStageLabel(editingTask.title)}</h1>
                     <p className="text-blue-100 mt-0.5 text-xs sm:text-xs truncate" title={editingTask.businessName}>{editingTask.businessName}</p>
                   </div>
                 </div>
@@ -3233,11 +3233,13 @@ function TaskManagementPage() {
                       ? 'bg-gray-100 text-gray-800'
                       : 'bg-orange-100 text-orange-800'
                   }`}>
-                    {editingTask.type === 'self' ? '자비' :
-                     editingTask.type === 'subsidy' ? '보조금' :
-                     editingTask.type === 'dealer' ? '대리점' :
-                     editingTask.type === 'outsourcing' ? '외주설치' :
-                     editingTask.type === 'etc' ? '기타' : 'AS'}
+                    {editingTask.progressStatus || (
+                      editingTask.type === 'self' ? '자비' :
+                      editingTask.type === 'subsidy' ? '보조금' :
+                      editingTask.type === 'dealer' ? '대리점' :
+                      editingTask.type === 'outsourcing' ? '외주설치' :
+                      editingTask.type === 'etc' ? '기타' : 'AS'
+                    )}
                   </span>
 
                   {/* 액션 버튼들 */}
@@ -3408,19 +3410,32 @@ function TaskManagementPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 업무 타입 */}
+                  {/* 업무 타입 (진행구분) */}
                   <div>
-                    <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">업무 타입</label>
+                    <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">진행구분</label>
                     <select
-                      value={editingTask.type}
-                      onChange={(e) => setEditingTask(prev => prev ? { ...prev, type: e.target.value as TaskType } : null)}
+                      value={editingTask.progressStatus || ''}
+                      onChange={(e) => {
+                        const catName = e.target.value
+                        if (!catName) return
+                        const derivedType = deriveTypeFromPS(catName)
+                        setEditingTask(prev => prev ? { ...prev, type: derivedType as TaskType, progressStatus: catName } : null)
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs sm:text-sm"
                     >
-                      <option value="self">자비</option>
-                      <option value="subsidy">보조금</option>
-                      <option value="dealer">대리점</option>
-                      <option value="outsourcing">외주설치</option>
-                      <option value="etc">기타</option>
+                      {progressCategories.filter(c => c.is_active).length === 0 ? (
+                        <>
+                          <option value="self">자비</option>
+                          <option value="subsidy">보조금</option>
+                          <option value="dealer">대리점</option>
+                          <option value="outsourcing">외주설치</option>
+                          <option value="etc">기타</option>
+                        </>
+                      ) : (
+                        progressCategories.filter(c => c.is_active).map(cat => (
+                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))
+                      )}
                     </select>
                   </div>
 

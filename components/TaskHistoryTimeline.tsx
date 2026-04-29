@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getTaskStatusKR } from '@/lib/task-status-utils';
+import { useAdminData } from '@/contexts/AdminDataContext';
 
 interface StatusHistoryEntry {
   id: string;
@@ -21,6 +21,7 @@ interface TaskHistoryTimelineProps {
 }
 
 export default function TaskHistoryTimeline({ taskId, className = '' }: TaskHistoryTimelineProps) {
+  const { getStageLabel } = useAdminData();
   const [history, setHistory] = useState<StatusHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +151,7 @@ export default function TaskHistoryTimeline({ taskId, className = '' }: TaskHist
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <h4 className="font-semibold text-gray-900">
-                          {getTaskStatusKR(entry.status)}
+                          {getStageLabel(entry.status)}
                         </h4>
                         {entry.assignee_name && (
                           <p className="text-sm text-gray-600 mt-1">
