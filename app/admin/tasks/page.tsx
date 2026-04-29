@@ -4,6 +4,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } fr
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import { withAuth, useAuth } from '@/contexts/AuthContext'
+import { useAdminData } from '@/contexts/AdminDataContext'
 import { TokenManager } from '@/lib/api-client'
 import MultiAssigneeSelector, { SelectedAssignee } from '@/components/ui/MultiAssigneeSelector'
 import TaskCardList from './components/TaskCardList'
@@ -148,6 +149,7 @@ function deriveTypeFromPS(ps: string): TaskType {
 
 function TaskManagementPage() {
   const { user } = useAuth()
+  const { getStagesByTaskType, getStageLabel, taskStages: dbTaskStages } = useAdminData()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -1180,25 +1182,25 @@ function TaskManagementPage() {
       ? kanbanTasks.filter(task => task.progressPercentage === 100)
       : kanbanTasks
 
-    // 선택된 진행구분들의 TaskType 집합에 따라 표시할 단계 결정 (getStepsForType 활용)
+    // DB sort_order 기반 단계 목록 사용 (DB에 없으면 hardcoded fallback)
+    const getSteps = (type: string) => {
+      const dbSteps = getStagesByTaskType(type)
+      if (dbSteps.length > 0) return dbSteps
+      return getStepsForType(type as any)
+    }
+
     const allTypeSteps = selectedType === 'all'
-      ? [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
-      : getStepsForType(selectedType)
+      ? ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].flatMap(t => getSteps(t))
+      : getSteps(selectedType)
 
     // 완료업무 필터 시: 각 타입의 마지막 단계만 표시
     const steps = showCompletedTasks ? (() => {
       if (selectedType === 'all') {
-        // 전체 보기: 각 타입의 마지막 단계 수집
-        return [
-          selfSteps[selfSteps.length - 1],
-          subsidySteps[subsidySteps.length - 1],
-          dealerSteps[dealerSteps.length - 1],
-          outsourcingSteps[outsourcingSteps.length - 1],
-          etcSteps[etcSteps.length - 1],
-          asSteps[asSteps.length - 1],
-        ]
+        return ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].map(t => {
+          const ts = getSteps(t)
+          return ts[ts.length - 1]
+        }).filter(Boolean)
       } else {
-        // 개별 타입: 해당 타입의 마지막 단계만
         return [allTypeSteps[allTypeSteps.length - 1]]
       }
     })() : allTypeSteps
@@ -1357,26 +1359,27 @@ function TaskManagementPage() {
     return Array.from(localGovSet).sort()
   }, [tasks, selectedSidos])
 
-  // 현재 선택된 타입의 업무단계 목록
+  // 현재 선택된 타입의 업무단계 목록 (DB sort_order 반영)
   const currentSteps = useMemo(() => {
-    if (selectedType === 'all') {
-      // 전체 타입일 때는 실제 등록된 업무들의 단계만 표시
-      const statusSet = new Set<TaskStatus>()
-      tasks.forEach(task => {
-        statusSet.add(task.status)
-      })
+    const getStepsWithFallback = (type: string) => {
+      const dbSteps = getStagesByTaskType(type)
+      return dbSteps.length > 0 ? dbSteps : getStepsForType(type as any)
+    }
 
-      // 모든 단계 정의에서 라벨 가져오기 (outsourcingSteps 포함)
-      const allSteps = [...selfSteps, ...subsidySteps, ...dealerSteps, ...outsourcingSteps, ...etcSteps, ...asSteps]
+    if (selectedType === 'all') {
+      const statusSet = new Set<TaskStatus>()
+      tasks.forEach(task => { statusSet.add(task.status) })
+
+      const allSteps = ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].flatMap(t => getStepsWithFallback(t))
       const uniqueSteps = Array.from(statusSet).map(status => {
         const step = allSteps.find(s => s.status === status)
-        return step || { status, label: status }
+        return step || { status, label: status, color: 'gray' }
       }).sort((a, b) => a.label.localeCompare(b.label))
 
       return uniqueSteps
     }
-    return getStepsForType(selectedType)
-  }, [selectedType, tasks])
+    return getStepsWithFallback(selectedType)
+  }, [selectedType, tasks, getStagesByTaskType, dbTaskStages])
 
   // 드래그 앤 드롭 핸들러
   const handleDragStart = useCallback((task: Task) => {
@@ -1555,12 +1558,7 @@ function TaskManagementPage() {
       );
 
       if (duplicateTask) {
-        const steps = createTaskForm.type === 'self' ? selfSteps :
-                     createTaskForm.type === 'subsidy' ? subsidySteps :
-                     createTaskForm.type === 'dealer' ? dealerSteps :
-                     createTaskForm.type === 'as' ? asSteps : etcSteps;
-        const statusInfo = steps.find(s => s.status === createTaskForm.status);
-        const statusLabel = statusInfo?.label || createTaskForm.status;
+        const statusLabel = getStageLabel(createTaskForm.status);
 
         const confirmMessage =
           `⚠️ 중복 업무 경고\n\n` +
@@ -1576,12 +1574,7 @@ function TaskManagementPage() {
 
       // API 요청 데이터 준비
       // 현재 단계명을 title로 자동 설정
-      const steps = createTaskForm.type === 'self' ? selfSteps :
-                   createTaskForm.type === 'subsidy' ? subsidySteps :
-                   createTaskForm.type === 'dealer' ? dealerSteps :
-                   createTaskForm.type === 'as' ? asSteps : etcSteps;
-      const currentStep = steps.find(s => s.status === createTaskForm.status);
-      const autoTitle = currentStep?.label || createTaskForm.status;
+      const autoTitle = getStageLabel(createTaskForm.status);
 
       const requestData = {
         title: autoTitle,
@@ -1773,12 +1766,7 @@ function TaskManagementPage() {
       );
 
       if (duplicateTask) {
-        const steps = editingTask.type === 'self' ? selfSteps :
-                     editingTask.type === 'subsidy' ? subsidySteps :
-                     editingTask.type === 'dealer' ? dealerSteps :
-                     editingTask.type === 'as' ? asSteps : etcSteps;
-        const statusInfo = steps.find(s => s.status === editingTask.status);
-        const statusLabel = statusInfo?.label || editingTask.status;
+        const statusLabel = getStageLabel(editingTask.status);
 
         const confirmMessage =
           `⚠️ 중복 업무 경고\n\n` +
@@ -3113,13 +3101,11 @@ function TaskManagementPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
                     required
                   >
-                    {(createTaskForm.type === 'self' ? selfSteps :
-                     createTaskForm.type === 'subsidy' ? subsidySteps :
-                     createTaskForm.type === 'dealer' ? dealerSteps :
-                     createTaskForm.type === 'outsourcing' ? outsourcingSteps :
-                     createTaskForm.type === 'etc' ? etcSteps : asSteps).map(step => (
-                      <option key={step.status} value={step.status}>{step.label}</option>
-                    ))}
+                    {(() => {
+                       const dbSteps = getStagesByTaskType(createTaskForm.type)
+                       return (dbSteps.length > 0 ? dbSteps : getStepsForType(createTaskForm.type as any))
+                         .map(step => <option key={step.status} value={step.status}>{step.label}</option>)
+                    })()}
                   </select>
                 </div>
 
@@ -3464,13 +3450,11 @@ function TaskManagementPage() {
                     onChange={(e) => setEditingTask(prev => prev ? { ...prev, status: e.target.value as TaskStatus } : null)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    {(editingTask.type === 'self' ? selfSteps :
-                     editingTask.type === 'subsidy' ? subsidySteps :
-                     editingTask.type === 'dealer' ? dealerSteps :
-                     editingTask.type === 'outsourcing' ? outsourcingSteps :
-                     editingTask.type === 'etc' ? etcSteps : asSteps).map(step => (
-                      <option key={step.status} value={step.status}>{step.label}</option>
-                    ))}
+                    {(() => {
+                       const dbSteps = getStagesByTaskType(editingTask.type)
+                       return (dbSteps.length > 0 ? dbSteps : getStepsForType(editingTask.type as any))
+                         .map(step => <option key={step.status} value={step.status}>{step.label}</option>)
+                    })()}
                   </select>
                 </div>
 

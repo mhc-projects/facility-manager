@@ -27,6 +27,13 @@ export interface TaskStage {
   is_active: boolean;
 }
 
+// 칸반/단계 드롭다운용 타입 (lib/task-steps.ts의 TaskStep과 호환)
+export interface TaskStepCompat {
+  status: string;
+  label: string;
+  color: string;
+}
+
 interface AdminDataContextType {
   manufacturers: Manufacturer[];
   progressCategories: ProgressCategory[];
@@ -34,6 +41,7 @@ interface AdminDataContextType {
   isLoading: boolean;
   getStageLabel: (statusOrStageKey: string) => string;
   getStagesByCategory: (categoryId: number) => TaskStage[];
+  getStagesByTaskType: (taskType: string) => TaskStepCompat[];
   refreshManufacturers: () => Promise<void>;
   refreshProgressCategories: () => Promise<void>;
   refreshTaskStages: () => Promise<void>;
@@ -116,6 +124,29 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [taskStages]);
 
+  // 칸반/드롭다운용: taskType prefix로 필터 → sort_order 순 정렬 → 중복 제거 → TaskStepCompat 변환
+  const STEP_COLORS = ['blue', 'yellow', 'orange', 'rose', 'purple', 'indigo', 'cyan', 'emerald', 'teal', 'green', 'amber', 'lime', 'red', 'pink', 'sky', 'violet'];
+
+  const getStagesByTaskType = useCallback((taskType: string): TaskStepCompat[] => {
+    const prefix = taskType + '_';
+    const seen = new Map<string, TaskStepCompat>();
+
+    taskStages
+      .filter(s => s.stage_key.startsWith(prefix) && s.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .forEach((s, idx) => {
+        if (!seen.has(s.stage_key)) {
+          seen.set(s.stage_key, {
+            status: s.stage_key,
+            label: s.stage_label,
+            color: STEP_COLORS[idx % STEP_COLORS.length],
+          });
+        }
+      });
+
+    return Array.from(seen.values());
+  }, [taskStages]);
+
   return (
     <AdminDataContext.Provider value={{
       manufacturers,
@@ -124,6 +155,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       getStageLabel,
       getStagesByCategory,
+      getStagesByTaskType,
       refreshManufacturers: fetchManufacturers,
       refreshProgressCategories: fetchProgressCategories,
       refreshTaskStages: fetchTaskStages,
