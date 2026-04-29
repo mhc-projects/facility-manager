@@ -3419,7 +3419,15 @@ function TaskManagementPage() {
                         const catName = e.target.value
                         if (!catName) return
                         const derivedType = deriveTypeFromPS(catName)
-                        setEditingTask(prev => prev ? { ...prev, type: derivedType as TaskType, progressStatus: catName } : null)
+                        const newStages = getStagesByTaskType(derivedType)
+                        const fallback = getStepsForType(derivedType as any)
+                        const firstStatus = (newStages.length > 0 ? newStages : fallback)[0]?.status || ''
+                        setEditingTask(prev => prev ? {
+                          ...prev,
+                          type: derivedType as TaskType,
+                          progressStatus: catName,
+                          status: firstStatus as TaskStatus,
+                        } : null)
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs sm:text-sm"
                     >
