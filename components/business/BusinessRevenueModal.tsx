@@ -1561,14 +1561,14 @@ export default function BusinessRevenueModal({
 
                 {/* 설치비 */}
                 <div
-                  className={`bg-white rounded-lg p-3 md:p-4 shadow-sm order-3 md:order-5 ${calculatedData?.equipment_breakdown?.length ? 'cursor-pointer hover:shadow-md hover:bg-cyan-50 transition-all' : ''}`}
+                  className={`bg-white rounded-lg p-3 md:p-4 shadow-sm order-3 md:order-5 ${calculatedData ? 'cursor-pointer hover:shadow-md hover:bg-cyan-50 transition-all' : ''}`}
                   onClick={() => {
-                    if (calculatedData?.equipment_breakdown?.length) setShowInstallModal(true);
+                    if (calculatedData) setShowInstallModal(true);
                   }}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-600">🔧 총 설치비</span>
-                    {calculatedData?.equipment_breakdown?.length ? (
+                    {calculatedData ? (
                       <span className="text-xs text-cyan-600 font-medium">상세 ›</span>
                     ) : null}
                   </div>
@@ -1934,11 +1934,11 @@ export default function BusinessRevenueModal({
         </div>
       </div>
       {/* 총 설치비 산출 근거 모달 */}
-      {showInstallModal && calculatedData?.equipment_breakdown && (
+      {showInstallModal && calculatedData && (
         <InstallationBreakdownModal
           isOpen={showInstallModal}
           onClose={() => setShowInstallModal(false)}
-          equipmentBreakdown={calculatedData.equipment_breakdown}
+          equipmentBreakdown={calculatedData.equipment_breakdown ?? []}
           installationExtraCost={Number(calculatedData.installation_extra_cost || 0)}
           totalInstallationCost={
             Number(displayData.installation_costs || 0) +
@@ -1955,7 +1955,6 @@ export default function BusinessRevenueModal({
           }
           userPermission={userPermission}
           onSaved={async (savedQty: number) => {
-            // 즉시 UI 반영 — state 업데이트로 리렌더링 트리거
             setMultipleStackInstallExtra(savedQty);
             try {
               const token = TokenManager.getToken();
@@ -1972,14 +1971,33 @@ export default function BusinessRevenueModal({
                 setCalculatedData(calcData.data.calculation);
                 invalidateRevenueCache(business.id);
                 setDataChanged(true);
-                // 부모에 재계산 결과 전달 → 테이블/엑셀에 즉시 반영
                 onMultipleStackSaved?.(business.id, savedQty, calcData.data.calculation);
               } else {
-                // 재계산 실패 시에도 수량은 업데이트
                 onMultipleStackSaved?.(business.id, savedQty);
               }
             } catch {
               onMultipleStackSaved?.(business.id, savedQty);
+              alert('재계산에 실패했습니다. 페이지를 새로고침해주세요.');
+            }
+          }}
+          onExtraCostSaved={async (savedCost: number | null) => {
+            try {
+              const token = TokenManager.getToken();
+              const calcResponse = await fetch('/api/revenue/calculate', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ business_id: business.id, save_result: true }),
+              });
+              const calcData = await calcResponse.json();
+              if (calcData.success && calcData.data?.calculation) {
+                setCalculatedData(calcData.data.calculation);
+                invalidateRevenueCache(business.id);
+                setDataChanged(true);
+              }
+            } catch {
               alert('재계산에 실패했습니다. 페이지를 새로고침해주세요.');
             }
           }}

@@ -15,6 +15,7 @@ interface InstallationBreakdownModalProps {
   multipleStackUnitInstallCost: number;     // 복수굴뚝 설치비 단가
   userPermission: number;
   onSaved: (savedQty: number) => void;      // 저장 후 재계산 트리거 (저장된 수량 전달)
+  onExtraCostSaved?: (savedCost: number | null) => void; // 추가설치비 저장 후 콜백
 }
 
 function formatCurrency(value: number) {
@@ -32,10 +33,16 @@ export default function InstallationBreakdownModal({
   multipleStackUnitInstallCost,
   userPermission,
   onSaved,
+  onExtraCostSaved,
 }: InstallationBreakdownModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [extraQty, setExtraQty] = useState(multipleStackInstallExtra);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 추가설치비 편집 상태
+  const [isEditingExtraCost, setIsEditingExtraCost] = useState(false);
+  const [extraCostInput, setExtraCostInput] = useState('');
+  const [isSavingExtraCost, setIsSavingExtraCost] = useState(false);
 
   // prop이 바뀌면 (저장 후 부모에서 갱신) 로컬 상태 동기화
   useEffect(() => {
@@ -84,7 +91,6 @@ export default function InstallationBreakdownModal({
       const data = await res.json();
       if (data.success) {
         setIsEditing(false);
-        // sessionStorage businesses 캐시 무효화 (새로고침 후에도 최신값 반영)
         Object.keys(sessionStorage)
           .filter(k => k.startsWith('revenue_businesses_cache'))
           .forEach(k => sessionStorage.removeItem(k));
@@ -96,6 +102,38 @@ export default function InstallationBreakdownModal({
       alert('저장 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveExtraCost = async (valueToSave: number | null) => {
+    setIsSavingExtraCost(true);
+    try {
+      const token = TokenManager.getToken();
+      const res = await fetch('/api/business-info-direct', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: businessId,
+          installation_extra_cost: valueToSave,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsEditingExtraCost(false);
+        Object.keys(sessionStorage)
+          .filter(k => k.startsWith('revenue_businesses_cache'))
+          .forEach(k => sessionStorage.removeItem(k));
+        onExtraCostSaved?.(valueToSave);
+      } else {
+        alert(data.message || '저장에 실패했습니다.');
+      }
+    } catch {
+      alert('저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingExtraCost(false);
     }
   };
 
@@ -261,10 +299,67 @@ export default function InstallationBreakdownModal({
 
           {/* 추가 설치비 */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              추가 설치비
-            </p>
-            {installationExtraCost > 0 ? (
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                추가 설치비
+              </p>
+              {!isEditingExtraCost && userPermission >= 2 && (
+                <button
+                  onClick={() => {
+                    setExtraCostInput(installationExtraCost > 0 ? String(installationExtraCost) : '');
+                    setIsEditingExtraCost(true);
+                  }}
+                  className="text-xs text-orange-600 hover:text-orange-800 font-medium"
+                >
+                  {installationExtraCost > 0 ? '수정' : '추가'}
+                </button>
+              )}
+            </div>
+            {isEditingExtraCost ? (
+              <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600 shrink-0">금액 (원)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="추가 설치비 입력"
+                    value={extraCostInput}
+                    onChange={(e) => setExtraCostInput(e.target.value)}
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+                {extraCostInput && Number(extraCostInput) > 0 && (
+                  <p className="text-xs text-orange-600 font-medium">
+                    {formatCurrency(Number(extraCostInput))}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => handleSaveExtraCost(Number(extraCostInput) || null)}
+                    disabled={isSavingExtraCost}
+                    className="flex-1 px-3 py-1.5 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 disabled:opacity-50 font-medium"
+                  >
+                    {isSavingExtraCost ? '저장 중...' : '저장'}
+                  </button>
+                  {installationExtraCost > 0 && (
+                    <button
+                      onClick={() => handleSaveExtraCost(null)}
+                      disabled={isSavingExtraCost}
+                      className="px-3 py-1.5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 disabled:opacity-50 font-medium"
+                    >
+                      삭제
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsEditingExtraCost(false)}
+                    disabled={isSavingExtraCost}
+                    className="flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300 disabled:opacity-50 font-medium"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : installationExtraCost > 0 ? (
               <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3 flex items-center justify-between">
                 <span className="text-sm text-gray-600">설치팀 요청 추가비용</span>
                 <span className="text-sm font-bold text-orange-600">
