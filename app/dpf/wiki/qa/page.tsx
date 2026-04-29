@@ -25,13 +25,6 @@ export default function WikiQAPage() {
             <QAChat />
           </div>
         </div>
-        <div className="mt-3 px-1">
-          <p className="text-xs text-gray-400">
-            * AI Q&A 기능 사용을 위해 <code className="bg-gray-100 px-1 rounded">.env.local</code>에
-            <code className="bg-gray-100 px-1 rounded">HF_API_KEY</code>와
-            <code className="bg-gray-100 px-1 rounded">GEMINI_API_KEY</code>가 설정되어 있어야 합니다.
-          </p>
-        </div>
       </div>
     </AdminLayout>
   );
