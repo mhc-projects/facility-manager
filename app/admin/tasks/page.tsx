@@ -1225,14 +1225,14 @@ function TaskManagementPage() {
 
         activeTasks.forEach(task => {
           // 업무의 실제 타입에 맞는 단계 정보를 찾기
-          const correctSteps = getStepsForType(task.type)
+          const dbSteps = getStagesByTaskType(task.type)
+          const correctSteps = dbSteps.length > 0 ? dbSteps : getStepsForType(task.type)
 
           // 해당 타입의 단계 중에서 현재 상태와 일치하는 단계 찾기
           const correctStep = correctSteps.find(s => s.status === task.status)
 
           // 올바른 단계가 있고, 그 단계의 label이 현재 처리 중인 uniqueStep의 label과 같다면 포함
           if (correctStep && correctStep.label === uniqueStep.label) {
-            // 업무에 올바른 단계 정보 첨부
             const taskWithCorrectStep = {
               ...task,
               _stepInfo: correctStep
@@ -1253,11 +1253,35 @@ function TaskManagementPage() {
         uniqueTasksArray.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         grouped[uniqueStep.status] = uniqueTasksArray
       })
+
+      // 전체 보기: 어느 컬럼에도 매칭되지 않는 업무를 해당 타입 첫 번째 컬럼에 배치
+      const assignedIds = new Set(Object.values(grouped).flat().map((t: Task) => t.id))
+      activeTasks.forEach((task: Task) => {
+        if (assignedIds.has(task.id)) return
+        const taskTypeSteps = (() => {
+          const db = getStagesByTaskType(task.type)
+          return db.length > 0 ? db : getStepsForType(task.type)
+        })()
+        if (taskTypeSteps.length === 0) return
+        const firstStep = taskTypeSteps[0]
+        if (!grouped[firstStep.status]) grouped[firstStep.status] = []
+        grouped[firstStep.status].push({ ...task, _stepInfo: firstStep })
+      })
     } else {
       // 개별 카테고리 보기일 때: 기존 로직 유지
       uniqueSteps.forEach(step => {
         grouped[step.status] = activeTasks.filter(task => task.status === step.status)
       })
+
+      // 현재 타입 단계에 매칭되지 않는 업무(레거시 status 등)를 첫 번째 컬럼에 배치
+      if (uniqueSteps.length > 0) {
+        const assignedIds = new Set(Object.values(grouped).flat().map((t: Task) => t.id))
+        const orphaned = activeTasks.filter((t: Task) => !assignedIds.has(t.id))
+        if (orphaned.length > 0) {
+          const firstKey = uniqueSteps[0].status
+          grouped[firstKey] = [...(grouped[firstKey] || []), ...orphaned]
+        }
+      }
     }
 
     // 🐛 DEBUG: Kanban board debugging for dealer filter
