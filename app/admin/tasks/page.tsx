@@ -22,16 +22,9 @@ import {
   TaskType,
   TaskStatus,
   TaskStep,
-  selfSteps,
-  subsidySteps,
-  etcSteps,
-  asSteps,
   dealerSteps,
-  outsourcingSteps,
   getStepsForType,
   calculateProgressPercentage,
-  getStatusLabel,
-  getStatusColorClass
 } from '@/lib/task-steps'
 import { parseLocalGov } from '@/lib/korean-admin-divisions'
 import {
@@ -2487,12 +2480,8 @@ function TaskManagementPage() {
                 </thead>
                 <tbody>
                   {paginatedTasks.map((task, index) => {
-                    const step = (task.type === 'self' ? selfSteps :
-                                   task.type === 'subsidy' ? subsidySteps :
-                                   task.type === 'dealer' ? dealerSteps :
-                                   task.type === 'outsourcing' ? outsourcingSteps :
-                                   task.type === 'etc' ? etcSteps : asSteps).find(s => s.status === task.status)
-                    const statusLabel = getStatusLabel(task.type, task.status)
+                    const dbStep = getStagesByTaskType(task.type).find(s => s.status === task.status)
+                    const statusLabel = getStageLabel(task.status)
                     return (
                       <tr
                         key={task.id}
@@ -2530,7 +2519,7 @@ function TaskManagementPage() {
                           </div>
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <span className={`inline-flex px-2 py-1 text-xs rounded-full ${getColorClasses(step?.color || 'gray')}`}>
+                          <span className={`inline-flex px-2 py-1 text-xs rounded-full ${getColorClasses(dbStep?.color || 'gray')}`}>
                             {statusLabel}
                           </span>
                         </td>
@@ -3285,7 +3274,7 @@ function TaskManagementPage() {
                   </div>
                   <div>
                     <p className="text-xs sm:text-xs font-medium text-gray-900 truncate">
-                      {getStatusLabel(editingTask.type, editingTask.status)}
+                      {getStageLabel(editingTask.status)}
                     </p>
                   </div>
                 </div>
