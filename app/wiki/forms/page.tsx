@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/ui/AdminLayout';
 import { FormTemplate } from '@/types/dpf';
-import { supabase } from '@/lib/supabase';
 import { File, Upload, CheckCircle } from 'lucide-react';
 
 const FORM_LIST = [
@@ -29,16 +28,15 @@ export default function WikiFormsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from('form_templates')
-      .select('*')
-      .eq('is_active', true)
-      .then(({ data }) => {
+    fetch('/api/wiki/form-templates')
+      .then(r => r.json())
+      .then(({ templates }) => {
         const map = new Map<string, FormTemplate>();
-        (data ?? []).forEach((t: FormTemplate) => map.set(t.code, t));
+        (templates ?? []).forEach((t: FormTemplate) => map.set(t.code, t));
         setTemplates(map);
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const actions = (

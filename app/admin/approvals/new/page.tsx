@@ -82,24 +82,44 @@ export default function NewApprovalPage() {
     const token = getToken()
     if (!token) throw new Error('인증 토큰이 없습니다')
 
+    // 클라이언트 사전 검증
+    if (file.size > 20 * 1024 * 1024) throw new Error('파일 크기는 20MB 이하여야 합니다')
+
     // 문서가 아직 저장되지 않은 경우 먼저 임시 저장
     let docId = savedId
     if (!docId) {
       docId = await handleSave()
     }
 
-    const fd = new FormData()
-    fd.append('file', file)
-    if (docId) fd.append('document_id', docId)
-
-    const res = await fetch('/api/approvals/attachments', {
+    // 1단계: Vercel 함수에서 Signed Upload URL 발급 (소형 JSON 요청)
+    const signedRes = await fetch('/api/approvals/attachments/signed-url', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: fd,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, fileSize: file.size, documentId: docId }),
     })
-    const data = await res.json()
-    if (!data.success) throw new Error(data.error || '업로드 실패')
-    return data.data as AttachmentFile
+    const signedData = await signedRes.json()
+    if (!signedData.success) throw new Error(signedData.error || '업로드 URL 발급 실패')
+
+    // 2단계: 파일을 Supabase에 직접 PUT (Vercel 함수 우회 → 크기 제한 없음)
+    const uploadRes = await fetch(signedData.signedUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type },
+    })
+    if (!uploadRes.ok) {
+      const msg = await uploadRes.text().catch(() => String(uploadRes.status))
+      throw new Error('스토리지 업로드 실패: ' + msg)
+    }
+
+    return {
+      id: signedData.fileId,
+      name: file.name,
+      url: signedData.publicUrl,
+      size: file.size,
+      type: file.type,
+      path: signedData.path,
+      uploaded_at: new Date().toISOString(),
+    }
   }
 
   const handleFileDelete = async (attachment: AttachmentFile) => {
@@ -132,7 +152,8 @@ export default function NewApprovalPage() {
       const defaultTitle = docType === 'overtime_log' ? THIS_MONTH_TITLE : `${DOC_TYPES.find(d => d.value === docType)?.label} - ${TODAY}`
       const body: any = { document_type: docType, title: title || defaultTitle, team_leader_id: teamLeaderId || null, executive_id: executiveId || null, vice_president_id: vicePresidentId || null, ceo_id: ceoId || null, form_data: formData, department: formData.department || '' }
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
-      const data = await res.json()
+      let data: any = {}
+      try { data = await res.json() } catch { throw new Error(`저장 실패 (HTTP ${res.status})`) }
       if (data.success) {
         const id = data.data?.id || savedId
         setSavedId(id)

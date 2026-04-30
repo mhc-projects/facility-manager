@@ -9,7 +9,6 @@ import Annex3Form from '@/components/forms/templates/Annex3Form';
 import Annex6Form from '@/components/forms/templates/Annex6Form';
 import Annex7Form from '@/components/forms/templates/Annex7Form';
 import { FormTemplate, DpfVehicle, FormFieldDefinition } from '@/types/dpf';
-import { supabase } from '@/lib/supabase';
 import { Printer, Download, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -109,11 +108,11 @@ export default function FormDetailPage({ params }: { params: { code: string } })
   useEffect(() => {
     const loadData = async () => {
       const [tmplRes, vehRes] = await Promise.all([
-        supabase.from('form_templates').select('*').eq('code', code).single(),
-        vin ? supabase.from('dpf_vehicles').select('*').eq('vin', vin).single() : Promise.resolve({ data: null }),
+        fetch(`/api/wiki/form-templates?code=${encodeURIComponent(code)}`).then(r => r.json()).catch(() => ({ template: null })),
+        vin ? fetch(`/api/dpf/vehicles/${encodeURIComponent(vin)}`).then(r => r.json()).catch(() => ({ vehicle: null })) : Promise.resolve({ vehicle: null }),
       ]);
-      setTemplate(tmplRes.data);
-      setVehicle((vehRes as { data: DpfVehicle | null }).data);
+      setTemplate(tmplRes.template ?? null);
+      setVehicle(vehRes.vehicle ?? null);
       setLoading(false);
     };
     loadData();
