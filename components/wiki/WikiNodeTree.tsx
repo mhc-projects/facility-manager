@@ -40,7 +40,7 @@ function TreeNode({ node, depth = 0 }: { node: WikiNode; depth: number }) {
         )}
         <span className="text-gray-400">{NODE_ICONS[node.node_type] ?? <File className="w-4 h-4 shrink-0" />}</span>
         {node.slug ? (
-          <Link href={`/dpf/wiki/${node.slug}`} className="flex-1 truncate" onClick={() => {}}>
+          <Link href={`/wiki/${node.slug}`} className="flex-1 truncate">
             {node.title}
           </Link>
         ) : (

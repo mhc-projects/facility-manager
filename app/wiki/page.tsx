@@ -116,16 +116,10 @@ export default function WikiPage() {
   }, [searchQuery, domainFilter]);
 
   const actions = (
-    <div className="flex gap-2">
-      <Link href="/wiki/qa"
-        className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-        <MessageSquare className="w-4 h-4" /> AI Q&A
-      </Link>
-      <Link href="/wiki/admin"
-        className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-        <Settings className="w-4 h-4" /> 관리
-      </Link>
-    </div>
+    <Link href="/wiki/admin"
+      className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+      <Settings className="w-4 h-4" /> 관리
+    </Link>
   );
 
   const showIot = domainFilter !== 'dpf';
