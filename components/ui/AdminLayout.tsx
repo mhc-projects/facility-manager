@@ -38,7 +38,6 @@ import {
   Radar,
   FileOutput,
   Truck,
-  MessageSquare,
   BookOpen
 } from 'lucide-react'
 
@@ -80,34 +79,15 @@ const navigationConfig: NavigationEntry[] = [
       requiredLevel: 3
     }
   },
-  // 업무지침 그룹
+  // 업무지침 (단독)
   {
-    type: 'group',
-    group: {
-      label: '업무지침',
-      items: [
-        {
-          name: '지침 Wiki',
-          href: '/wiki',
-          icon: BookOpen,
-          description: 'DPF·IoT 방지시설 업무처리지침 Wiki',
-          requiredLevel: 1
-        },
-        {
-          name: 'AI Q&A',
-          href: '/wiki/qa',
-          icon: MessageSquare,
-          description: '업무지침 AI 질의응답 (DPF·IoT 통합)',
-          requiredLevel: 1
-        },
-        {
-          name: '지침 관리',
-          href: '/wiki/admin',
-          icon: FileText,
-          description: '지침서 PDF 업로드 및 AI 분석 관리',
-          requiredLevel: 3
-        },
-      ]
+    type: 'item',
+    item: {
+      name: '업무지침',
+      href: '/wiki',
+      icon: BookOpen,
+      description: 'DPF·IoT 방지시설 업무처리지침 Wiki 및 AI Q&A',
+      requiredLevel: 1
     }
   },
   // IoT업무 그룹
