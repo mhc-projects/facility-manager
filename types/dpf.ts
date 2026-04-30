@@ -189,6 +189,7 @@ export interface GuidelineUpload {
   id: string;
   file_url: string;
   version_label: string;
+  domain?: 'dpf' | 'iot';
   status: 'analyzing' | 'review_needed' | 'applied' | 'rejected';
   diff_summary?: string | null;
   wiki_changes?: unknown[];

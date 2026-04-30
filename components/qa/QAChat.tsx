@@ -4,22 +4,45 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Send, Bot, User, ExternalLink } from 'lucide-react';
 
+type Domain = 'all' | 'dpf' | 'iot';
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: Array<{ title: string; slug: string }>;
 }
 
-const QUICK_QUESTIONS = [
-  '보조금 지급 청구 마감일은 언제인가요?',
-  'DPF 보증기간은 얼마나 되나요?',
-  '의무운행기간이 얼마나 되나요?',
-  '생계형 차량 기준이 무엇인가요?',
-  '클리닝은 얼마나 자주 해야 하나요?',
-  '저공해조치 기한이 얼마나 되나요?',
+const DOMAIN_TABS: { value: Domain; label: string; color: string }[] = [
+  { value: 'all', label: '전체', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+  { value: 'dpf', label: 'DPF', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 'iot', label: 'IoT', color: 'bg-green-50 text-green-700 border-green-200' },
 ];
 
+const QUICK_QUESTIONS: Record<Domain, string[]> = {
+  all: [
+    '보조금 지급 청구 마감일은 언제인가요?',
+    'DPF 보증기간은 얼마나 되나요?',
+    '방지시설 IoT 점검 주기는?',
+    '생계형 차량 기준이 무엇인가요?',
+  ],
+  dpf: [
+    '보조금 지급 청구 마감일은 언제인가요?',
+    'DPF 보증기간은 얼마나 되나요?',
+    '의무운행기간이 얼마나 되나요?',
+    '생계형 차량 기준이 무엇인가요?',
+    '클리닝은 얼마나 자주 해야 하나요?',
+    '저공해조치 기한이 얼마나 되나요?',
+  ],
+  iot: [
+    '방지시설 IoT 점검 주기는?',
+    'Gateway 이상 시 처리 절차는?',
+    '배출 기준 초과 시 조치사항은?',
+    '측정 데이터 보관 기간은?',
+  ],
+};
+
 export default function QAChat() {
+  const [domain, setDomain] = useState<Domain>('all');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +51,13 @@ export default function QAChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 도메인 변경 시 대화 초기화
+  function handleDomainChange(d: Domain) {
+    setDomain(d);
+    setMessages([]);
+    setInput('');
+  }
 
   async function sendMessage(question: string) {
     if (!question.trim() || loading) return;
@@ -44,7 +74,7 @@ export default function QAChat() {
       const res = await fetch('/api/wiki/qa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, domain: domain === 'all' ? undefined : domain }),
       });
 
       if (!res.ok) throw new Error('API 오류');
@@ -52,7 +82,6 @@ export default function QAChat() {
       const contentType = res.headers.get('content-type') ?? '';
 
       if (contentType.includes('text/event-stream')) {
-        // SSE 스트리밍 처리
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let sources: Array<{ title: string; slug: string }> = [];
@@ -88,7 +117,6 @@ export default function QAChat() {
           }
         }
       } else {
-        // JSON 응답 처리
         const data = await res.json();
         setMessages(prev => {
           const updated = [...prev];
@@ -100,7 +128,7 @@ export default function QAChat() {
           return updated;
         });
       }
-    } catch (err) {
+    } catch {
       setMessages(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = {
@@ -114,8 +142,28 @@ export default function QAChat() {
     }
   }
 
+  const currentDomainTab = DOMAIN_TABS.find(t => t.value === domain)!;
+  const quickQuestions = QUICK_QUESTIONS[domain];
+
   return (
     <div className="flex flex-col h-full">
+      {/* 도메인 필터 탭 */}
+      <div className="flex gap-1.5 mb-4 p-1 bg-gray-50 rounded-lg border border-gray-200">
+        {DOMAIN_TABS.map(tab => (
+          <button
+            key={tab.value}
+            onClick={() => handleDomainChange(tab.value)}
+            className={`flex-1 px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${
+              domain === tab.value
+                ? tab.color
+                : 'bg-transparent text-gray-500 border-transparent hover:bg-gray-100'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* 메시지 영역 */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
         {messages.length === 0 && (
@@ -123,12 +171,18 @@ export default function QAChat() {
             <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
               <Bot className="w-6 h-6 text-blue-600" />
             </div>
-            <h3 className="font-semibold text-gray-800 mb-1">DPF 업무지침 AI Q&A</h3>
+            <h3 className="font-semibold text-gray-800 mb-1">
+              {domain === 'all' ? '업무지침 AI Q&A' : domain === 'dpf' ? 'DPF 업무지침 AI Q&A' : 'IoT 방지시설 AI Q&A'}
+            </h3>
             <p className="text-sm text-gray-500 mb-6">
-              운행차 배출가스 저감사업 업무처리지침에 대해 질문하세요.
+              {domain === 'all'
+                ? 'DPF·IoT 방지시설 업무처리지침에 대해 질문하세요.'
+                : domain === 'dpf'
+                ? '운행차 배출가스 저감사업 업무처리지침에 대해 질문하세요.'
+                : 'IoT 방지시설 운영·모니터링 지침에 대해 질문하세요.'}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
-              {QUICK_QUESTIONS.map(q => (
+              {quickQuestions.map(q => (
                 <button
                   key={q}
                   onClick={() => sendMessage(q)}
@@ -168,7 +222,7 @@ export default function QAChat() {
                   {msg.sources.map((src, j) => (
                     <Link
                       key={j}
-                      href={`/dpf/wiki/${src.slug}`}
+                      href={`/wiki/${src.slug}`}
                       className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded text-xs text-gray-600 transition-colors"
                     >
                       <ExternalLink className="w-3 h-3" />
@@ -198,7 +252,11 @@ export default function QAChat() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="업무지침에 대해 질문하세요..."
+            placeholder={
+              domain === 'iot'
+                ? 'IoT 방지시설 지침에 대해 질문하세요...'
+                : 'DPF·IoT 업무지침에 대해 질문하세요...'
+            }
             disabled={loading}
             className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm
                        focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
@@ -213,7 +271,7 @@ export default function QAChat() {
           </button>
         </form>
         <p className="mt-1.5 text-xs text-gray-400 text-center">
-          AI가 업무처리지침 내용을 기반으로 답변합니다. 중요 사항은 지침 원문을 확인하세요.
+          AI가 업무처리지침과 공지사항을 기반으로 답변합니다. 중요 사항은 지침 원문을 확인하세요.
         </p>
       </div>
     </div>

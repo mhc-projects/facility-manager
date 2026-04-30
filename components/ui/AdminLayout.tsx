@@ -37,7 +37,9 @@ import {
   Megaphone,
   Radar,
   FileOutput,
-  Truck
+  Truck,
+  MessageSquare,
+  BookOpen
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -76,6 +78,36 @@ const navigationConfig: NavigationEntry[] = [
       icon: LayoutDashboard,
       description: '관리자 종합 현황 대시보드',
       requiredLevel: 3
+    }
+  },
+  // 업무지침 그룹
+  {
+    type: 'group',
+    group: {
+      label: '업무지침',
+      items: [
+        {
+          name: '지침 Wiki',
+          href: '/wiki',
+          icon: BookOpen,
+          description: 'DPF·IoT 방지시설 업무처리지침 Wiki',
+          requiredLevel: 1
+        },
+        {
+          name: 'AI Q&A',
+          href: '/wiki/qa',
+          icon: MessageSquare,
+          description: '업무지침 AI 질의응답 (DPF·IoT 통합)',
+          requiredLevel: 1
+        },
+        {
+          name: '지침 관리',
+          href: '/wiki/admin',
+          icon: FileText,
+          description: '지침서 PDF 업로드 및 AI 분석 관리',
+          requiredLevel: 3
+        },
+      ]
     }
   },
   // IoT업무 그룹
@@ -175,13 +207,6 @@ const navigationConfig: NavigationEntry[] = [
           href: '/dpf',
           icon: Truck,
           description: '매연저감장치 부착 차량 조회 및 서식 출력',
-          requiredLevel: 1
-        },
-        {
-          name: '업무 지침',
-          href: '/dpf/wiki',
-          icon: FileText,
-          description: '운행차 배출가스 저감사업 업무처리지침 Wiki',
           requiredLevel: 1
         },
         {

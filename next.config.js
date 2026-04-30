@@ -92,6 +92,16 @@ const nextConfig = {
     unoptimized: false,
   },
 
+  async redirects() {
+    return [
+      {
+        source: '/dpf/wiki/:path*',
+        destination: '/wiki/:path*',
+        permanent: true,
+      },
+    ];
+  },
+
   // 성능 헤더 - 🚀 최적화 강화
   async headers() {
     return [
