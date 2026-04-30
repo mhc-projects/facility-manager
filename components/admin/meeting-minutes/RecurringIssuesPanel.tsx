@@ -97,6 +97,50 @@ export default function RecurringIssuesPanel({
     setExpandedGroups(prev => ({ ...prev, [meetingId]: !prev[meetingId] }))
   }
 
+  const handleAddAllToMeeting = (issues: RecurringIssue[]) => {
+    let agendaCount = 0
+    let issueCount = 0
+    issues.forEach(issue => {
+      if (issue.issue_type === 'agenda_item' && onAddAgendaItem) {
+        const agendaItem: AgendaItem = {
+          id: issue.id,
+          title: issue.issue_description.split(' — ')[0],
+          description: issue.issue_description.includes(' — ')
+            ? issue.issue_description.split(' — ').slice(1).join(' — ')
+            : '',
+          department: issue.business_name === '안건' ? undefined : issue.business_name,
+          deadline: '',
+          progress: (issue.original_progress ?? 0) as 0 | 25 | 50 | 75 | 100,
+          assignee_id: issue.assignee_id,
+          assignee_name: issue.assignee_name,
+          assignee_ids: issue.assignee_ids || [],
+          assignees: issue.assignees || []
+        }
+        onAddAgendaItem(agendaItem)
+        agendaCount++
+      } else {
+        const businessIssue: BusinessIssue = {
+          id: crypto.randomUUID(),
+          business_id: issue.business_id,
+          business_name: issue.business_name,
+          issue_description: issue.issue_description,
+          assignee_id: issue.assignee_id,
+          assignee_name: issue.assignee_name,
+          assignee_ids: issue.assignee_ids,
+          assignees: issue.assignees,
+          is_completed: false,
+          completed_at: undefined
+        }
+        onAddIssue(businessIssue)
+        issueCount++
+      }
+    })
+    const parts: string[] = []
+    if (issueCount > 0) parts.push(`사업장 이슈 ${issueCount}건`)
+    if (agendaCount > 0) parts.push(`안건 ${agendaCount}건`)
+    if (parts.length > 0) alert(`${parts.join(', ')}이 추가되었습니다.`)
+  }
+
   const handleAddToMeeting = (issue: RecurringIssue) => {
     if (issue.issue_type === 'agenda_item' && onAddAgendaItem) {
       const agendaItem: AgendaItem = {
@@ -254,6 +298,12 @@ export default function RecurringIssuesPanel({
                         <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded-full">
                           {group.issues.length}건
                         </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleAddAllToMeeting(group.issues) }}
+                          className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-medium rounded hover:bg-blue-700 transition-colors"
+                        >
+                          전체 가져오기
+                        </button>
                         {isGroupExpanded
                           ? <ChevronUp className="w-3 h-3 text-gray-400" />
                           : <ChevronDown className="w-3 h-3 text-gray-400" />

@@ -682,7 +682,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
         {/* 2열 그리드 레이아웃 - create 페이지와 동일 */}
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
           {/* 왼쪽 열: 핵심 회의 정보 */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             {/* 기본 정보 */}
             {(() => {
               const metaLocker = getSectionLocker('meta')
@@ -998,7 +998,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                                         <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-sm">
                                           {sectionIndex + 1}
                                         </div>
-                                        <div className="flex-1 space-y-2">
+                                        <div className="flex-1 min-w-0 space-y-2">
                                           {/* 제목 */}
                                           <input
                                             type="text"
@@ -1150,7 +1150,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
           </div>
 
           {/* 오른쪽 열: 요약 및 이슈 */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             {/* 회의 요약 */}
             {(() => {
               const summaryLocker = getSectionLocker('summary')

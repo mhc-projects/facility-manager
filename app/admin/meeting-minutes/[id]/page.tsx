@@ -335,7 +335,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                             <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
                               {sectionIndex + 1}
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
                               {(() => {
                                 if (!item.description) return null
@@ -343,10 +343,12 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                                 // `<p>&lt;p&gt;...&lt;/p&gt;</p>` 형태로 저장된 데이터가 있음. 디코딩해 정상 HTML로 복원.
                                 const desc = sanitizeLegacyEscapedHtml(item.description)
                                 return /<[a-z][\s\S]*>/i.test(desc) ? (
-                                  <div
-                                    className="tiptap-readonly text-sm text-gray-600 mb-2"
-                                    dangerouslySetInnerHTML={{ __html: desc }}
-                                  />
+                                  <div className="overflow-x-auto">
+                                    <div
+                                      className="tiptap-readonly text-sm text-gray-600 mb-2"
+                                      dangerouslySetInnerHTML={{ __html: desc }}
+                                    />
+                                  </div>
                                 ) : (
                                   <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{desc}</p>
                                 )

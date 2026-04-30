@@ -56,6 +56,21 @@ function getProgressColor(progress: number): string {
   return 'bg-green-500'
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p>/gi, '\n')
+    .replace(/<li>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export default function RecurringIssueCard({
   issue,
   onAddToMeeting,
@@ -125,8 +140,8 @@ export default function RecurringIssueCard({
       {/* 이슈 내용 */}
       <div className="mb-2">
         <p className="text-[10px] text-gray-600 mb-0.5">{isAgendaItem ? '안건 내용:' : '이슈 내용:'}</p>
-        <p className="text-xs text-gray-900 leading-snug bg-gray-50 p-2 rounded border border-gray-200">
-          {issue.issue_description}
+        <p className="text-xs text-gray-900 leading-snug bg-gray-50 p-2 rounded border border-gray-200 whitespace-pre-line">
+          {stripHtml(issue.issue_description)}
         </p>
       </div>
 
