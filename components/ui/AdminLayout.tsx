@@ -189,13 +189,7 @@ const navigationConfig: NavigationEntry[] = [
           description: '매연저감장치 부착 차량 조회 및 서식 출력',
           requiredLevel: 1
         },
-        {
-          name: '데이터 임포트',
-          href: '/dpf/import',
-          icon: Package,
-          description: '후지노 차량정보 엑셀 일괄 임포트 (관리자)',
-          requiredLevel: 3
-        },
+
       ]
     }
   },
