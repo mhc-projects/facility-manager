@@ -23,5 +23,5 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     )
   );
 
-  return createSuccessResponse({ count: ids.length }, '순서가 저장되었습니다.');
+  return createSuccessResponse({ count: ids.length }, '순서가 저장되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });

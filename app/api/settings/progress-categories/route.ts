@@ -13,7 +13,7 @@ export const GET = withApiHandler(async (_request: NextRequest) => {
      FROM progress_categories
      ORDER BY sort_order ASC, id ASC`
   );
-  return createSuccessResponse(categories ?? [], '진행구분 목록을 조회했습니다.');
+  return createSuccessResponse(categories ?? [], '진행구분 목록을 조회했습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 const VALID_TASK_TYPES = ['self', 'subsidy', 'as', 'dealer', 'outsourcing', 'etc'] as const;
@@ -57,7 +57,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
      RETURNING id, name, task_type, sort_order, is_active`,
     [name, taskType, nextOrder]
   );
-  return createSuccessResponse(created, '진행구분이 추가되었습니다.');
+  return createSuccessResponse(created, '진행구분이 추가되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // PUT: 진행구분 수정
@@ -105,7 +105,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
      RETURNING id, name, task_type, sort_order, is_active`,
     params
   );
-  return createSuccessResponse(updated, '진행구분이 수정되었습니다.');
+  return createSuccessResponse(updated, '진행구분이 수정되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // DELETE: 진행구분 삭제
@@ -120,5 +120,5 @@ export const DELETE = withApiHandler(async (request: NextRequest) => {
   if (!existing) return createErrorResponse('존재하지 않는 진행구분입니다.', 404);
 
   await queryOne(`DELETE FROM progress_categories WHERE id = $1`, [Number(id)]);
-  return createSuccessResponse({ id: Number(id) }, `'${existing.name}' 진행구분이 삭제되었습니다.`);
+  return createSuccessResponse({ id: Number(id) }, `'${existing.name}' 진행구분이 삭제되었습니다.`, 200, { noCache: true });
 }, { logLevel: 'debug' });

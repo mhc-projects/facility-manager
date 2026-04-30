@@ -23,7 +23,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
   sql += ` ORDER BY progress_category_id ASC, sort_order ASC, id ASC`;
 
   const stages = await queryAll(sql, params);
-  return createSuccessResponse(stages ?? [], '업무단계 목록을 조회했습니다.');
+  return createSuccessResponse(stages ?? [], '업무단계 목록을 조회했습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // POST: 업무단계 추가
@@ -63,7 +63,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
      RETURNING id, progress_category_id, stage_key, stage_label, sort_order, is_active`,
     [Number(progress_category_id), key, label, nextOrder]
   );
-  return createSuccessResponse(created, '업무단계가 추가되었습니다.');
+  return createSuccessResponse(created, '업무단계가 추가되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // PUT: 업무단계 수정
@@ -99,7 +99,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
      RETURNING id, progress_category_id, stage_key, stage_label, sort_order, is_active`,
     params
   );
-  return createSuccessResponse(updated, '업무단계가 수정되었습니다.');
+  return createSuccessResponse(updated, '업무단계가 수정되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // DELETE: 업무단계 삭제
@@ -114,5 +114,5 @@ export const DELETE = withApiHandler(async (request: NextRequest) => {
   if (!existing) return createErrorResponse('존재하지 않는 업무단계입니다.', 404);
 
   await queryOne(`DELETE FROM task_stages WHERE id = $1`, [id]);
-  return createSuccessResponse({ id }, `'${existing.stage_label}' 단계가 삭제되었습니다.`);
+  return createSuccessResponse({ id }, `'${existing.stage_label}' 단계가 삭제되었습니다.`, 200, { noCache: true });
 }, { logLevel: 'debug' });

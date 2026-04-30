@@ -14,7 +14,7 @@ export const GET = withApiHandler(async (_request: NextRequest) => {
      ORDER BY sort_order ASC, id ASC`
   );
 
-  return createSuccessResponse(manufacturers ?? [], '제조사 목록을 조회했습니다.');
+  return createSuccessResponse(manufacturers ?? [], '제조사 목록을 조회했습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // POST: 제조사 추가
@@ -50,7 +50,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     [name, nextOrder]
   );
 
-  return createSuccessResponse(created, '제조사가 추가되었습니다.');
+  return createSuccessResponse(created, '제조사가 추가되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // PUT: 제조사 수정 (이름 변경 또는 순서/활성화 상태 변경)
@@ -110,7 +110,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     params
   );
 
-  return createSuccessResponse(updated, '제조사 정보가 수정되었습니다.');
+  return createSuccessResponse(updated, '제조사 정보가 수정되었습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // DELETE: 제조사 삭제
@@ -135,5 +135,5 @@ export const DELETE = withApiHandler(async (request: NextRequest) => {
     [Number(id)]
   );
 
-  return createSuccessResponse({ id: Number(id) }, `'${existing.name}' 제조사가 삭제되었습니다.`);
+  return createSuccessResponse({ id: Number(id) }, `'${existing.name}' 제조사가 삭제되었습니다.`, 200, { noCache: true });
 }, { logLevel: 'debug' });
