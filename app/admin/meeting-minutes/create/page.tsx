@@ -398,7 +398,7 @@ export default function CreateMeetingMinutePage() {
         {/* 2열 그리드 레이아웃 */}
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
           {/* 왼쪽 열: 핵심 회의 정보 */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             {/* 기본 정보 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <h2 className="text-base font-semibold text-gray-900 mb-3">기본 정보</h2>
@@ -692,7 +692,7 @@ export default function CreateMeetingMinutePage() {
                                         <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                                           {sectionIndex + 1}
                                         </div>
-                                        <div className="flex-1 space-y-2">
+                                        <div className="flex-1 min-w-0 space-y-2">
                                           <input
                                             type="text"
                                             value={item.title}
@@ -827,7 +827,7 @@ export default function CreateMeetingMinutePage() {
           </div>
 
           {/* 오른쪽 열: 부가 정보 */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {/* 회의 요약 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <h2 className="text-base font-semibold text-gray-900 mb-3">회의 요약</h2>
