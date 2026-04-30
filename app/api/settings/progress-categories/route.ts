@@ -9,20 +9,37 @@ export const runtime = 'nodejs';
 // GET: 진행구분 목록 조회
 export const GET = withApiHandler(async (_request: NextRequest) => {
   const categories = await queryAll(
-    `SELECT id, name, sort_order, is_active
+    `SELECT id, name, task_type, sort_order, is_active
      FROM progress_categories
      ORDER BY sort_order ASC, id ASC`
   );
   return createSuccessResponse(categories ?? [], '진행구분 목록을 조회했습니다.');
 }, { logLevel: 'debug' });
 
+const VALID_TASK_TYPES = ['self', 'subsidy', 'as', 'dealer', 'outsourcing', 'etc'] as const;
+type ValidTaskType = typeof VALID_TASK_TYPES[number];
+
+function inferTaskType(name: string): ValidTaskType {
+  if (name.includes('보조금')) return 'subsidy';
+  if (name.includes('자비'))   return 'self';
+  if (name === 'AS')           return 'as';
+  if (name.includes('외주'))   return 'outsourcing';
+  if (name.includes('대리점')) return 'dealer';
+  return 'etc';
+}
+
 // POST: 진행구분 추가
 export const POST = withApiHandler(async (request: NextRequest) => {
   const body = await request.json();
   const name = (body?.name ?? '').trim();
+  const taskTypeRaw = (body?.task_type ?? '').trim();
 
   if (!name) return createErrorResponse('진행구분 이름을 입력해주세요.', 400);
   if (name.length > 100) return createErrorResponse('진행구분 이름은 100자 이하여야 합니다.', 400);
+
+  const taskType: ValidTaskType = VALID_TASK_TYPES.includes(taskTypeRaw as ValidTaskType)
+    ? (taskTypeRaw as ValidTaskType)
+    : inferTaskType(name); // 미지정 시 이름으로 추론
 
   const existing = await queryOne(
     `SELECT id FROM progress_categories WHERE name = $1 LIMIT 1`, [name]
@@ -35,10 +52,10 @@ export const POST = withApiHandler(async (request: NextRequest) => {
   const nextOrder = (maxOrder?.max_order ?? 0) + 1;
 
   const created = await queryOne(
-    `INSERT INTO progress_categories (name, sort_order, is_active, created_at, updated_at)
-     VALUES ($1, $2, true, NOW(), NOW())
-     RETURNING id, name, sort_order, is_active`,
-    [name, nextOrder]
+    `INSERT INTO progress_categories (name, task_type, sort_order, is_active, created_at, updated_at)
+     VALUES ($1, $2, $3, true, NOW(), NOW())
+     RETURNING id, name, task_type, sort_order, is_active`,
+    [name, taskType, nextOrder]
   );
   return createSuccessResponse(created, '진행구분이 추가되었습니다.');
 }, { logLevel: 'debug' });
@@ -59,6 +76,8 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
   const params: any[] = [];
   let idx = 1;
 
+  const { task_type } = body ?? {};
+
   if (name !== undefined) {
     const trimmed = String(name).trim();
     if (!trimmed) return createErrorResponse('진행구분 이름을 입력해주세요.', 400);
@@ -67,6 +86,11 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     );
     if (dup) return createErrorResponse('이미 존재하는 진행구분입니다.', 409);
     updates.push(`name = $${idx++}`); params.push(trimmed);
+  }
+  if (task_type !== undefined) {
+    const t = String(task_type).trim();
+    if (!VALID_TASK_TYPES.includes(t as ValidTaskType)) return createErrorResponse('유효하지 않은 task_type입니다.', 400);
+    updates.push(`task_type = $${idx++}`); params.push(t);
   }
   if (sort_order !== undefined) { updates.push(`sort_order = $${idx++}`); params.push(Number(sort_order)); }
   if (is_active !== undefined) { updates.push(`is_active = $${idx++}`); params.push(Boolean(is_active)); }
@@ -78,7 +102,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
   const updated = await queryOne(
     `UPDATE progress_categories SET ${updates.join(', ')}
      WHERE id = $${idx}
-     RETURNING id, name, sort_order, is_active`,
+     RETURNING id, name, task_type, sort_order, is_active`,
     params
   );
   return createSuccessResponse(updated, '진행구분이 수정되었습니다.');

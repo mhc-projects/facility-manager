@@ -58,10 +58,29 @@ interface Manufacturer {
   is_active: boolean;
 }
 
+const TASK_TYPE_OPTIONS = [
+  { value: 'subsidy',     label: '보조금' },
+  { value: 'self',        label: '자비' },
+  { value: 'as',          label: 'AS' },
+  { value: 'dealer',      label: '대리점' },
+  { value: 'outsourcing', label: '외주' },
+  { value: 'etc',         label: '기타' },
+] as const;
+
+function inferTaskType(name: string): string {
+  if (name.includes('보조금')) return 'subsidy';
+  if (name.includes('자비'))   return 'self';
+  if (name === 'AS')           return 'as';
+  if (name.includes('외주'))   return 'outsourcing';
+  if (name.includes('대리점')) return 'dealer';
+  return 'etc';
+}
+
 // 진행구분 타입
 interface ProgressCategory {
   id: number;
   name: string;
+  task_type: string;
   sort_order: number;
   is_active: boolean;
 }
@@ -128,9 +147,11 @@ function AdminSettingsContent() {
   const [progressCategories, setProgressCategories] = useState<ProgressCategory[]>([]);
   const [isLoadingProgressCategories, setIsLoadingProgressCategories] = useState(false);
   const [newProgressCategoryName, setNewProgressCategoryName] = useState('');
+  const [newProgressCategoryTaskType, setNewProgressCategoryTaskType] = useState('etc');
   const [isAddingProgressCategory, setIsAddingProgressCategory] = useState(false);
   const [editingProgressCategory, setEditingProgressCategory] = useState<ProgressCategory | null>(null);
   const [editingProgressName, setEditingProgressName] = useState('');
+  const [editingProgressTaskType, setEditingProgressTaskType] = useState('etc');
   const [isSavingProgressCategory, setIsSavingProgressCategory] = useState(false);
   // 마이그레이션 상태
   const [usageList, setUsageList] = useState<ProgressCategoryUsage[]>([]);
@@ -296,12 +317,13 @@ function AdminSettingsContent() {
       const res = await fetch('/api/settings/progress-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, task_type: newProgressCategoryTaskType }),
       });
       const data = await res.json();
       if (data.success) {
         setProgressCategories(prev => [...prev, data.data]);
         setNewProgressCategoryName('');
+        setNewProgressCategoryTaskType('etc');
         setMessage({ type: 'success', text: `'${name}' 진행구분이 추가되었습니다.` });
       } else {
         setMessage({ type: 'error', text: data.message || '추가에 실패했습니다.' });
@@ -322,13 +344,14 @@ function AdminSettingsContent() {
       const res = await fetch('/api/settings/progress-categories', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingProgressCategory.id, name }),
+        body: JSON.stringify({ id: editingProgressCategory.id, name, task_type: editingProgressTaskType }),
       });
       const data = await res.json();
       if (data.success) {
         setProgressCategories(prev => prev.map(c => c.id === editingProgressCategory.id ? data.data : c));
         setEditingProgressCategory(null);
         setEditingProgressName('');
+        setEditingProgressTaskType('etc');
         setMessage({ type: 'success', text: '진행구분이 수정되었습니다.' });
       } else {
         setMessage({ type: 'error', text: data.message || '수정에 실패했습니다.' });
@@ -983,16 +1006,29 @@ function AdminSettingsContent() {
                   {/* 추가 폼 */}
                   <div className="mb-5">
                     <label className="block text-sm font-medium text-gray-700 mb-2">새 진행구분 추가</label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <input
                         type="text"
                         value={newProgressCategoryName}
-                        onChange={(e) => setNewProgressCategoryName(e.target.value)}
+                        onChange={(e) => {
+                          setNewProgressCategoryName(e.target.value);
+                          setNewProgressCategoryTaskType(inferTaskType(e.target.value));
+                        }}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddProgressCategory()}
                         placeholder="진행구분 이름 입력"
                         maxLength={100}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
+                      <select
+                        value={newProgressCategoryTaskType}
+                        onChange={(e) => setNewProgressCategoryTaskType(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        title="업무 분류"
+                      >
+                        {TASK_TYPE_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
                       <button
                         type="button"
                         onClick={handleAddProgressCategory}
@@ -1032,12 +1068,22 @@ function AdminSettingsContent() {
                                     onChange={(e) => setEditingProgressName(e.target.value)}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') handleUpdateProgressCategory();
-                                      if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); }
+                                      if (e.key === 'Escape') { setEditingProgressCategory(null); setEditingProgressName(''); setEditingProgressTaskType('etc'); }
                                     }}
                                     autoFocus
                                     maxLength={100}
                                     className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500"
                                   />
+                                  <select
+                                    value={editingProgressTaskType}
+                                    onChange={(e) => setEditingProgressTaskType(e.target.value)}
+                                    className="px-2 py-1 border border-blue-400 rounded text-xs focus:ring-2 focus:ring-blue-500"
+                                    title="업무 분류"
+                                  >
+                                    {TASK_TYPE_OPTIONS.map(opt => (
+                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                  </select>
                                   <button
                                     type="button"
                                     onClick={handleUpdateProgressCategory}
@@ -1046,7 +1092,7 @@ function AdminSettingsContent() {
                                   >저장</button>
                                   <button
                                     type="button"
-                                    onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); }}
+                                    onClick={() => { setEditingProgressCategory(null); setEditingProgressName(''); setEditingProgressTaskType('etc'); }}
                                     className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
                                   ><X className="w-4 h-4" /></button>
                                 </>
@@ -1055,6 +1101,11 @@ function AdminSettingsContent() {
                                   <span className={`flex-1 text-sm font-medium ${c.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
                                     {c.name}
                                   </span>
+                                  {c.task_type && c.task_type !== 'etc' && (
+                                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                      {TASK_TYPE_OPTIONS.find(o => o.value === c.task_type)?.label ?? c.task_type}
+                                    </span>
+                                  )}
                                   {!c.is_active && (
                                     <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비활성</span>
                                   )}
@@ -1069,7 +1120,7 @@ function AdminSettingsContent() {
                                   >{c.is_active ? '숨기기' : '표시'}</button>
                                   <button
                                     type="button"
-                                    onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); }}
+                                    onClick={() => { setEditingProgressCategory(c); setEditingProgressName(c.name); setEditingProgressTaskType(c.task_type ?? inferTaskType(c.name)); }}
                                     className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                     title="이름 수정"
                                   ><Pencil className="w-3.5 h-3.5" /></button>

@@ -4,7 +4,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } fr
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import { withAuth, useAuth } from '@/contexts/AuthContext'
-import { useAdminData } from '@/contexts/AdminDataContext'
+import { useAdminData, type ProgressCategory } from '@/contexts/AdminDataContext'
 import { TokenManager } from '@/lib/api-client'
 import MultiAssigneeSelector, { SelectedAssignee } from '@/components/ui/MultiAssigneeSelector'
 import TaskCardList from './components/TaskCardList'
@@ -136,7 +136,7 @@ interface BusinessOption {
 
 // 🔄 단계 정의 및 헬퍼 함수는 공유 모듈에서 import (lib/task-steps.ts)
 
-// progressStatus 문자열에서 TaskType 파생 (단일 출처)
+// progressStatus 문자열에서 TaskType 파생 — DB의 task_type 컬럼이 없을 때 폴백
 function deriveTypeFromPS(ps: string): TaskType {
   if (ps.includes('보조금') || ps.startsWith('보조(')) return 'subsidy'
   if (ps.includes('자비')) return 'self'
@@ -144,6 +144,13 @@ function deriveTypeFromPS(ps: string): TaskType {
   if (ps.includes('외주')) return 'outsourcing'
   if (ps.includes('대리점')) return 'dealer'
   return 'etc'
+}
+
+// DB의 task_type 우선 조회, 없으면 이름 기반 추론 폴백
+function lookupTaskType(categoryName: string, categories: ProgressCategory[]): TaskType {
+  const found = categories.find(c => c.name === categoryName)
+  if (found?.task_type) return found.task_type as TaskType
+  return deriveTypeFromPS(categoryName)
 }
 
 function TaskManagementPage() {
@@ -156,13 +163,13 @@ function TaskManagementPage() {
   const [progressFilterOpen, setProgressFilterOpen] = useState(false) // 진행구분 드롭다운 열림 여부
   const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]) // 설정 API 순서 (활성 항목만)
 
-  // selectedProgressStatuses에서 대표 TaskType 파생 (단일 타입이면 그 타입, 혼합이면 'all')
+  // selectedProgressStatuses에서 대표 TaskType 파생 (DB task_type 우선, 단일 타입이면 그 타입, 혼합이면 'all')
   const selectedType = useMemo<TaskType | 'all'>(() => {
     if (selectedProgressStatuses.length === 0) return 'all'
-    const types = new Set(selectedProgressStatuses.map(deriveTypeFromPS))
+    const types = new Set(selectedProgressStatuses.map(ps => lookupTaskType(ps, progressCategories)))
     if (types.size === 1) return [...types][0]
     return 'all'
-  }, [selectedProgressStatuses])
+  }, [selectedProgressStatuses, progressCategories])
 
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -963,15 +970,7 @@ function TaskManagementPage() {
 
   // 새 업무 등록 모달 진행구분 변경 핸들러
   const handleCreateProgressStatusChange = useCallback((value: string) => {
-    const deriveType = (ps: string): TaskType => {
-      if (ps.includes('보조금')) return 'subsidy'
-      if (ps.includes('자비')) return 'self'
-      if (ps === 'AS') return 'as'
-      if (ps.includes('외주')) return 'outsourcing'
-      if (ps.includes('대리점')) return 'dealer'
-      return 'etc'
-    }
-    const derivedType = deriveType(value)
+    const derivedType = lookupTaskType(value, progressCategories) // DB task_type 우선, 이름 기반 폴백
     setCreateProgressStatus(value)
     setCreateTaskForm(prev => ({
       ...prev,
@@ -986,7 +985,7 @@ function TaskManagementPage() {
     if (derivedType === 'etc') {
       setBusinessSearchTerm('')
     }
-  }, [])
+  }, [progressCategories])
 
   // 진행구분 토글 핸들러 (다중 선택)
   const toggleProgressStatus = useCallback((value: string) => {

@@ -14,6 +14,7 @@ export interface Manufacturer {
 export interface ProgressCategory {
   id: number;
   name: string;
+  task_type: string; // 'self' | 'subsidy' | 'as' | 'dealer' | 'outsourcing' | 'etc'
   sort_order: number;
   is_active: boolean;
 }
@@ -127,12 +128,28 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   // 칸반/드롭다운용: taskType prefix로 필터 → sort_order 순 정렬 → 중복 제거 → TaskStepCompat 변환
   const STEP_COLORS = ['blue', 'yellow', 'orange', 'rose', 'purple', 'indigo', 'cyan', 'emerald', 'teal', 'green', 'amber', 'lime', 'red', 'pink', 'sky', 'violet'];
 
+  // 이름 기반 task_type 추론 — DB의 task_type 컬럼이 없을 때 폴백용
+  const inferTaskTypeFromName = (name: string): string => {
+    if (name.includes('보조금')) return 'subsidy';
+    if (name.includes('자비'))   return 'self';
+    if (name === 'AS')           return 'as';
+    if (name.includes('외주'))   return 'outsourcing';
+    if (name.includes('대리점')) return 'dealer';
+    return 'etc';
+  };
+
   const getStagesByTaskType = useCallback((taskType: string): TaskStepCompat[] => {
     const prefix = taskType + '_';
+    // DB의 task_type 우선, 없으면(마이그레이션 미적용 등) 이름 기반 추론 폴백
+    const catIds = new Set(
+      progressCategories
+        .filter(c => (c.task_type ?? inferTaskTypeFromName(c.name)) === taskType)
+        .map(c => c.id)
+    );
     const seen = new Map<string, TaskStepCompat>();
 
     taskStages
-      .filter(s => s.stage_key.startsWith(prefix) && s.is_active)
+      .filter(s => (s.stage_key.startsWith(prefix) || catIds.has(s.progress_category_id)) && s.is_active)
       .sort((a, b) => a.sort_order - b.sort_order)
       .forEach((s, idx) => {
         if (!seen.has(s.stage_key)) {
@@ -145,7 +162,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       });
 
     return Array.from(seen.values());
-  }, [taskStages]);
+  }, [taskStages, progressCategories]);
 
   return (
     <AdminDataContext.Provider value={{
