@@ -9,7 +9,7 @@ import SubRecordFormModal, { SubRecordType } from '@/components/dpf/SubRecordFor
 import { ConfirmModal } from '@/components/ui/Modal';
 import {
   DpfVehicle, DpfDeviceInstallation, DpfPerformanceInspection,
-  DpfSubsidyApplication, DpfCallMonitoring,
+  DpfSubsidyApplication, DpfCallMonitoring, FormTemplate,
 } from '@/types/dpf';
 import {
   ChevronRight, Pencil, Trash2, Plus, ArrowLeft,
@@ -664,15 +664,36 @@ function SubsidyTab({
   );
 }
 
+const ALL_FORMS = [
+  { code: 'annex_1',   name: '국고보조금 교부신청서', auto: false, icon: '🏛' },
+  { code: 'annex_2',   name: 'DPF 부착 및 저공해엔진 개조·교체 확인서', auto: true, icon: '📋' },
+  { code: 'annex_2_2', name: '건설기계 엔진교체·개조 확인서', auto: true, icon: '🚜' },
+  { code: 'annex_3',   name: '보조금 지급 청구서 + 위임장 (소유자→제작사)', auto: true, icon: '💳' },
+  { code: 'annex_3_2', name: '보조금 지급 청구서 (제작사→지자체)', auto: true, icon: '💰' },
+  { code: 'annex_4',   name: '보조사업 수행 및 예산집행 실적보고서', auto: false, icon: '📊' },
+  { code: 'annex_5',   name: '유지관리비용 집행실적', auto: false, icon: '📈' },
+  { code: 'annex_6',   name: '저공해조치 신청서', auto: true, icon: '📝' },
+  { code: 'annex_7',   name: '차량상태 및 저감장치 부착 품질 확인서', auto: true, icon: '✅' },
+  { code: 'annex_7_2', name: '건설기계 엔진교체 전/후 점검표(지게차)', auto: true, icon: '🔍' },
+  { code: 'annex_7_3', name: '건설기계 엔진교체 전/후 점검표(굴착기·로더)', auto: true, icon: '🔍' },
+  { code: 'annex_7_4', name: '건설기계 엔진교체 전/후 점검표(롤러)', auto: true, icon: '🔍' },
+  { code: 'annex_7_5', name: '건설기계 전동화 개조 전/후 점검표(지게차)', auto: true, icon: '⚡' },
+  { code: 'annex_7_6', name: '자동차 전동화 개조 전/후 점검표(1톤 화물차)', auto: true, icon: '⚡' },
+];
+
 function DocumentsTab({ vehicle }: { vehicle: DpfVehicle }) {
-  const forms = [
-    { code: 'annex_2', name: 'DPF 부착 및 저공해엔진 개조·교체 확인서', auto: true, icon: '📋' },
-    { code: 'annex_3', name: '보조금 지급 청구서 + 위임장', auto: true, icon: '💳' },
-    { code: 'annex_6', name: '저공해조치 신청서', auto: true, icon: '📝' },
-    { code: 'annex_7', name: '차량상태 및 저감장치 부착 품질 확인서', auto: true, icon: '✅' },
-    { code: 'annex_1', name: '국고보조금 교부신청서', auto: false, icon: '🏛' },
-    { code: 'annex_4', name: '보조사업 수행 및 예산집행 실적보고서', auto: false, icon: '📊' },
-  ];
+  const [templates, setTemplates] = useState<Map<string, FormTemplate>>(new Map());
+
+  useEffect(() => {
+    fetch('/api/wiki/form-templates')
+      .then(r => r.json())
+      .then(({ templates: list }) => {
+        const map = new Map<string, FormTemplate>();
+        (list ?? []).forEach((t: FormTemplate) => map.set(t.code, t));
+        setTemplates(map);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="px-5 py-5">
@@ -681,30 +702,34 @@ function DocumentsTab({ vehicle }: { vehicle: DpfVehicle }) {
           <h3 className="font-semibold text-gray-800">서식 출력</h3>
           <p className="text-xs text-gray-500 mt-0.5">서식을 선택하면 차량 정보가 자동으로 입력됩니다.</p>
         </div>
-        <span className="text-xs text-gray-400 bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded-lg font-medium">
+        <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded-lg font-medium">
           자동입력 가능
         </span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {forms.map(form => (
-          <Link
-            key={form.code}
-            href={`/wiki/forms/${form.code}?vin=${encodeURIComponent(vehicle.vin)}`}
-            className="group flex items-center gap-3 p-3.5 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150"
-          >
-            <span className="text-xl">{form.icon}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-gray-800 group-hover:text-blue-700 leading-snug">
-                {form.name}
+        {ALL_FORMS.map(form => {
+          const hasTemplate = templates.has(form.code);
+          return (
+            <Link
+              key={form.code}
+              href={`/wiki/forms/${form.code}?vin=${encodeURIComponent(vehicle.vin)}`}
+              className="group flex items-center gap-3 p-3.5 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150"
+            >
+              <span className="text-xl">{form.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-800 group-hover:text-blue-700 leading-snug">
+                  {form.name}
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-xs text-gray-400 font-mono">{form.code.replace(/_/g, ' ')}</span>
+                  {form.auto && <span className="text-xs text-amber-500">· 자동입력</span>}
+                  {hasTemplate && <span className="text-xs text-green-600">· 등록됨</span>}
+                </div>
               </div>
-              <div className="text-xs text-gray-400 mt-0.5 font-mono">
-                {form.code.replace('_', ' ')}
-                {form.auto && <span className="ml-1.5 text-amber-500">· 자동입력</span>}
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors shrink-0" />
-          </Link>
-        ))}
+              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors shrink-0" />
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
