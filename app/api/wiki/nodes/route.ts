@@ -9,15 +9,29 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const domain = searchParams.get('domain'); // 선택적 도메인 필터
+    const domain = searchParams.get('domain');
+    const slug = searchParams.get('slug');
 
-    let query = supabaseAdmin
+    // slug 단건 조회 (wiki/[slug] 페이지용)
+    if (slug) {
+      const { data, error } = await supabaseAdmin
+        .from('wiki_nodes')
+        .select('*, children:wiki_nodes(id, title, slug, node_type, sort_order, is_published)')
+        .eq('slug', slug)
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json({ error: '페이지를 찾을 수 없습니다' }, { status: 404 });
+      }
+      return NextResponse.json({ node: data });
+    }
+
+    // 전체 트리용 목록 조회
+    const { data, error } = await supabaseAdmin
       .from('wiki_nodes')
       .select('id, parent_id, node_type, sort_order, title, slug, tags, is_published')
       .eq('is_published', true)
       .order('sort_order', { ascending: true });
-
-    const { data, error } = await query;
 
     if (error) {
       console.error('[Wiki Nodes] error:', error);
@@ -26,7 +40,6 @@ export async function GET(request: NextRequest) {
 
     let nodes = data ?? [];
 
-    // 도메인 필터: 루트 노드 기준으로 필터 (하위 노드는 parent 따라감)
     if (domain) {
       const domainRootIds = new Set(
         nodes
@@ -35,7 +48,6 @@ export async function GET(request: NextRequest) {
       );
       nodes = nodes.filter(n => {
         if (!n.parent_id) return domainRootIds.has(n.id);
-        // 부모가 해당 도메인이거나 자신이 해당 도메인 태그를 가지면 포함
         return Array.isArray(n.tags) && n.tags.includes(domain);
       });
     }

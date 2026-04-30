@@ -6,7 +6,6 @@ import AdminLayout from '@/components/ui/AdminLayout';
 import WikiContent from '@/components/wiki/WikiContent';
 import { WikiNode } from '@/types/dpf';
 import { ChevronRight, MessageSquare } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 export default function WikiSlugPage({ params }: { params: { slug: string } }) {
   const slug = decodeURIComponent(params.slug);
@@ -15,16 +14,14 @@ export default function WikiSlugPage({ params }: { params: { slug: string } }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    supabase
-      .from('wiki_nodes')
-      .select('*, children:wiki_nodes(id, title, slug, node_type, sort_order, is_published)')
-      .eq('slug', slug)
-      .single()
-      .then(({ data, error: err }) => {
-        if (err || !data) setError('페이지를 찾을 수 없습니다.');
-        else setNode(data);
-        setLoading(false);
-      });
+    fetch(`/api/wiki/nodes?slug=${encodeURIComponent(slug)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error || !data.node) setError(data.error ?? '페이지를 찾을 수 없습니다.');
+        else setNode(data.node);
+      })
+      .catch(() => setError('페이지를 불러오는 중 오류가 발생했습니다.'))
+      .finally(() => setLoading(false));
   }, [slug]);
 
   if (loading) {
@@ -39,7 +36,7 @@ export default function WikiSlugPage({ params }: { params: { slug: string } }) {
     return (
       <AdminLayout title="업무 지침" description="오류">
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-md">
-          <p className="text-red-700">{error}</p>
+          <p className="text-red-700">{error || '페이지를 찾을 수 없습니다.'}</p>
           <Link href="/wiki" className="mt-2 inline-block text-blue-600 text-sm hover:underline">
             목차로 돌아가기
           </Link>
@@ -49,12 +46,10 @@ export default function WikiSlugPage({ params }: { params: { slug: string } }) {
   }
 
   const actions = (
-    <div className="flex gap-2">
-      <Link href="/wiki/qa"
-        className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-        <MessageSquare className="w-4 h-4" /> AI에게 질문
-      </Link>
-    </div>
+    <Link href="/wiki/qa"
+      className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+      <MessageSquare className="w-4 h-4" /> AI에게 질문
+    </Link>
   );
 
   return (
