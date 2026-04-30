@@ -4364,12 +4364,12 @@ function BusinessManagementPage() {
             // 새 사업장 추가의 경우: 서버 응답을 정규화하여 즉시 UI 반영
             // normalizeBusiness와 동일한 변환을 거쳐 전체 로딩과 완전히 동일한 형태 보장
             // 별도 refetch 없이 단 한 번의 상태 업데이트로 완결 → 경쟁 조건 없음
-            addNormalizedBusiness(result.data)
+            addNormalizedBusiness(result.data?.business ?? result.data)
 
             // 새 사업장 추가 시 업무관리에 초기 업무 자동 등록 (백그라운드, 비차단)
             ;(async () => {
               try {
-                const newBusiness = result.data
+                const newBusiness = result.data?.business ?? result.data
                 const progressStatus: string = newBusiness.progress_status || newBusiness.진행상태 || ''
 
                 // 진행불가·확인필요는 업무 자동 등록 제외
