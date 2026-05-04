@@ -18,7 +18,8 @@ import {
   MapPin,
   AlertCircle,
   CheckCircle2,
-  Lock
+  Lock,
+  MessageSquare
 } from 'lucide-react'
 import {
   MeetingType,
@@ -679,10 +680,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
       }
     >
       <div className="w-full">
-        {/* 2열 그리드 레이아웃 - create 페이지와 동일 */}
-        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
-          {/* 왼쪽 열: 핵심 회의 정보 */}
-          <div className="space-y-4 min-w-0">
+        <div className="space-y-4">
             {/* 기본 정보 */}
             {(() => {
               const metaLocker = getSectionLocker('meta')
@@ -1147,10 +1145,7 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                 )
               })()}
             </div>
-          </div>
 
-          {/* 오른쪽 열: 요약 및 이슈 */}
-          <div className="space-y-4 min-w-0">
             {/* 회의 요약 */}
             {(() => {
               const summaryLocker = getSectionLocker('summary')
@@ -1170,209 +1165,51 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                   </span>
                 )}
               </div>
+
+              {/* 안건별 코멘트 편집 */}
+              {agenda.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="text-sm font-medium text-gray-600 flex items-center gap-1.5 mb-3">
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
+                    안건별 코멘트
+                  </h3>
+                  <div className="space-y-2">
+                    {agenda.map((item, index) => (
+                      <div key={item.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                            {index + 1}
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 truncate">{item.title}</span>
+                        </div>
+                        <textarea
+                          value={item.comment || ''}
+                          onChange={(e) => handleUpdateAgenda(index, 'comment', e.target.value)}
+                          disabled={summaryLocked}
+                          placeholder="코멘트 없음"
+                          rows={2}
+                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-y disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 mb-4 border-t border-gray-200" />
+                </div>
+              )}
+
+              <h3 className="text-sm font-medium text-gray-600 mb-2">전체 요약</h3>
               <textarea
                 value={summary}
                 onChange={(e) => { setSummary(e.target.value); markDirty('summary') }}
                 disabled={summaryLocked}
                 placeholder="회의 전반적인 내용을 요약하여 작성해주세요..."
-                rows={8}
+                rows={6}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
               )
             })()}
 
-            {/* 사업장별 이슈 */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold text-gray-900">사업장별 이슈</h2>
-                <button
-                  onClick={handleAddBusinessIssue}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>추가</span>
-                </button>
-              </div>
-
-              {businessIssues.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                  사업장별 이슈를 추가해주세요
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {businessIssues.map((issue, index) => {
-                    const businessSectionId = `business-${issue.id}`
-                    const businessLocker = getSectionLocker(businessSectionId)
-                    const businessLocked = !!businessLocker
-
-                    return (
-                      <div
-                        key={issue.id}
-                        className={`p-3 rounded-lg border transition-colors ${businessLocked ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}
-                        onFocus={() => { if (!businessLocked) lockSection(businessSectionId) }}
-                        onBlur={() => unlockSection(businessSectionId)}
-                      >
-                        {businessLocked && (
-                          <div className="flex items-center gap-1 text-xs text-orange-600 font-medium mb-2">
-                            <Lock className="w-3 h-3" />
-                            {businessLocker.userName} 편집 중
-                          </div>
-                        )}
-                        <fieldset disabled={businessLocked}>
-                        <div className="space-y-2">
-                        {/* fieldset wraps all issue content */}
-                          {/* 사업장 선택 */}
-                          {!issue.business_id && issue.business_name ? (
-                            <input
-                              type="text"
-                              value={issue.business_name}
-                              onChange={(e) => {
-                                const updated = [...businessIssues]
-                                updated[index] = {
-                                  ...updated[index],
-                                  business_name: e.target.value
-                                }
-                                setBusinessIssues(updated)
-                              }}
-                              placeholder="사업장명"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          ) : (
-                            <AutocompleteSelectInput
-                              value={issue.business_id}
-                              onChange={(id, name) => {
-                                const updated = [...businessIssues]
-                                updated[index] = {
-                                  ...updated[index],
-                                  business_name: name,
-                                  business_id: id
-                                }
-                                setBusinessIssues(updated)
-                              }}
-                              options={businesses.map((biz) => ({
-                                id: biz.id,
-                                name: biz.business_name
-                              }))}
-                              placeholder="사업장 선택"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              allowCustomValue={true}
-                            />
-                          )}
-
-                        {/* 이슈 설명 */}
-                        <textarea
-                          value={issue.issue_description}
-                          onChange={(e) => handleUpdateBusinessIssue(index, 'issue_description', e.target.value)}
-                          placeholder="사업장 이슈 내용 (우측 하단을 드래그하여 크기 조정 가능)"
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-y text-sm"
-                          style={{ minHeight: '75px' }}
-                        />
-
-                        {/* 담당자 (다중 선택) */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">담당자 (여러명 추가 가능)</label>
-                          <AutocompleteSelectInput
-                            value=""
-                            onChange={(selectedId, selectedName) => {
-                              const updated = [...businessIssues]
-                              const currentIds = updated[index].assignee_ids || []
-
-                              // 중복 체크
-                              if (currentIds.includes(selectedId)) {
-                                return
-                              }
-
-                              // 담당자 추가
-                              updated[index] = {
-                                ...updated[index],
-                                assignee_ids: [...currentIds, selectedId],
-                                assignees: [
-                                  ...(updated[index].assignees || []),
-                                  { id: selectedId, name: selectedName }
-                                ]
-                              }
-                              setBusinessIssues(updated)
-                              markDirty(`business-${businessIssues[index].id}`)
-                            }}
-                            options={activeEmployees
-                              .filter(emp => !(issue.assignee_ids || []).includes(emp.id))
-                              .map(emp => ({
-                                id: emp.id,
-                                name: emp.name,
-                                subtitle: `${emp.department || ''} ${emp.position || ''}`.trim()
-                              }))}
-                            placeholder="담당자 선택..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-
-                        {/* 선택된 담당자 배지 표시 */}
-                        {(issue.assignees && issue.assignees.length > 0) && (
-                          <div className="flex flex-wrap gap-2">
-                            {issue.assignees.map((assignee) => (
-                              <span
-                                key={assignee.id}
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm"
-                              >
-                                {assignee.name}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = [...businessIssues]
-                                    updated[index] = {
-                                      ...updated[index],
-                                      assignee_ids: (updated[index].assignee_ids || []).filter(id => id !== assignee.id),
-                                      assignees: (updated[index].assignees || []).filter(a => a.id !== assignee.id)
-                                    }
-                                    setBusinessIssues(updated)
-                                    markDirty(`business-${businessIssues[index].id}`)
-                                  }}
-                                  className="hover:bg-blue-200 rounded"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* 하단: 완료 체크 + 삭제 버튼 */}
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={issue.is_completed}
-                              onChange={() => handleToggleComplete(index)}
-                              className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                            />
-                            <span className={issue.is_completed ? 'text-green-600 font-medium' : 'text-gray-700'}>
-                              {issue.is_completed ? '완료됨' : '미완료'}
-                            </span>
-                            {issue.is_completed && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                          </label>
-
-                          <button
-                            onClick={() => handleRemoveBusinessIssue(index)}
-                            disabled={businessLocked}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                        </div>{/* space-y-2 */}
-                        </fieldset>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* 하단 버튼 */}

@@ -611,10 +611,7 @@ input[type="date"]:focus {
   line-height: 1.625;
 }
 
-/* tiptap-wrapper expands to content's natural width so div[height].overflow-auto
-   shows a horizontal scrollbar at the bottom of the editor (always visible). */
 .tiptap-wrapper {
-  width: max-content;
   min-width: 100%;
 }
 
@@ -659,9 +656,9 @@ input[type="date"]:focus {
 /* Tiptap Table Styles */
 .tiptap-editor-content table {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;
   margin: 0.75em 0;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .tiptap-readonly table {
@@ -686,6 +683,7 @@ input[type="date"]:focus {
 
 .tableWrapper {
   overflow-x: auto;
+  width: 100%;
 }
 
 .resize-cursor {

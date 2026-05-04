@@ -28,6 +28,7 @@ export interface AgendaItem {
   assignee_name?: string // @deprecated 단일 담당자명 (하위 호환성, optional)
   assignee_ids?: string[] // 담당자 ID 배열 (다중 담당자, optional)
   assignees?: Array<{ id: string, name: string }> // 담당자 정보 배열 (표시용, optional)
+  comment?: string        // 프레젠테이션 모드에서 입력한 안건 코멘트 (optional)
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   X,
   ChevronLeft,
@@ -322,6 +322,7 @@ function SlideAgenda({ slide }: { slide: Extract<Slide, { type: 'agenda' }> }) {
           </div>
         )}
       </div>
+
     </div>
   )
 }
@@ -442,8 +443,23 @@ function SlideBusinessIssues({ minute }: { minute: MeetingMinute }) {
   )
 }
 
-function SlideSummary({ minute }: { minute: MeetingMinute }) {
-  const hasSummary = !!minute.content.summary
+function SlideSummary({
+  minute,
+  localSummary,
+  hasComments,
+  onGenerate,
+  generating,
+  generated,
+}: {
+  minute: MeetingMinute
+  localSummary: string | null
+  hasComments: boolean
+  onGenerate: () => void
+  generating: boolean
+  generated: boolean
+}) {
+  const summaryText = localSummary ?? minute.content.summary
+  const hasSummary = !!summaryText
 
   return (
     <div className="flex flex-col items-center justify-center h-full px-12 text-center select-none">
@@ -453,9 +469,9 @@ function SlideSummary({ minute }: { minute: MeetingMinute }) {
             <FileText className="w-8 h-8 text-blue-400" />
           </div>
           <h2 className="text-3xl font-bold text-white mb-8">회의 요약</h2>
-          <div className="max-w-2xl bg-white/5 border border-white/10 rounded-2xl px-8 py-6 text-left">
+          <div className="max-w-2xl w-full bg-white/5 border border-white/10 rounded-2xl px-8 py-6 text-left">
             <p className="text-slate-200 text-lg leading-relaxed whitespace-pre-wrap">
-              {minute.content.summary}
+              {summaryText}
             </p>
           </div>
         </>
@@ -468,7 +484,19 @@ function SlideSummary({ minute }: { minute: MeetingMinute }) {
         </>
       )}
 
-      {hasSummary && (
+      {/* 요약 자동 생성 버튼 */}
+      {hasComments && (
+        <button
+          onClick={onGenerate}
+          disabled={generating}
+          className="mt-8 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-300 hover:text-white text-sm font-medium transition-all disabled:opacity-50"
+        >
+          <FileText className="w-4 h-4" />
+          {generating ? '생성 중...' : generated ? '요약 재생성' : '안건 코멘트로 요약 생성'}
+        </button>
+      )}
+
+      {hasSummary && !hasComments && (
         <div className="mt-8 flex items-center gap-2 text-slate-500 text-sm">
           <span>— 이상으로 회의를 마칩니다 —</span>
         </div>
@@ -520,8 +548,65 @@ export default function PresentationMode({ minute, onClose, departments = [] }: 
   const [showNav, setShowNav] = useState(true)
   const [navTimeout, setNavTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
 
+  // 코멘트 상태: agendaItem.id → comment text
+  const [comments, setComments] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    minute.agenda.forEach(item => { if (item.comment) map[item.id] = item.comment })
+    return map
+  })
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [localSummary, setLocalSummary] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [generated, setGenerated] = useState(false)
+  const [commentOpen, setCommentOpen] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const saveComment = useCallback(async (itemId: string, text: string) => {
+    setSavingId(itemId)
+    try {
+      await fetch(`/api/meeting-minutes/${minute.id}/sections`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section: 'agenda', itemId, data: { comment: text } }),
+      })
+    } finally {
+      setSavingId(null)
+    }
+  }, [minute.id])
+
+  const handleCommentChange = useCallback((itemId: string, text: string) => {
+    setComments(prev => ({ ...prev, [itemId]: text }))
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => saveComment(itemId, text), 800)
+  }, [saveComment])
+
+  const generateSummary = useCallback(async () => {
+    const agendaSlides = slides.filter(
+      (s): s is Extract<Slide, { type: 'agenda' }> => s.type === 'agenda'
+    )
+    const parts = agendaSlides
+      .filter(s => comments[s.item.id]?.trim())
+      .map(s => `[안건 ${s.index + 1}] ${s.item.title}\n${comments[s.item.id].trim()}`)
+    if (parts.length === 0) return
+
+    const summary = parts.join('\n\n')
+    setGenerating(true)
+    try {
+      await fetch(`/api/meeting-minutes/${minute.id}/sections`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section: 'summary', data: { summary } }),
+      })
+      setLocalSummary(summary)
+      setGenerated(true)
+    } finally {
+      setGenerating(false)
+    }
+  }, [slides, comments, minute.id])
+
   const goTo = useCallback((index: number) => {
     if (animating || index === current) return
+    setCommentOpen(false)
     setDirection(index > current ? 'forward' : 'backward')
     setAnimating(true)
     setTimeout(() => {
@@ -536,13 +621,18 @@ export default function PresentationMode({ minute, onClose, departments = [] }: 
   // 키보드 이벤트
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goNext() }
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
+      if (e.key === 'Escape') {
+        if (commentOpen) { setCommentOpen(false) } else { onClose() }
+        return
+      }
+      if (commentOpen) return
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goNext() }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev() }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose, goNext, goPrev])
+  }, [onClose, goNext, goPrev, commentOpen])
 
   // 마우스 움직임 → 네비 표시
   const handleMouseMove = useCallback(() => {
@@ -618,7 +708,16 @@ export default function PresentationMode({ minute, onClose, departments = [] }: 
           {slide.type === 'agenda' && <SlideAgenda slide={slide} />}
           {slide.type === 'discussions' && <SlideDiscussions minute={minute} />}
           {slide.type === 'business_issues' && <SlideBusinessIssues minute={minute} />}
-          {slide.type === 'summary' && <SlideSummary minute={minute} />}
+          {slide.type === 'summary' && (
+            <SlideSummary
+              minute={minute}
+              localSummary={localSummary}
+              hasComments={Object.values(comments).some(c => c.trim())}
+              onGenerate={generateSummary}
+              generating={generating}
+              generated={generated}
+            />
+          )}
         </div>
 
         {/* 좌우 클릭 영역 (넓은 터치/마우스 영역) */}
@@ -643,6 +742,62 @@ export default function PresentationMode({ minute, onClose, departments = [] }: 
               <ChevronRight className="w-6 h-6" />
             </div>
           </button>
+        )}
+
+        {/* 코멘트 플로팅 버튼 — 안건 슬라이드 전용, 좌우 클릭 영역(w-1/5) 밖 중앙 하단 */}
+        {slide.type === 'agenda' && (() => {
+          const agendaId = slide.item.id
+          const hasComment = !!comments[agendaId]?.trim()
+          return (
+            <button
+              onClick={(e) => { e.stopPropagation(); setCommentOpen(prev => !prev) }}
+              className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all shadow-lg ${
+                hasComment
+                  ? 'bg-blue-600/80 border-blue-500/60 text-white hover:bg-blue-600'
+                  : 'bg-white/10 border-white/20 text-slate-300 hover:bg-white/20 hover:text-white'
+              }`}
+              title="코멘트 작성 (C)"
+            >
+              <MessageSquare className="w-4 h-4" />
+              {hasComment ? '코멘트 편집' : '코멘트 추가'}
+              {savingId === agendaId && <span className="text-xs opacity-70 animate-pulse">저장 중</span>}
+            </button>
+          )
+        })()}
+
+        {/* 코멘트 모달 패널 */}
+        {slide.type === 'agenda' && commentOpen && (
+          <div
+            className="absolute inset-0 z-30 flex items-end justify-center pb-16"
+            onClick={() => setCommentOpen(false)}
+          >
+            <div
+              className="w-full max-w-2xl mx-8 bg-slate-800/95 backdrop-blur-sm border border-white/15 rounded-2xl p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-slate-300 text-sm font-medium flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-blue-400" />
+                  안건 {slide.index + 1} 코멘트
+                </span>
+                <button
+                  onClick={() => setCommentOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <textarea
+                autoFocus
+                value={comments[slide.item.id] ?? ''}
+                onChange={(e) => handleCommentChange(slide.item.id, e.target.value)}
+                placeholder="이 안건의 결정사항이나 논의 내용을 입력하세요 (자동 저장됨)"
+                rows={4}
+                className="w-full bg-white/5 border border-white/15 text-slate-200 placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
+              />
+              <p className="mt-2 text-slate-600 text-xs">ESC 또는 바깥 영역 클릭으로 닫기</p>
+            </div>
+          </div>
         )}
       </div>
 

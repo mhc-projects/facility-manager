@@ -18,7 +18,8 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  Monitor
+  Monitor,
+  MessageSquare
 } from 'lucide-react'
 import { MeetingMinute, ActionItem } from '@/types/meeting-minutes'
 import PresentationMode from '@/components/meeting-minutes/PresentationMode'
@@ -405,6 +406,13 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
                                       style={{ width: `${item.progress}%` }}
                                     />
                                   </div>
+                                </div>
+                              )}
+                              {/* 안건 코멘트 */}
+                              {item.comment && (
+                                <div className="mt-3 flex gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                  <MessageSquare className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                  <p className="text-sm text-blue-800 whitespace-pre-wrap leading-relaxed">{item.comment}</p>
                                 </div>
                               )}
                             </div>
