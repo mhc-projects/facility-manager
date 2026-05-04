@@ -179,7 +179,7 @@ export default function MeetingMinuteDetailPage({ params }: { params: { id: stri
     {presentationMode && (
       <PresentationMode
         minute={minute}
-        onClose={() => setPresentationMode(false)}
+        onClose={() => { setPresentationMode(false); loadMeetingMinute() }}
         departments={departments}
       />
     )}
