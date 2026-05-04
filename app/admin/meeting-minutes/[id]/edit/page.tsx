@@ -701,83 +701,73 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                 )}
               </div>
 
-              <fieldset disabled={metaLocked} className="space-y-3">
-                {/* 제목 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    회의록 제목 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => { setTitle(e.target.value); markDirty('meta') }}
-                    placeholder="예: 2024년 1월 주간 정기 회의"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-              {/* 회의 날짜 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  회의 날짜 <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <CalendarIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="datetime-local"
-                    value={meetingDate}
-                    onChange={(e) => { setMeetingDate(e.target.value); markDirty('meta') }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              {/* 회의 유형 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  회의 유형
-                </label>
-                <select
-                  value={meetingType}
-                  onChange={(e) => { setMeetingType(e.target.value as MeetingType); markDirty('meta') }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="정기회의">정기회의</option>
-                  <option value="임시회의">임시회의</option>
-                  <option value="프로젝트회의">프로젝트회의</option>
-                  <option value="고객미팅">고객미팅</option>
-                </select>
-              </div>
-            </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* 장소 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+              <fieldset disabled={metaLocked}>
+                {/* 1열: 제목 | 날짜 | 유형 | 장소 | 장소유형 */}
+                <div className="flex gap-3 items-end">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      회의록 제목 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => { setTitle(e.target.value); markDirty('meta') }}
+                      placeholder="예: 2024년 1월 주간 정기 회의"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+                    />
+                  </div>
+                  <div className="w-60 flex-shrink-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      회의 날짜 <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <CalendarIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="datetime-local"
+                        value={meetingDate}
+                        onChange={(e) => { setMeetingDate(e.target.value); markDirty('meta') }}
+                        className="w-full pl-8 pr-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="w-32 flex-shrink-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      회의 유형
+                    </label>
+                    <select
+                      value={meetingType}
+                      onChange={(e) => { setMeetingType(e.target.value as MeetingType); markDirty('meta') }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+                    >
+                      <option value="정기회의">정기회의</option>
+                      <option value="임시회의">임시회의</option>
+                      <option value="프로젝트회의">프로젝트회의</option>
+                      <option value="고객미팅">고객미팅</option>
+                    </select>
+                  </div>
+                  <div className="w-48 flex-shrink-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       장소
                     </label>
                     <div className="relative">
-                      <MapPin className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <MapPin className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
                         value={location}
                         onChange={(e) => { setLocation(e.target.value); markDirty('meta') }}
-                        placeholder="예: 본사 회의실 A"
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        placeholder="회의실"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                       />
                     </div>
                   </div>
-
-                  {/* 장소 유형 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="w-32 flex-shrink-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       장소 유형
                     </label>
                     <select
                       value={locationType}
                       onChange={(e) => { setLocationType(e.target.value as LocationType); markDirty('meta') }}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                     >
                       <option value="offline">오프라인</option>
                       <option value="online">온라인</option>
@@ -819,37 +809,34 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
                     활성 직원이 없습니다
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-9 gap-1.5">
                     {activeEmployees.map((employee) => {
                       const isSelected = participants.some(p => p.employee_id === employee.id)
-                      const participant = participants.find(p => p.employee_id === employee.id)
 
                       return (
-                        <div
+                        <label
                           key={employee.id}
-                          className={`flex items-center gap-2 p-2 rounded border transition-colors ${
-                            isSelected ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded border cursor-pointer transition-colors ${
+                            isSelected ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                           }`}
                         >
-                          <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleInternalParticipant(employee.id)}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900 truncate">
-                                {employee.name}
-                              </div>
-                              {(employee.department || employee.position) && (
-                                <div className="text-xs text-gray-500 truncate">
-                                  {[employee.department, employee.position].filter(Boolean).join(' · ')}
-                                </div>
-                              )}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleInternalParticipant(employee.id)}
+                            className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-gray-900 truncate">
+                              {employee.name}
                             </div>
-                          </label>
-                        </div>
+                            {(employee.department || employee.position) && (
+                              <div className="text-xs text-gray-500 truncate">
+                                {[employee.department, employee.position].filter(Boolean).join(' · ')}
+                              </div>
+                            )}
+                          </div>
+                        </label>
                       )
                     })}
                   </div>
