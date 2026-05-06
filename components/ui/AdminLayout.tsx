@@ -545,14 +545,14 @@ export default function AdminLayout({ children, title, description, actions }: A
       )}
 
       {/* Container with improved layout */}
-      <div className="md:flex md:gap-4 md:p-4 md:h-screen">
+      <div className="md:flex md:gap-2 md:p-2 md:h-screen">
         {/* Sidebar */}
         <div className={`
           fixed inset-y-0 left-0 z-50 bg-white/95 md:bg-white backdrop-blur-md
           shadow-xl md:shadow-lg md:border md:border-gray-200 md:rounded-xl transform transition-all duration-300 ease-in-out
           ${sidebarOpen ? 'translate-x-0 w-80' : '-translate-x-full w-80'}
           md:translate-x-0 md:static md:z-0 md:flex md:flex-col md:h-full md:min-w-0 md:flex-shrink-0
-          ${sidebarCollapsed ? 'md:w-16' : 'md:w-44 xl:w-48'}
+          ${sidebarCollapsed ? 'md:w-14' : 'md:w-40 xl:w-44'}
         `}>
           <div className="flex flex-col h-full lg:p-2">
             {/* Logo/Header */}
@@ -566,7 +566,7 @@ export default function AdminLayout({ children, title, description, actions }: A
                       <Building2 className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <h1 className="text-lg font-bold text-white">블루온</h1>
+                      <h1 className="text-lg font-bold text-white whitespace-nowrap">블루온</h1>
                     </div>
                   </Link>
                   {/* 데스크톱 collapsed: 토글 버튼만 */}
@@ -589,7 +589,7 @@ export default function AdminLayout({ children, title, description, actions }: A
                       <Building2 className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <h1 className="text-lg font-bold text-white lg:text-gray-800">블루온</h1>
+                      <h1 className="text-lg font-bold text-white lg:text-gray-800 whitespace-nowrap">블루온</h1>
                     </div>
                   </Link>
                   {/* 데스크톱 토글 버튼 */}
@@ -639,7 +639,7 @@ export default function AdminLayout({ children, title, description, actions }: A
           <div className="md:bg-white md:shadow-lg md:border md:border-gray-200 md:rounded-xl md:flex md:flex-col md:h-full md:overflow-hidden">
             {/* Top bar - Mobile optimized with fixed positioning */}
             <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md lg:bg-transparent border-b border-gray-200 lg:border-gray-300 shadow-sm lg:shadow-none">
-              <div className="px-4 py-3 lg:px-8 lg:py-6">
+              <div className="px-4 py-3 lg:px-5 lg:py-4">
                 {/* Mobile Layout (< 640px) - Minimal */}
                 <div className="flex items-center justify-between sm:hidden">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -741,7 +741,7 @@ export default function AdminLayout({ children, title, description, actions }: A
             </header>
 
             {/* Page content */}
-            <main className="p-1 sm:p-2 md:p-4 lg:p-6 md:flex-1 md:overflow-y-auto bg-gray-50 lg:bg-transparent">
+            <main className="p-1 sm:p-2 md:p-3 lg:p-4 md:flex-1 md:overflow-y-auto bg-gray-50 lg:bg-transparent">
               <div className="lg:h-full">
                 {children}
               </div>
