@@ -81,7 +81,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
 
   const fetchTaskStages = useCallback(async () => {
     try {
-      const res = await fetch('/api/settings/task-stages');
+      const res = await fetch('/api/settings/task-stages', { cache: 'no-store' });
       const data = await res.json();
       if (data.success) setTaskStages(data.data);
     } catch { /* 무시 */ }

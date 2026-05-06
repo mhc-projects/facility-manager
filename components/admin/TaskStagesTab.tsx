@@ -88,6 +88,18 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
     const label = newStageName.trim();
     if (!label || selectedCategoryId === null) return;
     setIsAdding(true);
+    // 낙관적 업데이트: 임시 항목 즉시 추가
+    const tempId = `temp_${Date.now()}`;
+    const tempStage: TaskStage = {
+      id: tempId,
+      progress_category_id: selectedCategoryId,
+      stage_key: tempId,
+      stage_label: label,
+      sort_order: localStages.length + 1,
+      is_active: true,
+    };
+    setLocalStages(prev => [...prev, tempStage]);
+    setNewStageName('');
     try {
       const res = await fetch('/api/settings/task-stages', {
         method: 'POST',
@@ -96,13 +108,18 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
       });
       const data = await res.json();
       if (data.success) {
-        setNewStageName('');
         await refreshTaskStages();
         onMessage('success', `'${label}' 단계가 추가되었습니다.`);
       } else {
+        // 롤백
+        setLocalStages(prev => prev.filter(s => s.id !== tempId));
+        setNewStageName(label);
         onMessage('error', data.message || '추가에 실패했습니다.');
       }
     } catch {
+      // 롤백
+      setLocalStages(prev => prev.filter(s => s.id !== tempId));
+      setNewStageName(label);
       onMessage('error', '추가 중 오류가 발생했습니다.');
     } finally {
       setIsAdding(false);
@@ -114,6 +131,11 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
     const label = editingLabel.trim();
     if (!label) return;
     setIsSaving(true);
+    const prevLabel = editingStage.stage_label;
+    // 낙관적 업데이트: 즉시 라벨 반영
+    setLocalStages(prev => prev.map(s => s.id === editingStage.id ? { ...s, stage_label: label } : s));
+    setEditingStage(null);
+    setEditingLabel('');
     try {
       const res = await fetch('/api/settings/task-stages', {
         method: 'PUT',
@@ -122,14 +144,16 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
       });
       const data = await res.json();
       if (data.success) {
-        setEditingStage(null);
-        setEditingLabel('');
         await refreshTaskStages();
         onMessage('success', '단계 이름이 수정되었습니다.');
       } else {
+        // 롤백
+        setLocalStages(prev => prev.map(s => s.id === editingStage.id ? { ...s, stage_label: prevLabel } : s));
         onMessage('error', data.message || '수정에 실패했습니다.');
       }
     } catch {
+      // 롤백
+      setLocalStages(prev => prev.map(s => s.id === editingStage.id ? { ...s, stage_label: prevLabel } : s));
       onMessage('error', '수정 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
@@ -138,6 +162,8 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
 
   const handleDelete = async (stage: TaskStage) => {
     if (!confirm(`'${stage.stage_label}' 단계를 삭제하시겠습니까?`)) return;
+    // 낙관적 업데이트: 즉시 목록에서 제거
+    setLocalStages(prev => prev.filter(s => s.id !== stage.id));
     try {
       const res = await fetch(`/api/settings/task-stages?id=${stage.id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -145,9 +171,19 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
         await refreshTaskStages();
         onMessage('success', `'${stage.stage_label}' 단계가 삭제되었습니다.`);
       } else {
+        // 롤백
+        setLocalStages(prev => {
+          const restored = [...prev, stage].sort((a, b) => a.sort_order - b.sort_order);
+          return restored;
+        });
         onMessage('error', data.message || '삭제에 실패했습니다.');
       }
     } catch {
+      // 롤백
+      setLocalStages(prev => {
+        const restored = [...prev, stage].sort((a, b) => a.sort_order - b.sort_order);
+        return restored;
+      });
       onMessage('error', '삭제 중 오류가 발생했습니다.');
     }
   };
