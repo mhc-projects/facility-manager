@@ -6803,6 +6803,7 @@ function BusinessManagementPage() {
             onClose={() => setIsExcelModalOpen(false)}
             businesses={filteredBusinesses}
             totalCount={allBusinesses.length}
+            taskCurrentSteps={calculateBusinessCurrentSteps}
           />
         </Suspense>
       )}

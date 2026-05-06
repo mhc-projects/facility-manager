@@ -13,6 +13,7 @@ interface BusinessExcelDownloadModalProps {
   onClose: () => void
   businesses: UnifiedBusinessInfo[]
   totalCount: number
+  taskCurrentSteps?: Record<string, string>
 }
 
 interface ColumnDef {
@@ -38,6 +39,7 @@ const COLUMN_GROUPS: ColumnGroup[] = [
       { key: 'sales_office', label: '영업점', default: true, width: 12 },
       { key: 'address', label: '주소', default: true, width: 30 },
       { key: 'progress_status', label: '진행구분', default: true, width: 14 },
+      { key: '__current_step__', label: '현재단계', default: true, width: 20 },
       { key: 'project_year', label: '사업 진행연도', default: true, width: 14 },
       { key: 'business_registration_number', label: '사업자등록번호', default: true, width: 16 },
       { key: 'business_type', label: '업종', width: 14 },
@@ -127,9 +129,9 @@ const COLUMN_GROUPS: ColumnGroup[] = [
       { key: 'order_date', label: '발주일', width: 14, type: 'date' },
       { key: 'order_manager', label: '발주담당자', width: 14 },
       { key: 'shipment_date', label: '출하일', width: 14, type: 'date' },
-      { key: 'receipt_date', label: '입고일', width: 14, type: 'date' },
+      { key: 'receipt_date', label: '접수일', width: 14, type: 'date' },
       { key: 'greenlink_confirmation_submitted_at', label: '그린링크제출일', width: 16, type: 'date' },
-      { key: 'construction_report_submitted_at', label: '공사실적제출일', width: 16, type: 'date' },
+      { key: 'construction_report_submitted_at', label: '착공신고서 제출일', width: 16, type: 'date' },
       { key: 'attachment_completion_submitted_at', label: '준공서류제출일', width: 16, type: 'date' },
       { key: 'attachment_support_application_date', label: '부착지원신청서신청일', width: 20, type: 'date' },
       { key: 'attachment_support_writing_date', label: '부착지원신청서작성일', width: 20, type: 'date' },
@@ -160,6 +162,7 @@ export default function BusinessExcelDownloadModal({
   onClose,
   businesses,
   totalCount,
+  taskCurrentSteps = {},
 }: BusinessExcelDownloadModalProps) {
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set(DEFAULT_COLUMNS))
   const [isDownloading, setIsDownloading] = useState(false)
@@ -248,10 +251,13 @@ export default function BusinessExcelDownloadModal({
       // 데이터 행
       businesses.forEach(b => {
         const rowData: Record<string, any> = {}
+        const businessName = b.business_name || b['사업장명'] || ''
         selectedCols.forEach(c => {
           if (c.key === 'multiple_stack_install_extra_cost') {
             const qty = Number(b.multiple_stack_install_extra) || 0
             rowData[c.key] = qty * multipleStackUnitInstallCost
+          } else if (c.key === '__current_step__') {
+            rowData[c.key] = taskCurrentSteps[businessName] || ''
           } else {
             rowData[c.key] = formatCellValue(b, c)
           }
