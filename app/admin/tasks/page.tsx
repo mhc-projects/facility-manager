@@ -105,6 +105,10 @@ export interface Task {
   greenlinkConfirmationSubmittedAt?: string
   attachmentSupportWritingDate?: string
   attachmentSupportApplicationDate?: string
+  manufacturer?: string
+  salesOffice?: string
+  vpnWired?: number
+  vpnWireless?: number
 }
 
 interface CreateTaskForm {
@@ -325,6 +329,10 @@ function TaskManagementPage() {
           greenlinkConfirmationSubmittedAt: dbTask.greenlink_confirmation_submitted_at || undefined,
           attachmentSupportWritingDate: dbTask.attachment_support_writing_date || undefined,
           attachmentSupportApplicationDate: dbTask.attachment_support_application_date || undefined,
+          manufacturer: dbTask.manufacturer || undefined,
+          salesOffice: dbTask.sales_office || undefined,
+          vpnWired: dbTask.vpn_wired ?? undefined,
+          vpnWireless: dbTask.vpn_wireless ?? undefined,
         }))
 
         console.log('✅ [STATE] setTasks 호출:', convertedTasks.length, '개')
@@ -1110,6 +1118,12 @@ function TaskManagementPage() {
       } else if (sortColumn === 'attachmentSupportApplicationDate') {
         aVal = a.attachmentSupportApplicationDate || ''
         bVal = b.attachmentSupportApplicationDate || ''
+      } else if (sortColumn === 'salesOffice') {
+        aVal = a.salesOffice || ''
+        bVal = b.salesOffice || ''
+      } else if (sortColumn === 'manufacturer') {
+        aVal = a.manufacturer || ''
+        bVal = b.manufacturer || ''
       } else if (sortColumn === 'receivables') {
         aVal = taskReceivables[a.businessId || ''] ?? 0
         bVal = taskReceivables[b.businessId || ''] ?? 0
@@ -2435,21 +2449,24 @@ function TaskManagementPage() {
               </div>
             ) : (
               <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-              <table className="w-full min-w-[800px]">
+              <table className="w-full min-w-[1180px]">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     {[
-                      { key: 'businessName', label: '사업장', align: 'left' },
-                      { key: 'localGovernment', label: '지자체', align: 'left' },
-                      { key: null, label: '업무 설명', align: 'left', className: 'w-28 sm:w-40 max-w-28 sm:max-w-40' },
-                      { key: 'status', label: '업무 단계', align: 'left' },
-                      { key: 'assignee', label: '담당자', align: 'left' },
-                      { key: 'type', label: '업무 타입', align: 'left' },
-                      { key: 'attachmentSupportWritingDate', label: '부착지원\n작성일', align: 'center', className: 'w-24' },
-                      { key: 'attachmentSupportApplicationDate', label: '부착지원\n신청일', align: 'center', className: 'w-24' },
-                      { key: 'installationDate', label: '설치완료', align: 'center', className: 'w-24' },
-                      { key: 'attachmentCompletionSubmittedAt', label: '부착통보', align: 'center', className: 'w-24' },
-                      { key: 'greenlinkConfirmationSubmittedAt', label: '그린링크', align: 'center', className: 'w-24' },
+                      { key: 'businessName', label: '사업장', align: 'left', className: 'min-w-[130px]' },
+                      { key: 'localGovernment', label: '지자체', align: 'left', className: 'whitespace-nowrap' },
+                      { key: null, label: '업무 설명', align: 'left', className: 'w-28 sm:w-40 max-w-28 sm:max-w-40 whitespace-nowrap' },
+                      { key: 'status', label: '업무 단계', align: 'left', className: 'whitespace-nowrap' },
+                      { key: 'assignee', label: '담당자', align: 'left', className: 'whitespace-nowrap' },
+                      { key: 'type', label: '업무\n타입', align: 'left' },
+                      { key: 'salesOffice', label: '영업점', align: 'center', className: 'w-16' },
+                      { key: 'manufacturer', label: '제조사', align: 'center', className: 'w-16' },
+                      { key: 'vpn', label: 'VPN', align: 'center', className: 'w-14' },
+                      { key: 'attachmentSupportWritingDate', label: '부착지원\n작성일', align: 'center', className: 'w-20 !text-[9px]' },
+                      { key: 'attachmentSupportApplicationDate', label: '부착지원\n신청일', align: 'center', className: 'w-20 !text-[9px]' },
+                      { key: 'installationDate', label: '설치완료', align: 'center', className: 'w-20 !text-[9px]' },
+                      { key: 'attachmentCompletionSubmittedAt', label: '부착통보', align: 'center', className: 'w-20 !text-[9px]' },
+                      { key: 'greenlinkConfirmationSubmittedAt', label: '그린링크', align: 'center', className: 'w-20 !text-[9px]' },
                       { key: 'receivables', label: '미수금', align: 'center' },
                     ].map(({ key, label, align, className }) => (
                       <th
@@ -2465,7 +2482,7 @@ function TaskManagementPage() {
                         <span className="inline-flex items-center gap-0.5">
                           <span>
                             {label.split('\n').map((line, i, arr) => (
-                              <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+                              <span key={i} className="whitespace-nowrap block">{line}</span>
                             ))}
                           </span>
                           {key && (
@@ -2488,9 +2505,9 @@ function TaskManagementPage() {
                         onClick={() => handleOpenEditModal(task)}
                         className={`border-b border-gray-100 hover:bg-blue-50 transition-colors cursor-pointer ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
                       >
-                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <div className="flex items-center gap-1">
-                            <span className="font-medium text-gray-900 truncate max-w-[120px] sm:max-w-none">
+                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs min-w-[130px]">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium text-gray-900 truncate max-w-[150px]">
                               {task.businessName}
                             </span>
                             <SubsidyActiveBadge
@@ -2501,7 +2518,7 @@ function TaskManagementPage() {
                             />
                           </div>
                         </td>
-                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs text-gray-600">
+                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs text-gray-600 whitespace-nowrap">
                           {task.localGovernment || '-'}
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
@@ -2519,7 +2536,7 @@ function TaskManagementPage() {
                           </div>
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <span className={`inline-flex px-2 py-1 text-xs rounded-full ${getColorClasses(dbStep?.color || 'gray')}`}>
+                          <span className={`inline-flex px-2 py-1 text-xs rounded-full whitespace-nowrap ${getColorClasses(dbStep?.color || 'gray')}`}>
                             {statusLabel}
                           </span>
                         </td>
@@ -2529,7 +2546,7 @@ function TaskManagementPage() {
                               {task.assignees.slice(0, 3).map((assignee) => (
                                 <span
                                   key={assignee.id}
-                                  className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium"
+                                  className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium whitespace-nowrap"
                                   title={`${assignee.name} (${assignee.position})`}
                                 >
                                   {assignee.name}
@@ -2546,7 +2563,7 @@ function TaskManagementPage() {
                           )}
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <span className={`inline-flex px-2 py-1 text-xs rounded ${
+                          <span className={`inline-flex px-2 py-1 text-xs rounded whitespace-nowrap ${
                             task.type === 'self'
                               ? 'bg-blue-100 text-blue-800'
                               : task.type === 'subsidy'
@@ -2565,6 +2582,33 @@ function TaskManagementPage() {
                              task.type === 'outsourcing' ? '외주설치' :
                              task.type === 'etc' ? '기타' : 'AS'}
                           </span>
+                        </td>
+                        {/* 영업점 */}
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.salesOffice
+                            ? <span className="text-gray-700 font-medium block truncate max-w-[64px]" title={task.salesOffice}>{task.salesOffice}</span>
+                            : <span className="text-gray-300">-</span>
+                          }
+                        </td>
+                        {/* 제조사 */}
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.manufacturer
+                            ? <span className="text-gray-700 font-medium block truncate max-w-[64px]" title={task.manufacturer}>{task.manufacturer}</span>
+                            : <span className="text-gray-300">-</span>
+                          }
+                        </td>
+                        {/* VPN연결 */}
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {(task.vpnWired || 0) > 0 || (task.vpnWireless || 0) > 0 ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              {(task.vpnWired || 0) > 0 && (
+                                <span className="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">유선</span>
+                              )}
+                              {(task.vpnWireless || 0) > 0 && (
+                                <span className="px-1 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-medium">무선</span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-300">-</span>}
                         </td>
                         <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
                           {task.attachmentSupportWritingDate ? (
