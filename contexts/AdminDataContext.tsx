@@ -26,6 +26,7 @@ export interface TaskStage {
   stage_label: string;
   sort_order: number;
   is_active: boolean;
+  is_forecast_target: boolean;
 }
 
 // 칸반/단계 드롭다운용 타입 (lib/task-steps.ts의 TaskStep과 호환)

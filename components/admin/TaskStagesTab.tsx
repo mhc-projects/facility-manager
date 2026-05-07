@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable';
-import { Plus, Pencil, Trash2, X, ListOrdered } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ListOrdered, Target } from 'lucide-react';
 import { SortableItem } from './SortableItem';
 import { useAdminData, ProgressCategory, TaskStage } from '@/contexts/AdminDataContext';
 
@@ -157,6 +157,28 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
       onMessage('error', '수정 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleToggleForecast = async (stage: TaskStage) => {
+    const next = !stage.is_forecast_target;
+    setLocalStages(prev => prev.map(s => s.id === stage.id ? { ...s, is_forecast_target: next } : s));
+    try {
+      const res = await fetch('/api/settings/task-stages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: stage.id, is_forecast_target: next }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await refreshTaskStages();
+      } else {
+        setLocalStages(prev => prev.map(s => s.id === stage.id ? { ...s, is_forecast_target: !next } : s));
+        onMessage('error', data.message || '변경에 실패했습니다.');
+      }
+    } catch {
+      setLocalStages(prev => prev.map(s => s.id === stage.id ? { ...s, is_forecast_target: !next } : s));
+      onMessage('error', '변경 중 오류가 발생했습니다.');
     }
   };
 
@@ -347,6 +369,19 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
                           </span>
                           <button
                             type="button"
+                            onClick={() => handleToggleForecast(stage)}
+                            className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                              stage.is_forecast_target
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                            }`}
+                            title={stage.is_forecast_target ? '예측마감 대상 해제' : '예측마감 대상으로 설정'}
+                          >
+                            <Target className="w-3 h-3" />
+                            예측
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => { setEditingStage(stage); setEditingLabel(stage.stage_label); }}
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                             title="이름 수정"
@@ -372,7 +407,8 @@ export default function TaskStagesTab({ onMessage }: TaskStagesTabProps) {
 
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs text-blue-800">
-              📌 단계 이름 수정 시 업무관리, 사업장관리 등 모든 화면에 즉각 반영됩니다. 드래그하여 단계 순서를 변경할 수 있습니다.
+              📌 단계 이름 수정 시 업무관리, 사업장관리 등 모든 화면에 즉각 반영됩니다. 드래그하여 단계 순서를 변경할 수 있습니다.<br />
+              <span className="font-medium">예측</span> 버튼을 눌러 해당 단계를 설치비 마감 예측마감 탭에 포함할 수 있습니다.
             </p>
           </div>
         </div>

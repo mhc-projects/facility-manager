@@ -11,7 +11,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url);
   const categoryId = searchParams.get('category_id');
 
-  let sql = `SELECT id, progress_category_id, stage_key, stage_label, sort_order, is_active
+  let sql = `SELECT id, progress_category_id, stage_key, stage_label, sort_order, is_active, is_forecast_target
              FROM task_stages`;
   const params: any[] = [];
 
@@ -60,7 +60,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
   const created = await queryOne(
     `INSERT INTO task_stages (progress_category_id, stage_key, stage_label, sort_order, is_active)
      VALUES ($1, $2, $3, $4, true)
-     RETURNING id, progress_category_id, stage_key, stage_label, sort_order, is_active`,
+     RETURNING id, progress_category_id, stage_key, stage_label, sort_order, is_active, is_forecast_target`,
     [Number(progress_category_id), key, label, nextOrder]
   );
   return createSuccessResponse(created, '업무단계가 추가되었습니다.', 200, { noCache: true });
@@ -69,7 +69,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 // PUT: 업무단계 수정
 export const PUT = withApiHandler(async (request: NextRequest) => {
   const body = await request.json();
-  const { id, stage_label, sort_order, is_active } = body ?? {};
+  const { id, stage_label, sort_order, is_active, is_forecast_target } = body ?? {};
 
   if (!id) return createErrorResponse('id가 필요합니다.', 400);
 
@@ -89,6 +89,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
   }
   if (sort_order !== undefined) { updates.push(`sort_order = $${idx++}`); params.push(Number(sort_order)); }
   if (is_active !== undefined) { updates.push(`is_active = $${idx++}`); params.push(Boolean(is_active)); }
+  if (is_forecast_target !== undefined) { updates.push(`is_forecast_target = $${idx++}`); params.push(Boolean(is_forecast_target)); }
   if (updates.length === 0) return createErrorResponse('변경할 항목이 없습니다.', 400);
 
   updates.push(`updated_at = NOW()`);
@@ -96,7 +97,7 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
   const updated = await queryOne(
     `UPDATE task_stages SET ${updates.join(', ')} WHERE id = $${idx}
-     RETURNING id, progress_category_id, stage_key, stage_label, sort_order, is_active`,
+     RETURNING id, progress_category_id, stage_key, stage_label, sort_order, is_active, is_forecast_target`,
     params
   );
   return createSuccessResponse(updated, '업무단계가 수정되었습니다.', 200, { noCache: true });

@@ -5,19 +5,6 @@ import { verifyTokenString } from '@/utils/auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// 예측마감 대상 업무 단계
-const FORECAST_TARGET_STATUSES = [
-  // 자비
-  'self_product_order',           // 제품 발주
-  'self_installation_schedule',   // 설치예정
-  // 보조금
-  'subsidy_product_order',        // 제품 발주
-  'subsidy_installation_schedule',// 설치예정
-  // 외주설치
-  'outsourcing_order',            // 외주 발주
-  'outsourcing_schedule',         // 일정 조율
-  'outsourcing_in_progress',      // 설치 진행 중
-];
 
 /**
  * GET /api/installation-closing/forecast
@@ -45,8 +32,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: '설치비 마감 권한이 필요합니다. (권한 레벨 3 이상)' }, { status: 403 });
     }
 
+    // 예측마감 대상 업무단계 조회 (관리자 설정 기반)
+    const forecastTargetStages = await queryAll(
+      `SELECT stage_key FROM task_stages WHERE is_forecast_target = true AND is_active = true`
+    );
+    const forecastTargetStatuses = forecastTargetStages.map((r: any) => r.stage_key);
+
     // 미처리 예측마감 대상: 업무 단계가 대상이고 + 설치 미완료 + 예측마감 미처리
-    const pendingBusinesses = await queryAll(`
+    const pendingBusinesses = forecastTargetStatuses.length === 0 ? [] : await queryAll(`
       SELECT DISTINCT
         b.id,
         b.business_name,
@@ -69,7 +62,7 @@ export async function GET(request: NextRequest) {
             AND ip.status NOT IN ('cancelled', 'deducted')
         )
       ORDER BY b.business_name ASC
-    `, [FORECAST_TARGET_STATUSES]);
+    `, [forecastTargetStatuses]);
 
     // 이미 예측마감 처리된 건 (최근 이력)
     const paidBusinesses = await queryAll(`
