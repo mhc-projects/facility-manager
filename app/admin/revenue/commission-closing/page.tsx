@@ -694,11 +694,6 @@ export default function CommissionClosingPage() {
               >
                 <Icon className="w-3.5 h-3.5" />
                 {label}
-                {key === 'eligible' && onHoldItems.length > 0 && (
-                  <span className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-500 text-white text-[10px] font-bold">
-                    {onHoldItems.length}
-                  </span>
-                )}
               </button>
             ))}
           </div>
