@@ -38,7 +38,8 @@ import {
   Radar,
   FileOutput,
   Truck,
-  BookOpen
+  BookOpen,
+  HeartHandshake
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -232,6 +233,13 @@ const navigationConfig: NavigationEntry[] = [
               href: '/admin/revenue/installation-closing',
               icon: Calculator,
               description: '예측마감/본마감 처리 및 은결 정산',
+              requiredLevel: 3
+            },
+            {
+              name: '영업비 마감',
+              href: '/admin/revenue/commission-closing',
+              icon: HeartHandshake,
+              description: '영업점 영업비 지급 관리 및 미수금 보류 처리',
               requiredLevel: 3
             }
           ]

@@ -77,6 +77,7 @@ async function sendNotification({
 const DOC_TYPE_LABEL: Record<string, string> = {
   expense_claim: '지출결의서', purchase_request: '구매요청서',
   leave_request: '휴가원', business_proposal: '업무품의서', overtime_log: '연장근무일지',
+  installation_closing: '설치비마감', commission_closing: '영업비마감',
 };
 
 /**
@@ -562,6 +563,28 @@ export async function POST(
           }
         } catch (closingErr) {
           console.error('⚠️ [APPROVAL] 설치비 마감 자동 처리 실패:', closingErr);
+        }
+      }
+
+      // 영업비 마감인 경우 pending_approval → approved 자동 전환
+      if (doc.document_type === 'commission_closing') {
+        try {
+          const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+          const commissionPaymentIds: string[] = formData?.commission_payment_ids ?? [];
+          if (commissionPaymentIds.length > 0) {
+            await queryOne(`
+              UPDATE commission_payments
+              SET status      = 'approved',
+                  approved_by = $1,
+                  approved_at = NOW(),
+                  updated_at  = NOW()
+              WHERE id = ANY($2::uuid[])
+                AND status = 'pending_approval'
+            `, [doc.requester_id, commissionPaymentIds]);
+            console.log(`✅ [APPROVAL] 영업비 마감 결재 완료 자동 처리: ${commissionPaymentIds.length}건 (${doc.document_number})`);
+          }
+        } catch (commissionErr) {
+          console.error('⚠️ [APPROVAL] 영업비 마감 자동 처리 실패:', commissionErr);
         }
       }
 
