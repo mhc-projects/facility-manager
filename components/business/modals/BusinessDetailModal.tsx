@@ -109,6 +109,7 @@ interface UnifiedBusinessInfo {
   attachment_completion_submitted_at?: string | null
   attachment_support_application_date?: string | null
   attachment_support_writing_date?: string | null
+  online_receipt_date?: string | null
   manufacturer?: '에코센스' | '크린어스' | '가이아씨앤에스' | '이브이에스' | null
   vpn?: 'wired' | 'wireless' | null
   greenlink_id?: string | null
@@ -1259,8 +1260,15 @@ export default function BusinessDetailModal({
 
                     {business.attachment_support_application_date && (
                       <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
-                        <div className="text-xs sm:text-sm text-gray-600 mb-1">부착지원신청서 신청일</div>
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">부착지원신청서 접수일</div>
                         <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.attachment_support_application_date)}</div>
+                      </div>
+                    )}
+
+                    {business.online_receipt_date && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">온라인 접수일</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.online_receipt_date)}</div>
                       </div>
                     )}
 

@@ -35,6 +35,7 @@ interface UnifiedBusinessInfo {
   attachment_completion_submitted_at: string | null
   attachment_support_application_date: string | null
   attachment_support_writing_date: string | null
+  online_receipt_date: string | null
 
   // 실사 관리
   estimate_survey_date: string | null
@@ -590,7 +591,7 @@ export default function BusinessInfoPanel({
     data.order_date || data.shipment_date || data.installation_date ||
     data.construction_report_submitted_at || data.greenlink_confirmation_submitted_at ||
     data.attachment_completion_submitted_at || data.attachment_support_application_date ||
-    data.attachment_support_writing_date
+    data.attachment_support_writing_date || data.online_receipt_date
   )
 
   const hasSurvey = !!(
@@ -760,9 +761,15 @@ export default function BusinessInfoPanel({
               />
             )}
             {(isEditing || data.attachment_support_application_date) && (
-              <FieldRow label="부착지원신청일" isEditing={isEditing}
+              <FieldRow label="부착지원신청서 접수일" isEditing={isEditing}
                 viewContent={<ViewDate value={data.attachment_support_application_date} />}
                 editContent={<DateInput value={get('attachment_support_application_date')} onChange={set('attachment_support_application_date')} />}
+              />
+            )}
+            {(isEditing || data.online_receipt_date) && (
+              <FieldRow label="온라인 접수일" isEditing={isEditing}
+                viewContent={<ViewDate value={data.online_receipt_date} />}
+                editContent={<DateInput value={get('online_receipt_date')} onChange={set('online_receipt_date')} />}
               />
             )}
             {(isEditing || data.attachment_support_writing_date) && (
