@@ -1153,6 +1153,18 @@ async function createAutoProgressNoteAndNotification(existingTask: any, updatedT
   }
 }
 
+// custom_* stage_key를 DB의 stage_label로 변환 (일반 상태는 getTaskStatusKR 위임)
+async function resolveStatusLabel(status: string): Promise<string> {
+  if (status?.startsWith('custom_')) {
+    const row = await queryOne(
+      `SELECT stage_label FROM task_stages WHERE stage_key = $1 AND is_active = true LIMIT 1`,
+      [status]
+    );
+    if (row?.stage_label) return row.stage_label;
+  }
+  return getTaskStatusKR(status);
+}
+
 async function createAutoProgressNote(params: {
   task: any;
   oldStatus?: string;
@@ -1167,9 +1179,10 @@ async function createAutoProgressNote(params: {
   let metadata: any = {};
 
   if (changeType === 'status_change' && oldStatus && newStatus) {
-    // ✅ 중앙 매핑 시스템 사용 (67개 전체 상태 지원)
-    const oldStatusLabel = getTaskStatusKR(oldStatus);
-    const newStatusLabel = getTaskStatusKR(newStatus);
+    const [oldStatusLabel, newStatusLabel] = await Promise.all([
+      resolveStatusLabel(oldStatus),
+      resolveStatusLabel(newStatus),
+    ]);
 
     content = `업무 상태가 "${oldStatusLabel}"에서 "${newStatusLabel}"로 변경되었습니다.`;
     metadata = {
@@ -1361,10 +1374,8 @@ async function createTaskNotifications(params: {
 // 업무 생성 시 자동 메모 생성 함수
 async function createTaskCreationNote(task: any) {
   try {
-    // ✅ 중앙 매핑 시스템 사용 (67개 전체 상태 + 6개 업무 타입 지원)
-    // task_type은 status prefix에서 파생 (레거시 status의 경우 task.task_type을 fallback으로 사용)
     const taskTypeLabel = getTaskTypeKR(getTaskTypeFromStatus(task.status, task.task_type));
-    const statusLabel = getTaskStatusKR(task.status);
+    const statusLabel = await resolveStatusLabel(task.status);
     const assigneeList = task.assignees?.map((a: any) => a.name).filter(Boolean).join(', ') || '미배정';
 
     const content = `새로운 ${taskTypeLabel} 업무 "${task.title}"이 생성되었습니다. (상태: ${statusLabel}, 담당자: ${assigneeList})`;
