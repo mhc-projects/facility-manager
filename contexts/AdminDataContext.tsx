@@ -140,17 +140,17 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getStagesByTaskType = useCallback((taskType: string): TaskStepCompat[] => {
-    const prefix = taskType + '_';
-    // DB의 task_type 우선, 없으면(마이그레이션 미적용 등) 이름 기반 추론 폴백
-    const catIds = new Set(
-      progressCategories
-        .filter(c => (c.task_type ?? inferTaskTypeFromName(c.name)) === taskType)
-        .map(c => c.id)
-    );
-    const seen = new Map<string, TaskStepCompat>();
+    // sort_order 기준 최우선 카테고리만 사용 — 변형 카테고리(5년경과, 동시진행 등)의 오래된 단계가
+    // 메인 카테고리 설정과 혼재되는 문제를 방지한다
+    const primaryCat = progressCategories
+      .filter(c => c.is_active && (c.task_type ?? inferTaskTypeFromName(c.name)) === taskType)
+      .sort((a, b) => a.sort_order - b.sort_order)[0];
 
+    if (!primaryCat) return [];
+
+    const seen = new Map<string, TaskStepCompat>();
     taskStages
-      .filter(s => (s.stage_key.startsWith(prefix) || catIds.has(s.progress_category_id)) && s.is_active)
+      .filter(s => s.progress_category_id === primaryCat.id && s.is_active)
       .sort((a, b) => a.sort_order - b.sort_order)
       .forEach((s, idx) => {
         if (!seen.has(s.stage_key)) {

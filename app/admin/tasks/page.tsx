@@ -1450,8 +1450,10 @@ function TaskManagementPage() {
 
   const mobileTaskSteps = useMemo(() => {
     if (!mobileSelectedTask) return []
+    const dbSteps = getStagesByTaskType(mobileSelectedTask.type)
+    if (dbSteps.length > 0) return dbSteps
     return getStepsForType(mobileSelectedTask.type as TaskType)
-  }, [mobileSelectedTask])
+  }, [mobileSelectedTask, getStagesByTaskType])
 
   // 헬퍼 함수들
   const getColorClasses = useCallback((color: string) => {

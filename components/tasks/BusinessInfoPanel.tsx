@@ -601,13 +601,19 @@ export default function BusinessInfoPanel({
   )
 
   const hasInvoice = !!(
-    data.invoice_1st_date || data.invoice_2nd_date || data.invoice_additional_date ||
-    data.invoice_advance_date || data.invoice_balance_date
+    data.invoice_1st_date || (data.invoice_1st_amount && data.invoice_1st_amount > 0) ||
+    data.invoice_2nd_date || (data.invoice_2nd_amount && data.invoice_2nd_amount > 0) ||
+    data.invoice_additional_date ||
+    data.invoice_advance_date || (data.invoice_advance_amount && data.invoice_advance_amount > 0) ||
+    data.invoice_balance_date || (data.invoice_balance_amount && data.invoice_balance_amount > 0)
   )
 
   const hasPayment = !!(
-    data.payment_1st_date || data.payment_2nd_date || data.payment_additional_date ||
-    data.payment_advance_date || data.payment_balance_date
+    data.payment_1st_date || (data.payment_1st_amount && data.payment_1st_amount > 0) ||
+    data.payment_2nd_date || (data.payment_2nd_amount && data.payment_2nd_amount > 0) ||
+    data.payment_additional_date || (data.payment_additional_amount && data.payment_additional_amount > 0) ||
+    data.payment_advance_date || (data.payment_advance_amount && data.payment_advance_amount > 0) ||
+    data.payment_balance_date || (data.payment_balance_amount && data.payment_balance_amount > 0)
   )
 
   // ── Render ─────────────────────────────────────────────────────────────────
