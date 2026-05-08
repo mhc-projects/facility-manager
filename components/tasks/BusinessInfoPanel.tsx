@@ -25,6 +25,7 @@ interface UnifiedBusinessInfo {
 
   // 일정 관리
   subsidy_approval_date: string | null
+  quote_sent_date: string | null
   contract_sent_date: string | null
   order_request_date: string | null
   order_date: string | null
@@ -587,8 +588,8 @@ export default function BusinessInfoPanel({
   const d = isEditing ? draft : data
 
   const hasSchedule = !!(
-    data.subsidy_approval_date || data.contract_sent_date || data.order_request_date ||
-    data.order_date || data.shipment_date || data.installation_date ||
+    data.subsidy_approval_date || data.quote_sent_date || data.contract_sent_date ||
+    data.order_request_date || data.order_date || data.shipment_date || data.installation_date ||
     data.construction_report_submitted_at || data.greenlink_confirmation_submitted_at ||
     data.attachment_completion_submitted_at || data.attachment_support_application_date ||
     data.attachment_support_writing_date || data.online_receipt_date
@@ -725,6 +726,10 @@ export default function BusinessInfoPanel({
             <FieldRow label="보조금 승인일" isEditing={isEditing}
               viewContent={<ViewDate value={data.subsidy_approval_date} />}
               editContent={<DateInput value={get('subsidy_approval_date')} onChange={set('subsidy_approval_date')} />}
+            />
+            <FieldRow label="견적서 발송일" isEditing={isEditing}
+              viewContent={<ViewDate value={data.quote_sent_date} />}
+              editContent={<DateInput value={get('quote_sent_date')} onChange={set('quote_sent_date')} />}
             />
             <FieldRow label="계약서 발송일" isEditing={isEditing}
               viewContent={<ViewDate value={data.contract_sent_date} />}

@@ -178,6 +178,7 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     attachment_support_writing_date: business.attachment_support_writing_date || null,
     // 일정 관리
     contract_sent_date: business.contract_sent_date || null,
+    quote_sent_date: business.quote_sent_date || null,
     subsidy_approval_date: business.subsidy_approval_date || null,
     order_request_date: business.order_request_date || null,
     receipt_date: business.receipt_date || null,
@@ -185,6 +186,7 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     shipment_date: business.shipment_date || null,
     installation_date: business.installation_date || null,
     payment_scheduled_date: business.payment_scheduled_date || null,
+    online_receipt_date: business.online_receipt_date || null,
     // 추가공사비
     additional_cost: business.additional_cost || null,
     // 매출비용 조정

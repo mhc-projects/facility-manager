@@ -58,6 +58,7 @@ interface UnifiedBusinessInfo {
   installation_support?: string | null
   order_manager?: string | null
   contract_sent_date?: string | null
+  quote_sent_date?: string | null
   order_date?: string | null
   shipment_date?: string | null
   inventory_check?: string | null
