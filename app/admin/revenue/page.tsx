@@ -18,6 +18,7 @@ import { MANUFACTURER_NAMES } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
 import { sumAllPayments } from '@/lib/receivables-calculator';
 import { allSteps } from '@/lib/task-steps';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { CacheManager } from '@/utils/cache-manager';
@@ -135,6 +136,7 @@ function getFilterPaymentDate(business: Record<string, any>): string | null {
 function RevenueDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { getStageLabel, taskStages } = useAdminData();
   const isMobile = useIsMobile();
   const [businesses, setBusinesses] = useState<BusinessInfo[]>([]);
   const [riskMap, setRiskMap] = useState<Record<string, string | null>>({}); // 위험도 별도 상태 (businesses 재계산 방지)
@@ -405,15 +407,18 @@ function RevenueDashboard() {
     };
   };
 
-  // 업무단계 고유 라벨 목록 (중복 제거)
+  // 업무단계 고유 라벨 목록 (DB 동적 단계 우선, 없으면 하드코딩 폴백)
   const uniqueTaskStepLabels = useMemo(() => {
+    const source = taskStages.length > 0
+      ? taskStages.filter(s => s.is_active).map(s => ({ status: s.stage_key, label: s.stage_label }))
+      : allSteps;
     const seen = new Set<string>();
-    return allSteps.filter(step => {
+    return source.filter(step => {
       if (seen.has(step.label)) return false;
       seen.add(step.label);
       return true;
     });
-  }, []);
+  }, [taskStages]);
 
   // 업무 상태 맵 로드
   const loadTaskStatuses = async () => {
@@ -1794,8 +1799,11 @@ function RevenueDashboard() {
       // 업무단계 필터 (미수금 필터 활성화 시에만 적용)
       if (!showReceivablesOnly) return true;
       if (selectedTaskTypes.length === 0) return true;
-      // 선택된 라벨들에 해당하는 모든 status 코드 수집
-      const matchingStatuses = allSteps
+      // 선택된 라벨들에 해당하는 모든 status 코드 수집 (DB 동적 단계 우선, 없으면 하드코딩 폴백)
+      const stepSource = taskStages.length > 0
+        ? taskStages.filter(s => s.is_active).map(s => ({ status: s.stage_key, label: s.stage_label }))
+        : allSteps;
+      const matchingStatuses = stepSource
         .filter(s => selectedTaskTypes.includes(s.label))
         .map(s => s.status);
       const taskList = taskStatusMap[business.business_name] ?? [];
@@ -3326,8 +3334,7 @@ function VirtualizedTable({
                   <div className="border-r border-gray-300 px-1.5 py-1 flex items-center flex-wrap gap-0.5 bg-indigo-50/30">
                     {(business.task_statuses ?? []).length > 0 ? (
                       (business.task_statuses as Array<{ task_type: string; status: string }>).map((ts, i) => {
-                        const step = allSteps.find(s => s.status === ts.status);
-                        const label = step?.label ?? ts.status;
+                        const label = getStageLabel(ts.status);
                         return (
                           <span
                             key={i}
