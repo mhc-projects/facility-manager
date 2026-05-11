@@ -133,10 +133,20 @@ function getFilterPaymentDate(business: Record<string, any>): string | null {
   return null;
 }
 
+// 업무단계 뱃지: 가상화된 리스트 내 hook 클로저 문제를 피하기 위해 독립 컴포넌트로 분리
+function TaskStageBadge({ status }: { status: string }) {
+  const { getStageLabel } = useAdminData();
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 whitespace-nowrap">
+      {getStageLabel(status)}
+    </span>
+  );
+}
+
 function RevenueDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { getStageLabel, taskStages } = useAdminData();
+  const { taskStages } = useAdminData();
   const isMobile = useIsMobile();
   const [businesses, setBusinesses] = useState<BusinessInfo[]>([]);
   const [riskMap, setRiskMap] = useState<Record<string, string | null>>({}); // 위험도 별도 상태 (businesses 재계산 방지)
@@ -3333,17 +3343,9 @@ function VirtualizedTable({
                 {showReceivablesOnly && (
                   <div className="border-r border-gray-300 px-1.5 py-1 flex items-center flex-wrap gap-0.5 bg-indigo-50/30">
                     {(business.task_statuses ?? []).length > 0 ? (
-                      (business.task_statuses as Array<{ task_type: string; status: string }>).map((ts, i) => {
-                        const label = getStageLabel(ts.status);
-                        return (
-                          <span
-                            key={i}
-                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 whitespace-nowrap"
-                          >
-                            {label}
-                          </span>
-                        );
-                      })
+                      (business.task_statuses as Array<{ task_type: string; status: string }>).map((ts, i) => (
+                        <TaskStageBadge key={i} status={ts.status} />
+                      ))
                     ) : (
                       <span className="text-[10px] text-gray-400">-</span>
                     )}
