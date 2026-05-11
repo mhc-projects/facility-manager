@@ -440,7 +440,7 @@ function BusinessManagementPage() {
   // 권한 확인 훅
   const { canDeleteAutoMemos } = usePermission()
   const { user } = useAuth()
-  const { getStageLabel } = useAdminData()
+  const { getStageLabel, getStageColorClass } = useAdminData()
   const userPermission = user?.permission_level || 0
   const toast = useToast()
 
@@ -4661,7 +4661,7 @@ function BusinessManagementPage() {
     {
       key: '현재단계',
       title: '현재 단계',
-      width: '100px',
+      width: '110px',
       render: (item: any) => {
         const businessName = item.사업장명 || item.business_name || ''
         const taskStatus = businessTaskStatuses[businessName]
@@ -4682,19 +4682,22 @@ function BusinessManagementPage() {
 
         // 업무 상태 정보가 있을 때
         if (taskStatus) {
-          // rawStatus가 있으면 AdminDataContext의 동적 레이블 사용, 없으면 기존 statusText 사용
           const displayText = taskStatus.rawStatus && taskStatus.hasActiveTasks
             ? (() => {
                 const label = getStageLabel(taskStatus.rawStatus)
                 return taskStatus.taskCount > 1 ? `${label} 외 ${taskStatus.taskCount - 1}건` : label
               })()
             : taskStatus.statusText
+          // rawStatus가 있으면 동적 색상, 없으면 기존 색상(업무완료·미등록 등)
+          const colorClass = taskStatus.rawStatus && taskStatus.hasActiveTasks
+            ? getStageColorClass(taskStatus.rawStatus)
+            : taskStatus.colorClass
           return (
             <div className="text-center">
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${taskStatus.colorClass}`}>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium leading-snug inline-block whitespace-normal break-keep ${colorClass}`}>
                 {displayText}
               </span>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-[10px] text-gray-500 mt-0.5">
                 {getTaskSummary(taskStatus.taskCount, taskStatus.hasActiveTasks, taskStatus.lastUpdated)}
               </div>
             </div>

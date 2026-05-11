@@ -42,6 +42,7 @@ interface AdminDataContextType {
   taskStages: TaskStage[];
   isLoading: boolean;
   getStageLabel: (statusOrStageKey: string) => string;
+  getStageColorClass: (stageKey: string) => string;
   getStagesByCategory: (categoryId: number) => TaskStage[];
   getStagesByTaskType: (taskType: string) => TaskStepCompat[];
   refreshManufacturers: () => Promise<void>;
@@ -129,6 +130,38 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   // 칸반/드롭다운용: taskType prefix로 필터 → sort_order 순 정렬 → 중복 제거 → TaskStepCompat 변환
   const STEP_COLORS = ['blue', 'yellow', 'orange', 'rose', 'purple', 'indigo', 'cyan', 'emerald', 'teal', 'green', 'amber', 'lime', 'red', 'pink', 'sky', 'violet'];
 
+  // 색상 이름 → Tailwind 뱃지 클래스
+  const COLOR_TO_BADGE: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-800',
+    yellow: 'bg-yellow-100 text-yellow-800',
+    orange: 'bg-orange-100 text-orange-800',
+    rose: 'bg-rose-100 text-rose-800',
+    purple: 'bg-purple-100 text-purple-800',
+    indigo: 'bg-indigo-100 text-indigo-800',
+    cyan: 'bg-cyan-100 text-cyan-800',
+    emerald: 'bg-emerald-100 text-emerald-800',
+    teal: 'bg-teal-100 text-teal-800',
+    green: 'bg-green-100 text-green-800',
+    amber: 'bg-amber-100 text-amber-800',
+    lime: 'bg-lime-100 text-lime-800',
+    red: 'bg-red-100 text-red-800',
+    pink: 'bg-pink-100 text-pink-800',
+    sky: 'bg-sky-100 text-sky-800',
+    violet: 'bg-violet-100 text-violet-800',
+  };
+
+  // stage_key → Tailwind 뱃지 클래스: 카테고리 내 sort_order 기반 색상 사이클
+  const getStageColorClass = useCallback((stageKey: string): string => {
+    const stage = taskStages.find(s => s.stage_key === stageKey && s.is_active);
+    if (!stage) return 'bg-gray-100 text-gray-600';
+    const siblings = taskStages
+      .filter(s => s.progress_category_id === stage.progress_category_id && s.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const idx = siblings.findIndex(s => s.id === stage.id);
+    const colorName = STEP_COLORS[(idx >= 0 ? idx : 0) % STEP_COLORS.length];
+    return COLOR_TO_BADGE[colorName] || 'bg-gray-100 text-gray-600';
+  }, [taskStages]);
+
   // 이름 기반 task_type 추론 — DB의 task_type 컬럼이 없을 때 폴백용
   const inferTaskTypeFromName = (name: string): string => {
     if (name.includes('보조금')) return 'subsidy';
@@ -172,6 +205,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       taskStages,
       isLoading,
       getStageLabel,
+      getStageColorClass,
       getStagesByCategory,
       getStagesByTaskType,
       refreshManufacturers: fetchManufacturers,
