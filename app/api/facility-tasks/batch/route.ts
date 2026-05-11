@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
 
         businessStatuses[businessName] = {
           statusText,
+          rawStatus: topTask.status,
           colorClass: statusColors[topTask.status] || 'bg-gray-100 text-gray-600',
           lastUpdated: topTask.updated_at,
           taskCount: activeTasks.length,

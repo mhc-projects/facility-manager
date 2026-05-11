@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { TokenManager } from '@/lib/api-client';
 import { Clock, User, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
-// 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import
+// 🔄 공유 모듈에서 단계 정의 및 헬퍼 함수 import (폴백용)
 import {
   TaskType,
   TaskStatus,
@@ -16,8 +16,8 @@ import {
   asSteps,
   dealerSteps,
   outsourcingSteps,
-  getStepsForType
 } from '@/lib/task-steps';
+import { useAdminData } from '@/contexts/AdminDataContext';
 
 interface TaskAssignee {
   id: string;
@@ -78,13 +78,12 @@ const getColorClasses = (color: string) => {
   return colorMap[color] || colorMap.gray
 }
 
-// 🔄 getStepsForType 함수는 공유 모듈에서 import (lib/task-steps.ts)
-
 export default function TaskProgressMiniBoard({
   businessName,
   onStatusChange
 }: TaskProgressMiniBoardProps) {
   const { user } = useAuth();
+  const { getStagesByTaskType } = useAdminData();
   const [tasks, setTasks] = useState<FacilityTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -201,15 +200,31 @@ export default function TaskProgressMiniBoard({
     return () => clearTimeout(timer);
   }, [lastEventTime, businessName, loadTasks]);
 
+  // 폴백용 하드코딩 단계 맵
+  const FALLBACK_STEPS: Record<string, any[]> = {
+    self: selfSteps,
+    subsidy: subsidySteps,
+    dealer: dealerSteps,
+    outsourcing: outsourcingSteps,
+    as: asSteps,
+    etc: etcSteps,
+  };
+
   // 업무 타입별로 그룹화된 단계별 업무 개수 계산
   const getTasksByTypeAndStatus = () => {
+    // AdminDataContext에서 동적 단계 조회, 없으면 하드코딩 폴백
+    const getSteps = (taskType: string) => {
+      const dynamic = getStagesByTaskType(taskType);
+      return dynamic.length > 0 ? dynamic : (FALLBACK_STEPS[taskType] || etcSteps);
+    };
+
     const tasksByType: {[key: string]: {tasks: FacilityTask[], steps: any[]}} = {
-      self: { tasks: [], steps: selfSteps },
-      subsidy: { tasks: [], steps: subsidySteps },
-      dealer: { tasks: [], steps: dealerSteps }, // 🔄 추가
-      outsourcing: { tasks: [], steps: outsourcingSteps }, // 🔄 추가
-      as: { tasks: [], steps: asSteps },
-      etc: { tasks: [], steps: etcSteps }
+      self: { tasks: [], steps: getSteps('self') },
+      subsidy: { tasks: [], steps: getSteps('subsidy') },
+      dealer: { tasks: [], steps: getSteps('dealer') },
+      outsourcing: { tasks: [], steps: getSteps('outsourcing') },
+      as: { tasks: [], steps: getSteps('as') },
+      etc: { tasks: [], steps: getSteps('etc') },
     };
 
     tasks.forEach(task => {

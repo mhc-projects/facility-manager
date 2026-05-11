@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { BusinessInfo } from '@/lib/database-service'
 import type { BusinessMemo, CreateBusinessMemoInput, UpdateBusinessMemoInput } from '@/types/database'
 import { getBusinessTaskStatus, getBatchBusinessTaskStatuses, getTaskSummary } from '@/lib/business-task-utils'
-import { TASK_STATUS_KR, TASK_TYPE_KR } from '@/lib/task-status-utils'
+import { TASK_TYPE_KR } from '@/lib/task-status-utils'
 import { supabase } from '@/lib/supabase'
 // Lazy load heavy modals for better initial load performance
 const BusinessRevenueModal = lazy(() => import('@/components/business/BusinessRevenueModal'))
@@ -14,6 +14,7 @@ const BusinessUploadModal = lazy(() => import('@/components/business/modals/Busi
 const BusinessDetailModal = lazy(() => import('@/components/business/modals/BusinessDetailModal'))
 const BusinessExcelDownloadModal = lazy(() => import('@/components/business/modals/BusinessExcelDownloadModal'))
 import { useAuth } from '@/contexts/AuthContext'
+import { useAdminData } from '@/contexts/AdminDataContext'
 import { TokenManager } from '@/lib/api-client'
 import { getManufacturerName } from '@/constants/manufacturers'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
@@ -439,6 +440,7 @@ function BusinessManagementPage() {
   // 권한 확인 훅
   const { canDeleteAutoMemos } = usePermission()
   const { user } = useAuth()
+  const { getStageLabel } = useAdminData()
   const userPermission = user?.permission_level || 0
   const toast = useToast()
 
@@ -1020,6 +1022,7 @@ function BusinessManagementPage() {
   const [businessTaskStatuses, setBusinessTaskStatuses] = useState<{
     [businessName: string]: {
       statusText: string
+      rawStatus?: string
       colorClass: string
       lastUpdated: string
       taskCount: number
@@ -1105,112 +1108,9 @@ function BusinessManagementPage() {
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const LOAD_MORE_COUNT = 20 // 한 번에 로드할 개수
 
-  // 업무 상태 매핑 유틸리티 함수들
+  // 업무 상태 매핑 유틸리티 함수들 — AdminDataContext의 동적 단계 레이블 사용
   const getStatusDisplayName = (status: string): string => {
-    const statusMap: { [key: string]: string } = {
-      // 확인필요 단계
-      'self_needs_check': '확인필요',
-      'subsidy_needs_check': '확인필요',
-      'as_needs_check': '확인필요',
-      'dealer_needs_check': '확인필요',
-      'outsourcing_needs_check': '확인필요',
-      'etc_needs_check': '확인필요',
-      // 자비 공통 단계
-      'self_customer_contact': '고객 상담',
-      'self_site_inspection': '현장 실사',
-      'self_quotation': '견적서 작성',
-      'self_contract': '계약 체결',
-      // 자비 전용 단계
-      'self_deposit_confirm': '계약금 확인',
-      'self_product_order': '제품 발주',
-      'self_product_shipment': '제품 출고',
-      'self_installation_schedule': '설치예정',
-      'self_installation': '설치 완료',
-      'self_completion_document': '준공서류 작성필요',
-      'self_balance_payment': '잔금 입금',
-      'self_document_complete': '서류 발송 완료',
-      // 보조금 공통 단계
-      'subsidy_customer_contact': '고객 상담',
-      'subsidy_site_inspection': '현장 실사',
-      'subsidy_quotation': '견적서 작성',
-      'subsidy_contract': '계약 체결',
-      // 보조금 전용 단계
-      'subsidy_document_preparation': '신청서 작성 필요',
-      'subsidy_application_submit': '신청서 제출',
-      'subsidy_approval_pending': '보조금 승인대기',
-      'subsidy_approved': '보조금 승인',
-      'subsidy_rejected': '보조금 탈락',
-      'subsidy_document_supplement': '신청서 보완',
-      'subsidy_pre_construction_inspection': '착공 전 실사',
-      'subsidy_pre_construction_supplement_1st': '착공 보완 1차',
-      'subsidy_pre_construction_supplement_2nd': '착공 보완 2차',
-      'subsidy_construction_report_submit': '착공신고서 제출',
-      'subsidy_product_order': '제품 발주',
-      'subsidy_product_shipment': '제품 출고',
-      'subsidy_installation_schedule': '설치예정',
-      'subsidy_installation': '설치완료',
-      'subsidy_pre_completion_document_submit': '준공도서 작성 필요',
-      'subsidy_completion_inspection': '준공 실사',
-      'subsidy_completion_supplement_1st': '준공 보완 1차',
-      'subsidy_completion_supplement_2nd': '준공 보완 2차',
-      'subsidy_completion_supplement_3rd': '준공 보완 3차',
-      'subsidy_final_document_submit': '보조금지급신청서 제출',
-      'subsidy_payment_pending': '보조금 입금 대기',
-      'subsidy_payment': '보조금 입금',
-      // AS 단계
-      'as_customer_contact': 'AS 고객 상담',
-      'as_site_inspection': 'AS 현장 확인',
-      'as_quotation': 'AS 견적 작성',
-      'as_contract': 'AS 계약 체결',
-      'as_part_order': 'AS 부품 발주',
-      'as_completed': 'AS 완료',
-      // 대리점 단계
-      'dealer_order_received': '발주 수신',
-      'dealer_invoice_issued': '계산서 발행',
-      'dealer_payment_confirmed': '입금 확인',
-      'dealer_product_ordered': '제품 발주',
-      // 외주설치 단계
-      'outsourcing_order': '외주 발주',
-      'outsourcing_schedule': '일정 조율',
-      'outsourcing_in_progress': '설치 진행 중',
-      'outsourcing_completed': '설치 완료',
-      // 기타 단계
-      'etc_status': '기타',
-      // 레거시 호환성 (구버전 status - 유지)
-      'customer_contact': '고객 상담',
-      'site_inspection': '현장 실사',
-      'quotation': '견적서 작성',
-      'contract': '계약 체결',
-      'deposit_confirm': '계약금 확인',
-      'product_order': '제품 발주',
-      'product_shipment': '제품 출고',
-      'installation_schedule': '설치예정',
-      'installation': '설치완료',
-      'balance_payment': '잔금 입금',
-      'document_complete': '서류 발송 완료',
-      'document_preparation': '신청서 작성 필요',
-      'application_submit': '신청서 제출',
-      'approval_pending': '보조금 승인대기',
-      'approved': '보조금 승인',
-      'rejected': '보조금 탈락',
-      'document_supplement': '신청서 보완',
-      'pre_construction_inspection': '착공 전 실사',
-      'pre_construction_supplement_1st': '착공 보완 1차',
-      'pre_construction_supplement_2nd': '착공 보완 2차',
-      'construction_report_submit': '착공신고서 제출',
-      'pre_completion_document_submit': '준공도서 작성 필요',
-      'completion_inspection': '준공 실사',
-      'completion_supplement_1st': '준공 보완 1차',
-      'completion_supplement_2nd': '준공 보완 2차',
-      'completion_supplement_3rd': '준공 보완 3차',
-      'final_document_submit': '보조금지급신청서 제출',
-      'pending': '대기',
-      'in_progress': '진행중',
-      'completed': '완료',
-      'cancelled': '취소',
-      'on_hold': '보류'
-    }
-    return statusMap[status] || status
+    return getStageLabel(status)
   }
 
   const getStatusColor = (status: string) => {
@@ -1835,9 +1735,6 @@ function BusinessManagementPage() {
   const calculateBusinessCurrentSteps = useMemo(() => {
     const statusMap: Record<string, string> = {}
 
-    // task-status-utils.ts의 TASK_STATUS_KR을 직접 사용 (중복 관리 방지)
-    const statusLabels = TASK_STATUS_KR
-
     // 사업장별로 업무 그룹화
     const businessTasksMap: Record<string, any[]> = {}
     allTasksForFilter.forEach(task => {
@@ -1865,7 +1762,8 @@ function BusinessManagementPage() {
         })
 
         const topTask = sortedTasks[0]
-        const rawLabel = statusLabels[topTask.status] || topTask.status
+        // AdminDataContext.getStageLabel: DB 단계 레이블 우선, TASK_STATUS_KR 폴백
+        const rawLabel = getStageLabel(topTask.status)
         // status key의 타입 prefix 감지 (subsidy_, self_, as_, dealer_, outsourcing_, etc_)
         const knownPrefixes = ['subsidy', 'self', 'as', 'dealer', 'outsourcing', 'etc']
         const detectedPrefix = knownPrefixes.find(p => topTask.status.startsWith(p + '_'))
@@ -1877,7 +1775,7 @@ function BusinessManagementPage() {
 
     console.log(`📊 [CURRENT-STEP-CALC] ${Object.keys(statusMap).length}개 사업장의 현재 단계 계산 완료`)
     return statusMap
-  }, [allTasksForFilter])
+  }, [allTasksForFilter, getStageLabel])
 
   // 검색 필터링 (useMemo 사용으로 자동 필터링)
   const filteredBusinesses = useMemo(() => {
@@ -4784,10 +4682,17 @@ function BusinessManagementPage() {
 
         // 업무 상태 정보가 있을 때
         if (taskStatus) {
+          // rawStatus가 있으면 AdminDataContext의 동적 레이블 사용, 없으면 기존 statusText 사용
+          const displayText = taskStatus.rawStatus && taskStatus.hasActiveTasks
+            ? (() => {
+                const label = getStageLabel(taskStatus.rawStatus)
+                return taskStatus.taskCount > 1 ? `${label} 외 ${taskStatus.taskCount - 1}건` : label
+              })()
+            : taskStatus.statusText
           return (
             <div className="text-center">
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${taskStatus.colorClass}`}>
-                {taskStatus.statusText}
+                {displayText}
               </span>
               <div className="text-xs text-gray-500 mt-1">
                 {getTaskSummary(taskStatus.taskCount, taskStatus.hasActiveTasks, taskStatus.lastUpdated)}

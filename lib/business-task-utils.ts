@@ -194,6 +194,7 @@ const COMPLETED_COLOR = 'bg-green-100 text-green-800'
  */
 export async function getBusinessTaskStatus(businessName: string, token?: string): Promise<{
   statusText: string
+  rawStatus?: string
   colorClass: string
   lastUpdated: string
   taskCount: number
@@ -308,6 +309,7 @@ export async function getBusinessTaskStatus(businessName: string, token?: string
 
     return {
       statusText,
+      rawStatus: topTask.status,
       colorClass: STATUS_COLORS[topTask.status] || DEFAULT_COLOR,
       lastUpdated: topTask.updated_at,
       taskCount: activeTasks.length,
@@ -337,6 +339,7 @@ export async function getBatchBusinessTaskStatuses(
   token?: string
 ): Promise<Record<string, {
   statusText: string
+  rawStatus?: string
   colorClass: string
   lastUpdated: string
   taskCount: number
@@ -393,6 +396,7 @@ async function fallbackToIndividualCalls(
   token?: string
 ): Promise<Record<string, {
   statusText: string
+  rawStatus?: string
   colorClass: string
   lastUpdated: string
   taskCount: number
