@@ -81,3 +81,4 @@ test-*.js
 .claude/settings.local.json
 .serena/project.yml
 .aider*
+supabase/.temp/
