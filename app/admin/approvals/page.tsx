@@ -246,7 +246,8 @@ function ApprovalsContent() {
       params.set('limit', '100')
 
       const res = await fetch(`/api/approvals?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       })
       const data = await res.json()
       if (data.success) {
