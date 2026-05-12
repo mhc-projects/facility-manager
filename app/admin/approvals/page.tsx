@@ -288,7 +288,7 @@ function ApprovalsContent() {
       fetchDocs()
       fetchPendingCount()
     }
-  }, [refreshToken]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshToken, fetchDocs, fetchPendingCount])
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
   useEffect(() => { fetchPendingCount() }, [fetchPendingCount])

@@ -197,6 +197,7 @@ export default function NewApprovalPage() {
       const data = await res.json()
       if (data.success) {
         router.push(`/admin/approvals?tab=my&submitted=1&_t=${Date.now()}`)
+        router.refresh()
       } else {
         alert(data.error || '상신 실패')
       }
