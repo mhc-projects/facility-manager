@@ -282,7 +282,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 // 24시간
+      maxAge: 30 * 24 * 60 * 60 // 30일
     });
 
     return response;

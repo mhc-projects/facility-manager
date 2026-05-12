@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
         name: employee.name
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '30d' }
     );
 
     // 응답 데이터 (password_hash 제외)
@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60, // 24시간
+      maxAge: 30 * 24 * 60 * 60, // 30일
       path: '/'
     });
 

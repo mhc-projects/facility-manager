@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
         name: employee.name
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '30d' }
     );
 
     console.log('✅ [AUTH] 로그인 성공:', { email: employee.email, name: employee.name });
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
 
     // ✅ httpOnly 쿠키 설정 - Next.js cookies.set() API 사용 (권장 방식)
     const isProduction = process.env.NODE_ENV === 'production';
-    const maxAge = 24 * 60 * 60; // 24시간
+    const maxAge = 30 * 24 * 60 * 60; // 30일
 
     // session_token 쿠키 (httpOnly - 보안)
     response.cookies.set('session_token', token, {
