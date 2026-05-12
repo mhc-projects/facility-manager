@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export type LeaveType = 'annual' | 'condolence' | 'special' | 'other' | 'half_am' | 'half_pm'
 
@@ -38,9 +38,9 @@ const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
 
 const IS_HALF = (t: string) => t === 'half_am' || t === 'half_pm'
 
-// 대한민국 공휴일 (YYYY-MM-DD) — 주말 제외 워킹데이 계산에 사용
-// 대체공휴일 포함. 매년 확인 후 업데이트 필요.
-const KR_HOLIDAYS = new Set<string>([
+// 하드코딩 fallback 목록 — API 응답 전 또는 실패 시 사용
+// /api/holidays 가 nager.at 기반으로 자동 갱신하므로 매년 업데이트 불필요
+const KR_HOLIDAYS_FALLBACK = new Set<string>([
   // 2024
   '2024-01-01',
   '2024-02-09','2024-02-10','2024-02-11','2024-02-12',
@@ -80,7 +80,7 @@ const KR_HOLIDAYS = new Set<string>([
   '2027-12-25','2027-12-27',
 ])
 
-function countWorkingDays(start: string, end: string): number {
+function countWorkingDays(start: string, end: string, holidays: Set<string>): number {
   if (!start || !end || start > end) return 0
   const [sy, sm, sd] = start.split('-').map(Number)
   const [ey, em, ed] = end.split('-').map(Number)
@@ -90,7 +90,7 @@ function countWorkingDays(start: string, end: string): number {
   while (cur <= endDate) {
     const day = cur.getDay() // 0=일, 6=토
     const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-    if (day !== 0 && day !== 6 && !KR_HOLIDAYS.has(ds)) count++
+    if (day !== 0 && day !== 6 && !holidays.has(ds)) count++
     cur.setDate(cur.getDate() + 1)
   }
   return count
@@ -125,6 +125,25 @@ function labelFor(leave_type: LeaveType): string {
 }
 
 export default function LeaveRequestForm({ data, onChange, disabled = false }: Props) {
+  // 공휴일 Set — 마운트 시 /api/holidays 에서 동적 로드, 실패 시 fallback 사용
+  const [holidays, setHolidays] = useState<Set<string>>(KR_HOLIDAYS_FALLBACK)
+
+  useEffect(() => {
+    const currentYear = new Date().getFullYear()
+    const years = [currentYear - 1, currentYear, currentYear + 1, currentYear + 2]
+    Promise.all(
+      years.map(y =>
+        fetch(`/api/holidays?year=${y}`)
+          .then(r => r.ok ? r.json() as Promise<string[]> : Promise.resolve([]))
+          .catch(() => [] as string[])
+      )
+    ).then(results => {
+      const merged = new Set<string>()
+      results.flat().forEach(d => merged.add(d))
+      if (merged.size > 0) setHolidays(merged)
+    })
+  }, [])
+
   const [range, setRange] = useState<{ open: boolean; start: string; end: string; leave_type: LeaveType }>({
     open: false,
     start: new Date().toISOString().split('T')[0],
@@ -172,7 +191,7 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
   const handleConvertToPeriod = (index: number) => {
     const item = data.items[index]
     if (item.end_date) return
-    const days = countWorkingDays(item.date, item.date)
+    const days = countWorkingDays(item.date, item.date, holidays)
     updateItems(data.items.map((it, i) =>
       i === index ? { ...it, end_date: it.date, days } : it
     ))
@@ -191,7 +210,7 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
     const start = field === 'date' ? value : item.date
     const end = field === 'end_date' ? value : (item.end_date ?? item.date)
     if (!start || !end || start > end) return
-    const days = countWorkingDays(start, end)
+    const days = countWorkingDays(start, end, holidays)
     updateItems(data.items.map((it, i) => i === index ? { ...newItem, days } : it))
   }
 
@@ -206,7 +225,7 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
     if (!range.start || !range.end || range.start > range.end) return
     const calDiff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
     if (calDiff >= 31) return
-    const days = countWorkingDays(range.start, range.end)
+    const days = countWorkingDays(range.start, range.end, holidays)
     updateItems([...data.items, { date: range.start, end_date: range.end, leave_type: range.leave_type, days }])
     setRange(r => ({ ...r, open: false }))
   }
@@ -216,7 +235,7 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
     if (!range.start || !range.end || range.start > range.end) return ''
     const calDiff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
     if (calDiff >= 31) return '31일 이하 범위만 입력 가능합니다'
-    const workDays = countWorkingDays(range.start, range.end)
+    const workDays = countWorkingDays(range.start, range.end, holidays)
     return `${workDays}일 추가 예정 (주말·공휴일 제외)`
   }
 

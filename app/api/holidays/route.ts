@@ -1,99 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * 대한민국 공휴일 API
- * Google Calendar API를 통해 한국 공휴일 데이터를 가져옴
- * 서버 메모리 캐싱으로 불필요한 API 호출 최소화
- */
+// 서버 메모리 캐시 (연도별, 서버 재시작 전까지 유지)
+const cache = new Map<number, { dates: string[]; fetchedAt: number }>();
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7일
 
-interface Holiday {
-  date: string;      // YYYY-MM-DD
-  name: string;      // 공휴일명
-  isHoliday: boolean;
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 서버 메모리 캐시 (월별 캐싱)
-const cache = new Map<string, { data: Holiday[]; fetchedAt: number }>();
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24시간
+// 대체공휴일 대상 공휴일명 (현충일 제외)
+const SUBSTITUTE_ELIGIBLE = [
+  '새해', '설날', '3·1절', '어린이날', '부처님', '광복절', '추석', '개천절', '한글날', '크리스마스',
+];
 
-const KR_HOLIDAY_CALENDAR_ID = 'ko.south_korea#holiday@group.v.calendar.google.com';
+async function fetchKRHolidaysFromNager(year: number): Promise<string[]> {
+  const res = await fetch(`https://date.nager.at/api/v3/publicholidays/${year}/KR`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`nager.at HTTP ${res.status}`);
+  const data: Array<{ date: string; localName: string }> = await res.json();
+
+  const base = new Set(data.map(h => h.date));
+
+  // 대체공휴일 계산: 일요일 또는 토요일(2023년~) 공휴일 → 다음 평일
+  const sorted = data
+    .filter(h => SUBSTITUTE_ELIGIBLE.some(n => h.localName.includes(n)))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const h of sorted) {
+    const [y, m, d] = h.date.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const dow = dt.getDay(); // 0=일, 6=토
+
+    const needsSub = dow === 0 || (dow === 6 && year >= 2023);
+    if (!needsSub) continue;
+
+    let sub = new Date(y, m - 1, d + 1);
+    while (sub.getDay() === 0 || sub.getDay() === 6 || base.has(dateToStr(sub))) {
+      sub.setDate(sub.getDate() + 1);
+    }
+    base.add(dateToStr(sub));
+  }
+
+  return [...base].sort();
+}
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const year = searchParams.get('year');
-  const month = searchParams.get('month'); // 1-12
+  const yearParam = request.nextUrl.searchParams.get('year');
+  const year = yearParam ? parseInt(yearParam) : new Date().getFullYear();
 
-  if (!year || !month) {
-    return NextResponse.json({ success: false, error: 'year, month 파라미터가 필요합니다.' }, { status: 400 });
+  if (isNaN(year) || year < 2020 || year > 2035) {
+    return NextResponse.json({ error: '유효하지 않은 연도입니다.' }, { status: 400 });
   }
 
-  const apiKey = process.env.GOOGLE_CALENDAR_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ success: false, error: 'Google Calendar API 키가 설정되지 않았습니다.' }, { status: 500 });
-  }
-
-  const cacheKey = `${year}-${month}`;
-  const cached = cache.get(cacheKey);
-
-  // 캐시 히트: 24시간 이내 데이터 반환
+  // 캐시 히트
+  const cached = cache.get(year);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return NextResponse.json({ success: true, data: cached.data, cached: true });
+    return NextResponse.json(cached.dates, {
+      headers: { 'Cache-Control': 'public, max-age=86400', 'X-Cache': 'HIT' },
+    });
   }
 
   try {
-    const yearNum = parseInt(year);
-    const monthNum = parseInt(month);
-
-    // 해당 월의 시작/끝 (ISO 8601)
-    const timeMin = new Date(yearNum, monthNum - 1, 1).toISOString();
-    const timeMax = new Date(yearNum, monthNum, 0, 23, 59, 59).toISOString();
-
-    const params = new URLSearchParams({
-      key: apiKey,
-      timeMin,
-      timeMax,
-      singleEvents: 'true',
-      orderBy: 'startTime',
+    const dates = await fetchKRHolidaysFromNager(year);
+    cache.set(year, { dates, fetchedAt: Date.now() });
+    console.log(`✅ [공휴일] ${year}년 ${dates.length}개 공휴일 로드 (대체공휴일 포함)`);
+    return NextResponse.json(dates, {
+      headers: { 'Cache-Control': 'public, max-age=86400', 'X-Cache': 'MISS' },
     });
-    const calendarUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KR_HOLIDAY_CALENDAR_ID)}/events?${params.toString()}`;
-
-    const response = await fetch(calendarUrl, {
-      headers: { 'Accept': 'application/json' },
-      // Next.js 캐시 비활성화 (서버 메모리 캐시로 직접 관리)
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[공휴일 API] Google Calendar 오류:', response.status, errorText);
-      return NextResponse.json(
-        { success: false, error: `Google Calendar API 오류: ${response.status}` },
-        { status: response.status }
-      );
-    }
-
-    const googleData = await response.json();
-    const holidays: Holiday[] = (googleData.items || []).map((item: any) => {
-      // Google Calendar 공휴일은 종일 이벤트 (date 필드 사용)
-      const date = item.start?.date || item.start?.dateTime?.substring(0, 10) || '';
-      return {
-        date,
-        name: item.summary || '공휴일',
-        isHoliday: true,
-      };
-    });
-
-    // 캐시 저장
-    cache.set(cacheKey, { data: holidays, fetchedAt: Date.now() });
-
-    console.log(`✅ [공휴일] ${year}년 ${month}월 공휴일 ${holidays.length}개 로드`);
-
-    return NextResponse.json({ success: true, data: holidays, cached: false });
   } catch (err) {
-    console.error('[공휴일 API] 오류:', err);
-    return NextResponse.json(
-      { success: false, error: '공휴일 데이터를 가져오는 데 실패했습니다.' },
-      { status: 500 }
-    );
+    console.error('[공휴일 API] nager.at 오류:', err);
+    return NextResponse.json({ error: '공휴일 데이터를 가져오는 데 실패했습니다.' }, { status: 502 });
   }
 }
