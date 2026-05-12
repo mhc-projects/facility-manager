@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne } from '@/lib/supabase-direct';
+import { queryOne, transaction } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendWebPushToUser } from '@/lib/send-push';
@@ -140,19 +140,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: '아직 내 결재 차례가 아닙니다' }, { status: 403 });
     }
 
-    // 현재 step 반려 처리 (낙관 락: status = 'pending' 조건으로 중복 처리 방지)
-    const updatedStep = await queryOne(
-      `UPDATE approval_steps
-       SET status = 'rejected', approved_at = NOW(), comment = $1
-       WHERE id = $2 AND status = 'pending'
-       RETURNING *`,
-      [comment, currentStep.id]
-    );
-    if (!updatedStep) {
-      return NextResponse.json({ success: false, error: '이미 다른 결재자가 처리한 단계입니다' }, { status: 409 });
-    }
-
-    // 반려 이력 추가
+    // step 반려 + 문서 상태 → rejected 를 하나의 트랜잭션으로 처리
     const currentHistory = doc.rejection_history || [];
     const newHistory = [
       ...currentHistory,
@@ -165,16 +153,32 @@ export async function POST(
       }
     ];
 
-    // 문서 상태 → rejected (작성자가 수정 후 재상신 가능)
-    await queryOne(
-      `UPDATE approval_documents
-       SET status = 'rejected',
-           rejection_history = $1::JSONB,
-           completed_at = NOW(),
-           updated_at = NOW()
-       WHERE id = $2`,
-      [JSON.stringify(newHistory), params.id]
-    );
+    let updatedStep: any;
+    await transaction(async (client) => {
+      // 낙관 락: status = 'pending' 조건으로 중복 처리 방지
+      const stepResult = await client.query(
+        `UPDATE approval_steps
+         SET status = 'rejected', approved_at = NOW(), comment = $1
+         WHERE id = $2 AND status = 'pending'
+         RETURNING *`,
+        [comment, currentStep.id]
+      );
+      updatedStep = stepResult.rows[0];
+      if (!updatedStep) throw Object.assign(new Error('이미 다른 결재자가 처리한 단계입니다'), { statusCode: 409 });
+
+      await client.query(
+        `UPDATE approval_documents
+         SET status = 'rejected',
+             rejection_history = $1::JSONB,
+             completed_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [JSON.stringify(newHistory), params.id]
+      );
+    });
+    if (!updatedStep) {
+      return NextResponse.json({ success: false, error: '이미 다른 결재자가 처리한 단계입니다' }, { status: 409 });
+    }
 
     // 작성자에게 반려 사유 포함 알림 발송
     const typeLabel = DOC_TYPE_LABEL[doc.document_type] || doc.document_type;

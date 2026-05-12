@@ -144,7 +144,7 @@ function ApprovalDetailContent() {
     if (!t) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/approvals/${id}`, { headers: { Authorization: `Bearer ${t}` } })
+      const res = await fetch(`/api/approvals/${id}`, { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' })
       const data = await res.json()
       if (data.success) {
         setDoc(data.data)
