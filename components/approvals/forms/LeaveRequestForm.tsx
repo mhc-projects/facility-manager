@@ -38,6 +38,64 @@ const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
 
 const IS_HALF = (t: string) => t === 'half_am' || t === 'half_pm'
 
+// 대한민국 공휴일 (YYYY-MM-DD) — 주말 제외 워킹데이 계산에 사용
+// 대체공휴일 포함. 매년 확인 후 업데이트 필요.
+const KR_HOLIDAYS = new Set<string>([
+  // 2024
+  '2024-01-01',
+  '2024-02-09','2024-02-10','2024-02-11','2024-02-12',
+  '2024-03-01',
+  '2024-05-05','2024-05-06','2024-05-15',
+  '2024-06-06','2024-08-15',
+  '2024-09-16','2024-09-17','2024-09-18',
+  '2024-10-03','2024-10-09','2024-12-25',
+  // 2025
+  '2025-01-01',
+  '2025-01-28','2025-01-29','2025-01-30',
+  '2025-03-01','2025-03-03',
+  '2025-05-05','2025-05-06',
+  '2025-06-06','2025-08-15',
+  '2025-10-03','2025-10-05','2025-10-06','2025-10-07','2025-10-08',
+  '2025-10-09','2025-12-25',
+  // 2026
+  '2026-01-01',
+  '2026-02-16','2026-02-17','2026-02-18',
+  '2026-03-01','2026-03-02',
+  '2026-05-05','2026-05-24','2026-05-25',
+  '2026-06-06','2026-06-08',
+  '2026-08-15','2026-08-17',
+  '2026-09-24','2026-09-25','2026-09-26',
+  '2026-10-03','2026-10-05',
+  '2026-10-09','2026-12-25',
+  // 2027
+  '2027-01-01',
+  '2027-02-07','2027-02-08','2027-02-09','2027-02-10',
+  '2027-03-01',
+  '2027-05-05','2027-05-13',
+  '2027-06-06','2027-06-07',
+  '2027-08-15','2027-08-16',
+  '2027-09-14','2027-09-15','2027-09-16',
+  '2027-10-03','2027-10-04',
+  '2027-10-09','2027-10-11',
+  '2027-12-25','2027-12-27',
+])
+
+function countWorkingDays(start: string, end: string): number {
+  if (!start || !end || start > end) return 0
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const cur = new Date(sy, sm - 1, sd)
+  const endDate = new Date(ey, em - 1, ed)
+  let count = 0
+  while (cur <= endDate) {
+    const day = cur.getDay() // 0=일, 6=토
+    const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
+    if (day !== 0 && day !== 6 && !KR_HOLIDAYS.has(ds)) count++
+    cur.setDate(cur.getDate() + 1)
+  }
+  return count
+}
+
 function itemDays(leave_type: LeaveType): number {
   return IS_HALF(leave_type) ? 0.5 : 1
 }
@@ -48,16 +106,18 @@ function calcTotal(items: LeaveItem[]): number {
 
 function formatKorDate(dateStr: string): string {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
   const days = ['일', '월', '화', '수', '목', '금', '토']
-  return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}. (${days[d.getDay()]})`
+  return `${dt.getFullYear()}. ${String(dt.getMonth() + 1).padStart(2, '0')}. ${String(dt.getDate()).padStart(2, '0')}. (${days[dt.getDay()]})`
 }
 
 function formatShortDate(dateStr: string): string {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
   const days = ['일', '월', '화', '수', '목', '금', '토']
-  return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}(${days[d.getDay()]})`
+  return `${String(dt.getMonth() + 1).padStart(2, '0')}.${String(dt.getDate()).padStart(2, '0')}(${days[dt.getDay()]})`
 }
 
 function labelFor(leave_type: LeaveType): string {
@@ -108,21 +168,31 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
     updateItems(data.items.filter((_, i) => i !== index))
   }
 
+  // 단일 날짜 → 기간 항목으로 전환
+  const handleConvertToPeriod = (index: number) => {
+    const item = data.items[index]
+    if (item.end_date) return
+    const days = countWorkingDays(item.date, item.date)
+    updateItems(data.items.map((it, i) =>
+      i === index ? { ...it, end_date: it.date, days } : it
+    ))
+  }
+
   // 단일 날짜 항목: 날짜 변경
   const handleItemDate = (index: number, date: string) => {
     if (isDateUsed(date, index)) return
     updateItems(data.items.map((item, i) => i === index ? { ...item, date } : item))
   }
 
-  // 기간 항목: 시작/종료일 변경
+  // 기간 항목: 시작/종료일 변경 → 워킹데이 재계산
   const handlePeriodDate = (index: number, field: 'date' | 'end_date', value: string) => {
     const item = data.items[index]
     const newItem = { ...item, [field]: value }
     const start = field === 'date' ? value : item.date
     const end = field === 'end_date' ? value : (item.end_date ?? item.date)
     if (!start || !end || start > end) return
-    const dayCount = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1
-    updateItems(data.items.map((it, i) => i === index ? { ...newItem, days: dayCount } : it))
+    const days = countWorkingDays(start, end)
+    updateItems(data.items.map((it, i) => i === index ? { ...newItem, days } : it))
   }
 
   const handleItemType = (index: number, leave_type: LeaveType) => {
@@ -131,28 +201,29 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
     ))
   }
 
-  // 기간 추가: 단일 LeaveItem(start~end)으로 저장
+  // 기간 추가: 워킹데이 기준으로 일수 계산
   const handleAddRange = () => {
     if (!range.start || !range.end || range.start > range.end) return
-    const diff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
-    if (diff >= 31) return
-    const dayCount = diff + 1
-    updateItems([...data.items, { date: range.start, end_date: range.end, leave_type: range.leave_type, days: dayCount }])
+    const calDiff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
+    if (calDiff >= 31) return
+    const days = countWorkingDays(range.start, range.end)
+    updateItems([...data.items, { date: range.start, end_date: range.end, leave_type: range.leave_type, days }])
     setRange(r => ({ ...r, open: false }))
   }
 
-  // 기간 패널 미리보기
+  // 기간 패널 미리보기 (워킹데이 표시)
   const rangePreview = (): string => {
     if (!range.start || !range.end || range.start > range.end) return ''
-    const diff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
-    if (diff >= 31) return '31일 이하 범위만 입력 가능합니다'
-    return `${diff + 1}일 추가 예정`
+    const calDiff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
+    if (calDiff >= 31) return '31일 이하 범위만 입력 가능합니다'
+    const workDays = countWorkingDays(range.start, range.end)
+    return `${workDays}일 추가 예정 (주말·공휴일 제외)`
   }
 
   const isRangeValid = (): boolean => {
     if (!range.start || !range.end || range.start > range.end) return false
-    const diff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
-    return diff < 31
+    const calDiff = Math.round((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000)
+    return calDiff < 31
   }
 
   const periodSummary = () => {
@@ -205,7 +276,6 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
                     /* 기간 항목 */
                     <>
                       <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
-                        {/* 달력 아이콘 */}
                         <svg className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
@@ -262,6 +332,15 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
                         </svg>
                         <input type="date" className="text-sm bg-transparent border-0 outline-none focus:ring-0 disabled:text-gray-500 flex-1 min-w-0"
                           value={item.date} onChange={e => handleItemDate(index, e.target.value)} disabled={disabled} />
+                        {!disabled && (
+                          <button
+                            type="button"
+                            onClick={() => handleConvertToPeriod(index)}
+                            className="text-xs text-gray-300 hover:text-indigo-500 transition-colors flex-shrink-0 whitespace-nowrap"
+                          >
+                            기간으로
+                          </button>
+                        )}
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${isHalfItem ? 'text-amber-600 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>
                           {item.days}일
                         </span>
