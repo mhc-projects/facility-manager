@@ -304,7 +304,7 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
 /**
  * 연속 날짜끼리 그룹화 (1일 차이면 같은 그룹, 그 이상이면 새 그룹)
  */
-function groupConsecutiveDates(items: Array<{ date: string; leave_type: string; days: number }>) {
+function groupConsecutiveDates(items: Array<{ date: string; end_date?: string; leave_type: string; days: number }>) {
   const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
   const groups: Array<typeof sorted> = [];
   let current: typeof sorted = [];
@@ -313,9 +313,11 @@ function groupConsecutiveDates(items: Array<{ date: string; leave_type: string; 
     if (current.length === 0) {
       current.push(item);
     } else {
-      const prevDate = new Date(current[current.length - 1].date);
+      const prev = current[current.length - 1];
+      // 기간 항목은 end_date 기준으로 연속 여부 판단
+      const prevEndDate = new Date(prev.end_date ?? prev.date);
       const currDate = new Date(item.date);
-      const diffDays = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+      const diffDays = (currDate.getTime() - prevEndDate.getTime()) / (1000 * 60 * 60 * 24);
       if (diffDays === 1) {
         current.push(item);
       } else {
@@ -349,7 +351,9 @@ async function createLeaveCalendarEvent(doc: any, requesterName: string) {
 
       for (const group of groups) {
         const startDate = group[0].date;
-        const endDate = group[group.length - 1].date;
+        // 기간 항목은 마지막 항목의 end_date를, 단일 항목은 date를 사용
+        const lastItem = group[group.length - 1];
+        const endDate = lastItem.end_date ?? lastItem.date;
         const groupDays = group.reduce((sum, i) => sum + (i.days ?? 1), 0);
         const typeLabels = [...new Set(group.map(i => LEAVE_TYPE_LABEL[i.leave_type] || '휴가'))];
         const leaveTypeDetail = typeLabels.join(', ');
