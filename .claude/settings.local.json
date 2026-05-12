@@ -317,7 +317,14 @@
       "Bash(mkdir -p \"/Users/mh.c/claude/facility-manager/app/api/wiki/forms/[code]/submit\")",
       "Bash(npm show *)",
       "Bash(npm list *)",
-      "Bash(PGPASSWORD='chlansgh35855#' psql *)"
+      "Bash(PGPASSWORD='chlansgh35855#' psql *)",
+      "Bash(supabase --help)",
+      "Bash(supabase login *)",
+      "Read(//Users/mh.c/.supabase/**)",
+      "Read(//Users/mh.c/.config/**)",
+      "mcp__serena__replace_content",
+      "Bash(ps -p 24588 -o command=)",
+      "Bash(ps -p 24884 -o command=)"
     ],
     "deny": [],
     "ask": [],
