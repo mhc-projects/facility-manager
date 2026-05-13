@@ -11,6 +11,16 @@ export const runtime = 'nodejs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
+function clearAuthCookies(response: NextResponse): void {
+  const isProduction = process.env.NODE_ENV === 'production';
+  response.cookies.set('session_token', '', {
+    httpOnly: true, secure: isProduction, sameSite: 'lax', maxAge: 0, path: '/'
+  });
+  response.cookies.set('auth_ready', '', {
+    httpOnly: false, secure: isProduction, sameSite: 'lax', maxAge: 0, path: '/'
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -31,10 +41,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!token) {
-      return NextResponse.json(
+      const res = NextResponse.json(
         { success: false, error: { code: 'NO_TOKEN', message: '인증 토큰이 없습니다.' } },
         { status: 401 }
       );
+      clearAuthCookies(res);
+      return res;
     }
 
     // JWT 토큰 검증
@@ -42,10 +54,12 @@ export async function POST(request: NextRequest) {
     try {
       decoded = jwt.verify(token, JWT_SECRET);
     } catch (jwtError) {
-      return NextResponse.json(
+      const res = NextResponse.json(
         { success: false, error: { code: 'INVALID_TOKEN', message: '유효하지 않은 토큰입니다.' } },
         { status: 401 }
       );
+      clearAuthCookies(res);
+      return res;
     }
 
     // 사용자 존재 여부 재확인 (토큰은 유효하지만 사용자가 비활성화된 경우) - 직접 PostgreSQL 연결 사용
@@ -64,10 +78,12 @@ export async function POST(request: NextRequest) {
 
     if (!employeeData) {
       console.log('❌ [AUTH] 사용자 재조회 실패: 존재하지 않거나 비활성 사용자');
-      return NextResponse.json(
+      const res = NextResponse.json(
         { success: false, error: { code: 'USER_NOT_FOUND', message: '사용자를 찾을 수 없습니다.' } },
         { status: 401 }
       );
+      clearAuthCookies(res);
+      return res;
     }
 
     // permission_level을 role로 매핑하여 반환 (프론트엔드 호환성)

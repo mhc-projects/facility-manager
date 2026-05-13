@@ -18,12 +18,20 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString()
     });
 
-    // httpOnly 쿠키 삭제
-    response.cookies.set('auth_token', '', {
+    // 쿠키 삭제 (login API에서 설정한 쿠키 이름과 동일하게)
+    const isProduction = process.env.NODE_ENV === 'production';
+    response.cookies.set('session_token', '', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'lax',
-      maxAge: 0, // 즉시 만료
+      maxAge: 0,
+      path: '/'
+    });
+    response.cookies.set('auth_ready', '', {
+      httpOnly: false,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 0,
       path: '/'
     });
 

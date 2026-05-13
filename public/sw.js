@@ -1,8 +1,8 @@
 // Service Worker for PWA and caching
-// 🔄 버전 업데이트: f7e256b (iOS 알림 아이콘 수정 - favicon.png, 미지원 옵션 제거)
-const CACHE_NAME = 'facility-manager-v1.6';
-const STATIC_CACHE_NAME = 'facility-static-v1.6';
-const DYNAMIC_CACHE_NAME = 'facility-dynamic-v1.6';
+// 🔄 버전 업데이트: v1.7 (인증 경로 캐시 제외, 로그아웃 쿠키 버그 수정)
+const CACHE_NAME = 'facility-manager-v1.7';
+const STATIC_CACHE_NAME = 'facility-static-v1.7';
+const DYNAMIC_CACHE_NAME = 'facility-dynamic-v1.7';
 
 // 캐시할 정적 리소스
 const STATIC_ASSETS = [
@@ -11,6 +11,16 @@ const STATIC_ASSETS = [
   '/icon-192.svg',
   '/icon-512.svg',
   '/favicon.svg',
+];
+
+// 캐시에서 완전히 제외할 경로 (인증 관련 - 항상 최신 응답 필요)
+const NO_CACHE_PATHS = [
+  /^\/api\/auth\//,
+  /^\/login/,
+  /^\/signup/,
+  /^\/set-password/,
+  /^\/reset-password/,
+  /^\/change-password/,
 ];
 
 // 캐시 전략별 URL 패턴
@@ -90,7 +100,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') {
     return;
   }
-  
+
+  // 인증 관련 경로는 SW를 완전히 우회 (캐시 없이 네트워크 직접 요청)
+  if (NO_CACHE_PATHS.some(pattern => pattern.test(url.pathname))) {
+    return;
+  }
+
   event.respondWith(handleRequest(request));
 });
 
@@ -180,8 +195,9 @@ async function networkFirst(request) {
       signal: AbortSignal.timeout(8000)
     });
     
-    if (response.ok) {
-      // API 응답 캐싱 (짧은 TTL)
+    // HTML 응답은 캐시하지 않음 (페이지 셸 스테일 방지)
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && !contentType.includes('text/html')) {
       const cache = await caches.open(DYNAMIC_CACHE_NAME);
       cache.put(request, response.clone());
       console.log('🌐 네트워크에서 가져와서 캐싱:', request.url);
