@@ -1773,9 +1773,17 @@ function BusinessManagementPage() {
       }
     })
 
+    // facility_tasks에 한 번도 등록되지 않은 사업장을 '업무 미등록'으로 추가
+    allBusinesses.forEach(b => {
+      const name = b.사업장명 || b.business_name || ''
+      if (name && !(name in statusMap)) {
+        statusMap[name] = '업무 미등록'
+      }
+    })
+
     console.log(`📊 [CURRENT-STEP-CALC] ${Object.keys(statusMap).length}개 사업장의 현재 단계 계산 완료`)
     return statusMap
-  }, [allTasksForFilter, getStageLabel])
+  }, [allTasksForFilter, getStageLabel, allBusinesses])
 
   // 검색 필터링 (useMemo 사용으로 자동 필터링)
   const filteredBusinesses = useMemo(() => {
@@ -1969,7 +1977,7 @@ function BusinessManagementPage() {
     const years = [...new Set(
       allBusinesses.map(b => (b as any).사업진행연도 || b.project_year).filter(Boolean)
     )] as number[]
-    // calculateBusinessCurrentSteps에서 현재 단계 추출 (업무가 등록된 사업장만)
+    // calculateBusinessCurrentSteps에서 현재 단계 추출 (업무 미등록 사업장 포함)
     const currentSteps = [...new Set(
       Object.values(calculateBusinessCurrentSteps)
         .map(status => status.trim())
@@ -1989,7 +1997,13 @@ function BusinessManagementPage() {
       regions: regions.sort(),
       categories,
       years: years.sort((a, b) => b - a), // 최신 연도부터
-      currentSteps: currentSteps.sort()
+      currentSteps: currentSteps.sort((a, b) => {
+        if (a === '업무 미등록') return -1
+        if (b === '업무 미등록') return 1
+        if (a === '업무 완료') return 1
+        if (b === '업무 완료') return -1
+        return a.localeCompare(b, 'ko')
+      })
     }
   }, [allBusinesses, calculateBusinessCurrentSteps])
 
