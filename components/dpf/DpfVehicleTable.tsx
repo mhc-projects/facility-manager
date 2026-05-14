@@ -29,7 +29,7 @@ const COLUMNS = [
   { key: 'owner_contact',    label: '연락처',      width: 120 },
   { key: 'owner_address',    label: '주소',        width: 200 },
   { key: 'manufacturer',     label: '제작사',      width: 80 },
-  { key: 'device_type',      label: '부착장치',    width: 80 },
+  { key: 'device_type',      label: '장치',        width: 90 },
   { key: 'local_gov_large',  label: '지자체(대)',  width: 110 },
   { key: 'local_gov_small',  label: '지자체(소)',  width: 90 },
   { key: 'installation_date',label: '구조변경일',  width: 100 },
@@ -107,7 +107,22 @@ export default function DpfVehicleTable({
           </span>
         );
       case 'manufacturer':    return <span className="text-xs text-gray-600">{raw(v, '제작사')}</span>;
-      case 'device_type':     return <span className="text-xs text-gray-600">{raw(v, '부착장치')}</span>;
+      case 'device_type': {
+        const dt = v.device_type || raw(v, '부착장치');
+        if (!dt || dt === '-') return <span className="text-gray-300">-</span>;
+        const dtColors: Record<string, string> = {
+          '복합중형': 'bg-blue-50 text-blue-700',
+          '복합소형': 'bg-cyan-50 text-cyan-700',
+          '2종 파샬': 'bg-amber-50 text-amber-700',
+          '1종 대형': 'bg-orange-50 text-orange-700',
+          '정보없음': 'bg-gray-100 text-gray-500',
+        };
+        return (
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${dtColors[dt] ?? 'bg-gray-100 text-gray-600'}`}>
+            {dt}
+          </span>
+        );
+      }
       case 'local_gov_large': return <span className="text-sm">{v.local_government || '-'}</span>;
       case 'local_gov_small': return <span className="text-xs text-gray-500">{raw(v, '지자체(소)')}</span>;
       case 'installation_date':

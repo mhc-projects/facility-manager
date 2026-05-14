@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
     const {
       vin, plate_number, vehicle_name, owner_name, owner_contact,
       owner_address, local_government, device_serial, installation_date, vendor,
+      engine_type, device_type, trust_grade, plate_number_original,
+      grade_management, management_direction,
     } = body;
 
     if (!vin?.trim() || !plate_number?.trim()) {
@@ -29,6 +31,12 @@ export async function POST(request: NextRequest) {
         device_serial: device_serial?.trim() || null,
         installation_date: installation_date || null,
         vendor: vendor || 'fujino',
+        engine_type: engine_type?.trim() || null,
+        device_type: device_type?.trim() || null,
+        trust_grade: trust_grade?.trim() || null,
+        plate_number_original: plate_number_original?.trim() || null,
+        grade_management: grade_management?.trim() || null,
+        management_direction: management_direction?.trim() || null,
         raw_data: {},
       })
       .select()

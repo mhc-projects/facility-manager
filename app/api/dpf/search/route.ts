@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     let dbQuery = supabaseAdmin
       .from('dpf_vehicles')
-      .select('id, vin, plate_number, vehicle_name, owner_name, owner_address, owner_contact, local_government, device_serial, installation_date, vendor, raw_data, is_active, created_at', { count: 'exact' })
+      .select('id, vin, plate_number, vehicle_name, owner_name, owner_address, owner_contact, local_government, device_serial, installation_date, engine_type, device_type, trust_grade, plate_number_original, grade_management, management_direction, vendor, raw_data, is_active, created_at', { count: 'exact' })
       .eq('is_deleted', false)
       .eq('is_active', true);
 

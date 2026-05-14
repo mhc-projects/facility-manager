@@ -11,6 +11,13 @@ export interface DpfVehicle {
   local_government?: string | null;
   device_serial?: string | null;
   installation_date?: string | null;
+  // 후지노테크 전산반영 신규 필드
+  engine_type?: string | null;
+  device_type?: string | null;
+  trust_grade?: string | null;
+  plate_number_original?: string | null;
+  grade_management?: string | null;
+  management_direction?: string | null;
   vendor: 'fujino' | 'mz';
   raw_data?: Record<string, unknown>;
   is_active: boolean;
