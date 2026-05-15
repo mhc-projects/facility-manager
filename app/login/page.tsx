@@ -26,15 +26,13 @@ function LoginForm() {
       const redirectTo = searchParams?.get('redirect') || '/'
       console.log('✅ 이미 로그인됨, 리다이렉트:', redirectTo)
 
-      // ✅ 간단한 리다이렉트 (쿠키 폴링 제거)
       const timeoutId = setTimeout(() => {
-        window.location.replace(redirectTo)
-      }, 500)
+        router.replace(redirectTo)
+      }, 300)
 
-      // ✅ 클린업 함수: 컴포넌트 언마운트 시 타이머 정리
       return () => clearTimeout(timeoutId)
     }
-  }, [user, authLoading, searchParams])
+  }, [user, authLoading, searchParams, router])
 
   // URL 파라미터에서 오류 메시지 확인
   useEffect(() => {
@@ -80,14 +78,7 @@ function LoginForm() {
 
         if (authResult.success) {
           setSuccessMessage('로그인되었습니다!')
-
-          // ✅ 간단한 리다이렉트 (중복 폴링 제거)
-          const redirectTo = searchParams?.get('redirect') || '/'
-          console.log('✅ 로그인 성공, 리다이렉트:', redirectTo)
-
-          setTimeout(() => {
-            window.location.replace(redirectTo)
-          }, 500)
+          // useEffect([user, authLoading])가 user 설정 감지 후 리다이렉트 처리
         } else {
           setError(authResult.error || '인증 처리 중 오류가 발생했습니다.')
         }
@@ -123,7 +114,9 @@ function LoginForm() {
     }
   }
 
-  if (authLoading) {
+  // authLoading 중이거나 이미 user가 설정된 경우 폼 노출 방지
+  // (user 설정 후 리다이렉트 전까지 로그인 폼이 깜빡이는 버그 수정)
+  if (authLoading || user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
