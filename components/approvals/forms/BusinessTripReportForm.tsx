@@ -77,11 +77,8 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
         </div>
         <div className="grid grid-cols-[90px_1fr] divide-x divide-black">
           <div className={labelCell}>작 성 자</div>
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            <input className={`${cellInput} flex-1`} value={data.writer}
-              onChange={e => update('writer', e.target.value)} disabled={disabled} placeholder="작성자" />
-            <span className="text-sm text-gray-500 shrink-0 pr-1">(인)</span>
-          </div>
+          <input className={cellInput} value={data.writer}
+            onChange={e => update('writer', e.target.value)} disabled={disabled} placeholder="작성자" />
         </div>
       </div>
 
