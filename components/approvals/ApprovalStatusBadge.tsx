@@ -35,4 +35,5 @@ export const DOC_TYPE_LABEL: Record<string, string> = {
   business_proposal: '업무품의서',
   overtime_log:      '연장근무일지',
   installation_closing: '설치비 마감',
+  business_trip_report: '출장보고서',
 }

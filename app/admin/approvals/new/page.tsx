@@ -11,6 +11,7 @@ import LeaveRequestForm, { LeaveRequestData } from '@/components/approvals/forms
 import BusinessProposalForm, { BusinessProposalData } from '@/components/approvals/forms/BusinessProposalForm'
 import OvertimeLogForm, { OvertimeLogData } from '@/components/approvals/forms/OvertimeLogForm'
 import InstallationClosingForm, { InstallationClosingData } from '@/components/approvals/forms/InstallationClosingForm'
+import BusinessTripReportForm, { BusinessTripReportData } from '@/components/approvals/forms/BusinessTripReportForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Save, Send, ChevronLeft } from 'lucide-react'
@@ -22,6 +23,7 @@ const DOC_TYPES = [
   { value: 'business_proposal', label: '업무품의서',   desc: '업무 협의/승인 요청' },
   { value: 'overtime_log',      label: '연장근무일지', desc: '연장근무 내역 보고' },
   { value: 'installation_closing', label: '설치비 마감', desc: '설치비 예측/본마감 결재' },
+  { value: 'business_trip_report', label: '출장보고서',  desc: '출장 결과 보고 및 승인 요청' },
 ] as const
 
 type DocType = typeof DOC_TYPES[number]['value']
@@ -44,6 +46,8 @@ function getDefaultFormData(type: DocType, writerName: string, dept: string): an
       return { writer: writerName, department: dept, written_date: TODAY, items: Array.from({ length: 5 }, () => ({ date: '', day_of_week: '', ot_hours: 1, start_time: '18:00', work_time: '근무시간 1H (18:00~19:00)', work_content: '' })) } as OvertimeLogData
     case 'installation_closing':
       return { writer: writerName, department: dept, written_date: TODAY, closing_type: 'forecast', closing_month: '', items: [], total_count: 0, total_amount: 0, note: '' } as InstallationClosingData
+    case 'business_trip_report':
+      return { writer: writerName, department: dept, written_date: TODAY, trip_purpose: '', trip_period: '', trip_region: '', traveler: writerName, visited_company: '', companion_count: '', schedule_items: [{ date: TODAY, time: '', main_schedule: '', location: '', note: '' }, { date: '', time: '', main_schedule: '', location: '', note: '' }, { date: '', time: '', main_schedule: '', location: '', note: '' }], work_content: '', discussion_items: '', special_notes: '', other_notes: '' } as BusinessTripReportData
   }
 }
 
@@ -323,6 +327,9 @@ export default function NewApprovalPage() {
             )}
             {docType === 'installation_closing' && (
               <InstallationClosingForm data={formData} onChange={setFormData} />
+            )}
+            {docType === 'business_trip_report' && (
+              <BusinessTripReportForm data={formData} onChange={setFormData} />
             )}
           </div>
         )}

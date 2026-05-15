@@ -14,6 +14,7 @@ import LeaveRequestForm from '@/components/approvals/forms/LeaveRequestForm'
 import BusinessProposalForm from '@/components/approvals/forms/BusinessProposalForm'
 import OvertimeLogForm from '@/components/approvals/forms/OvertimeLogForm'
 import InstallationClosingForm from '@/components/approvals/forms/InstallationClosingForm'
+import BusinessTripReportForm from '@/components/approvals/forms/BusinessTripReportForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap, Clock, CheckSquare } from 'lucide-react'
@@ -91,6 +92,7 @@ function FormViewer({
     )
     case 'overtime_log':      return <OvertimeLogForm {...props} />
     case 'installation_closing': return <InstallationClosingForm {...props} />
+    case 'business_trip_report': return <BusinessTripReportForm {...props} />
     default: return <div className="text-gray-400 text-sm">알 수 없는 문서 유형</div>
   }
 }
