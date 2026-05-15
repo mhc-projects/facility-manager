@@ -110,7 +110,10 @@ export async function POST(request: NextRequest) {
     // 특별 계정 여부 확인 (permission_level과 무관하게 고정)
     const specialAccount = isSpecialAccount(employee.email);
 
-    return NextResponse.json({
+    const isProduction = process.env.NODE_ENV === 'production';
+    const maxAge = 30 * 24 * 60 * 60; // 30일
+
+    const response = NextResponse.json({
       success: true,
       data: {
         user: {
@@ -139,6 +142,16 @@ export async function POST(request: NextRequest) {
       },
       timestamp: new Date().toISOString()
     });
+
+    // JWT가 유효하지만 쿠키가 만료/삭제된 경우 복구 (미들웨어 리다이렉트 루프 방지)
+    response.cookies.set('session_token', token!, {
+      httpOnly: true, secure: isProduction, sameSite: 'lax', maxAge, path: '/'
+    });
+    response.cookies.set('auth_ready', 'true', {
+      httpOnly: false, secure: isProduction, sameSite: 'lax', maxAge, path: '/'
+    });
+
+    return response;
 
   } catch (error) {
     console.error('❌ [AUTH] 토큰 검증 오류:', error);
