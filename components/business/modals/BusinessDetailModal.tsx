@@ -151,7 +151,7 @@ interface UnifiedBusinessInfo {
     last_updated?: string
   } | null
   representatives?: Array<{ name: string; birth_date: string | null }> | null
-  contacts_list?: Array<{ name: string; position: string; phone: string; email: string }> | null
+  contacts_list?: Array<{ name: string; position: string; phone: string; email: string; comment?: string }> | null
   // 관리책임자 (JSONB 배열, 구버전 단일 필드 폴백 포함)
   admin_managers?: Array<{ id: string; name: string; position?: string; department?: string }> | null
   admin_manager_id?: string | null
@@ -546,6 +546,12 @@ export default function BusinessDetailModal({
                                       </span>
                                     )}
                                   </div>
+                                  {c.comment && (
+                                    <div className="mt-1.5 flex items-start gap-1 px-2 py-1 bg-amber-50 border border-amber-100 rounded text-[10px] sm:text-xs text-amber-800">
+                                      <span className="shrink-0 mt-px">💬</span>
+                                      <span>{c.comment}</span>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>

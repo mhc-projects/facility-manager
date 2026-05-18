@@ -878,6 +878,7 @@ export async function PUT(request: Request) {
             position: normalizeUTF8(c.position || ''),
             phone: normalizeUTF8(c.phone || ''),
             email: normalizeUTF8(c.email || ''),
+            comment: normalizeUTF8((c.comment || '').slice(0, 200)),
           }));
         updateObject.contacts_list = JSON.stringify(validatedContacts);
       } else {

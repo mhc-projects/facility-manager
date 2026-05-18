@@ -53,6 +53,7 @@ interface ContactPerson {
   position: string;
   phone: string;
   email: string;
+  comment?: string;
 }
 
 interface FacilitySummary {
