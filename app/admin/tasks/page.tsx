@@ -109,6 +109,7 @@ export interface Task {
   salesOffice?: string
   vpnWired?: number
   vpnWireless?: number
+  onlineReceiptDate?: string
 }
 
 interface CreateTaskForm {
@@ -333,6 +334,7 @@ function TaskManagementPage() {
           salesOffice: dbTask.sales_office || undefined,
           vpnWired: dbTask.vpn_wired ?? undefined,
           vpnWireless: dbTask.vpn_wireless ?? undefined,
+          onlineReceiptDate: dbTask.online_receipt_date || undefined,
         }))
 
         console.log('✅ [STATE] setTasks 호출:', convertedTasks.length, '개')
@@ -2457,13 +2459,13 @@ function TaskManagementPage() {
                     {[
                       { key: 'businessName', label: '사업장', align: 'left', className: 'min-w-[130px]' },
                       { key: 'localGovernment', label: '지자체', align: 'left', className: 'whitespace-nowrap' },
-                      { key: null, label: '업무 설명', align: 'left', className: 'w-28 sm:w-40 max-w-28 sm:max-w-40 whitespace-nowrap' },
                       { key: 'status', label: '업무 단계', align: 'left', className: 'whitespace-nowrap' },
                       { key: 'assignee', label: '담당자', align: 'left', className: 'whitespace-nowrap' },
                       { key: 'type', label: '업무\n타입', align: 'left' },
                       { key: 'salesOffice', label: '영업점', align: 'center', className: 'w-16' },
                       { key: 'manufacturer', label: '제조사', align: 'center', className: 'w-16' },
                       { key: 'vpn', label: 'VPN', align: 'center', className: 'w-14' },
+                      { key: 'onlineReceiptDate', label: '온라인\n접수일', align: 'center', className: 'w-20 !text-[9px]' },
                       { key: 'attachmentSupportWritingDate', label: '부착지원\n작성일', align: 'center', className: 'w-20 !text-[9px]' },
                       { key: 'attachmentSupportApplicationDate', label: '부착지원\n신청일', align: 'center', className: 'w-20 !text-[9px]' },
                       { key: 'installationDate', label: '설치완료', align: 'center', className: 'w-20 !text-[9px]' },
@@ -2522,20 +2524,6 @@ function TaskManagementPage() {
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs text-gray-600 whitespace-nowrap">
                           {task.localGovernment || '-'}
-                        </td>
-                        <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
-                          <div
-                            className="font-medium text-gray-900 max-w-[160px] leading-tight"
-                            style={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}
-                          >
-                            {task.description || '-'}
-                          </div>
                         </td>
                         <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs">
                           <span className={`inline-flex px-2 py-1 text-xs rounded-full whitespace-nowrap ${getColorClasses(dbStep?.color || 'gray')}`}>
@@ -2611,6 +2599,14 @@ function TaskManagementPage() {
                               )}
                             </div>
                           ) : <span className="text-gray-300">-</span>}
+                        </td>
+                        {/* 온라인 접수일 */}
+                        <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
+                          {task.onlineReceiptDate ? (
+                            <span className="text-sky-600 font-medium">
+                              {(() => { const d = new Date(task.onlineReceiptDate); return `${d.getFullYear().toString().slice(-2)}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')}` })()}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
                           {task.attachmentSupportWritingDate ? (

@@ -187,7 +187,8 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ftb.attachment_completion_submitted_at,
         ftb.greenlink_confirmation_submitted_at,
         ftb.attachment_support_writing_date,
-        ftb.attachment_support_application_date
+        ftb.attachment_support_application_date,
+        ftb.online_receipt_date
       FROM facility_tasks_with_business ftb
       ${whereClause}
       ORDER BY ftb.created_at DESC
