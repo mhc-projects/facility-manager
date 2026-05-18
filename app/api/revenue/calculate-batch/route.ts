@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyTokenString } from '@/utils/auth';
 import { calculateRevenue, preloadMasterData } from '@/lib/services/revenue-calculator';
+import { queryAll } from '@/lib/supabase-direct';
 
 /**
  * Batch Revenue Calculation API
@@ -65,6 +66,59 @@ export async function POST(request: NextRequest) {
 
     // 글로벌 마스터 데이터 사전 로드 (루프 진입 전 1회)
     const masterData = await preloadMasterData();
+
+    // 사업장별 데이터 일괄 사전 로드 — N+1 제거 (~10개 쿼리로 고정)
+    const [
+      businessInfoRows,
+      additionalInstallRows,
+      surveyAdjRows,
+      opCostRows,
+      allCommissionRates,
+      allSalesSettings,
+    ] = await Promise.all([
+      queryAll('SELECT * FROM business_info WHERE id = ANY($1::uuid[])', [business_ids]),
+      queryAll('SELECT * FROM business_additional_installation_cost WHERE business_id = ANY($1::uuid[]) AND is_active = $2', [business_ids, true]),
+      queryAll('SELECT * FROM survey_cost_adjustments WHERE business_id = ANY($1::uuid[])', [business_ids]),
+      queryAll('SELECT * FROM operating_cost_adjustments WHERE business_id = ANY($1::uuid[])', [business_ids]),
+      queryAll('SELECT DISTINCT ON (sales_office, manufacturer) * FROM sales_office_commission_rates ORDER BY sales_office, manufacturer, effective_from DESC', []),
+      queryAll('SELECT DISTINCT ON (sales_office) * FROM sales_office_cost_settings WHERE is_active = $1 ORDER BY sales_office, effective_from DESC', [true]),
+    ]);
+
+    masterData.businessInfoMap = (businessInfoRows || []).reduce((acc: Record<string, any>, row: any) => {
+      acc[String(row.id)] = row;
+      return acc;
+    }, {});
+
+    masterData.additionalInstallCostByBusiness = (additionalInstallRows || []).reduce((acc: Record<string, any[]>, row: any) => {
+      const key = String(row.business_id);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+
+    masterData.surveyAdjustmentsByBusiness = (surveyAdjRows || []).reduce((acc: Record<string, any[]>, row: any) => {
+      const key = String(row.business_id);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+
+    masterData.operatingCostAdjByBusiness = (opCostRows || []).reduce((acc: Record<string, any>, row: any) => {
+      acc[String(row.business_id)] = row;
+      return acc;
+    }, {});
+
+    masterData.commissionRatesByKey = (allCommissionRates || []).reduce((acc: Record<string, any>, row: any) => {
+      acc[`${row.sales_office}:${row.manufacturer}`] = row;
+      return acc;
+    }, {});
+
+    masterData.salesSettingsBySalesOffice = (allSalesSettings || []).reduce((acc: Record<string, any>, row: any) => {
+      acc[row.sales_office] = row;
+      return acc;
+    }, {});
+
+    console.log(`📦 [BATCH-CALC] 사전 로드 완료: 사업장 ${Object.keys(masterData.businessInfoMap || {}).length}개`);
 
     // 각 사업장에 대해 서비스 함수 직접 호출 (NEXT_PUBLIC_APP_URL 의존 제거)
     const results: any[] = [];

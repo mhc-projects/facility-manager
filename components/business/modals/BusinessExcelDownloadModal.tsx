@@ -115,6 +115,19 @@ const COLUMN_GROUPS: ColumnGroup[] = [
     ],
   },
   {
+    label: '매출 정보',
+    columns: [
+      { key: '__rev_total_revenue__', label: '매출금액', width: 16, type: 'number' },
+      { key: '__rev_net_profit__', label: '순이익', width: 14, type: 'number' },
+      { key: '__rev_gross_profit__', label: '매출총이익', width: 14, type: 'number' },
+      { key: '__rev_total_cost__', label: '총비용', width: 14, type: 'number' },
+      { key: '__rev_sales_commission__', label: '영업수수료', width: 14, type: 'number' },
+      { key: '__rev_survey_costs__', label: '실사비', width: 14, type: 'number' },
+      { key: '__rev_installation_costs__', label: '설치비(원가)', width: 16, type: 'number' },
+      { key: '__rev_installation_extra__', label: '추가설치비(원가)', width: 18, type: 'number' },
+    ],
+  },
+  {
     label: '일정 정보',
     columns: [
       { key: 'estimate_survey_date', label: '견적실사일', width: 14, type: 'date' },
@@ -143,6 +156,17 @@ const COLUMN_GROUPS: ColumnGroup[] = [
 const DEFAULT_COLUMNS = new Set<string>(
   COLUMN_GROUPS.flatMap(g => g.columns.filter(c => c.default).map(c => c.key))
 )
+
+const REVENUE_COL_MAP: Record<string, string> = {
+  '__rev_total_revenue__': 'total_revenue',
+  '__rev_net_profit__': 'net_profit',
+  '__rev_gross_profit__': 'gross_profit',
+  '__rev_total_cost__': 'total_cost',
+  '__rev_sales_commission__': 'sales_commission',
+  '__rev_survey_costs__': 'survey_costs',
+  '__rev_installation_costs__': 'installation_costs',
+  '__rev_installation_extra__': 'installation_extra_cost',
+}
 
 function formatCellValue(business: UnifiedBusinessInfo, col: ColumnDef): any {
   const raw = business[col.key]
@@ -205,11 +229,12 @@ export default function BusinessExcelDownloadModal({
     }
     setIsDownloading(true)
     try {
+      const token = TokenManager.getToken()
+
       // 복수굴뚝 추가설치금액 컬럼이 선택된 경우 단가 조회
       let multipleStackUnitInstallCost = 0
       if (selectedColumns.has('multiple_stack_install_extra_cost')) {
         try {
-          const token = TokenManager.getToken()
           const res = await fetch('/api/revenue/installation-cost', {
             headers: { Authorization: `Bearer ${token}` },
           })
@@ -224,6 +249,31 @@ export default function BusinessExcelDownloadModal({
           }
         } catch {
           console.warn('복수굴뚝 설치 단가 조회 실패, 금액 0으로 처리')
+        }
+      }
+
+      // 매출 정보 컬럼이 선택된 경우 배치 계산 API 호출
+      const revenueMap = new Map<string, any>()
+      const needsRevenue = [...selectedColumns].some(k => k in REVENUE_COL_MAP)
+      if (needsRevenue) {
+        try {
+          const businessIds = businesses.map(b => b.id).filter(Boolean)
+          const res = await fetch('/api/revenue/calculate-batch', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ business_ids: businessIds, save_result: false }),
+          })
+          const data = await res.json()
+          if (data.success && data.data) {
+            for (const item of data.data) {
+              revenueMap.set(String(item.business_id), item)
+            }
+          }
+        } catch {
+          console.warn('매출 데이터 조회 실패, 매출 항목은 빈 값으로 처리')
         }
       }
 
@@ -259,6 +309,10 @@ export default function BusinessExcelDownloadModal({
             rowData[c.key] = qty * multipleStackUnitInstallCost
           } else if (c.key === '__current_step__') {
             rowData[c.key] = taskCurrentSteps[businessName] || ''
+          } else if (c.key in REVENUE_COL_MAP) {
+            const revData = revenueMap.get(String(b.id)) || {}
+            const val = revData[REVENUE_COL_MAP[c.key]]
+            rowData[c.key] = val != null ? Number(val) : ''
           } else {
             rowData[c.key] = formatCellValue(b, c)
           }

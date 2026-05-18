@@ -87,6 +87,18 @@ export interface PreloadedMasterData {
   installationCostMap: Record<string, number>;
   /** survey_cost_settings — survey_type → base_cost */
   surveyCostMap: Record<string, number>;
+  /** 배치 전용: business_id → business_info row */
+  businessInfoMap?: Record<string, any>;
+  /** 배치 전용: business_id → additional_installation_cost rows (is_active=true) */
+  additionalInstallCostByBusiness?: Record<string, any[]>;
+  /** 배치 전용: business_id → survey_cost_adjustments rows */
+  surveyAdjustmentsByBusiness?: Record<string, any[]>;
+  /** 배치 전용: business_id → operating_cost_adjustments row */
+  operatingCostAdjByBusiness?: Record<string, any>;
+  /** 배치 전용: `${salesOffice}:${manufacturerCode}` → commission_rates row */
+  commissionRatesByKey?: Record<string, any>;
+  /** 배치 전용: salesOffice → sales_office_cost_settings row */
+  salesSettingsBySalesOffice?: Record<string, any>;
 }
 
 export interface CalculateRevenueParams {
@@ -132,10 +144,15 @@ export async function calculateRevenue(
   } = params;
 
   // 1. 사업장 정보 조회
-  const businessInfo = await queryOne(
-    'SELECT * FROM business_info WHERE id = $1',
-    [business_id]
-  );
+  let businessInfo: any;
+  if (preloadedMasterData?.businessInfoMap) {
+    businessInfo = preloadedMasterData.businessInfoMap[String(business_id)];
+  } else {
+    businessInfo = await queryOne(
+      'SELECT * FROM business_info WHERE id = $1',
+      [business_id]
+    );
+  }
 
   if (!businessInfo) {
     throw new Error('사업장 정보를 찾을 수 없습니다.');
@@ -248,13 +265,19 @@ export async function calculateRevenue(
   }
 
   // 2-3. 사업장별 추가 설치비 조회
-  const additionalCosts = await queryAll(
-    `SELECT * FROM business_additional_installation_cost
-     WHERE business_id = $1
-     AND is_active = $2
-     AND applied_date <= $3`,
-    [business_id, true, calcDate]
-  );
+  let additionalCosts: any[] | null;
+  if (preloadedMasterData?.additionalInstallCostByBusiness) {
+    const allRows = preloadedMasterData.additionalInstallCostByBusiness[String(business_id)] || [];
+    additionalCosts = allRows.filter((r: any) => r.applied_date && r.applied_date <= calcDate);
+  } else {
+    additionalCosts = await queryAll(
+      `SELECT * FROM business_additional_installation_cost
+       WHERE business_id = $1
+       AND is_active = $2
+       AND applied_date <= $3`,
+      [business_id, true, calcDate]
+    );
+  }
 
   if (!additionalCosts) {
     console.error('추가 설치비 조회 오류');
@@ -283,24 +306,34 @@ export async function calculateRevenue(
   const manufacturerCode = manufacturerCodeMap[manufacturer] || manufacturer.toLowerCase();
 
   // 3-1. 영업점별 + 제조사별 수수료율 조회 (최우선)
-  const commissionRate = await queryOne(
-    `SELECT * FROM sales_office_commission_rates
-     WHERE sales_office = $1
-     AND manufacturer = $2
-     ORDER BY effective_from DESC
-     LIMIT 1`,
-    [salesOffice, manufacturerCode]
-  );
+  let commissionRate: any;
+  if (preloadedMasterData?.commissionRatesByKey) {
+    commissionRate = preloadedMasterData.commissionRatesByKey[`${salesOffice}:${manufacturerCode}`] || null;
+  } else {
+    commissionRate = await queryOne(
+      `SELECT * FROM sales_office_commission_rates
+       WHERE sales_office = $1
+       AND manufacturer = $2
+       ORDER BY effective_from DESC
+       LIMIT 1`,
+      [salesOffice, manufacturerCode]
+    );
+  }
 
   // 3-2. 영업점별 기본 설정 조회 (폴백)
-  const salesSettings = await queryOne(
-    `SELECT * FROM sales_office_cost_settings
-     WHERE sales_office = $1
-     AND is_active = $2
-     ORDER BY effective_from DESC
-     LIMIT 1`,
-    [salesOffice, true]
-  );
+  let salesSettings: any;
+  if (preloadedMasterData?.salesSettingsBySalesOffice) {
+    salesSettings = preloadedMasterData.salesSettingsBySalesOffice[salesOffice] || null;
+  } else {
+    salesSettings = await queryOne(
+      `SELECT * FROM sales_office_cost_settings
+       WHERE sales_office = $1
+       AND is_active = $2
+       ORDER BY effective_from DESC
+       LIMIT 1`,
+      [salesOffice, true]
+    );
+  }
 
   const defaultCommission = {
     commission_type: 'percentage',
@@ -359,12 +392,18 @@ export async function calculateRevenue(
   }
 
   // 5. 실사비용 조정 조회
-  const surveyAdjustments = await queryAll(
-    `SELECT * FROM survey_cost_adjustments
-     WHERE business_id = $1
-     AND applied_date <= $2`,
-    [business_id, calcDate]
-  );
+  let surveyAdjustments: any[] | null;
+  if (preloadedMasterData?.surveyAdjustmentsByBusiness) {
+    const allRows = preloadedMasterData.surveyAdjustmentsByBusiness[String(business_id)] || [];
+    surveyAdjustments = allRows.filter((r: any) => r.applied_date && r.applied_date <= calcDate);
+  } else {
+    surveyAdjustments = await queryAll(
+      `SELECT * FROM survey_cost_adjustments
+       WHERE business_id = $1
+       AND applied_date <= $2`,
+      [business_id, calcDate]
+    );
+  }
 
   const totalAdjustments =
     surveyAdjustments?.reduce((sum: number, adj: any) => sum + (Number(adj.adjustment_amount) || 0), 0) || 0;
@@ -592,12 +631,17 @@ export async function calculateRevenue(
   }
 
   // 9.1. 영업비용 조정 조회
-  const operatingCostAdjustment = await queryOne(
-    `SELECT * FROM operating_cost_adjustments
-     WHERE business_id = $1
-     LIMIT 1`,
-    [business_id]
-  );
+  let operatingCostAdjustment: any;
+  if (preloadedMasterData?.operatingCostAdjByBusiness) {
+    operatingCostAdjustment = preloadedMasterData.operatingCostAdjByBusiness[String(business_id)] || null;
+  } else {
+    operatingCostAdjustment = await queryOne(
+      `SELECT * FROM operating_cost_adjustments
+       WHERE business_id = $1
+       LIMIT 1`,
+      [business_id]
+    );
+  }
 
   let adjustedSalesCommission = salesCommission;
   let hasAdjustment = false;
