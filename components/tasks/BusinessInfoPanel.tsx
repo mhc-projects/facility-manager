@@ -22,6 +22,7 @@ interface UnifiedBusinessInfo {
 
   // 프로젝트 관리
   receipt_date: string | null
+  installation_team: string | null
 
   // 일정 관리
   subsidy_approval_date: string | null
@@ -696,21 +697,29 @@ export default function BusinessInfoPanel({
           </div>
         )}
 
-        {/* 1. 접수일 */}
+        {/* 1. 프로젝트 관리 */}
         <Section
           icon={<Calendar className="w-3.5 h-3.5 text-white" />}
-          title="접수일"
+          title="프로젝트 관리"
           color="bg-slate-500"
-          defaultOpen={!!data.receipt_date}
-          isEmpty={!data.receipt_date}
+          defaultOpen={!!(data.receipt_date || data.installation_team)}
+          isEmpty={!data.receipt_date && !data.installation_team}
           isEditing={isEditing}
         >
-          <FieldRow
-            label="접수일"
-            isEditing={isEditing}
-            viewContent={<ViewDate value={data.receipt_date} />}
-            editContent={<DateInput value={get('receipt_date')} onChange={set('receipt_date')} />}
-          />
+          <div className="space-y-1">
+            <FieldRow
+              label="접수일"
+              isEditing={isEditing}
+              viewContent={<ViewDate value={data.receipt_date} />}
+              editContent={<DateInput value={get('receipt_date')} onChange={set('receipt_date')} />}
+            />
+            <FieldRow
+              label="설치팀"
+              isEditing={isEditing}
+              viewContent={<ViewText value={data.installation_team} />}
+              editContent={<TextInput value={get('installation_team')} onChange={set('installation_team')} placeholder="설치팀 입력" />}
+            />
+          </div>
         </Section>
 
         {/* 2. 일정관리 */}
