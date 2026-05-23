@@ -4747,8 +4747,9 @@ function BusinessManagementPage() {
   const businessesWithId = useMemo(() =>
     filteredBusinesses.map(business => ({
       ...business,
-      id: business.id
-    })), [filteredBusinesses])
+      id: business.id,
+      현재단계: calculateBusinessCurrentSteps[business.사업장명 || business.business_name || ''] || ''
+    })), [filteredBusinesses, calculateBusinessCurrentSteps])
 
   // 📱 무한 스크롤: 초기 로드 및 검색/필터 변경 시 초기화
   useEffect(() => {
