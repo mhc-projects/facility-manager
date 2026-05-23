@@ -192,6 +192,8 @@ interface UnifiedBusinessInfo {
   construction_report_submitted_at?: string | null;
   greenlink_confirmation_submitted_at?: string | null;
   attachment_completion_submitted_at?: string | null;
+  completion_doc_sent_date?: string | null;
+  subsidy_payment_application_sent_date?: string | null;
 
   // 부착지원신청서
   attachment_support_application_date?: string | null;  // 부착지원신청서 접수일
@@ -2783,6 +2785,8 @@ function BusinessManagementPage() {
           construction_report_submitted_at: business.construction_report_submitted_at || null,
           greenlink_confirmation_submitted_at: business.greenlink_confirmation_submitted_at || null,
           attachment_completion_submitted_at: business.attachment_completion_submitted_at || null,
+          completion_doc_sent_date: business.completion_doc_sent_date || null,
+          subsidy_payment_application_sent_date: business.subsidy_payment_application_sent_date || null,
           attachment_support_application_date: business.attachment_support_application_date || null,
           attachment_support_writing_date: business.attachment_support_writing_date || null,
           online_receipt_date: business.online_receipt_date || null,
@@ -3182,6 +3186,8 @@ function BusinessManagementPage() {
         construction_report_submitted_at: freshData.construction_report_submitted_at || '',
         greenlink_confirmation_submitted_at: freshData.greenlink_confirmation_submitted_at || '',
         attachment_completion_submitted_at: freshData.attachment_completion_submitted_at || '',
+        completion_doc_sent_date: freshData.completion_doc_sent_date || '',
+        subsidy_payment_application_sent_date: freshData.subsidy_payment_application_sent_date || '',
 
         // 부착지원신청서
         attachment_support_application_date: freshData.attachment_support_application_date || '',
@@ -3640,7 +3646,9 @@ function BusinessManagementPage() {
         // 제출일 관리 (착공신고서, 그린링크 전송확인서, 부착완료통보서)
         construction_report_submitted_at: parseExcelDate(row['착공신고서제출일']),
         greenlink_confirmation_submitted_at: parseExcelDate(row['그린링크전송확인서제출일']),
-        attachment_completion_submitted_at: parseExcelDate(row['부착완료통보서제출일'])
+        attachment_completion_submitted_at: parseExcelDate(row['부착완료통보서제출일']),
+        completion_doc_sent_date: parseExcelDate(row['준공도서발송일']),
+        subsidy_payment_application_sent_date: parseExcelDate(row['보조금지급신청서발송일'])
         }
       });
       
@@ -3797,7 +3805,7 @@ function BusinessManagementPage() {
         'subsidy_approval_date', 'contract_sent_date',
         'receipt_date', 'order_request_date', 'order_date', 'shipment_date', 'installation_date',
         'construction_report_submitted_at', 'greenlink_confirmation_submitted_at',
-        'attachment_completion_submitted_at',
+        'attachment_completion_submitted_at', 'completion_doc_sent_date', 'subsidy_payment_application_sent_date',
         'attachment_support_application_date', 'attachment_support_writing_date', 'online_receipt_date',
         'estimate_survey_date', 'pre_construction_survey_date', 'completion_survey_date',
         'invoice_1st_date', 'payment_1st_date', 'invoice_2nd_date', 'payment_2nd_date',
@@ -4172,6 +4180,8 @@ function BusinessManagementPage() {
               construction_report_submitted_at: serverData.construction_report_submitted_at || null,
               greenlink_confirmation_submitted_at: serverData.greenlink_confirmation_submitted_at || null,
               attachment_completion_submitted_at: serverData.attachment_completion_submitted_at || null,
+              completion_doc_sent_date: serverData.completion_doc_sent_date || null,
+              subsidy_payment_application_sent_date: serverData.subsidy_payment_application_sent_date || null,
               attachment_support_application_date: serverData.attachment_support_application_date || null,
               attachment_support_writing_date: serverData.attachment_support_writing_date || null,
               online_receipt_date: serverData.online_receipt_date || null,
@@ -5849,6 +5859,22 @@ function BusinessManagementPage() {
                       <DateInput
                         value={formData.attachment_completion_submitted_at || ''}
                         onChange={(value) => setFormData({...formData, attachment_completion_submitted_at: value})}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">준공도서 발송일</label>
+                      <DateInput
+                        value={formData.completion_doc_sent_date || ''}
+                        onChange={(value) => setFormData({...formData, completion_doc_sent_date: value})}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">보조금지급신청서 발송일</label>
+                      <DateInput
+                        value={formData.subsidy_payment_application_sent_date || ''}
+                        onChange={(value) => setFormData({...formData, subsidy_payment_application_sent_date: value})}
                       />
                     </div>
 
