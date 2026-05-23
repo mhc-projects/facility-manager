@@ -181,7 +181,8 @@ function TaskManagementPage() {
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
   const [localGovFilterOpen, setLocalGovFilterOpen] = useState(false)
   const [sidoFilterOpen, setSidoFilterOpen] = useState(false)
-  const [showOnlyNoConstructionReport, setShowOnlyNoConstructionReport] = useState(false) // 착공신고서 미제출 필터
+  const [showOnlyNoConstructionReport, setShowOnlyNoConstructionReport] = useState(false)
+  const [filterUnassignedTasks, setFilterUnassignedTasks] = useState(false) // 담당자 미배정 업무 필터
   const [assigneeFilterInitialized, setAssigneeFilterInitialized] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -724,6 +725,7 @@ function TaskManagementPage() {
     setSelectedSidos([])
     setSelectedLocalGovs([])
     setShowOnlyNoConstructionReport(false)
+    setFilterUnassignedTasks(false)
     setSearchTerm('')
   }, [])
 
@@ -1032,16 +1034,18 @@ function TaskManagementPage() {
       const matchesSido = selectedSidos.length === 0 || selectedSidos.includes(taskSido)
       const matchesLocalGov = selectedLocalGovs.length === 0 || selectedLocalGovs.includes(task.localGovernment || '')
       const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
+      const matchesUnassigned = !filterUnassignedTasks ||
+        (!task.assignee && (!task.assignees || task.assignees.length === 0))
 
       const passed = matchesSearch && matchesType && matchesPriority && matchesAssignee &&
-                     matchesStatus && matchesSido && matchesLocalGov && matchesConstructionReport
+                     matchesStatus && matchesSido && matchesLocalGov && matchesConstructionReport && matchesUnassigned
 
       return passed
     })
 
     return result
   }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
+      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport, filterUnassignedTasks])
 
   // 칸반 보드용 필터링 (완료 업무도 항상 포함)
   const kanbanTasks = useMemo(() => {
@@ -1066,12 +1070,14 @@ function TaskManagementPage() {
       const matchesSido = selectedSidos.length === 0 || selectedSidos.includes(taskSido)
       const matchesLocalGov = selectedLocalGovs.length === 0 || selectedLocalGovs.includes(task.localGovernment || '')
       const matchesConstructionReport = !showOnlyNoConstructionReport || !task.constructionReportDate
+      const matchesUnassigned = !filterUnassignedTasks ||
+        (!task.assignee && (!task.assignees || task.assignees.length === 0))
 
       return matchesSearch && matchesType && matchesPriority && matchesAssignee &&
-             matchesStatus && matchesSido && matchesLocalGov && matchesConstructionReport
+             matchesStatus && matchesSido && matchesLocalGov && matchesConstructionReport && matchesUnassigned
     })
   }, [tasksWithDelayStatus, searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
+      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport, filterUnassignedTasks])
 
   // 정렬 핸들러
   const handleSort = (column: string) => {
@@ -1150,7 +1156,7 @@ function TaskManagementPage() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, selectedProgressStatuses, selectedType, selectedPriorities, selectedAssignees,
-      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport])
+      selectedStatuses, selectedSidos, selectedLocalGovs, showOnlyNoConstructionReport, filterUnassignedTasks])
 
   // 상태별 업무 그룹화 (칸반용: 완료 업무 포함)
   const tasksByStatus = useMemo(() => {
@@ -2192,6 +2198,19 @@ function TaskManagementPage() {
                 )}
               </div>
 
+              {/* 담당자 미배정 토글 */}
+              <button
+                type="button"
+                onClick={() => setFilterUnassignedTasks(v => !v)}
+                className={`flex items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 border rounded-lg text-sm transition-colors whitespace-nowrap ${
+                  filterUnassignedTasks
+                    ? 'border-orange-400 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                미배정
+              </button>
+
               {/* 업무단계 다중 선택 */}
               <div className="relative" ref={statusFilterRef}>
                 <button
@@ -2399,7 +2418,7 @@ function TaskManagementPage() {
               {/* 전체 필터 초기화 버튼 */}
               {(selectedProgressStatuses.length > 0 || selectedPriorities.length > 0 || selectedAssignees.length > 0 ||
                 selectedStatuses.length > 0 || selectedSidos.length > 0 || selectedLocalGovs.length > 0 ||
-                showOnlyNoConstructionReport || searchTerm) && (
+                showOnlyNoConstructionReport || filterUnassignedTasks || searchTerm) && (
                 <button
                   onClick={handleResetFilters}
                   className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded text-xs hover:bg-red-200 transition-colors font-medium"
