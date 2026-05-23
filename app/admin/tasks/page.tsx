@@ -714,7 +714,7 @@ function TaskManagementPage() {
       alert(`업무 삭제 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
       return false // 실패 시 false 반환
     }
-  }, [mobileSelectedTask])
+  }, [editingTask, mobileSelectedTask])
 
   // 필터 초기화 함수
   const handleResetFilters = useCallback(() => {
