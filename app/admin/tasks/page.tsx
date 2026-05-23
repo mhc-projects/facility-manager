@@ -1320,15 +1320,15 @@ function TaskManagementPage() {
     const assigneeSet = new Set<string>()
 
     tasks.forEach(task => {
-      // 기존 assignee 필드
-      if (task.assignee) {
+      // 기존 assignee 필드 ('미배정' 문자열은 필터 옵션에서 제외)
+      if (task.assignee && task.assignee !== '미배정') {
         assigneeSet.add(task.assignee)
       }
 
       // 새로운 assignees 배열
       if (task.assignees && Array.isArray(task.assignees)) {
         task.assignees.forEach((assignee: any) => {
-          if (assignee.name) {
+          if (assignee.name && assignee.name !== '미배정') {
             assigneeSet.add(assignee.name)
           }
         })
