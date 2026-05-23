@@ -4761,7 +4761,19 @@ function BusinessManagementPage() {
           )
         }
 
-        // 기본값 (오류 상황)
+        // taskStatus 미로딩 시 calculateBusinessCurrentSteps 값을 fallback으로 표시
+        const precomputedStep = calculateBusinessCurrentSteps[businessName]
+        if (precomputedStep) {
+          return (
+            <div className="text-center">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium leading-snug inline-block whitespace-normal break-keep bg-gray-100 text-gray-600">
+                {precomputedStep}
+              </span>
+            </div>
+          )
+        }
+
+        // 기본값 (업무 미등록)
         return (
           <div className="text-center">
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">

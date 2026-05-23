@@ -101,11 +101,25 @@ export default function DataTable<T extends { id: string }>({
   }
 
   const handleSort = (columnKey: string) => {
-    if (sortColumn === columnKey) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortColumn(columnKey)
-      setSortDirection('asc')
+    const newSortColumn = sortColumn === columnKey ? sortColumn : columnKey
+    const newSortDirection: 'asc' | 'desc' =
+      sortColumn === columnKey ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
+
+    setSortColumn(newSortColumn)
+    setSortDirection(newSortDirection)
+    setCurrentPage(1)
+
+    if (onPageChange && pagination) {
+      const newSorted = [...filteredData].sort((a, b) => {
+        const aVal = a[newSortColumn as keyof T]
+        const bVal = b[newSortColumn as keyof T]
+        if (aVal == null && bVal == null) return 0
+        if (aVal == null) return 1
+        if (bVal == null) return -1
+        const r = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
+        return newSortDirection === 'desc' ? -r : r
+      })
+      onPageChange(1, newSorted.slice(0, pageSize))
     }
   }
 
