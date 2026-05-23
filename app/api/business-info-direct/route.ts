@@ -109,6 +109,8 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     construction_report_submitted_at: normalizeDateField(business.construction_report_submitted_at),
     greenlink_confirmation_submitted_at: normalizeDateField(business.greenlink_confirmation_submitted_at),
     attachment_completion_submitted_at: normalizeDateField(business.attachment_completion_submitted_at),
+    completion_doc_sent_date: normalizeDateField(business.completion_doc_sent_date),
+    subsidy_payment_application_sent_date: normalizeDateField(business.subsidy_payment_application_sent_date),
     attachment_support_application_date: normalizeDateField(business.attachment_support_application_date),
     attachment_support_writing_date: normalizeDateField(business.attachment_support_writing_date),
     created_at: new Date().toISOString(),
@@ -182,6 +184,8 @@ export async function GET(request: Request) {
       construction_report_submitted_at::text as construction_report_submitted_at,
       greenlink_confirmation_submitted_at::text as greenlink_confirmation_submitted_at,
       attachment_completion_submitted_at::text as attachment_completion_submitted_at,
+      completion_doc_sent_date::text as completion_doc_sent_date,
+      subsidy_payment_application_sent_date::text as subsidy_payment_application_sent_date,
       attachment_support_application_date::text as attachment_support_application_date,
       attachment_support_writing_date::text as attachment_support_writing_date,
       online_receipt_date::text as online_receipt_date,
@@ -306,6 +310,8 @@ export async function GET(request: Request) {
         bi.construction_report_submitted_at::text AS construction_report_submitted_at,
         bi.greenlink_confirmation_submitted_at::text AS greenlink_confirmation_submitted_at,
         bi.attachment_completion_submitted_at::text AS attachment_completion_submitted_at,
+        bi.completion_doc_sent_date::text AS completion_doc_sent_date,
+        bi.subsidy_payment_application_sent_date::text AS subsidy_payment_application_sent_date,
         bi.attachment_support_application_date::text AS attachment_support_application_date,
         bi.attachment_support_writing_date::text AS attachment_support_writing_date,
         bi.online_receipt_date::text AS online_receipt_date,
@@ -977,6 +983,12 @@ export async function PUT(request: Request) {
     if (updateData.attachment_completion_submitted_at !== undefined) {
       updateObject.attachment_completion_submitted_at = updateData.attachment_completion_submitted_at || null;
     }
+    if (updateData.completion_doc_sent_date !== undefined) {
+      updateObject.completion_doc_sent_date = updateData.completion_doc_sent_date || null;
+    }
+    if (updateData.subsidy_payment_application_sent_date !== undefined) {
+      updateObject.subsidy_payment_application_sent_date = updateData.subsidy_payment_application_sent_date || null;
+    }
     if (updateData.attachment_support_application_date !== undefined) {
       updateObject.attachment_support_application_date = updateData.attachment_support_application_date || null;
     }
@@ -1231,6 +1243,8 @@ export async function POST(request: Request) {
       construction_report_submitted_at: businessData.construction_report_submitted_at || null,
       greenlink_confirmation_submitted_at: businessData.greenlink_confirmation_submitted_at || null,
       attachment_completion_submitted_at: businessData.attachment_completion_submitted_at || null,
+      completion_doc_sent_date: businessData.completion_doc_sent_date || null,
+      subsidy_payment_application_sent_date: businessData.subsidy_payment_application_sent_date || null,
       attachment_support_application_date: businessData.attachment_support_application_date || null,
       attachment_support_writing_date: businessData.attachment_support_writing_date || null,
 
