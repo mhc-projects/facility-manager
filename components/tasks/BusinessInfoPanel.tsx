@@ -747,6 +747,24 @@ export default function BusinessInfoPanel({
               viewContent={<ViewDate value={data.contract_sent_date} />}
               editContent={<DateInput value={get('contract_sent_date')} onChange={set('contract_sent_date')} />}
             />
+            {(isEditing || data.attachment_support_writing_date) && (
+              <FieldRow label="부착지원작성일" isEditing={isEditing}
+                viewContent={<ViewDate value={data.attachment_support_writing_date} />}
+                editContent={<DateInput value={get('attachment_support_writing_date')} onChange={set('attachment_support_writing_date')} />}
+              />
+            )}
+            {(isEditing || data.attachment_support_application_date) && (
+              <FieldRow label="부착지원신청서 접수일" isEditing={isEditing}
+                viewContent={<ViewDate value={data.attachment_support_application_date} />}
+                editContent={<DateInput value={get('attachment_support_application_date')} onChange={set('attachment_support_application_date')} />}
+              />
+            )}
+            {(isEditing || data.online_receipt_date) && (
+              <FieldRow label="온라인 접수일" isEditing={isEditing}
+                viewContent={<ViewDate value={data.online_receipt_date} />}
+                editContent={<DateInput value={get('online_receipt_date')} onChange={set('online_receipt_date')} />}
+              />
+            )}
             <FieldRow label="발주요청일" isEditing={isEditing}
               viewContent={<ViewDate value={data.order_request_date} />}
               editContent={<DateInput value={get('order_request_date')} onChange={set('order_request_date')} />}
@@ -793,24 +811,6 @@ export default function BusinessInfoPanel({
               <FieldRow label="보조금지급신청서 발송일" isEditing={isEditing}
                 viewContent={<ViewDate value={data.subsidy_payment_application_sent_date} />}
                 editContent={<DateInput value={get('subsidy_payment_application_sent_date')} onChange={set('subsidy_payment_application_sent_date')} />}
-              />
-            )}
-            {(isEditing || data.attachment_support_application_date) && (
-              <FieldRow label="부착지원신청서 접수일" isEditing={isEditing}
-                viewContent={<ViewDate value={data.attachment_support_application_date} />}
-                editContent={<DateInput value={get('attachment_support_application_date')} onChange={set('attachment_support_application_date')} />}
-              />
-            )}
-            {(isEditing || data.online_receipt_date) && (
-              <FieldRow label="온라인 접수일" isEditing={isEditing}
-                viewContent={<ViewDate value={data.online_receipt_date} />}
-                editContent={<DateInput value={get('online_receipt_date')} onChange={set('online_receipt_date')} />}
-              />
-            )}
-            {(isEditing || data.attachment_support_writing_date) && (
-              <FieldRow label="부착지원작성일" isEditing={isEditing}
-                viewContent={<ViewDate value={data.attachment_support_writing_date} />}
-                editContent={<DateInput value={get('attachment_support_writing_date')} onChange={set('attachment_support_writing_date')} />}
               />
             )}
           </div>
