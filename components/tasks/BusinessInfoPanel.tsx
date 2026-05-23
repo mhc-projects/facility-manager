@@ -35,6 +35,8 @@ interface UnifiedBusinessInfo {
   construction_report_submitted_at: string | null
   greenlink_confirmation_submitted_at: string | null
   attachment_completion_submitted_at: string | null
+  completion_doc_sent_date: string | null
+  subsidy_payment_application_sent_date: string | null
   attachment_support_application_date: string | null
   attachment_support_writing_date: string | null
   online_receipt_date: string | null
@@ -592,7 +594,8 @@ export default function BusinessInfoPanel({
     data.subsidy_approval_date || data.quote_sent_date || data.contract_sent_date ||
     data.order_request_date || data.order_date || data.shipment_date || data.installation_date ||
     data.construction_report_submitted_at || data.greenlink_confirmation_submitted_at ||
-    data.attachment_completion_submitted_at || data.attachment_support_application_date ||
+    data.attachment_completion_submitted_at || data.completion_doc_sent_date ||
+    data.subsidy_payment_application_sent_date || data.attachment_support_application_date ||
     data.attachment_support_writing_date || data.online_receipt_date
   )
 
@@ -778,6 +781,18 @@ export default function BusinessInfoPanel({
               <FieldRow label="부착완료 통보" isEditing={isEditing}
                 viewContent={<ViewDate value={data.attachment_completion_submitted_at} />}
                 editContent={<DateInput value={get('attachment_completion_submitted_at')} onChange={set('attachment_completion_submitted_at')} />}
+              />
+            )}
+            {(isEditing || data.completion_doc_sent_date) && (
+              <FieldRow label="준공도서 발송일" isEditing={isEditing}
+                viewContent={<ViewDate value={data.completion_doc_sent_date} />}
+                editContent={<DateInput value={get('completion_doc_sent_date')} onChange={set('completion_doc_sent_date')} />}
+              />
+            )}
+            {(isEditing || data.subsidy_payment_application_sent_date) && (
+              <FieldRow label="보조금지급신청서 발송일" isEditing={isEditing}
+                viewContent={<ViewDate value={data.subsidy_payment_application_sent_date} />}
+                editContent={<DateInput value={get('subsidy_payment_application_sent_date')} onChange={set('subsidy_payment_application_sent_date')} />}
               />
             )}
             {(isEditing || data.attachment_support_application_date) && (
