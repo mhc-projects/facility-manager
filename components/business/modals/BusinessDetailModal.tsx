@@ -108,6 +108,8 @@ interface UnifiedBusinessInfo {
   construction_report_submitted_at?: string | null
   greenlink_confirmation_submitted_at?: string | null
   attachment_completion_submitted_at?: string | null
+  completion_doc_sent_date?: string | null
+  subsidy_payment_application_sent_date?: string | null
   attachment_support_application_date?: string | null
   attachment_support_writing_date?: string | null
   online_receipt_date?: string | null
@@ -1325,6 +1327,20 @@ export default function BusinessDetailModal({
                       <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
                         <div className="text-xs sm:text-sm text-gray-600 mb-1">부착완료통보서 제출일</div>
                         <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.attachment_completion_submitted_at)}</div>
+                      </div>
+                    )}
+
+                    {business.completion_doc_sent_date && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">준공도서 발송일</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.completion_doc_sent_date)}</div>
+                      </div>
+                    )}
+
+                    {business.subsidy_payment_application_sent_date && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">보조금지급신청서 발송일</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.subsidy_payment_application_sent_date)}</div>
                       </div>
                     )}
 
