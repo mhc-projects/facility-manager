@@ -1997,7 +1997,7 @@ function BusinessManagementPage() {
 
     return {
       offices: offices.sort(),
-      regions: regions.sort(),
+      regions: regions.sort((a, b) => a.localeCompare(b, 'ko')),
       categories,
       years: years.sort((a, b) => b - a), // 최신 연도부터
       currentSteps: currentSteps.sort((a, b) => {
@@ -5412,7 +5412,7 @@ function BusinessManagementPage() {
                           className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400"
                         >
                           <option value="">시/군/구 선택</option>
-                          {(KOREAN_ADMIN_DIVISIONS[parseLocalGov(formData.local_government).sido] || []).map(sg => (
+                          {[...(KOREAN_ADMIN_DIVISIONS[parseLocalGov(formData.local_government).sido] || [])].sort((a, b) => a.localeCompare(b, 'ko')).map(sg => (
                             <option key={sg} value={sg}>{sg}</option>
                           ))}
                         </select>
