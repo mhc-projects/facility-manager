@@ -305,11 +305,6 @@ export function useBusinessData() {
 
       const result = await response.json();
 
-      // 사진 등록된 사업장 삭제 차단 (409)
-      if (response.status === 409) {
-        return { success: false, error: result.error || '사진이 등록된 사업장은 삭제할 수 없습니다' };
-      }
-
       if (!response.ok || !result.success) {
         throw new Error(result.error || '삭제 실패');
       }

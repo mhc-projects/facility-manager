@@ -2567,7 +2567,7 @@ function TaskManagementPage() {
                               : 'bg-orange-100 text-orange-800'
                           }`}>
                             {task.type === 'self' ? '자비' :
-                             task.type === 'subsidy' ? '보조금' :
+                             task.type === 'subsidy' ? (task.progressStatus || '보조금') :
                              task.type === 'dealer' ? '대리점' :
                              task.type === 'outsourcing' ? '외주설치' :
                              task.type === 'etc' ? '기타' : 'AS'}

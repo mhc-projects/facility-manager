@@ -1823,19 +1823,6 @@ export async function DELETE(request: Request) {
       }, { status: 400 });
     }
 
-    // 사진이 등록된 사업장은 삭제 불가
-    const photoCheck = await queryOne(
-      `SELECT COUNT(*)::int AS cnt FROM uploaded_files WHERE business_id = $1`,
-      [id]
-    );
-    if (photoCheck?.cnt > 0) {
-      return NextResponse.json({
-        success: false,
-        error: `이 사업장에 등록된 사진 ${photoCheck.cnt}장이 있어 삭제할 수 없습니다. 사진을 먼저 삭제해주세요.`,
-        photo_count: photoCheck.cnt,
-      }, { status: 409 });
-    }
-
     // Soft delete: is_deleted 플래그를 true로 설정
     const result = await pgQuery(
       `UPDATE business_info

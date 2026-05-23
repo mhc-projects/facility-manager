@@ -1043,21 +1043,30 @@ function BusinessManagementPage() {
 
   // 필터 상태 (다중 선택 지원)
   const [filterOffices, setFilterOffices] = useState<string[]>([])
-  const [filterRegions, setFilterRegions] = useState<string[]>([])
+  const [filterSido, setFilterSido] = useState<string[]>([])
+  const [filterSigungu, setFilterSigungu] = useState<string[]>([])
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [filterProjectYears, setFilterProjectYears] = useState<string[]>([])
   const [filterCurrentSteps, setFilterCurrentSteps] = useState<string[]>([])
+  const [filterUnassigned, setFilterUnassigned] = useState<boolean>(false)
+
+  // 시/도 변경 시 시/군/구 초기화
+  useEffect(() => {
+    setFilterSigungu([])
+  }, [filterSido])
 
   // 🔍 필터 상태 변경 감시 (디버깅용)
   useEffect(() => {
     console.log('🎛️ 필터 상태 변경:', {
       영업점: filterOffices,
-      지역: filterRegions,
+      시도: filterSido,
+      시군구: filterSigungu,
       진행구분: filterCategories,
       사업진행연도: filterProjectYears,
-      현재단계: filterCurrentSteps
+      현재단계: filterCurrentSteps,
+      담당자미지정: filterUnassigned
     })
-  }, [filterOffices, filterRegions, filterCategories, filterProjectYears, filterCurrentSteps])
+  }, [filterOffices, filterSido, filterSigungu, filterCategories, filterProjectYears, filterCurrentSteps, filterUnassigned])
 
   // 모바일 필터 접기/펼치기 상태
   const isMobile = useIsMobile()
@@ -1736,51 +1745,57 @@ function BusinessManagementPage() {
 
   // 전체 업무 데이터를 기반으로 사업장별 현재 단계 계산 (업무관리에서 사용하는 로직과 동일)
   const calculateBusinessCurrentSteps = useMemo(() => {
-    const statusMap: Record<string, string> = {}
-
-    // 사업장별로 업무 그룹화
-    const businessTasksMap: Record<string, any[]> = {}
+    // business_id 기준으로 그룹화 (id 없는 경우 business_name 폴백)
+    const idTasksMap: Record<string, any[]> = {}
+    const nameTasksMap: Record<string, any[]> = {}
     allTasksForFilter.forEach(task => {
-      const businessName = task.business_name
-      if (!businessTasksMap[businessName]) {
-        businessTasksMap[businessName] = []
-      }
-      businessTasksMap[businessName].push(task)
-    })
-
-    // 각 사업장의 현재 단계 계산
-    Object.entries(businessTasksMap).forEach(([businessName, tasks]) => {
-      const activeTasks = tasks.filter(task => !task.completed_at)
-
-      if (activeTasks.length === 0) {
-        const completedTasks = tasks.filter(task => task.completed_at)
-        statusMap[businessName] = completedTasks.length > 0 ? '업무 완료' : '업무 미등록'
+      if (task.business_id) {
+        if (!idTasksMap[task.business_id]) idTasksMap[task.business_id] = []
+        idTasksMap[task.business_id].push(task)
       } else {
-        // 우선순위별 정렬
-        const priorityOrder = { high: 3, medium: 2, low: 1 }
-        const sortedTasks = activeTasks.sort((a, b) => {
-          const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority]
-          if (priorityDiff !== 0) return priorityDiff
-          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        })
-
-        const topTask = sortedTasks[0]
-        // AdminDataContext.getStageLabel: DB 단계 레이블 우선, TASK_STATUS_KR 폴백
-        const rawLabel = getStageLabel(topTask.status)
-        // status key의 타입 prefix 감지 (subsidy_, self_, as_, dealer_, outsourcing_, etc_)
-        const knownPrefixes = ['subsidy', 'self', 'as', 'dealer', 'outsourcing', 'etc']
-        const detectedPrefix = knownPrefixes.find(p => topTask.status.startsWith(p + '_'))
-        const typeKR = detectedPrefix ? TASK_TYPE_KR[detectedPrefix] || null : null
-        const statusLabel = typeKR ? `[${typeKR}] ${rawLabel}` : rawLabel
-        statusMap[businessName] = activeTasks.length === 1 ? statusLabel : `${statusLabel} 외 ${activeTasks.length - 1}건`
+        const name = task.business_name || ''
+        if (!name) return
+        if (!nameTasksMap[name]) nameTasksMap[name] = []
+        nameTasksMap[name].push(task)
       }
     })
 
-    // facility_tasks에 한 번도 등록되지 않은 사업장을 '업무 미등록'으로 추가
+    const computeStatus = (tasks: any[]): string => {
+      const activeTasks = tasks.filter(task => !task.completed_at)
+      if (activeTasks.length === 0) {
+        return tasks.filter(task => task.completed_at).length > 0 ? '업무 완료' : '업무 미등록'
+      }
+      const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 }
+      const sorted = [...activeTasks].sort((a, b) => {
+        const diff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0)
+        if (diff !== 0) return diff
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      })
+      const topTask = sorted[0]
+      const rawLabel = getStageLabel(topTask.status)
+      // task_type은 VIEW에서 business_info.progress_status 기반으로 올바르게 파생됨
+      const typeKR = topTask.task_type && topTask.task_type !== 'etc' ? TASK_TYPE_KR[topTask.task_type] || null : null
+      const statusLabel = typeKR ? `[${typeKR}] ${rawLabel}` : rawLabel
+      return activeTasks.length === 1 ? statusLabel : `${statusLabel} 외 ${activeTasks.length - 1}건`
+    }
+
+    const idStatusMap: Record<string, string> = {}
+    Object.entries(idTasksMap).forEach(([id, tasks]) => { idStatusMap[id] = computeStatus(tasks) })
+
+    const nameStatusMap: Record<string, string> = {}
+    Object.entries(nameTasksMap).forEach(([name, tasks]) => { nameStatusMap[name] = computeStatus(tasks) })
+
+    // 최종 statusMap은 사업장명 기준 (businessesWithId 조회 호환)
+    const statusMap: Record<string, string> = {}
     allBusinesses.forEach(b => {
-      const name = b.사업장명 || b.business_name || ''
-      if (name && !(name in statusMap)) {
-        statusMap[name] = '업무 미등록'
+      const bName = b.사업장명 || b.business_name || ''
+      if (!bName) return
+      if (b.id && idStatusMap[b.id] !== undefined) {
+        statusMap[bName] = idStatusMap[b.id]
+      } else if (nameStatusMap[bName] !== undefined) {
+        statusMap[bName] = nameStatusMap[bName]
+      } else {
+        statusMap[bName] = '업무 미등록'
       }
     })
 
@@ -1803,13 +1818,19 @@ function BusinessManagementPage() {
       })
       console.log('🏢 영업점 필터 후:', filtered.length, '개')
     }
-    if (filterRegions.length > 0) {
-      console.log('🗺️ 지역 필터 적용:', filterRegions)
+    if (filterSido.length > 0) {
       filtered = filtered.filter(b => {
-        const address = b.주소 || b.address || ''
-        return filterRegions.some(region => address.includes(region))
+        const { sido } = parseLocalGov(b.local_government)
+        return filterSido.includes(sido)
       })
-      console.log('🗺️ 지역 필터 후:', filtered.length, '개')
+      console.log('🗺️ 시/도 필터 후:', filtered.length, '개')
+    }
+    if (filterSigungu.length > 0) {
+      filtered = filtered.filter(b => {
+        const { sigungu } = parseLocalGov(b.local_government)
+        return filterSigungu.includes(sigungu)
+      })
+      console.log('🗺️ 시/군/구 필터 후:', filtered.length, '개')
     }
     if (filterCategories.length > 0) {
       console.log('📂 진행구분 필터 적용:', filterCategories)
@@ -1847,6 +1868,13 @@ function BusinessManagementPage() {
         return currentStep && filterCurrentSteps.includes(currentStep.trim())
       })
       console.log('📊 현재단계 필터 후:', filtered.length, '개')
+    }
+    if (filterUnassigned) {
+      filtered = filtered.filter(b => {
+        const managers = b.admin_managers
+        return !managers || managers.length === 0
+      })
+      console.log('👤 담당자 미지정 필터 후:', filtered.length, '개')
     }
 
     // 상세 필터 적용 (제출일 + 설치완료)
@@ -1958,18 +1986,20 @@ function BusinessManagementPage() {
 
     console.log('🎯 필터링 결과:', filtered.length, '개 사업장 (검색어:', searchTerms.length, '개)')
     return filtered
-  }, [searchTerms, allBusinesses, filterOffices, filterRegions, filterCategories, filterProjectYears, filterCurrentSteps, calculateBusinessCurrentSteps, submissionDateFilters, hasActiveSubmissionFilter])
+  }, [searchTerms, allBusinesses, filterOffices, filterSido, filterSigungu, filterCategories, filterProjectYears, filterCurrentSteps, filterUnassigned, calculateBusinessCurrentSteps, submissionDateFilters, hasActiveSubmissionFilter])
 
   // 필터 옵션 추출
   const filterOptions = useMemo(() => {
     const offices = [...new Set(allBusinesses.map(b => b.영업점 || b.sales_office).filter(Boolean))] as string[]
-    const regions = [...new Set(
-      allBusinesses.map(b => {
-        const address = b.주소 || b.address || ''
-        if (!address) return ''
-        const parts = address.split(' ')
-        return parts.slice(0, 2).join(' ')
-      }).filter(Boolean)
+    const sidoSet = [...new Set(
+      allBusinesses.map(b => parseLocalGov(b.local_government).sido).filter(Boolean)
+    )] as string[]
+    // 현재 선택된 시/도에 해당하는 시/군/구 목록 (선택 없으면 전체)
+    const sigunguSet = [...new Set(
+      allBusinesses
+        .filter(b => filterSido.length === 0 || filterSido.includes(parseLocalGov(b.local_government).sido))
+        .map(b => parseLocalGov(b.local_government).sigungu)
+        .filter(Boolean)
     )] as string[]
     const categories = [...new Set(
       allBusinesses.map(b => {
@@ -1989,7 +2019,8 @@ function BusinessManagementPage() {
 
     console.log('🎛️ 필터 옵션 생성:', {
       offices: offices.length,
-      regions: regions.length,
+      sido: sidoSet.length,
+      sigungu: sigunguSet.length,
       categories,
       years,
       currentSteps: currentSteps.length
@@ -1997,7 +2028,8 @@ function BusinessManagementPage() {
 
     return {
       offices: offices.sort(),
-      regions: regions.sort((a, b) => a.localeCompare(b, 'ko')),
+      sido: sidoSet.sort((a, b) => a.localeCompare(b, 'ko')),
+      sigungu: sigunguSet.sort((a, b) => a.localeCompare(b, 'ko')),
       categories,
       years: years.sort((a, b) => b - a), // 최신 연도부터
       currentSteps: currentSteps.sort((a, b) => {
@@ -2008,7 +2040,7 @@ function BusinessManagementPage() {
         return a.localeCompare(b, 'ko')
       })
     }
-  }, [allBusinesses, calculateBusinessCurrentSteps])
+  }, [allBusinesses, filterSido, calculateBusinessCurrentSteps])
 
   // 검색어 하이라이팅 함수
   const highlightSearchTerm = useCallback((text: string, searchTerm: string) => {
@@ -3301,10 +3333,10 @@ function BusinessManagementPage() {
 
       if (result.success) {
         // 3️⃣ 성공
-        toast.success('사업장 삭제 완료', `${businessName}이(가) 성공적으로 삭제되었습니다.`)
+        toast.success(`${businessName} 삭제 완료`)
       } else {
         // 4️⃣ 실패 (훅에서 자동 롤백됨)
-        toast.error('삭제 실패', `${businessName} 삭제에 실패했습니다: ${result.error}`)
+        toast.error(`${businessName} 삭제 실패: ${result.error}`)
       }
 
     } finally {
@@ -4935,7 +4967,7 @@ function BusinessManagementPage() {
               {/* 통계 + 로딩 상태 */}
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs sm:text-sm font-normal bg-blue-100 text-blue-800 px-2 py-1 rounded-full whitespace-nowrap">
-                  {(searchQuery || filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) ? (
+                  {(searchQuery || filterOffices.length > 0 || filterSido.length > 0 || filterSigungu.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0 || filterUnassigned) ? (
                     `필터링 ${filteredBusinesses.length}개 (전체 ${allBusinesses.length}개)`
                   ) : (
                     `전체 ${allBusinesses.length}개`
@@ -4999,14 +5031,16 @@ function BusinessManagementPage() {
                         )}
                       </button>
                     </div>
-                    {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
+                    {(filterOffices.length > 0 || filterSido.length > 0 || filterSigungu.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0 || filterUnassigned) && (
                       <button
                         onClick={() => {
                           setFilterOffices([])
-                          setFilterRegions([])
+                          setFilterSido([])
+                          setFilterSigungu([])
                           setFilterCategories([])
                           setFilterProjectYears([])
                           setFilterCurrentSteps([])
+                          setFilterUnassigned(false)
                         }}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
                       >
@@ -5027,23 +5061,49 @@ function BusinessManagementPage() {
                     `}
                   >
                     <MultiSelectDropdown label="영업점" options={filterOptions.offices} selectedValues={filterOffices} onChange={setFilterOffices} placeholder="전체" inline />
-                    <MultiSelectDropdown label="지역" options={filterOptions.regions} selectedValues={filterRegions} onChange={setFilterRegions} placeholder="전체" inline />
+                    <MultiSelectDropdown label="시/도" options={filterOptions.sido} selectedValues={filterSido} onChange={setFilterSido} placeholder="전체" inline />
+                    <MultiSelectDropdown label="시/군/구" options={filterOptions.sigungu} selectedValues={filterSigungu} onChange={setFilterSigungu} placeholder="전체" inline />
                     <MultiSelectDropdown label="진행구분" options={filterOptions.categories} selectedValues={filterCategories} onChange={setFilterCategories} placeholder="전체" inline />
                     <MultiSelectDropdown label="사업 진행 연도" options={filterOptions.years.map(year => `${year}년`)} selectedValues={filterProjectYears} onChange={setFilterProjectYears} placeholder="전체" inline />
                     <MultiSelectDropdown label="현재 단계" options={filterOptions.currentSteps} selectedValues={filterCurrentSteps} onChange={setFilterCurrentSteps} placeholder="전체" inline />
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => setFilterUnassigned(v => !v)}
+                        className={`text-xs px-3 py-1.5 rounded border font-medium transition-colors ${
+                          filterUnassigned
+                            ? 'bg-orange-100 text-orange-700 border-orange-300'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        담당자 미지정
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* 데스크톱: 한 행 (grid 비율 유지, 현재단계만 적절히 조정) */}
                 {!isMobile && (
-                  <div className="grid grid-cols-12 gap-2 items-center">
+                  <div className="grid grid-cols-14 gap-2 items-center" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
                     <MultiSelectDropdown label="영업점" options={filterOptions.offices} selectedValues={filterOffices} onChange={setFilterOffices} placeholder="전체" inline className="col-span-2" />
-                    <MultiSelectDropdown label="지역" options={filterOptions.regions} selectedValues={filterRegions} onChange={setFilterRegions} placeholder="전체" inline className="col-span-2" />
+                    <MultiSelectDropdown label="시/도" options={filterOptions.sido} selectedValues={filterSido} onChange={setFilterSido} placeholder="전체" inline className="col-span-2" />
+                    <MultiSelectDropdown label="시/군/구" options={filterOptions.sigungu} selectedValues={filterSigungu} onChange={setFilterSigungu} placeholder="전체" inline className="col-span-2" />
                     <MultiSelectDropdown label="진행구분" options={filterOptions.categories} selectedValues={filterCategories} onChange={setFilterCategories} placeholder="전체" inline className="col-span-2" />
                     <MultiSelectDropdown label="사업 진행 연도" options={filterOptions.years.map(year => `${year}년`)} selectedValues={filterProjectYears} onChange={setFilterProjectYears} placeholder="전체" inline className="col-span-2" />
-                    <MultiSelectDropdown label="현재 단계" options={filterOptions.currentSteps} selectedValues={filterCurrentSteps} onChange={setFilterCurrentSteps} placeholder="전체" inline className="col-span-3" />
+                    <MultiSelectDropdown label="현재 단계" options={filterOptions.currentSteps} selectedValues={filterCurrentSteps} onChange={setFilterCurrentSteps} placeholder="전체" inline className="col-span-2" />
+                    <div className="col-span-1 flex items-end pb-0.5">
+                      <button
+                        onClick={() => setFilterUnassigned(v => !v)}
+                        className={`text-xs px-2 py-1.5 rounded border font-medium transition-colors whitespace-nowrap w-full ${
+                          filterUnassigned
+                            ? 'bg-orange-100 text-orange-700 border-orange-300'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        미지정
+                      </button>
+                    </div>
                     <div className="col-span-1 flex justify-end">
-                      {(filterOffices.length > 0 || filterRegions.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0) && (
+                      {(filterOffices.length > 0 || filterSido.length > 0 || filterSigungu.length > 0 || filterCategories.length > 0 || filterProjectYears.length > 0 || filterCurrentSteps.length > 0 || filterUnassigned) && (
                         <button
                           onClick={() => {
                             setFilterOffices([])
@@ -5051,6 +5111,7 @@ function BusinessManagementPage() {
                             setFilterCategories([])
                             setFilterProjectYears([])
                             setFilterCurrentSteps([])
+                            setFilterUnassigned(false)
                           }}
                           className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 whitespace-nowrap"
                         >
