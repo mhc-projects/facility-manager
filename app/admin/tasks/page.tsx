@@ -595,6 +595,12 @@ function TaskManagementPage() {
     }
   }, [loadBusinesses])
 
+  // 모달에 새 업무가 로드될 때 메모 입력란 초기화 (ESC, 취소 외 경로 포함)
+  useEffect(() => {
+    setMemoInput('')
+    setPendingMemo(null)
+  }, [editingTask?.id])
+
   // Auto-resize textareas when modals open with existing content
   useEffect(() => {
     const resizeTextarea = (textarea: HTMLTextAreaElement | null) => {
@@ -1709,6 +1715,8 @@ function TaskManagementPage() {
           setEditingTask(null)
           setEditBusinessSearchTerm('')
           setShowEditBusinessDropdown(false)
+          setMemoInput('')
+          setPendingMemo(null)
         }
       }
     }
@@ -3583,6 +3591,7 @@ function TaskManagementPage() {
                     <textarea
                       ref={editNotesRef}
                       value={memoInput}
+                      autoComplete="off"
                       onChange={(e) => {
                         setMemoInput(e.target.value)
                         // Auto-resize
