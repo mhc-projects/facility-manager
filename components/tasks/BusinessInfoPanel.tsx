@@ -40,6 +40,7 @@ interface UnifiedBusinessInfo {
   attachment_support_application_date: string | null
   attachment_support_writing_date: string | null
   online_receipt_date: string | null
+  wireless_document: string | null
 
   // 실사 관리
   estimate_survey_date: string | null
@@ -596,7 +597,7 @@ export default function BusinessInfoPanel({
     data.construction_report_submitted_at || data.greenlink_confirmation_submitted_at ||
     data.attachment_completion_submitted_at || data.completion_doc_sent_date ||
     data.subsidy_payment_application_sent_date || data.attachment_support_application_date ||
-    data.attachment_support_writing_date || data.online_receipt_date
+    data.attachment_support_writing_date || data.online_receipt_date || data.wireless_document
   )
 
   const hasSurvey = !!(
@@ -811,6 +812,12 @@ export default function BusinessInfoPanel({
               <FieldRow label="보조금지급신청서 발송일" isEditing={isEditing}
                 viewContent={<ViewDate value={data.subsidy_payment_application_sent_date} />}
                 editContent={<DateInput value={get('subsidy_payment_application_sent_date')} onChange={set('subsidy_payment_application_sent_date')} />}
+              />
+            )}
+            {(isEditing || data.wireless_document) && (
+              <FieldRow label="무선서류 확인" isEditing={isEditing}
+                viewContent={<ViewDate value={data.wireless_document} />}
+                editContent={<DateInput value={get('wireless_document')} onChange={set('wireless_document')} />}
               />
             )}
           </div>

@@ -176,6 +176,7 @@ export async function GET(request: Request) {
       order_manager,
       order_request_date::text as order_request_date,
       receipt_date::text as receipt_date,
+      wireless_document,
       shipment_date::text as shipment_date,
       installation_date::text as installation_date,
       subsidy_approval_date::text as subsidy_approval_date,
@@ -302,6 +303,7 @@ export async function GET(request: Request) {
         bi.order_manager,
         bi.order_request_date::text AS order_request_date,
         bi.receipt_date::text AS receipt_date,
+        bi.wireless_document,
         bi.shipment_date::text AS shipment_date,
         bi.installation_date::text AS installation_date,
         bi.subsidy_approval_date::text AS subsidy_approval_date,
@@ -659,7 +661,7 @@ export async function PUT(request: Request) {
       updateObject.receipt_date = updateData.receipt_date || null;
     }
     if (updateData.wireless_document !== undefined) {
-      updateObject.wireless_document = normalizeUTF8(updateData.wireless_document || '');
+      updateObject.wireless_document = updateData.wireless_document || null;
     }
     if (updateData.installation_support !== undefined) {
       updateObject.installation_support = normalizeUTF8(updateData.installation_support || '');

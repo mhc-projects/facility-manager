@@ -187,6 +187,7 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     installation_date: business.installation_date || null,
     payment_scheduled_date: business.payment_scheduled_date || null,
     online_receipt_date: business.online_receipt_date || null,
+    wireless_document: business.wireless_document || null,
     // 추가공사비
     additional_cost: business.additional_cost || null,
     // 매출비용 조정

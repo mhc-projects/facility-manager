@@ -1344,6 +1344,13 @@ export default function BusinessDetailModal({
                       </div>
                     )}
 
+                    {business.wireless_document && (
+                      <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 md:p-4 shadow-sm">
+                        <div className="text-xs sm:text-sm text-gray-600 mb-1">무선서류 확인</div>
+                        <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900">{formatDate(business.wireless_document)}</div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
 

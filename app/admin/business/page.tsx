@@ -5952,6 +5952,14 @@ function BusinessManagementPage() {
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">무선서류 확인</label>
+                      <DateInput
+                        value={formData.wireless_document || ''}
+                        onChange={(value) => setFormData({...formData, wireless_document: value})}
+                      />
+                    </div>
+
                     </div>
                   </div>
                 </div>
