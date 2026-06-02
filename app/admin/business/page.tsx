@@ -3182,6 +3182,7 @@ function BusinessManagementPage() {
         shipment_date: freshData.shipment_date || '',
         installation_date: freshData.installation_date || '',
         payment_scheduled_date: freshData.payment_scheduled_date || '',
+        wireless_document: freshData.wireless_document || '',
 
         // 실사 관리
         estimate_survey_manager: freshData.estimate_survey_manager || '',
