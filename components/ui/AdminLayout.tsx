@@ -271,7 +271,7 @@ const navigationConfig: NavigationEntry[] = [
           icon: Code2,
           description: '개발팀 업무 접수 및 일지 관리',
           requiredLevel: 1,
-          departmentOnly: '개발',
+          departmentOnly: '시스템개발팀',
         },
       ]
     }
