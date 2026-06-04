@@ -114,6 +114,7 @@ function normalizeBusiness(business: any): UnifiedBusinessInfo {
     그린링크ID: business.greenlink_id || '',
     그린링크PW: business.greenlink_pw || '',
     영업점: business.sales_office || '',
+    sales_office: business.sales_office || null,
     // 프로젝트 관리 필드
     progress_status: business.progress_status || null,
     진행상태: business.progress_status || null,
