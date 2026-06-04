@@ -161,10 +161,10 @@ async function handleIdsMode(ids: string[]) {
   // invoice_records 맵 구성
   const recordsMap = buildRecordsMap(ids, recordsResult.rows || []);
 
-  // 미수금 계산
-  const result = calculateBatchReceivables(businesses, recordsMap);
+  // 미수금·입금액 계산
+  const { receivables, payments } = calculateBatchReceivables(businesses, recordsMap);
 
-  return NextResponse.json({ success: true, data: result });
+  return NextResponse.json({ success: true, data: receivables, payments });
 }
 
 /**
@@ -184,9 +184,10 @@ async function handleBusinessesMode(businesses: any[]) {
   );
 
   const recordsMap = buildRecordsMap(ids, recordsResult.rows || []);
-  const result = calculateBatchReceivables(businesses, recordsMap);
+  const { receivables } = calculateBatchReceivables(businesses, recordsMap);
 
-  return NextResponse.json({ success: true, data: result });
+  // 매출관리 페이지: 기존 data 필드만 반환 (역방향 호환)
+  return NextResponse.json({ success: true, data: receivables });
 }
 
 /**
@@ -213,13 +214,14 @@ function buildRecordsMap(ids: string[], rows: any[]): Map<string, InvoiceRecords
 }
 
 /**
- * 사업장별 미수금 일괄 계산
+ * 사업장별 미수금·입금액 일괄 계산
  */
 function calculateBatchReceivables(
   businesses: any[],
   recordsMap: Map<string, InvoiceRecordsByStage>
-): Record<string, number> {
+): { receivables: Record<string, number>; payments: Record<string, number> } {
   const result: Record<string, number> = {};
+  const paymentsResult: Record<string, number> = {};
 
   for (const b of businesses) {
     const category = mapProgressToCategory(b.progress_status);
@@ -289,6 +291,7 @@ function calculateBatchReceivables(
     // 계산서 발행이 없고 입금만 있는 경우: 입금액이 실질 기준
     const baseAmount = baseFromInvoice > 0 ? baseFromInvoice : allPayments;
 
+    paymentsResult[b.id] = allPayments;
     result[b.id] = baseAmount === 0
       ? 0
       : calculateReceivables({
@@ -298,5 +301,5 @@ function calculateBatchReceivables(
         });
   }
 
-  return result;
+  return { receivables: result, payments: paymentsResult };
 }

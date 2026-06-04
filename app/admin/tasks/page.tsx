@@ -187,6 +187,7 @@ function TaskManagementPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [taskReceivables, setTaskReceivables] = useState<Record<string, number>>({})
+  const [taskPayments, setTaskPayments] = useState<Record<string, number>>({})
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createProgressStatus, setCreateProgressStatus] = useState('') // 등록 모달 진행구분 표시용
@@ -467,6 +468,7 @@ function TaskManagementPage() {
         const result = await response.json()
         if (result.success && result.data) {
           setTaskReceivables(result.data)
+          if (result.payments) setTaskPayments(result.payments)
         }
       } catch (error) {
         console.error('❌ [TASKS] 미수금 batch 로딩 실패:', error)
@@ -2498,7 +2500,7 @@ function TaskManagementPage() {
                       { key: 'installationDate', label: '설치완료', align: 'center', className: 'w-20 !text-[9px]' },
                       { key: 'attachmentCompletionSubmittedAt', label: '부착통보', align: 'center', className: 'w-20 !text-[9px]' },
                       { key: 'greenlinkConfirmationSubmittedAt', label: '그린링크', align: 'center', className: 'w-20 !text-[9px]' },
-                      { key: 'receivables', label: '미수금', align: 'center' },
+                      { key: 'receivables', label: '입금/미수', align: 'center' },
                     ].map(({ key, label, align, className }) => (
                       <th
                         key={label}
@@ -2683,10 +2685,21 @@ function TaskManagementPage() {
                         </td>
                         <td className="py-2 sm:py-2.5 px-1 sm:px-2 text-[10px] sm:text-xs text-center">
                           {(() => {
-                            const batchVal = taskReceivables[task.businessId || '']
-                            if (batchVal === null || batchVal === undefined) return <span className="text-gray-400">-</span>
-                            if (batchVal <= 0) return <span className="text-green-600 font-medium">0</span>
-                            return <span className="text-red-600 font-medium">{batchVal.toLocaleString()}</span>
+                            const bid = task.businessId || ''
+                            const rec = taskReceivables[bid]
+                            const pay = taskPayments[bid]
+                            if (rec === undefined && pay === undefined) return <span className="text-gray-400">-</span>
+                            const payAmt = pay ?? 0
+                            const recAmt = rec ?? 0
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-blue-600 whitespace-nowrap">입금 {payAmt.toLocaleString()}</span>
+                                {recAmt <= 0
+                                  ? <span className="text-green-600 font-medium whitespace-nowrap">완납</span>
+                                  : <span className="text-red-600 font-medium whitespace-nowrap">미수 {recAmt.toLocaleString()}</span>
+                                }
+                              </div>
+                            )
                           })()}
                         </td>
                       </tr>
