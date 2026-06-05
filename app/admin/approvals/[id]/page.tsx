@@ -92,7 +92,13 @@ function FormViewer({
     )
     case 'overtime_log':      return <OvertimeLogForm {...props} />
     case 'installation_closing': return <InstallationClosingForm {...props} />
-    case 'business_trip_report': return <BusinessTripReportForm {...props} />
+    case 'business_trip_report': return (
+      <BusinessTripReportForm
+        {...props}
+        onFileUpload={editing ? onFileUpload : undefined}
+        onFileDelete={editing ? onFileDelete : undefined}
+      />
+    )
     default: return <div className="text-gray-400 text-sm">알 수 없는 문서 유형</div>
   }
 }

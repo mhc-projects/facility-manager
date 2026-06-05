@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { useCallback, useRef } from 'react'
+import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
+import type { AttachmentFile } from './ExpenseClaimForm'
 
 export interface TripScheduleItem {
   date: string
@@ -30,12 +31,28 @@ export interface BusinessTripReportData {
   special_notes: string
   // 기타
   other_notes: string
+  // 첨부 파일
+  attachments?: AttachmentFile[]
 }
 
 interface Props {
   data: BusinessTripReportData
   onChange: (data: BusinessTripReportData) => void
   disabled?: boolean
+  onFileUpload?: (file: File) => Promise<AttachmentFile>
+  onFileDelete?: (attachment: AttachmentFile) => Promise<void>
+}
+
+function FileIcon({ type }: { type?: string }) {
+  if (type?.startsWith('image/')) return <Image className="w-4 h-4 text-green-500 shrink-0" />
+  if (type === 'application/pdf') return <FileText className="w-4 h-4 text-red-500 shrink-0" />
+  return <File className="w-4 h-4 text-blue-500 shrink-0" />
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
 const EMPTY_SCHEDULE: TripScheduleItem = {
@@ -45,8 +62,11 @@ const EMPTY_SCHEDULE: TripScheduleItem = {
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 border-0 outline-none`
 const labelCell = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center whitespace-nowrap`
 
-export default function BusinessTripReportForm({ data, onChange, disabled = false }: Props) {
-  const update = useCallback((field: keyof BusinessTripReportData, value: string | TripScheduleItem[]) => {
+export default function BusinessTripReportForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachments = data.attachments || []
+
+  const update = useCallback((field: keyof BusinessTripReportData, value: string | TripScheduleItem[] | AttachmentFile[]) => {
     onChange({ ...data, [field]: value })
   }, [data, onChange])
 
@@ -60,6 +80,31 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
   const removeRow = (idx: number) => {
     if (data.schedule_items.length <= 1) return
     update('schedule_items', data.schedule_items.filter((_, i) => i !== idx))
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onFileUpload) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    for (const file of Array.from(files)) {
+      try {
+        const uploaded = await onFileUpload(file)
+        update('attachments', [...attachments, uploaded])
+      } catch (err: any) {
+        alert(err?.message || '파일 업로드에 실패했습니다')
+      }
+    }
+    e.target.value = ''
+  }
+
+  const handleFileDelete = async (attachment: AttachmentFile) => {
+    if (!onFileDelete) return
+    try {
+      await onFileDelete(attachment)
+      update('attachments', attachments.filter(a => a.id !== attachment.id))
+    } catch (err: any) {
+      alert(err?.message || '파일 삭제에 실패했습니다')
+    }
   }
 
   return (
@@ -221,6 +266,67 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
             disabled={disabled}
             placeholder="첨부 서류 목록 또는 기타 사항 입력"
           />
+        </div>
+      </div>
+
+      {/* ── 첨부 파일 ── */}
+      <div className="no-print">
+        <div className="text-sm font-bold mb-1.5">첨부 파일</div>
+        <div className="border border-black">
+          <div className="p-3 space-y-2">
+            {attachments.map(att => (
+              <div key={att.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                <FileIcon type={att.type} />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await fetch(att.url)
+                    const blob = await res.blob()
+                    const blobUrl = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = blobUrl
+                    a.download = att.name
+                    a.click()
+                    URL.revokeObjectURL(blobUrl)
+                  }}
+                  className="flex-1 text-sm text-blue-600 hover:underline truncate text-left"
+                >
+                  {att.name}
+                </button>
+                <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
+                {!disabled && onFileDelete && (
+                  <button type="button" onClick={() => handleFileDelete(att)} className="text-gray-400 hover:text-red-500 shrink-0">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {!disabled && onFileUpload && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                >
+                  <Paperclip className="w-4 h-4" />
+                  파일 추가
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xls,.xlsx,.doc,.docx"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </>
+            )}
+
+            {disabled && attachments.length === 0 && (
+              <p className="text-sm text-gray-400 italic">첨부된 파일이 없습니다</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
