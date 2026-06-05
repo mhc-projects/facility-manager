@@ -311,7 +311,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
             <div className="px-3 py-3 bg-gray-50 text-sm font-bold flex items-center justify-center">특이사항</div>
             <div className="p-3">
               <textarea className="w-full text-sm resize-none focus:outline-none bg-transparent disabled:text-gray-700" rows={3} value={data.special_notes} onChange={e => onChange({ ...data, special_notes: e.target.value })} disabled={disabled} placeholder="상기와 같이 물품 구매를 요청합니다." />
-              <div className="flex items-center gap-3 mt-2">
+              <div className="no-print flex items-center gap-3 mt-2">
                 <span className="text-sm text-gray-600">견적서 첨부:</span>
                 <label className="flex items-center gap-1 text-sm cursor-pointer">
                   <input type="radio" checked={data.attachment_included} onChange={() => handleAttachmentToggle(true)} disabled={disabled} />여
@@ -323,7 +323,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
 
               {/* 견적서 '여' 선택 시 파일 업로드 영역 */}
               {data.attachment_included && (
-                <div className="mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                <div className="no-print mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
                   <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
                     <Paperclip className="w-3.5 h-3.5" />
                     첨부 파일 (PDF, 이미지, Excel, Word)

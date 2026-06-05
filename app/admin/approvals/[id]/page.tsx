@@ -488,6 +488,12 @@ function ApprovalDetailContent() {
         body * { visibility: hidden; }
         #approval-print-area, #approval-print-area * { visibility: visible; }
         #approval-print-area { position: absolute; top: 0; left: 0; right: 0; padding: 24px; background: white; }
+        /* 인쇄 제외 섹션 */
+        #approval-print-area .no-print { display: none !important; visibility: hidden !important; }
+        /* 모바일 카드 레이아웃 숨기고 데스크탑 테이블 레이아웃 표시 */
+        #approval-print-area .hidden.md\\:block { display: block !important; }
+        #approval-print-area .hidden.md\\:flex { display: flex !important; }
+        #approval-print-area .md\\:hidden { display: none !important; }
       }
     `}</style>
     <AdminLayout
@@ -522,7 +528,7 @@ function ApprovalDetailContent() {
       }
     >
       {/* 하단 여백 (모바일 고정 버튼 공간) */}
-      <div className={`max-w-4xl mx-auto space-y-6 ${(canApprove || canExpressApprove || (canSubmit && !editing)) ? 'pb-24 md:pb-8' : 'pb-8'}`}>
+      <div id="approval-print-area" className={`max-w-4xl mx-auto space-y-6 print:pb-0 ${(canApprove || canExpressApprove || (canSubmit && !editing)) ? 'pb-24 md:pb-8' : 'pb-8'}`}>
 
         {/* 문서 헤더 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -564,7 +570,7 @@ function ApprovalDetailContent() {
 
         {/* 편집 모드 - 결재선 변경 */}
         {editing && (
-          <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4 md:p-6">
+          <div className="no-print bg-white rounded-xl border border-blue-200 shadow-sm p-4 md:p-6">
             <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">결재선 변경</h3>
             <div className="mb-4">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">제목</label>
@@ -590,7 +596,7 @@ function ApprovalDetailContent() {
 
         {/* 반려 이력 */}
         {doc.rejection_history && doc.rejection_history.length > 0 && (
-          <div className="bg-red-50 rounded-xl border border-red-200 p-4 md:p-5">
+          <div className="no-print bg-red-50 rounded-xl border border-red-200 p-4 md:p-5">
             <h3 className="text-sm font-semibold text-red-700 mb-3">반려 이력</h3>
             <div className="space-y-3">
               {doc.rejection_history.map((h: any, i: number) => (
@@ -608,7 +614,7 @@ function ApprovalDetailContent() {
 
         {/* 결재 의견 */}
         {doc.steps && doc.steps.filter(s => s.status === 'approved' && s.comment).length > 0 && (
-          <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 md:p-5">
+          <div className="no-print bg-blue-50 rounded-xl border border-blue-200 p-4 md:p-5">
             <h3 className="text-sm font-semibold text-blue-700 mb-3">결재 의견</h3>
             <div className="space-y-3">
               {doc.steps
@@ -627,19 +633,8 @@ function ApprovalDetailContent() {
         )}
 
         {/* 양식 */}
-        <div id="approval-print-area" className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
-          {/* 인쇄 전용 헤더 */}
-          <div className="hidden print:block mb-6 pb-4 border-b border-gray-200">
-            <p className="text-xs text-gray-400 mb-1">{doc.document_number}</p>
-            <h1 className="text-xl font-bold text-gray-900">{DOC_TYPE_LABEL[doc.document_type] || '결재 문서'}</h1>
-            {doc.title && <p className="text-base text-gray-700 mt-1">{doc.title}</p>}
-            <div className="flex gap-6 text-sm text-gray-500 mt-2">
-              <span>작성자: {doc.requester_name}</span>
-              <span>상신일: {formatDate(doc.submitted_at)}</span>
-              {doc.completed_at && <span>결재완료: {formatDate(doc.completed_at)}</span>}
-            </div>
-          </div>
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 md:mb-6 print:hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
+          <h3 className="no-print text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 md:mb-6">
             {editing ? '내용 수정' : '문서 내용'}
           </h3>
           <FormViewer
@@ -653,7 +648,7 @@ function ApprovalDetailContent() {
 
         {/* 처리확인 섹션 (총무팀 또는 권한4, approved 상태에서만) */}
         {(isManagementSupport || isSuperAdmin) && doc?.status === 'approved' && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
+          <div className="no-print bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
               <CheckSquare className="w-4 h-4 text-blue-600" />
               처리확인
@@ -713,7 +708,7 @@ function ApprovalDetailContent() {
 
         {/* 결재 처리 영역 — 데스크탑만 (모바일은 하단 고정 버튼) */}
         {(canApprove || canExpressApprove) && (
-          <div className="hidden md:block bg-white rounded-xl border border-blue-200 shadow-sm p-6">
+          <div className="no-print hidden md:block bg-white rounded-xl border border-blue-200 shadow-sm p-6">
             <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">
               결재 처리 {canApprove ? `(${myPendingStep?.role_label})` : ''}
             </h3>
@@ -750,7 +745,7 @@ function ApprovalDetailContent() {
         )}
 
         {/* 하단 액션 — 데스크탑 편집 모드 */}
-        <div className="hidden md:flex justify-end gap-3">
+        <div className="no-print hidden md:flex justify-end gap-3">
           {editing && (
             <>
               <button onClick={() => setEditing(false)} className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">

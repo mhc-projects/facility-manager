@@ -230,7 +230,7 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
       </div>
 
       {/* 첨부서류 */}
-      <div className="border border-black">
+      <div className="no-print border border-black">
         <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
           <div className={`${cellClass} justify-center items-start pt-3`}>첨부서류</div>
           <div className="p-2 space-y-1.5">

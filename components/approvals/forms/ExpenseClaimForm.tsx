@@ -258,7 +258,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
         <p className="text-center text-sm text-gray-600 pt-2">위 금액을 청구하오니 결재하여 주시기 바랍니다.</p>
 
         {/* 증빙서류 첨부 */}
-        <div className="border border-black">
+        <div className="no-print border border-black">
           <div className="grid grid-cols-[80px_1fr] divide-x divide-black">
             <div className="px-3 py-3 bg-gray-50 text-sm font-bold flex items-center justify-center whitespace-nowrap">증빙서류</div>
             <div className="p-3">
