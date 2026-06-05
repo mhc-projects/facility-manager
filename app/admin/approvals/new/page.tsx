@@ -329,7 +329,12 @@ export default function NewApprovalPage() {
               <InstallationClosingForm data={formData} onChange={setFormData} />
             )}
             {docType === 'business_trip_report' && (
-              <BusinessTripReportForm data={formData} onChange={setFormData} />
+              <BusinessTripReportForm
+                data={formData}
+                onChange={setFormData}
+                onFileUpload={handleFileUpload}
+                onFileDelete={handleFileDelete}
+              />
             )}
           </div>
         )}

@@ -254,21 +254,6 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
         </div>
       </div>
 
-      {/* ── 기타(첨부 서류 등) ── */}
-      <div>
-        <div className="text-sm font-bold mb-1.5">기타(첨부 서류 등)</div>
-        <div className="border border-black">
-          <textarea
-            rows={3}
-            className="w-full px-3 py-2 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 resize-none"
-            value={data.other_notes}
-            onChange={e => update('other_notes', e.target.value)}
-            disabled={disabled}
-            placeholder="첨부 서류 목록 또는 기타 사항 입력"
-          />
-        </div>
-      </div>
-
       {/* ── 첨부 파일 ── */}
       <div className="no-print">
         <div className="text-sm font-bold mb-1.5">첨부 파일</div>
