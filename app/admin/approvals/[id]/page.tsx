@@ -17,7 +17,7 @@ import InstallationClosingForm from '@/components/approvals/forms/InstallationCl
 import BusinessTripReportForm from '@/components/approvals/forms/BusinessTripReportForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
-import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap, Clock, CheckSquare } from 'lucide-react'
+import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap, Clock, CheckSquare, Printer } from 'lucide-react'
 
 interface ApprovalDoc {
   id: string
@@ -482,26 +482,39 @@ function ApprovalDetailContent() {
   }
 
   return (
+    <>
+    <style>{`
+      @media print {
+        body * { visibility: hidden; }
+        #approval-print-area, #approval-print-area * { visibility: visible; }
+        #approval-print-area { position: absolute; top: 0; left: 0; right: 0; padding: 24px; background: white; }
+      }
+    `}</style>
     <AdminLayout
       title={DOC_TYPE_LABEL[doc.document_type] || '결재 문서'}
       description={doc.document_number}
       actions={
         <div className="flex items-center gap-2">
-          <button onClick={() => router.push(`${backUrl}&_t=${Date.now()}`)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2">
+          <button onClick={() => router.push(`${backUrl}&_t=${Date.now()}`)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 text-sm px-3 py-2 print:hidden">
             <ChevronLeft className="w-4 h-4" />목록
           </button>
+          {doc.status === 'approved' && (
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 text-gray-700 border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm print:hidden">
+              <Printer className="w-4 h-4" />인쇄
+            </button>
+          )}
           {canEdit && !editing && (
-            <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-gray-700 border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm">
+            <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-gray-700 border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm print:hidden">
               <Edit className="w-4 h-4" />수정
             </button>
           )}
           {canDelete && (
-            <button onClick={handleDelete} className="flex items-center gap-1.5 text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg text-sm">
+            <button onClick={handleDelete} className="flex items-center gap-1.5 text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg text-sm print:hidden">
               <Trash2 className="w-4 h-4" />삭제
             </button>
           )}
           {canForceCancel && (
-            <button onClick={handleDelete} className="flex items-center gap-1.5 text-white bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm">
+            <button onClick={handleDelete} className="flex items-center gap-1.5 text-white bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm print:hidden">
               <Trash2 className="w-4 h-4" />강제 취소
             </button>
           )}
@@ -614,8 +627,19 @@ function ApprovalDetailContent() {
         )}
 
         {/* 양식 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 md:mb-6">
+        <div id="approval-print-area" className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
+          {/* 인쇄 전용 헤더 */}
+          <div className="hidden print:block mb-6 pb-4 border-b border-gray-200">
+            <p className="text-xs text-gray-400 mb-1">{doc.document_number}</p>
+            <h1 className="text-xl font-bold text-gray-900">{DOC_TYPE_LABEL[doc.document_type] || '결재 문서'}</h1>
+            {doc.title && <p className="text-base text-gray-700 mt-1">{doc.title}</p>}
+            <div className="flex gap-6 text-sm text-gray-500 mt-2">
+              <span>작성자: {doc.requester_name}</span>
+              <span>상신일: {formatDate(doc.submitted_at)}</span>
+              {doc.completed_at && <span>결재완료: {formatDate(doc.completed_at)}</span>}
+            </div>
+          </div>
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 md:mb-6 print:hidden">
             {editing ? '내용 수정' : '문서 내용'}
           </h3>
           <FormViewer
@@ -1197,6 +1221,7 @@ function ApprovalDetailContent() {
         </div>
       </div>
     </AdminLayout>
+    </>
   )
 }
 
