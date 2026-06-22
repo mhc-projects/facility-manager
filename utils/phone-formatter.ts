@@ -44,7 +44,7 @@ export function formatLandlinePhone(value: string): string {
   } else if (numbers.length <= 9) {
     return `${numbers.slice(0, 3)}-${numbers.slice(3, 6)}-${numbers.slice(6, 9)}`
   } else {
-    // 10자리: 031-xxxx-xxxx
-    return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`
+    // 10자리: 031-123-4567, 062-946-0230
+    return `${numbers.slice(0, 3)}-${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`
   }
 }
