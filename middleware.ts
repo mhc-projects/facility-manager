@@ -6,8 +6,8 @@ import { validateRequestSize } from '@/lib/security/input-validation';
 // 접속 IP 로깅 (비동기 - 응답 지연 없음)
 function logUserAccess(request: NextRequest, payload: any): void {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseServiceKey) return;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) return;
 
   const ip =
     request.ip ||
@@ -18,8 +18,8 @@ function logUserAccess(request: NextRequest, payload: any): void {
   fetch(`${supabaseUrl}/rest/v1/user_access_logs`, {
     method: 'POST',
     headers: {
-      apikey: supabaseServiceKey,
-      Authorization: `Bearer ${supabaseServiceKey}`,
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
