@@ -268,8 +268,11 @@ async function checkPageAuthentication(request: NextRequest): Promise<NextRespon
       throw new Error('Invalid JWT structure');
     }
 
-    // JWT payload 디코딩 (검증 없이)
-    const payload = JSON.parse(atob(parts[1]));
+    // JWT payload 디코딩 (UTF-8 한국어 지원)
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder('utf-8').decode(bytes));
 
     // 만료 시간 체크
     if (payload.exp && payload.exp * 1000 < Date.now()) {
