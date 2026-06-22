@@ -3,11 +3,10 @@ import { RateLimiter } from '@/lib/security/rate-limiter';
 import { protectCSRF } from '@/lib/security/csrf-protection';
 import { validateRequestSize } from '@/lib/security/input-validation';
 
-// 접속 IP 로깅 (비동기 - 응답 지연 없음)
+// 접속 IP 로깅 (비동기 - 응답 지연 없음, 내부 API 경유)
 function logUserAccess(request: NextRequest, payload: any): void {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) return;
+  const secret = process.env.INTERNAL_LOG_SECRET;
+  if (!secret) return;
 
   const ip =
     request.ip ||
@@ -15,33 +14,22 @@ function logUserAccess(request: NextRequest, payload: any): void {
     request.headers.get('x-real-ip') ||
     'unknown';
 
-  const body = JSON.stringify({
-    user_id: String(payload.id || payload.userId || ''),
-    email: payload.email || '',
-    name: payload.name || '',
-    ip_address: ip,
-    path: request.nextUrl.pathname,
-    method: request.method,
-    user_agent: request.headers.get('user-agent') || '',
-  });
-
-  fetch(`${supabaseUrl}/rest/v1/user_access_logs`, {
+  fetch(`${request.nextUrl.origin}/api/internal/log-access`, {
     method: 'POST',
     headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
+      'x-internal-secret': secret,
     },
-    body,
-  }).then(async (res) => {
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error(`[ACCESS-LOG] INSERT 실패 status=${res.status} body=${text}`);
-    }
-  }).catch((err) => {
-    console.error('[ACCESS-LOG] fetch 오류:', err);
-  });
+    body: JSON.stringify({
+      user_id:    String(payload.id || payload.userId || ''),
+      email:      payload.email    || '',
+      name:       payload.name     || '',
+      ip_address: ip,
+      path:       request.nextUrl.pathname,
+      method:     request.method,
+      user_agent: request.headers.get('user-agent') || '',
+    }),
+  }).catch(() => {});
 }
 
 // 보안 헤더 설정
@@ -145,6 +133,7 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/telegram/',        // 텔레그램 API (Webhook + 연결 관리, Bearer 토큰 인증)
     '/api/dev-work-log',     // 개발 업무 일지 API (Bearer 토큰 인증)
     '/api/commission-closing/', // 영업비 마감 API (Bearer 토큰 인증)
+    '/api/internal/',          // 내부 전용 API (시크릿 헤더 인증)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }
