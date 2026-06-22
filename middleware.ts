@@ -3,6 +3,38 @@ import { RateLimiter } from '@/lib/security/rate-limiter';
 import { protectCSRF } from '@/lib/security/csrf-protection';
 import { validateRequestSize } from '@/lib/security/input-validation';
 
+// 접속 IP 로깅 (비동기 - 응답 지연 없음)
+function logUserAccess(request: NextRequest, payload: any): void {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseServiceKey) return;
+
+  const ip =
+    request.ip ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
+    'unknown';
+
+  fetch(`${supabaseUrl}/rest/v1/user_access_logs`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      user_id: String(payload.id || payload.userId || ''),
+      email: payload.email || '',
+      name: payload.name || '',
+      ip_address: ip,
+      path: request.nextUrl.pathname,
+      method: request.method,
+      user_agent: request.headers.get('user-agent') || '',
+    }),
+  }).catch(() => {});
+}
+
 // 보안 헤더 설정
 function setSecurityHeaders(response: NextResponse): void {
   // XSS 보호
@@ -249,6 +281,9 @@ async function checkPageAuthentication(request: NextRequest): Promise<NextRespon
       userId: payload.id || payload.userId,
       permissionLevel: payload.permission_level
     });
+
+    // 접속 IP 로깅 (비동기)
+    logUserAccess(request, payload);
 
     // 토큰이 유효한 형식이면 계속 진행
     // 실제 서명 검증은 페이지/API에서 수행됨

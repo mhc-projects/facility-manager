@@ -118,6 +118,14 @@ export const PAGE_PERMISSIONS: PagePermission[] = [
     requiredLevel: PERMISSION_LEVELS.ADMIN,
     requiredPermission: 'canAccessAdminPages',
     description: '시스템 초기 설정 및 구성'
+  },
+
+  // === 슈퍼관리자 (레벨 4) 전용 ===
+  {
+    path: '/admin/access-logs',
+    name: '접속 감사 로그',
+    requiredLevel: PERMISSION_LEVELS.SUPER_ADMIN,
+    description: '사용자 접속 IP 및 페이지 이력 감사 (보안 감사 전용)'
   }
 ];
 
