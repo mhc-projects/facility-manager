@@ -27,6 +27,7 @@ import {
 import TaskProgressMiniBoard from '@/components/business/TaskProgressMiniBoard'
 import { InvoiceDisplay } from '@/components/business/InvoiceDisplay'
 import { formatDate } from '@/utils/formatters'
+import { formatLandlinePhone } from '@/utils/phone-formatter'
 import { MemoSection } from '@/components/business/MemoSection'
 import React from 'react'
 
@@ -571,7 +572,7 @@ export default function BusinessDetailModal({
                         <span className="hidden sm:inline">사업장 연락처</span>
                         <span className="sm:hidden">사업장전화</span>
                       </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{business.사업장연락처 || '-'}</div>
+                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{(business.사업장연락처 ? formatLandlinePhone(business.사업장연락처) : '-')}</div>
                     </div>
 
                     <div className="bg-white rounded-md sm:rounded-lg p-2 sm:p-3 shadow-sm">
@@ -579,7 +580,7 @@ export default function BusinessDetailModal({
                         <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-gray-500 flex-shrink-0" />
                         팩스번호
                       </div>
-                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{business.fax_number || '-'}</div>
+                      <div className="text-xs sm:text-sm md:text-sm font-medium text-gray-900 break-words">{(business.fax_number ? formatLandlinePhone(business.fax_number) : '-')}</div>
                     </div>
                   </div>
                 </div>
