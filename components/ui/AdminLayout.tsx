@@ -39,7 +39,8 @@ import {
   FileOutput,
   Truck,
   BookOpen,
-  HeartHandshake
+  HeartHandshake,
+  ShieldAlert
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -257,6 +258,13 @@ const navigationConfig: NavigationEntry[] = [
           icon: User,
           description: '사용자 승인 및 권한 관리',
           requiredLevel: 3
+        },
+        {
+          name: '접속 감사 로그',
+          href: '/admin/access-logs',
+          icon: ShieldAlert,
+          description: '사용자 접속 IP 및 이력 감사',
+          requiredLevel: 4
         },
         {
           name: '관리자 설정',
