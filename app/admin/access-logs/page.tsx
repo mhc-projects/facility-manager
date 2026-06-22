@@ -56,7 +56,6 @@ export default function AccessLogsPage() {
   const [logs, setLogs] = useState<AccessLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterIp, setFilterIp] = useState('');
-  const [filterUser, setFilterUser] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
 
@@ -73,7 +72,6 @@ export default function AccessLogsPage() {
       const token = TokenManager.getToken();
       const params = new URLSearchParams({ limit: '500' });
       if (filterIp) params.set('ip', filterIp);
-      if (filterUser) params.set('user_id', filterUser);
       if (filterFrom) params.set('from', filterFrom);
       if (filterTo) params.set('to', filterTo);
 
