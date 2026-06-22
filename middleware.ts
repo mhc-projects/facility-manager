@@ -15,6 +15,16 @@ function logUserAccess(request: NextRequest, payload: any): void {
     request.headers.get('x-real-ip') ||
     'unknown';
 
+  const body = JSON.stringify({
+    user_id: String(payload.id || payload.userId || ''),
+    email: payload.email || '',
+    name: payload.name || '',
+    ip_address: ip,
+    path: request.nextUrl.pathname,
+    method: request.method,
+    user_agent: request.headers.get('user-agent') || '',
+  });
+
   fetch(`${supabaseUrl}/rest/v1/user_access_logs`, {
     method: 'POST',
     headers: {
@@ -23,16 +33,15 @@ function logUserAccess(request: NextRequest, payload: any): void {
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
-    body: JSON.stringify({
-      user_id: String(payload.id || payload.userId || ''),
-      email: payload.email || '',
-      name: payload.name || '',
-      ip_address: ip,
-      path: request.nextUrl.pathname,
-      method: request.method,
-      user_agent: request.headers.get('user-agent') || '',
-    }),
-  }).catch(() => {});
+    body,
+  }).then(async (res) => {
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error(`[ACCESS-LOG] INSERT 실패 status=${res.status} body=${text}`);
+    }
+  }).catch((err) => {
+    console.error('[ACCESS-LOG] fetch 오류:', err);
+  });
 }
 
 // 보안 헤더 설정
