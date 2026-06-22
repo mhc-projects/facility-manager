@@ -77,8 +77,10 @@ export default function AccessLogsPage() {
       if (filterFrom) params.set('from', filterFrom);
       if (filterTo) params.set('to', filterTo);
 
+      params.set('_t', String(Date.now())); // 캐시 무효화
       const res = await fetch(`/api/access-logs?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       const data = await res.json();
       setLogs(data.logs ?? []);

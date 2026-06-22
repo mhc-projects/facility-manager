@@ -57,5 +57,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'DB 조회 실패' }, { status: 500 });
   }
 
-  return NextResponse.json({ logs: data ?? [] });
+  return NextResponse.json({ logs: data ?? [] }, {
+    headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+  });
 }
