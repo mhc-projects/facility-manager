@@ -6,10 +6,19 @@ import { verifyToken } from '@/utils/auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Next.js fetch 캐시를 우회하기 위해 요청마다 클라이언트 생성
+function makeClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      global: {
+        fetch: (url: RequestInfo | URL, opts?: RequestInit) =>
+          fetch(url, { ...opts, cache: 'no-store' }),
+      },
+    }
+  );
+}
 
 export async function GET(request: NextRequest) {
   // 인증 확인
@@ -38,6 +47,8 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from'); // YYYY-MM-DD
   const to = searchParams.get('to');     // YYYY-MM-DD
   const limit = Math.min(parseInt(searchParams.get('limit') || '200'), 1000);
+
+  const supabaseAdmin = makeClient();
 
   let query = supabaseAdmin
     .from('user_access_logs')
