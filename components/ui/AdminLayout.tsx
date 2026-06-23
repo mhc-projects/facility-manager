@@ -40,7 +40,8 @@ import {
   Truck,
   BookOpen,
   HeartHandshake,
-  ShieldAlert
+  ShieldAlert,
+  Recycle
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -191,7 +192,22 @@ const navigationConfig: NavigationEntry[] = [
           description: '매연저감장치 부착 차량 조회 및 서식 출력',
           requiredLevel: 1
         },
-
+      ]
+    }
+  },
+  // E-PTO 업무 그룹
+  {
+    type: 'group',
+    group: {
+      label: 'E-PTO업무',
+      items: [
+        {
+          name: '폐배터리 입찰',
+          href: '/admin/e-pto',
+          icon: Recycle,
+          description: '순환자원정보센터 전자입찰 공고 조회',
+          requiredLevel: 1
+        },
       ]
     }
   },
