@@ -68,6 +68,7 @@ export default function AccessLogsPage() {
 
   const [logs, setLogs] = useState<AccessLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [filterName, setFilterName] = useState('');
   const [filterIp, setFilterIp] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
@@ -143,6 +144,13 @@ export default function AccessLogsPage() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  // 이름 클라이언트 필터
+  const visibleLogs = filterName.trim()
+    ? logs.filter((l) =>
+        l.name.includes(filterName.trim()) || l.email.includes(filterName.trim())
+      )
+    : logs;
 
   // 같은 IP에서 여러 계정이 접속한 경우
   const suspiciousIps = new Set(
@@ -298,7 +306,17 @@ export default function AccessLogsPage() {
             <Filter className="w-4 h-4 text-gray-500" />
             <span className="text-sm font-medium text-gray-700">필터</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">이름 / 이메일</label>
+              <input
+                type="text"
+                value={filterName}
+                onChange={(e) => setFilterName(e.target.value)}
+                placeholder="홍길동"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+              />
+            </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">IP 주소</label>
               <input
@@ -346,7 +364,7 @@ export default function AccessLogsPage() {
               <User className="w-4 h-4" />
               <span className="text-xs">총 접속 건수</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{logs.length.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-gray-900">{visibleLogs.length.toLocaleString()}</p>
           </div>
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center gap-2 text-gray-500 mb-1">
@@ -354,7 +372,7 @@ export default function AccessLogsPage() {
               <span className="text-xs">고유 IP 수</span>
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {new Set(logs.map((l) => l.ip_address)).size}
+              {new Set(visibleLogs.map((l) => l.ip_address)).size}
             </p>
           </div>
           <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -363,7 +381,7 @@ export default function AccessLogsPage() {
               <span className="text-xs">접속 계정 수</span>
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {new Set(logs.map((l) => l.email)).size}
+              {new Set(visibleLogs.map((l) => l.email)).size}
             </p>
           </div>
         </div>
@@ -375,7 +393,7 @@ export default function AccessLogsPage() {
               <RefreshCw className="w-5 h-5 animate-spin mr-2" />
               로딩 중...
             </div>
-          ) : logs.length === 0 ? (
+          ) : visibleLogs.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-gray-400">
               <Clock className="w-5 h-5 mr-2" />
               접속 기록이 없습니다
@@ -393,7 +411,7 @@ export default function AccessLogsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {logs.map((log) => (
+                  {visibleLogs.map((log) => (
                     <tr
                       key={log.id}
                       className={
