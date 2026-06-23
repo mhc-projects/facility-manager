@@ -355,8 +355,8 @@ export default function EptoPage() {
   const [resultTotal, setResultTotal] = useState(0)
   const [resultPage, setResultPage] = useState(1)
   const [resultStatus, setResultStatus] = useState<BidResultType>('')
-  const [resultSearch, setResultSearch] = useState('')
-  const [resultSearchInput, setResultSearchInput] = useState('')
+  const [resultSearch, setResultSearch] = useState('전기자동차')
+  const [resultSearchInput, setResultSearchInput] = useState('전기자동차')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
