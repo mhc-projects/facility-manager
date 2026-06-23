@@ -87,7 +87,7 @@ export default function AccessLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterIp, filterUser, filterFrom, filterTo]);
+  }, [filterIp, filterFrom, filterTo]);
 
   useEffect(() => {
     if (user && (user.permission_level ?? 0) >= 4) {
