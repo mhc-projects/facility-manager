@@ -181,6 +181,8 @@ function ApprovalsContent() {
 
   // 결재완료 탭 필터
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')  // IME 조합 중 표시용 (searchQuery와 분리)
+  const isComposingRef = useRef(false)
   const [completedTypeFilter, setCompletedTypeFilter] = useState('')
   const [processedFilter, setProcessedFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -378,6 +380,7 @@ function ApprovalsContent() {
   }
 
   const resetCompletedFilters = () => {
+    setSearchInput('')
     setSearchQuery('')
     setCompletedTypeFilter('')
     setProcessedFilter('')
@@ -386,7 +389,7 @@ function ApprovalsContent() {
     setDepartmentFilter('')
   }
 
-  const hasActiveFilters = searchQuery || completedTypeFilter || processedFilter || dateFrom || dateTo || departmentFilter
+  const hasActiveFilters = searchInput || completedTypeFilter || processedFilter || dateFrom || dateTo || departmentFilter
 
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -406,8 +409,8 @@ function ApprovalsContent() {
     </div>
   )
 
-  // 결재완료 탭 전용 컨텐츠
-  const CompletedTabContent = () => {
+  // 결재완료 탭 전용 컨텐츠 — 컴포넌트가 아닌 렌더 함수로 정의해야 매 렌더마다 새 타입이 생기지 않아 input 언마운트 문제를 방지할 수 있다
+  const renderCompletedTab = () => {
     const unprocessedCount = docs.filter(d => !d.is_processed).length
     const processedCount = docs.filter(d => d.is_processed).length
 
@@ -421,8 +424,16 @@ function ApprovalsContent() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={e => {
+                  setSearchInput(e.target.value)
+                  if (!isComposingRef.current) setSearchQuery(e.target.value)
+                }}
+                onCompositionStart={() => { isComposingRef.current = true }}
+                onCompositionEnd={e => {
+                  isComposingRef.current = false
+                  setSearchQuery((e.target as HTMLInputElement).value)
+                }}
                 placeholder="문서번호, 제목, 작성자..."
                 className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -696,7 +707,7 @@ function ApprovalsContent() {
 
         {/* 결재완료 탭 */}
         {tab === 'completed' ? (
-          <CompletedTabContent />
+          renderCompletedTab()
         ) : (
           <>
             {/* 일반 탭 필터 */}
