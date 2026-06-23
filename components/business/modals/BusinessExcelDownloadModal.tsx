@@ -42,6 +42,7 @@ const COLUMN_GROUPS: ColumnGroup[] = [
       { key: '__current_step__', label: '현재단계', default: true, width: 20 },
       { key: 'project_year', label: '사업 진행연도', default: true, width: 14 },
       { key: 'business_registration_number', label: '사업자등록번호', default: true, width: 16 },
+      { key: 'admin_managers', label: '관리책임자', width: 20 },
       { key: 'business_type', label: '업종', width: 14 },
       { key: 'local_government', label: '지자체', width: 14 },
       { key: 'manufacturer', label: '제조사', width: 14 },
@@ -172,6 +173,12 @@ function formatCellValue(business: UnifiedBusinessInfo, col: ColumnDef): any {
   const raw = business[col.key]
   if (raw === null || raw === undefined || raw === '') return ''
   if (col.key === 'is_active') return raw ? '활성' : '비활성'
+  if (col.key === 'admin_managers') {
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((m: { name?: string }) => m.name || '').filter(Boolean).join(', ')
+    }
+    return ''
+  }
   if (col.type === 'date') {
     return typeof raw === 'string' ? raw.slice(0, 10) : raw
   }
