@@ -112,7 +112,7 @@ export default function AccessLogsPage() {
     URL.revokeObjectURL(url);
   }
 
-  // 같은 IP에서 여러 계정이 접속한 경우 하이라이트
+  // 같은 IP에서 여러 계정이 접속한 경우
   const suspiciousIps = new Set(
     Object.entries(
       logs.reduce<Record<string, Set<string>>>((acc, l) => {
@@ -123,6 +123,18 @@ export default function AccessLogsPage() {
     )
       .filter(([, emails]) => emails.size > 1)
       .map(([ip]) => ip)
+  );
+
+  // 같은 계정이 여러 IP에서 접속한 경우
+  const emailIpMap = logs.reduce<Record<string, Set<string>>>((acc, l) => {
+    if (!acc[l.email]) acc[l.email] = new Set();
+    acc[l.email].add(l.ip_address);
+    return acc;
+  }, {});
+  const suspiciousEmails = new Set(
+    Object.entries(emailIpMap)
+      .filter(([, ips]) => ips.size > 1)
+      .map(([email]) => email)
   );
 
   if (!user || (user.permission_level ?? 0) < 4) return null;
@@ -157,12 +169,28 @@ export default function AccessLogsPage() {
           </div>
         </div>
 
-        {/* 의심 IP 경고 */}
-        {suspiciousIps.size > 0 && (
-          <div className="bg-red-50 border border-red-300 rounded-lg p-4">
-            <p className="text-sm font-medium text-red-800">
-              ⚠️ 동일 IP에서 여러 계정이 접속된 IP 감지: {Array.from(suspiciousIps).join(', ')}
-            </p>
+        {/* 이상 징후 경고 */}
+        {(suspiciousIps.size > 0 || suspiciousEmails.size > 0) && (
+          <div className="space-y-2">
+            {suspiciousIps.size > 0 && (
+              <div className="bg-red-50 border border-red-300 rounded-lg p-4">
+                <p className="text-sm font-medium text-red-800">
+                  🔴 동일 IP · 다중 계정 접속 감지: {Array.from(suspiciousIps).join(', ')}
+                </p>
+              </div>
+            )}
+            {suspiciousEmails.size > 0 && (
+              <div className="bg-orange-50 border border-orange-300 rounded-lg p-4">
+                <p className="text-sm font-medium text-orange-800">
+                  🟠 동일 계정 · 다중 IP 접속 감지:{' '}
+                  {Array.from(suspiciousEmails).map((email) => (
+                    <span key={email} className="mr-2">
+                      {email} ({Array.from(emailIpMap[email]).join(', ')})
+                    </span>
+                  ))}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -273,12 +301,19 @@ export default function AccessLogsPage() {
                       className={
                         suspiciousIps.has(log.ip_address)
                           ? 'bg-red-50 hover:bg-red-100'
+                          : suspiciousEmails.has(log.email)
+                          ? 'bg-orange-50 hover:bg-orange-100'
                           : 'hover:bg-gray-50'
                       }
                     >
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{log.name || '(이름 없음)'}</p>
                         <p className="text-xs text-gray-500">{log.email}</p>
+                        {suspiciousEmails.has(log.email) && (
+                          <p className="text-xs text-orange-600 mt-0.5">
+                            {emailIpMap[log.email].size}개 IP에서 접속
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span
