@@ -5,8 +5,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import AdminLayout from '@/components/ui/AdminLayout';
-import { Shield, Search, Download, RefreshCw, Monitor, User, MapPin, Clock, Filter } from 'lucide-react';
+import { Shield, Search, Download, RefreshCw, Monitor, User, MapPin, Clock, Filter, X, Wifi, Building2, Smartphone } from 'lucide-react';
 import { TokenManager } from '@/lib/api-client';
+
+interface IpInfo {
+  ip: string;
+  country: string;
+  countryCode: string;
+  regionName: string;
+  city: string;
+  isp: string;
+  org: string;
+  mobile: boolean;
+  hosting: boolean;
+  status: 'success' | 'fail';
+}
 
 interface AccessLog {
   id: string;
@@ -58,6 +71,8 @@ export default function AccessLogsPage() {
   const [filterIp, setFilterIp] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [ipInfoMap, setIpInfoMap] = useState<Record<string, IpInfo>>({});
+  const [selectedIp, setSelectedIp] = useState<string | null>(null);
 
   // 권한 4 미만이면 차단
   useEffect(() => {
@@ -81,7 +96,24 @@ export default function AccessLogsPage() {
         cache: 'no-store',
       });
       const data = await res.json();
-      setLogs(data.logs ?? []);
+      const fetchedLogs: AccessLog[] = data.logs ?? [];
+      setLogs(fetchedLogs);
+
+      // 고유 IP 위치 일괄 조회 (백그라운드)
+      const uniqueIps = [...new Set(fetchedLogs.map((l) => l.ip_address))].filter(Boolean);
+      if (uniqueIps.length > 0) {
+        fetch('/api/internal/ip-location', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ips: uniqueIps }),
+        })
+          .then((r) => r.json())
+          .then((d) => setIpInfoMap((prev) => ({ ...prev, ...d.results })))
+          .catch(() => {});
+      }
     } catch {
       setLogs([]);
     } finally {
@@ -139,8 +171,74 @@ export default function AccessLogsPage() {
 
   if (!user || (user.permission_level ?? 0) < 4) return null;
 
+  const selectedInfo = selectedIp ? ipInfoMap[selectedIp] : null;
+
   return (
     <AdminLayout>
+      {/* IP 위치 팝업 */}
+      {selectedIp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setSelectedIp(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-80 p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-sm font-bold text-gray-800">{selectedIp}</span>
+              <button onClick={() => setSelectedIp(null)}>
+                <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+              </button>
+            </div>
+
+            {!selectedInfo ? (
+              <p className="text-sm text-gray-400">위치 조회 중...</p>
+            ) : selectedInfo.status === 'fail' ? (
+              <p className="text-sm text-gray-400">위치 정보를 가져올 수 없습니다.</p>
+            ) : (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span>
+                    {selectedInfo.country !== 'South Korea'
+                      ? `🌐 ${selectedInfo.country} · ${selectedInfo.city}`
+                      : `🇰🇷 ${selectedInfo.regionName} · ${selectedInfo.city}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Wifi className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span>{selectedInfo.isp}</span>
+                </div>
+                {selectedInfo.org && selectedInfo.org !== selectedInfo.isp && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                    <span>{selectedInfo.org}</span>
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  {selectedInfo.mobile && (
+                    <span className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                      <Smartphone className="w-3 h-3" /> 모바일
+                    </span>
+                  )}
+                  {selectedInfo.hosting && (
+                    <span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                      ⚠️ VPN / 데이터센터
+                    </span>
+                  )}
+                  {!selectedInfo.mobile && !selectedInfo.hosting && (
+                    <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                      일반 유선 접속
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="p-6 space-y-6">
         {/* 헤더 */}
         <div className="flex items-center justify-between">
@@ -316,15 +414,25 @@ export default function AccessLogsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`font-mono text-xs px-2 py-0.5 rounded ${
+                        <button
+                          onClick={() => setSelectedIp(log.ip_address)}
+                          className={`font-mono text-xs px-2 py-0.5 rounded hover:opacity-75 transition-opacity ${
                             suspiciousIps.has(log.ip_address)
                               ? 'bg-red-100 text-red-800'
                               : 'bg-gray-100 text-gray-700'
                           }`}
+                          title="클릭하면 위치 정보 표시"
                         >
                           {log.ip_address}
-                        </span>
+                        </button>
+                        {ipInfoMap[log.ip_address]?.status === 'success' && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {ipInfoMap[log.ip_address].countryCode !== 'KR'
+                              ? `🌐 ${ipInfoMap[log.ip_address].country}`
+                              : `🇰🇷 ${ipInfoMap[log.ip_address].city || ipInfoMap[log.ip_address].regionName}`}
+                            {ipInfoMap[log.ip_address].hosting && ' · ⚠️VPN'}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-gray-600 font-mono">{log.path}</span>
