@@ -1,11 +1,11 @@
 'use client';
 
 // 접속 감사 로그 페이지 (권한 레벨 4 전용)
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import AdminLayout from '@/components/ui/AdminLayout';
-import { Shield, Search, Download, RefreshCw, Monitor, User, MapPin, Clock, Filter, X, Wifi, Building2, Smartphone } from 'lucide-react';
+import { Shield, Search, Download, RefreshCw, Monitor, User, MapPin, Clock, Filter, X, Wifi, Building2, Smartphone, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TokenManager } from '@/lib/api-client';
 
 interface IpInfo {
@@ -62,6 +62,18 @@ function formatKST(iso: string): string {
   });
 }
 
+const PAGE_SIZE = 50;
+
+function getDefaultFrom() {
+  const d = new Date();
+  d.setDate(d.getDate() - 6);
+  return d.toISOString().slice(0, 10);
+}
+
+function getDefaultTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function AccessLogsPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -70,8 +82,9 @@ export default function AccessLogsPage() {
   const [loading, setLoading] = useState(false);
   const [filterName, setFilterName] = useState('');
   const [filterIp, setFilterIp] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
+  const [filterFrom, setFilterFrom] = useState(getDefaultFrom);
+  const [filterTo, setFilterTo] = useState(getDefaultTo);
+  const [currentPage, setCurrentPage] = useState(1);
   const [ipInfoMap, setIpInfoMap] = useState<Record<string, IpInfo>>({});
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
 
@@ -86,7 +99,7 @@ export default function AccessLogsPage() {
     setLoading(true);
     try {
       const token = TokenManager.getToken();
-      const params = new URLSearchParams({ limit: '500' });
+      const params = new URLSearchParams({ limit: '2000' });
       if (filterIp) params.set('ip', filterIp);
       if (filterFrom) params.set('from', filterFrom);
       if (filterTo) params.set('to', filterTo);
@@ -99,6 +112,7 @@ export default function AccessLogsPage() {
       const data = await res.json();
       const fetchedLogs: AccessLog[] = data.logs ?? [];
       setLogs(fetchedLogs);
+      setCurrentPage(1);
 
       // 고유 IP 위치 일괄 조회 (백그라운드)
       const uniqueIps = [...new Set(fetchedLogs.map((l) => l.ip_address))].filter(Boolean);
@@ -146,11 +160,19 @@ export default function AccessLogsPage() {
   }
 
   // 이름 클라이언트 필터
-  const visibleLogs = filterName.trim()
-    ? logs.filter((l) =>
-        l.name.includes(filterName.trim()) || l.email.includes(filterName.trim())
-      )
-    : logs;
+  const visibleLogs = useMemo(
+    () =>
+      filterName.trim()
+        ? logs.filter(
+            (l) =>
+              l.name.includes(filterName.trim()) || l.email.includes(filterName.trim())
+          )
+        : logs,
+    [logs, filterName]
+  );
+
+  const totalPages = Math.ceil(visibleLogs.length / PAGE_SIZE);
+  const paginatedLogs = visibleLogs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // 같은 IP에서 여러 계정이 접속한 경우
   const suspiciousIps = new Set(
@@ -312,7 +334,7 @@ export default function AccessLogsPage() {
               <input
                 type="text"
                 value={filterName}
-                onChange={(e) => setFilterName(e.target.value)}
+                onChange={(e) => { setFilterName(e.target.value); setCurrentPage(1); }}
                 placeholder="홍길동"
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
               />
@@ -399,6 +421,7 @@ export default function AccessLogsPage() {
               접속 기록이 없습니다
             </div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -411,7 +434,7 @@ export default function AccessLogsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {visibleLogs.map((log) => (
+                  {paginatedLogs.map((log) => (
                     <tr
                       key={log.id}
                       className={
@@ -467,6 +490,57 @@ export default function AccessLogsPage() {
                 </tbody>
               </table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                <p className="text-xs text-gray-500">
+                  전체 {visibleLogs.length.toLocaleString()}건 중{' '}
+                  {((currentPage - 1) * PAGE_SIZE + 1).toLocaleString()}–
+                  {Math.min(currentPage * PAGE_SIZE, visibleLogs.length).toLocaleString()}건
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let page: number;
+                    if (totalPages <= 7) {
+                      page = i + 1;
+                    } else if (currentPage <= 4) {
+                      page = i + 1;
+                    } else if (currentPage >= totalPages - 3) {
+                      page = totalPages - 6 + i;
+                    } else {
+                      page = currentPage - 3 + i;
+                    }
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-7 h-7 text-xs rounded ${
+                          page === currentPage
+                            ? 'bg-gray-800 text-white'
+                            : 'hover:bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       </div>

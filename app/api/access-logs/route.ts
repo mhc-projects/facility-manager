@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   const ip = searchParams.get('ip');
   const from = searchParams.get('from'); // YYYY-MM-DD
   const to = searchParams.get('to');     // YYYY-MM-DD
-  const limit = Math.min(parseInt(searchParams.get('limit') || '200'), 1000);
+  const limit = Math.min(parseInt(searchParams.get('limit') || '500'), 5000);
 
   const supabaseAdmin = makeClient();
 
