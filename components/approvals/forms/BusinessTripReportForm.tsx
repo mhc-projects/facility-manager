@@ -242,8 +242,8 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
             <div key={field}>
               <div className="px-3 py-1.5 bg-gray-50 text-sm font-bold border-b border-black">{label}</div>
               <textarea
-                rows={4}
-                className="w-full px-3 py-2 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 resize-none"
+                rows={8}
+                className="w-full px-3 py-2 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 resize-y"
                 value={data[field]}
                 onChange={e => update(field, e.target.value)}
                 disabled={disabled}
