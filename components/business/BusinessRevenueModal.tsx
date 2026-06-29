@@ -820,6 +820,7 @@ export default function BusinessRevenueModal({
   };
 
   const isReadOnly = userPermission < 2;
+  const canViewCost = userPermission >= 2;
   const canEditAdjustment = userPermission >= 3;
 
   // 사업장명 클릭 핸들러 - Business 페이지로 이동하여 전체 기능 사용
@@ -1018,9 +1019,9 @@ export default function BusinessRevenueModal({
                     <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-left">기기명</th>
                     <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-center">수량</th>
                     <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매출단가</th>
-                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매입단가</th>
+                    {canViewCost && <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매입단가</th>}
                     <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매출합계</th>
-                    <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매입합계</th>
+                    {canViewCost && <th className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right">매입합계</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1031,7 +1032,7 @@ export default function BusinessRevenueModal({
                     if (equipmentBreakdown.length === 0) {
                       return (
                         <tr>
-                          <td colSpan={6} className="border border-gray-300 px-2 md:px-4 py-4 md:py-6 text-xs md:text-sm text-center text-gray-500">
+                          <td colSpan={canViewCost ? 6 : 4} className="border border-gray-300 px-2 md:px-4 py-4 md:py-6 text-xs md:text-sm text-center text-gray-500">
                             등록된 기기 정보가 없습니다.
                           </td>
                         </tr>
@@ -1050,25 +1051,31 @@ export default function BusinessRevenueModal({
                             <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono">
                               {Math.round(item.unit_official_price).toLocaleString()}
                             </td>
-                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-red-600">
-                              {Math.round(item.unit_manufacturer_price).toLocaleString()}
-                            </td>
+                            {canViewCost && (
+                              <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-red-600">
+                                {Math.round(item.unit_manufacturer_price).toLocaleString()}
+                              </td>
+                            )}
                             <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono font-medium">
                               {item.total_revenue.toLocaleString()}
                             </td>
-                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono font-medium text-red-600">
-                              {item.total_cost.toLocaleString()}
-                            </td>
+                            {canViewCost && (
+                              <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono font-medium text-red-600">
+                                {item.total_cost.toLocaleString()}
+                              </td>
+                            )}
                           </tr>
                         ))}
                         <tr className="bg-blue-50 font-bold">
-                          <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm" colSpan={4}>합계</td>
+                          <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm" colSpan={canViewCost ? 4 : 3}>합계</td>
                           <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-blue-600">
                             {totalRevenue.toLocaleString()}원
                           </td>
-                          <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-red-600">
-                            {totalCost.toLocaleString()}원
-                          </td>
+                          {canViewCost && (
+                            <td className="border border-gray-300 px-2 md:px-4 py-1 md:py-2 text-xs md:text-sm text-right font-mono text-red-600">
+                              {totalCost.toLocaleString()}원
+                            </td>
+                          )}
                         </tr>
                       </>
                     );
@@ -1110,33 +1117,39 @@ export default function BusinessRevenueModal({
 
           {/* 매출/매입/이익 정보 */}
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className={`grid gap-4 ${canViewCost ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 max-w-xs'}`}>
               <div className="bg-green-50 rounded-lg p-3 md:p-4">
                 <p className="text-xs font-medium text-green-600 mb-1">매출금액</p>
                 <p className="text-lg font-bold text-green-700">
                   {formatCurrency(Number(displayData.total_revenue))}
                 </p>
               </div>
-              <div className="bg-red-50 rounded-lg p-3 md:p-4">
-                <p className="text-xs font-medium text-red-600 mb-1">매입금액</p>
-                <p className="text-lg font-bold text-red-700">
-                  {formatCurrency(Number(displayData.total_cost))}
-                </p>
-              </div>
-              <div className={`rounded-lg p-3 md:p-4 ${Number(displayData.net_profit) >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
-                <p className={`text-xs font-medium mb-1 ${Number(displayData.net_profit) >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>순이익</p>
-                <p className={`text-lg font-bold ${Number(displayData.net_profit) >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>
-                  {formatCurrency(Number(displayData.net_profit))}
-                </p>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-3 md:p-4">
-                <p className="text-xs font-medium text-purple-600 mb-1">이익률</p>
-                <p className="text-lg font-bold text-purple-700">
-                  {displayData.total_revenue > 0
-                    ? ((displayData.net_profit / displayData.total_revenue) * 100).toFixed(1)
-                    : '0'}%
-                </p>
-              </div>
+              {canViewCost && (
+                <div className="bg-red-50 rounded-lg p-3 md:p-4">
+                  <p className="text-xs font-medium text-red-600 mb-1">매입금액</p>
+                  <p className="text-lg font-bold text-red-700">
+                    {formatCurrency(Number(displayData.total_cost))}
+                  </p>
+                </div>
+              )}
+              {canViewCost && (
+                <div className={`rounded-lg p-3 md:p-4 ${Number(displayData.net_profit) >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                  <p className={`text-xs font-medium mb-1 ${Number(displayData.net_profit) >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>순이익</p>
+                  <p className={`text-lg font-bold ${Number(displayData.net_profit) >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>
+                    {formatCurrency(Number(displayData.net_profit))}
+                  </p>
+                </div>
+              )}
+              {canViewCost && (
+                <div className="bg-purple-50 rounded-lg p-3 md:p-4">
+                  <p className="text-xs font-medium text-purple-600 mb-1">이익률</p>
+                  <p className="text-lg font-bold text-purple-700">
+                    {displayData.total_revenue > 0
+                      ? ((displayData.net_profit / displayData.total_revenue) * 100).toFixed(1)
+                      : '0'}%
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* 추가공사비, 협의사항, 매출비용 조정 */}
@@ -1182,8 +1195,8 @@ export default function BusinessRevenueModal({
               );
             })()}
 
-            {/* 매입비용 조정 내역 */}
-            {(() => {
+            {/* 매입비용 조정 내역 - 권한 2 이상만 표시 */}
+            {canViewCost && (() => {
               const purchRaw = (business as any).purchase_adjustments;
               const purchArr: Array<{ reason: string; amount: number }> = purchRaw
                 ? (typeof purchRaw === 'string' ? (() => { try { return JSON.parse(purchRaw); } catch { return []; } })() : purchRaw)
@@ -1254,8 +1267,8 @@ export default function BusinessRevenueModal({
             </div>
           </>
 
-          {/* 비용 상세 내역 */}
-          <div className="mt-6">
+          {/* 비용 상세 내역 - 권한 2 이상만 표시 */}
+          {canViewCost && <div className="mt-6">
             <h4 className="text-lg font-semibold text-gray-900 mb-4">💰 비용 상세 내역</h4>
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
               <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
@@ -1875,7 +1888,7 @@ export default function BusinessRevenueModal({
                 </p>
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* 계산서 및 입금 현황 */}
           {business.id && (

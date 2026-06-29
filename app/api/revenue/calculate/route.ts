@@ -68,6 +68,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: msg }, { status: 500 });
     }
 
+    // 권한 1 사용자는 매입·이익 정보를 API 응답에서 제거 (브라우저 네트워크 탭 노출 방지)
+    if (permissionLevel === 1 && data) {
+      const {
+        total_cost, gross_profit, net_profit, sales_commission, survey_costs,
+        installation_costs, additional_installation_revenue, as_cost,
+        installation_extra_cost, adjusted_sales_commission, survey_fee_adjustment,
+        adjusted_survey_costs, cost_breakdown, operating_cost_adjustment,
+        ...safeData
+      } = data as any;
+      const safeEquipment = data.equipment_breakdown?.map((item: any) => {
+        const { unit_manufacturer_price, total_cost: _tc, total_installation, profit, ...safeItem } = item;
+        return safeItem;
+      });
+      return NextResponse.json({
+        success: true,
+        data: { ...safeData, equipment_breakdown: safeEquipment },
+        message: '매출 계산이 완료되었습니다.'
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data,
