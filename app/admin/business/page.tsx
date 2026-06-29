@@ -22,7 +22,7 @@ import DateInput from '@/components/ui/DateInput'
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown'
 import AdminManagerPicker from '@/components/ui/AdminManagerPicker'
 import ContactsListEditor from '@/components/ui/ContactsListEditor'
-import { formatMobilePhone, formatLandlinePhone } from '@/utils/phone-formatter'
+import { formatMobilePhone, formatLandlinePhone, formatBusinessPhone } from '@/utils/phone-formatter'
 import { useToast } from '@/contexts/ToastContext'
 import { CacheManager } from '@/utils/cache-manager'
 import { KOREAN_ADMIN_DIVISIONS, SIDO_LIST, parseLocalGov, buildLocalGov } from '@/lib/korean-admin-divisions'
@@ -5592,11 +5592,11 @@ function BusinessManagementPage() {
                         type="tel"
                         value={formData.business_contact || ''}
                         onChange={(e) => {
-                          const formatted = formatLandlinePhone(e.target.value)
+                          const formatted = formatBusinessPhone(e.target.value)
                           setFormData({...formData, business_contact: formatted})
                         }}
                         className="w-full px-2 sm:px-2.5 py-1.5 sm:py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="02-000-0000"
+                        placeholder="02-000-0000 또는 010-0000-0000"
                         maxLength={14}
                       />
                     </div>

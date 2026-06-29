@@ -1,4 +1,4 @@
-// utils/phone-formatter.ts - 전화번호 포맷팅 유틸리티
+// utils/phone-formatter.ts - 전화번호 포맷팅 유틸리티 (일반전화 · 휴대폰 자동 감지 포함)
 
 /**
  * 휴대폰 번호 포맷팅: xxx-xxxx-xxxx
@@ -13,6 +13,23 @@ export function formatMobilePhone(value: string): string {
   } else {
     return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`
   }
+}
+
+/**
+ * 사업장 연락처 자동 감지 포맷팅
+ * - 010으로 시작하면 휴대폰 형식: 010-xxxx-xxxx
+ * - 그 외는 지역번호 형식: 02-xxx-xxxx / 031-xxx-xxxx 등
+ */
+export function formatBusinessPhone(value: string): string {
+  const numbers = value.replace(/[^0-9]/g, '')
+
+  if (numbers.startsWith('010')) {
+    if (numbers.length <= 3) return numbers
+    if (numbers.length <= 7) return `${numbers.slice(0, 3)}-${numbers.slice(3)}`
+    return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`
+  }
+
+  return formatLandlinePhone(value)
 }
 
 /**
