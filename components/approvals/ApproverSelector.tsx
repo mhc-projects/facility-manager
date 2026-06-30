@@ -125,32 +125,54 @@ export default function ApproverSelector({
   return (
     <div className={gridClass}>
       {/* 팀장 — 중역/팀장/부사장 role은 스킵 */}
-      {needTeamLeader && (
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            팀장 <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
-            <select
-              value={teamLeaderId}
-              onChange={e => onTeamLeaderChange(e.target.value)}
-              disabled={disabled}
-              className={selectClass}
-            >
-              <option value="">팀장 선택</option>
-              {approvers.teamLeaders.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.name}{a.position ? ` (${a.position})` : ''}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      {needTeamLeader && (() => {
+        const byDept = approvers.teamLeaders.reduce((acc, a) => {
+          const dept = a.department || '기타'
+          if (!acc[dept]) acc[dept] = []
+          acc[dept].push(a)
+          return acc
+        }, {} as Record<string, Approver[]>)
+        const depts = Object.keys(byDept).sort()
+        const isGrouped = depts.length > 1
+
+        return (
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              팀장 <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <select
+                value={teamLeaderId}
+                onChange={e => onTeamLeaderChange(e.target.value)}
+                disabled={disabled}
+                className={selectClass}
+              >
+                <option value="">팀장 선택</option>
+                {isGrouped
+                  ? depts.map(dept => (
+                      <optgroup key={dept} label={dept}>
+                        {byDept[dept].map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}{a.position ? ` (${a.position})` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))
+                  : approvers.teamLeaders.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}{a.position ? ` (${a.position})` : ''}
+                      </option>
+                    ))
+                }
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+            {approvers.teamLeaders.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">팀장 권한 계정이 없습니다</p>
+            )}
           </div>
-          {approvers.teamLeaders.length === 0 && (
-            <p className="text-xs text-amber-600 mt-1">팀장 권한 계정이 없습니다</p>
-          )}
-        </div>
-      )}
+        )
+      })()}
 
       {/* 중역 — 중역/부사장 role은 스킵 */}
       {needExecutive && (
