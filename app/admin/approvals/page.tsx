@@ -179,6 +179,11 @@ function ApprovalsContent() {
   const [statusFilter, setStatusFilter] = useState('')
   const allSortBy = searchParams?.get('sort_by') === 'completed_at' ? 'completed_at' as const : 'submitted_at' as const
 
+  // 일반 탭 검색 (클라이언트 사이드 필터링)
+  const [generalSearchQuery, setGeneralSearchQuery] = useState('')
+  const [generalSearchInput, setGeneralSearchInput] = useState('')
+  const isGeneralComposingRef = useRef(false)
+
   // 결재완료 탭 필터
   const [searchQuery, setSearchQuery] = useState('')
   const [searchInput, setSearchInput] = useState('')  // IME 조합 중 표시용 (searchQuery와 분리)
@@ -659,6 +664,15 @@ function ApprovalsContent() {
     )
   }
 
+  const filteredDocs = generalSearchQuery
+    ? docs.filter(d => {
+        const q = generalSearchQuery.toLowerCase()
+        return d.title.toLowerCase().includes(q) ||
+               d.document_number.toLowerCase().includes(q) ||
+               d.requester_name.toLowerCase().includes(q)
+      })
+    : docs
+
   return (
     <AdminLayout
       title="전자결재"
@@ -687,6 +701,8 @@ function ApprovalsContent() {
                   setTypeFilter('')
                   setStatusFilter('')
                   setMySubTab('active')
+                  setGeneralSearchInput('')
+                  setGeneralSearchQuery('')
                   router.push(`/admin/approvals?tab=${t}`)
                 }}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -712,6 +728,24 @@ function ApprovalsContent() {
           <>
             {/* 일반 탭 필터 */}
             <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={generalSearchInput}
+                  onChange={e => {
+                    setGeneralSearchInput(e.target.value)
+                    if (!isGeneralComposingRef.current) setGeneralSearchQuery(e.target.value)
+                  }}
+                  onCompositionStart={() => { isGeneralComposingRef.current = true }}
+                  onCompositionEnd={e => {
+                    isGeneralComposingRef.current = false
+                    setGeneralSearchQuery((e.target as HTMLInputElement).value)
+                  }}
+                  placeholder="문서번호, 제목, 작성자..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <select
                 value={typeFilter}
                 onChange={e => setTypeFilter(e.target.value)}
@@ -778,11 +812,11 @@ function ApprovalsContent() {
                 <div className="flex items-center justify-center py-16">
                   <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : docs.length === 0 ? (
+              ) : filteredDocs.length === 0 ? (
                 <EmptyState />
               ) : (
                 <div className="space-y-2">
-                  {docs.map(doc => (
+                  {filteredDocs.map(doc => (
                     <button
                       key={doc.id}
                       onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
@@ -827,7 +861,7 @@ function ApprovalsContent() {
                 <div className="flex items-center justify-center py-16">
                   <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : docs.length === 0 ? (
+              ) : filteredDocs.length === 0 ? (
                 <EmptyState />
               ) : (
                 <div className="overflow-x-auto">
@@ -844,7 +878,7 @@ function ApprovalsContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {docs.map(doc => (
+                      {filteredDocs.map(doc => (
                         <tr
                           key={doc.id}
                           onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
