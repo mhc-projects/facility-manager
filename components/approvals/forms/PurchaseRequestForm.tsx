@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
+import FileUploadArea from '../FileUploadArea'
 
 function autoResize(el: HTMLTextAreaElement) {
   el.style.height = 'auto'
@@ -63,7 +64,6 @@ function FileIcon({ type }: { type?: string }) {
 }
 
 export default function PurchaseRequestForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const estimatedTotal = data.items.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0)
   const totalQty = data.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
   const attachments = data.attachments || []
@@ -95,24 +95,16 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
     onChange({ ...data, attachment_included: value })
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFiles = async (files: File[]) => {
     if (!onFileUpload) return
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       try {
         const uploaded = await onFileUpload(file)
-        onChange({
-          ...data,
-          attachments: [...attachments, uploaded],
-        })
+        onChange({ ...data, attachments: [...attachments, uploaded] })
       } catch (err: any) {
         alert(err?.message || '파일 업로드에 실패했습니다')
       }
     }
-    // input 초기화 (같은 파일 재선택 허용)
-    e.target.value = ''
   }
 
   const handleFileDelete = async (attachment: AttachmentFile) => {
@@ -185,24 +177,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
       ))}
 
       {!disabled && onFileUpload && (
-        <>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-          >
-            <Paperclip className="w-4 h-4" />
-            파일 추가
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xls,.xlsx,.doc,.docx"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </>
+        <FileUploadArea onFiles={handleFiles} />
       )}
 
       {disabled && attachments.length === 0 && (

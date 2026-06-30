@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
+import FileUploadArea from '../FileUploadArea'
 import type { AttachmentFile } from './ExpenseClaimForm'
 
 export interface TripScheduleItem {
@@ -63,7 +64,6 @@ const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent 
 const labelCell = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center whitespace-nowrap`
 
 export default function BusinessTripReportForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const attachments = data.attachments || []
 
   const update = useCallback((field: keyof BusinessTripReportData, value: string | TripScheduleItem[] | AttachmentFile[]) => {
@@ -82,11 +82,9 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
     update('schedule_items', data.schedule_items.filter((_, i) => i !== idx))
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFiles = async (files: File[]) => {
     if (!onFileUpload) return
-    const files = e.target.files
-    if (!files || files.length === 0) return
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       try {
         const uploaded = await onFileUpload(file)
         update('attachments', [...attachments, uploaded])
@@ -94,7 +92,6 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
         alert(err?.message || '파일 업로드에 실패했습니다')
       }
     }
-    e.target.value = ''
   }
 
   const handleFileDelete = async (attachment: AttachmentFile) => {
@@ -288,24 +285,7 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
             ))}
 
             {!disabled && onFileUpload && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                >
-                  <Paperclip className="w-4 h-4" />
-                  파일 추가
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xls,.xlsx,.doc,.docx"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </>
+              <FileUploadArea onFiles={handleFiles} />
             )}
 
             {disabled && attachments.length === 0 && (

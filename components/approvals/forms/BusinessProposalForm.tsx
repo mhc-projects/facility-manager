@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Paperclip, X, FileText, Image, File } from 'lucide-react'
+import FileUploadArea from '../FileUploadArea'
 import TiptapEditor from '@/components/ui/TiptapEditor'
 
 export interface AttachmentFile {
@@ -68,14 +69,11 @@ const selectInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 
 export default function BusinessProposalForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
   const [departments, setDepartments] = useState<Department[]>([])
   const [teams, setTeams] = useState<Team[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const attachments = data.attachments || []
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFiles = async (files: File[]) => {
     if (!onFileUpload) return
-    const files = e.target.files
-    if (!files || files.length === 0) return
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       try {
         const uploaded = await onFileUpload(file)
         onChange({ ...data, attachments: [...(data.attachments || []), uploaded] })
@@ -83,7 +81,6 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
         alert(err?.message || '파일 업로드에 실패했습니다')
       }
     }
-    e.target.value = ''
   }
 
   const handleFileDelete = async (attachment: AttachmentFile) => {
@@ -263,24 +260,7 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
             ))}
 
             {!disabled && onFileUpload && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                >
-                  <Paperclip className="w-4 h-4" />
-                  파일 추가
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xls,.xlsx,.doc,.docx"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </>
+              <FileUploadArea onFiles={handleFiles} />
             )}
 
             {disabled && attachments.length === 0 && (
