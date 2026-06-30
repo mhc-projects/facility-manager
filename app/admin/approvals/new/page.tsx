@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/ui/AdminLayout'
 import ApprovalLineHeader from '@/components/approvals/ApprovalLineHeader'
@@ -65,6 +65,8 @@ export default function NewApprovalPage() {
   const [submitting, setSubmitting] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [saveToast, setSaveToast] = useState<'saved' | 'updated' | null>(null)
+  // 드래그앤드롭 다중 파일 업로드 시 React state 반영 전에 누적 추적
+  const pendingAttachmentsRef = useRef<AttachmentFile[]>([])
 
   const handleDocTypeChange = (type: DocType) => {
     if (type === docType) return
@@ -94,6 +96,7 @@ export default function NewApprovalPage() {
     if (!docId) {
       docId = await handleSave()
     }
+    if (!docId) throw new Error('문서 저장에 실패했습니다')
 
     // 1단계: Vercel 함수에서 Signed Upload URL 발급 (소형 JSON 요청)
     const signedRes = await fetch('/api/approvals/attachments/signed-url', {
@@ -115,7 +118,7 @@ export default function NewApprovalPage() {
       throw new Error('스토리지 업로드 실패: ' + msg)
     }
 
-    return {
+    const attachment: AttachmentFile = {
       id: signedData.fileId,
       name: file.name,
       url: signedData.publicUrl,
@@ -124,6 +127,36 @@ export default function NewApprovalPage() {
       path: signedData.path,
       uploaded_at: new Date().toISOString(),
     }
+
+    // 업로드 완료 후 첨부파일 포함 즉시 재저장
+    // - 첫 번째 handleSave()는 첨부파일 없는 상태로 저장됨
+    // - React onChange/setFormData는 비동기라 아직 state에 미반영
+    // - pendingAttachmentsRef로 누적해 다중 파일 동시 드롭도 정확히 처리
+    pendingAttachmentsRef.current = [...pendingAttachmentsRef.current, attachment]
+    const existingAttachments: AttachmentFile[] = formData?.attachments || []
+    const allAttachments = [
+      ...existingAttachments.filter(e => !pendingAttachmentsRef.current.some(p => p.id === e.id)),
+      ...pendingAttachmentsRef.current,
+    ]
+    const defaultTitle = docType === 'overtime_log'
+      ? THIS_MONTH_TITLE
+      : `${DOC_TYPES.find(d => d.value === docType)?.label} - ${TODAY}`
+    await fetch(`/api/approvals/${docId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        document_type: docType,
+        title: title || defaultTitle,
+        team_leader_id: teamLeaderId || null,
+        executive_id: executiveId || null,
+        vice_president_id: vicePresidentId || null,
+        ceo_id: ceoId || null,
+        form_data: { ...formData, attachments: allAttachments },
+        department: formData?.department || '',
+      }),
+    })
+
+    return attachment
   }
 
   const handleFileDelete = async (attachment: AttachmentFile) => {
