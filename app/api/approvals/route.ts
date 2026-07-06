@@ -201,7 +201,8 @@ export async function GET(request: NextRequest) {
     } else {
       // 전체 탭: 작성자 본인 OR 결재선에 포함된 문서
       // + 업무품의서의 경우 현재 사용자의 팀이 작성팀/협조팀이면 추가 조회
-      // 신규 문서: department_id에 teams.id 저장 / 기존 문서: departments.id 저장 → 양쪽 호환
+      // department_id/cooperative_team_id는 teams.id를 저장한다 (departments.id로는 매칭하지 않음 —
+      // 두 테이블의 id 시퀀스가 겹쳐서 무관한 부서에 노출되는 버그가 있었음, 2026-07-06 수정)
       conditions.push(`(
         d.requester_id = $${idx++}
         OR d.id IN (
@@ -225,19 +226,11 @@ export async function GET(request: NextRequest) {
                   WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
                     AND t.name = (SELECT team FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
                 )
-                OR (bp.form_data->>'department_id') IN (
-                  SELECT dd.id::TEXT FROM departments dd
-                  WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
-                )
-                OR (bp.form_data->>'cooperative_team_id') IN (
-                  SELECT dd.id::TEXT FROM departments dd
-                  WHERE dd.name = (SELECT department FROM employees WHERE id = $${idx++} AND is_deleted = FALSE LIMIT 1)
-                )
               )
           )
         )
       )`);
-      values.push(userId, userId, userId, userId, userId, userId, userId, userId);
+      values.push(userId, userId, userId, userId, userId, userId);
     }
 
     if (typeFilter) {
