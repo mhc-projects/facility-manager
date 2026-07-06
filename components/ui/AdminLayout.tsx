@@ -320,17 +320,21 @@ function getAllItems(config: NavigationEntry[]): NavigationItem[] {
   return items
 }
 
-function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: string, onItemClick: () => void, collapsed: boolean }) {
-  const router = useRouter()
-  const { user, permissions } = useAuth()
-  const [userDeptName, setUserDeptName] = useState<string | null>(null)
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['/admin/revenue']))
+// 특정 부서는 지정된 메뉴만 이용 가능 (그 외 메뉴는 숨김 처리 및 접근 차단)
+const DEPARTMENT_MENU_RESTRICTIONS: Record<string, string[]> = {
+  '기술개발부': ['/admin/e-pto', '/admin/approvals'],
+}
 
-  // 부서명 비동기 로드 (departmentOnly 항목이 있을 때만)
+function isPathAllowedForRestrictedDept(pathname: string, allowedHrefs: string[]): boolean {
+  return allowedHrefs.some(href => pathname === href || pathname.startsWith(href + '/'))
+}
+
+// 현재 사용자의 부서명 비동기 로드 (전자결재/게시판 메뉴 제한, departmentOnly 항목 판별에 공통 사용)
+function useUserDepartmentName(user: unknown): string | null {
+  const [userDeptName, setUserDeptName] = useState<string | null>(null)
+
   useEffect(() => {
-    const allItems = getAllItems(navigationConfig)
-    const hasDeptOnlyItem = allItems.some(i => i.departmentOnly)
-    if (!user || !hasDeptOnlyItem) return
+    if (!user) return
     const token = TokenManager.getToken()
     if (!token) return
     fetch('/api/employees/me/department-info', {
@@ -342,6 +346,15 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
       })
       .catch(() => setUserDeptName(''))
   }, [user])
+
+  return userDeptName
+}
+
+function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: string, onItemClick: () => void, collapsed: boolean }) {
+  const router = useRouter()
+  const { user, permissions } = useAuth()
+  const userDeptName = useUserDepartmentName(user)
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['/admin/revenue']))
 
   // 현재 경로에 해당하는 부모 메뉴 자동 펼침
   useEffect(() => {
@@ -357,6 +370,13 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
   const isItemVisible = (item: NavigationItem): boolean => {
     if (!user) return false
     if (permissions?.isSpecialAccount && user.email && isPathHiddenForAccount(user.email, item.href)) return false
+
+    // 부서 전용 제한: 지정된 부서는 허용된 메뉴만 표시 (그 외 전부 숨김)
+    const restrictedHrefs = userDeptName ? DEPARTMENT_MENU_RESTRICTIONS[userDeptName] : undefined
+    if (restrictedHrefs) {
+      return isPathAllowedForRestrictedDept(item.href, restrictedHrefs)
+    }
+
     const permLevel = (user as any).permission_level ?? (user as any).role ?? 1
     if (permLevel < (item.requiredLevel || 1)) return false
     if (item.departmentOnly) {
@@ -508,6 +528,7 @@ export default function AdminLayout({ children, title, description, actions }: A
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
+  const userDeptName = useUserDepartmentName(user)
 
   // Mount and time initialization
   useEffect(() => {
@@ -541,6 +562,16 @@ export default function AdminLayout({ children, title, description, actions }: A
       router.push('/login?redirect=' + encodeURIComponent(pathname || '/admin'))
     }
   }, [mounted, authChecked, authLoading, user, router, pathname])
+
+  // 부서 전용 제한: 허용되지 않은 페이지로 직접 접근 시 허용된 페이지로 이동
+  useEffect(() => {
+    if (!mounted || !authChecked || authLoading || !user || !pathname || !userDeptName) return
+    const restrictedHrefs = DEPARTMENT_MENU_RESTRICTIONS[userDeptName]
+    if (!restrictedHrefs) return
+    if (!isPathAllowedForRestrictedDept(pathname, restrictedHrefs)) {
+      router.replace(restrictedHrefs[0])
+    }
+  }, [mounted, authChecked, authLoading, user, userDeptName, pathname, router])
 
   // 마운트 전이거나 인증 로딩 중이면 로딩 화면 표시
   if (!mounted || authLoading || !authChecked) {
