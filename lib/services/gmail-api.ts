@@ -1,7 +1,31 @@
 // Gmail API(gmail.readonly)로 INBOX 메일 목록/본문을 조회하는 서비스
 import { gmail_v1, google } from 'googleapis';
-import DOMPurify from 'isomorphic-dompurify';
+import sanitizeHtml from 'sanitize-html';
 import { getAuthorizedGmailClient } from './gmail-oauth';
+
+// isomorphic-dompurify(jsdom 기반)는 Vercel 서버리스 번들에서 모듈 로드 시점에
+// 크래시가 발생해 순수 JS 기반 sanitize-html로 대체함
+const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'a', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'p', 'br', 'div', 'span',
+    'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'hr',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+    'img', 'font',
+  ],
+  allowedAttributes: {
+    a: ['href', 'name', 'target', 'rel'],
+    img: ['src', 'alt', 'width', 'height'],
+    font: ['color', 'size', 'face'],
+    td: ['colspan', 'rowspan', 'align', 'valign'],
+    th: ['colspan', 'rowspan', 'align', 'valign'],
+    table: ['border', 'cellpadding', 'cellspacing', 'width'],
+    '*': ['style', 'class', 'align'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  allowedSchemesByTag: { img: ['http', 'https'] },
+  disallowedTagsMode: 'discard',
+};
 
 export interface MailListItem {
   id: string;
@@ -138,7 +162,7 @@ export async function getMailMessage(id: string): Promise<MailDetail | null> {
     from: headerValue(data.payload?.headers, 'From'),
     to: headerValue(data.payload?.headers, 'To'),
     date: headerValue(data.payload?.headers, 'Date'),
-    html: html ? DOMPurify.sanitize(html) : '',
+    html: html ? sanitizeHtml(html, SANITIZE_OPTIONS) : '',
     text,
     attachments,
   };
