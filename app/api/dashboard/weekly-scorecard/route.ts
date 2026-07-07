@@ -57,6 +57,8 @@ function amountAsOf(amount: any, dateCol: string | null, asOfDate: string): numb
 }
 
 interface ReceivableRow {
+  id: string;
+  business_name: string;
   progress_status: string | null;
   installation_date: string | null;
   invoice_1st_amount: any; invoice_1st_date: string | null;
@@ -97,6 +99,57 @@ function computeReceivableAsOf(biz: ReceivableRow, asOfDate: string): { self: nu
   return { self, subsidy };
 }
 
+// ========================================
+// 기간별 집계 공통 유틸
+// ========================================
+
+interface BusinessRef {
+  id?: string;
+  business_name: string;
+  amount?: number;
+  elapsedDays?: number;
+}
+
+interface CountPair {
+  current: number;
+  previous: number;
+  currentBusinesses: BusinessRef[];
+  previousBusinesses: BusinessRef[];
+}
+
+interface PeriodRange {
+  current: { start: string; end: string };
+  previous: { start: string; end: string };
+}
+
+// entry_date(KST 기준 YYYY-MM-DD 문자열)가 이번주/지난주 범위 중 어디에 속하는지 분류
+function splitByPeriod<T extends { entry_date: string }>(rows: T[], period: PeriodRange): { current: T[]; previous: T[] } {
+  const current: T[] = [];
+  const previous: T[] = [];
+  for (const row of rows) {
+    if (row.entry_date >= period.current.start && row.entry_date <= period.current.end) {
+      current.push(row);
+    } else if (row.entry_date >= period.previous.start && row.entry_date <= period.previous.end) {
+      previous.push(row);
+    }
+  }
+  return { current, previous };
+}
+
+function toCountPair<T extends { entry_date: string }>(
+  rows: T[],
+  period: PeriodRange,
+  mapFn: (row: T) => BusinessRef
+): CountPair {
+  const { current, previous } = splitByPeriod(rows, period);
+  return {
+    current: current.length,
+    previous: previous.length,
+    currentBusinesses: current.map(mapFn),
+    previousBusinesses: previous.map(mapFn)
+  };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
@@ -113,68 +166,77 @@ export async function GET(request: NextRequest) {
     const previousMonday = addDaysUTC(currentMonday, -7);
     const previousSunday = addDaysUTC(currentMonday, -1);
 
-    const period = {
+    const period: PeriodRange = {
       current: { start: currentMonday, end: currentEnd },
       previous: { start: previousMonday, end: previousSunday }
     };
 
-    // 1. 계약 건수 (자비/보조금)
-    const contractRows = await queryAll(
-      `SELECT contract_type,
-        COUNT(*) FILTER (WHERE contract_date BETWEEN $1 AND $2) AS current_count,
-        COUNT(*) FILTER (WHERE contract_date BETWEEN $3 AND $4) AS previous_count
-       FROM contract_history
-       GROUP BY contract_type`,
-      [currentMonday, currentEnd, previousMonday, previousSunday]
-    );
-    const contracts = { self: { current: 0, previous: 0 }, subsidy: { current: 0, previous: 0 } };
-    for (const row of contractRows) {
-      const bucket = row.contract_type === 'subsidy' ? contracts.subsidy : contracts.self;
-      bucket.current = Number(row.current_count) || 0;
-      bucket.previous = Number(row.previous_count) || 0;
+    // 1. 계약 건수 - 업무관리(facility_tasks)의 실제 업무 단계 진입 시점 기준으로 재정의.
+    //    자비/보조금은 업무 흐름 자체가 달라서 "계약"이라는 하나의 개념으로 묶지 않고 단계별로 분리했다.
+    //    - 자비: "계약체결"(self_contract) 단계
+    //    - 보조금: "신청서접수"(subsidy_approval_pending, 라벨상 신청서접수 "필요"인 subsidy_application_submit이 아니라
+    //      그 다음 단계인 "승인대기(접수완료)"가 실제 접수완료 시점이라 이걸 기준으로 함) / "승인" 단계
+    //    같은 업무가 칸반에서 뒤로 갔다가 다시 그 단계로 돌아오는 재진입 사례가 실제로 있어서(task_status_history 확인),
+    //    task_id별 "최초 진입 시점"만 세도록 DISTINCT ON + MIN(started_at)으로 중복을 제거한다.
+    //    "탈락"은 실사용이 거의 없어(활성 업무 1건) 별도 지표로 추가하지 않기로 함.
+    async function fetchFirstStatusEntries(statusValues: string[]): Promise<{ business_name: string; entry_date: string }[]> {
+      const rows = await queryAll(
+        `SELECT business_name, (started_at AT TIME ZONE 'Asia/Seoul')::date::text AS entry_date
+         FROM (
+           SELECT DISTINCT ON (task_id) task_id, business_name, started_at
+           FROM task_status_history
+           WHERE status = ANY($1::text[])
+           ORDER BY task_id, started_at ASC
+         ) first_entry`,
+        [statusValues]
+      );
+      return rows;
     }
 
-    // 2. 설치 수량 / 3. 보조금 승인 수량
-    const [installRow] = await queryAll(
-      `SELECT
-        COUNT(*) FILTER (WHERE installation_date BETWEEN $1 AND $2) AS current_count,
-        COUNT(*) FILTER (WHERE installation_date BETWEEN $3 AND $4) AS previous_count
-       FROM business_info
-       WHERE is_active = true AND is_deleted = false`,
-      [currentMonday, currentEnd, previousMonday, previousSunday]
-    );
-    const [approvalRow] = await queryAll(
-      `SELECT
-        COUNT(*) FILTER (WHERE subsidy_approval_date BETWEEN $1 AND $2) AS current_count,
-        COUNT(*) FILTER (WHERE subsidy_approval_date BETWEEN $3 AND $4) AS previous_count
-       FROM business_info
-       WHERE is_active = true AND is_deleted = false`,
-      [currentMonday, currentEnd, previousMonday, previousSunday]
-    );
+    const [selfContractRows, subsidyReceivedRows, subsidyApprovedTaskRows] = await Promise.all([
+      fetchFirstStatusEntries(['self_contract']),
+      fetchFirstStatusEntries(['subsidy_approval_pending']),
+      fetchFirstStatusEntries(['subsidy_approved', 'custom_1777968825327', 'custom_1778198486933'])
+    ]);
 
-    // 4. 착공실사 / 준공실사 수량
-    const surveyRows = await queryAll(
-      `SELECT survey_type,
-        COUNT(*) FILTER (WHERE event_date BETWEEN $1 AND $2) AS current_count,
-        COUNT(*) FILTER (WHERE event_date BETWEEN $3 AND $4) AS previous_count
-       FROM survey_events
-       WHERE survey_type IN ('pre_construction_survey', 'completion_survey')
-       GROUP BY survey_type`,
-      [currentMonday, currentEnd, previousMonday, previousSunday]
-    );
-    const surveys = {
-      preConstruction: { current: 0, previous: 0 },
-      completion: { current: 0, previous: 0 }
+    const contracts = {
+      selfContract: toCountPair(selfContractRows, period, r => ({ business_name: r.business_name })),
+      subsidyReceived: toCountPair(subsidyReceivedRows, period, r => ({ business_name: r.business_name })),
+      subsidyApproved: toCountPair(subsidyApprovedTaskRows, period, r => ({ business_name: r.business_name }))
     };
-    for (const row of surveyRows) {
-      const bucket = row.survey_type === 'pre_construction_survey' ? surveys.preConstruction : surveys.completion;
-      bucket.current = Number(row.current_count) || 0;
-      bucket.previous = Number(row.previous_count) || 0;
-    }
 
-    // 5. 미수금 (자비/보조금) + 상중하 위험도 — 두 시점 모두 실시간 재계산 (별도 이력 저장 불필요)
+    // 2. 설치 수량
+    const installRows = await queryAll(
+      `SELECT id, business_name, installation_date AS entry_date
+       FROM business_info
+       WHERE is_active = true AND is_deleted = false
+         AND installation_date BETWEEN $1 AND $2`,
+      [previousMonday, currentEnd]
+    );
+    const installations = toCountPair(installRows, period, r => ({ id: r.id, business_name: r.business_name }));
+
+    // 3. 견적실사 / 착공실사 / 준공실사 수량
+    // 기존 "보조금 승인일자"(business_info.subsidy_approval_date 기준) 지표는 영업·설치 섹션의
+    // 업무단계 기준 "보조금 승인"과 중복되어 제거하고, 그 자리에 견적실사를 추가했다.
+    const surveyRows = await queryAll(
+      `SELECT survey_type, business_id AS id, business_name, event_date AS entry_date
+       FROM survey_events
+       WHERE survey_type IN ('estimate_survey', 'pre_construction_survey', 'completion_survey')
+         AND event_date BETWEEN $1 AND $2`,
+      [previousMonday, currentEnd]
+    );
+    const estimateRows = surveyRows.filter((r: any) => r.survey_type === 'estimate_survey');
+    const preConstructionRows = surveyRows.filter((r: any) => r.survey_type === 'pre_construction_survey');
+    const completionRows = surveyRows.filter((r: any) => r.survey_type === 'completion_survey');
+    const surveys = {
+      estimate: toCountPair(estimateRows, period, r => ({ id: r.id, business_name: r.business_name })),
+      preConstruction: toCountPair(preConstructionRows, period, r => ({ id: r.id, business_name: r.business_name })),
+      completion: toCountPair(completionRows, period, r => ({ id: r.id, business_name: r.business_name }))
+    };
+
+    // 4. 미수금 (자비/보조금) + 상중하 위험도 — 두 시점 모두 실시간 재계산 (별도 이력 저장 불필요)
     const businesses: ReceivableRow[] = await queryAll(
-      `SELECT progress_status, installation_date,
+      `SELECT id, business_name, progress_status, installation_date,
         invoice_1st_amount, invoice_1st_date, payment_1st_amount, payment_1st_date,
         invoice_2nd_amount, invoice_2nd_date, payment_2nd_amount, payment_2nd_date,
         additional_cost, invoice_additional_date, payment_additional_amount, payment_additional_date,
@@ -185,8 +247,16 @@ export async function GET(request: NextRequest) {
     );
 
     let selfCurrent = 0, selfPrevious = 0, subsidyCurrent = 0, subsidyPrevious = 0;
-    const riskCurrent = { 상: 0, 중: 0, 하: 0 };
-    const riskPrevious = { 상: 0, 중: 0, 하: 0 };
+    const selfCurrentBiz: BusinessRef[] = [];
+    const selfPreviousBiz: BusinessRef[] = [];
+    const subsidyCurrentBiz: BusinessRef[] = [];
+    const subsidyPreviousBiz: BusinessRef[] = [];
+    const riskCurrent: Record<'상' | '중' | '하', BusinessRef[]> = { 상: [], 중: [], 하: [] };
+    const riskPrevious: Record<'상' | '중' | '하', BusinessRef[]> = { 상: [], 중: [], 하: [] };
+    // 변동액(Delta) 클릭용 - 금액이 0/음수인 사업장도 포함해서 부호와 무관하게 전부 모아둬야
+    // "총 변동액"과 사업장별 변동액 합계가 정확히 일치한다 (미수금 목록엔 양수만 보여주는 것과는 별개)
+    const selfChange: { id: string; business_name: string; amount: number }[] = [];
+    const subsidyChange: { id: string; business_name: string; amount: number }[] = [];
 
     for (const biz of businesses) {
       const curR = computeReceivableAsOf(biz, currentEnd);
@@ -196,37 +266,44 @@ export async function GET(request: NextRequest) {
       selfPrevious += prevR.self;
       subsidyPrevious += prevR.subsidy;
 
+      if (curR.self > 0) selfCurrentBiz.push({ id: biz.id, business_name: biz.business_name, amount: curR.self });
+      if (prevR.self > 0) selfPreviousBiz.push({ id: biz.id, business_name: biz.business_name, amount: prevR.self });
+      if (curR.subsidy > 0) subsidyCurrentBiz.push({ id: biz.id, business_name: biz.business_name, amount: curR.subsidy });
+      if (prevR.subsidy > 0) subsidyPreviousBiz.push({ id: biz.id, business_name: biz.business_name, amount: prevR.subsidy });
+      if (curR.self !== prevR.self) selfChange.push({ id: biz.id, business_name: biz.business_name, amount: curR.self - prevR.self });
+      if (curR.subsidy !== prevR.subsidy) subsidyChange.push({ id: biz.id, business_name: biz.business_name, amount: curR.subsidy - prevR.subsidy });
+
       if (curR.self + curR.subsidy > 0) {
         const tier = calcRiskTier(biz.installation_date, currentEnd);
-        if (tier) riskCurrent[tier]++;
+        if (tier) riskCurrent[tier].push({ id: biz.id, business_name: biz.business_name, elapsedDays: daysBetween(biz.installation_date!, currentEnd) });
       }
       if (prevR.self + prevR.subsidy > 0) {
         const tier = calcRiskTier(biz.installation_date, previousSunday);
-        if (tier) riskPrevious[tier]++;
+        if (tier) riskPrevious[tier].push({ id: biz.id, business_name: biz.business_name, elapsedDays: daysBetween(biz.installation_date!, previousSunday) });
       }
     }
+
+    const byAmountDesc = (a: BusinessRef, b: BusinessRef) => (b.amount || 0) - (a.amount || 0);
+    const byAbsAmountDesc = (a: BusinessRef, b: BusinessRef) => Math.abs(b.amount || 0) - Math.abs(a.amount || 0);
+    const byElapsedDesc = (a: BusinessRef, b: BusinessRef) => (b.elapsedDays || 0) - (a.elapsedDays || 0);
+    [selfCurrentBiz, selfPreviousBiz, subsidyCurrentBiz, subsidyPreviousBiz].forEach(list => list.sort(byAmountDesc));
+    [riskCurrent.상, riskCurrent.중, riskCurrent.하, riskPrevious.상, riskPrevious.중, riskPrevious.하].forEach(list => list.sort(byElapsedDesc));
+    [selfChange, subsidyChange].forEach(list => list.sort(byAbsAmountDesc));
 
     return NextResponse.json({
       success: true,
       period,
       data: {
         contracts,
-        installations: {
-          current: Number(installRow?.current_count) || 0,
-          previous: Number(installRow?.previous_count) || 0
-        },
-        subsidyApprovals: {
-          current: Number(approvalRow?.current_count) || 0,
-          previous: Number(approvalRow?.previous_count) || 0
-        },
+        installations,
         surveys,
         receivables: {
-          self: { current: selfCurrent, previous: selfPrevious },
-          subsidy: { current: subsidyCurrent, previous: subsidyPrevious },
+          self: { current: selfCurrent, previous: selfPrevious, currentBusinesses: selfCurrentBiz, previousBusinesses: selfPreviousBiz, changeBusinesses: selfChange },
+          subsidy: { current: subsidyCurrent, previous: subsidyPrevious, currentBusinesses: subsidyCurrentBiz, previousBusinesses: subsidyPreviousBiz, changeBusinesses: subsidyChange },
           riskTiers: {
-            high: { current: riskCurrent.상, previous: riskPrevious.상 },
-            medium: { current: riskCurrent.중, previous: riskPrevious.중 },
-            low: { current: riskCurrent.하, previous: riskPrevious.하 }
+            high: { current: riskCurrent.상.length, previous: riskPrevious.상.length, currentBusinesses: riskCurrent.상, previousBusinesses: riskPrevious.상 },
+            medium: { current: riskCurrent.중.length, previous: riskPrevious.중.length, currentBusinesses: riskCurrent.중, previousBusinesses: riskPrevious.중 },
+            low: { current: riskCurrent.하.length, previous: riskPrevious.하.length, currentBusinesses: riskCurrent.하, previousBusinesses: riskPrevious.하 }
           }
         }
       }
