@@ -20,6 +20,7 @@ interface DashboardCustomizerProps {
 }
 
 const WIDGET_LABELS: Record<string, string> = {
+  'weekly-scorecard': '주간 브리핑',
   organization: '조직 현황',
   revenue: '매출/매입/이익 현황',
   receivable: '미수금 현황',

@@ -8,7 +8,7 @@ import RevenueChart from '@/components/dashboard/charts/RevenueChart'
 import ReceivableChart from '@/components/dashboard/charts/ReceivableChart'
 import InstallationChart from '@/components/dashboard/charts/InstallationChart'
 import MonthlyLeadsChart from '@/components/dashboard/charts/MonthlyLeadsChart'
-import FilterPanel from '@/components/dashboard/FilterPanel'
+import WeeklyScorecard from '@/components/dashboard/WeeklyScorecard'
 import DashboardCustomizer from '@/components/dashboard/DashboardCustomizer'
 import { DashboardFilters } from '@/types/dashboard'
 import { ChevronDown, ChevronUp } from 'lucide-react'
@@ -28,11 +28,12 @@ interface DashboardLayout {
 
 const DEFAULT_LAYOUT: DashboardLayout = {
   widgets: [
-    { id: 'organization', visible: true, order: 1 },
-    { id: 'revenue', visible: true, order: 2 },
-    { id: 'receivable', visible: true, order: 3 },
-    { id: 'installation', visible: true, order: 4 },
-    { id: 'monthly-leads', visible: true, order: 5 }
+    { id: 'weekly-scorecard', visible: true, order: 1 },
+    { id: 'organization', visible: true, order: 2 },
+    { id: 'revenue', visible: true, order: 3 },
+    { id: 'receivable', visible: true, order: 4 },
+    { id: 'installation', visible: true, order: 5 },
+    { id: 'monthly-leads', visible: true, order: 6 }
   ]
 };
 
@@ -139,7 +140,17 @@ export default function AdminDashboard() {
       const result = await response.json()
 
       if (result.success && result.data) {
-        setLayout(result.data)
+        // 이미 레이아웃을 저장해둔 사용자에게도 새로 추가된 위젯(예: weekly-scorecard)이
+        // 보이도록, 저장된 목록에 없는 기본 위젯을 뒤에 추가로 병합
+        const savedIds = new Set(result.data.widgets.map((w: Widget) => w.id))
+        const missingDefaults = DEFAULT_LAYOUT.widgets.filter(w => !savedIds.has(w.id))
+        const maxOrder = result.data.widgets.reduce((max: number, w: Widget) => Math.max(max, w.order), 0)
+        const mergedWidgets = [
+          ...result.data.widgets,
+          ...missingDefaults.map((w, i) => ({ ...w, order: maxOrder + i + 1 }))
+        ]
+
+        setLayout({ widgets: mergedWidgets })
       }
     } catch (error) {
       console.error('Failed to load layout:', error)
@@ -211,10 +222,6 @@ export default function AdminDashboard() {
       setChartsLoading(false);
     }
   };
-
-  const handleFilterChange = (newFilters: DashboardFilters) => {
-    setFilters(newFilters)
-  }
 
   const handleSaveLayout = async (newLayout: DashboardLayout) => {
     try {
@@ -329,8 +336,12 @@ export default function AdminDashboard() {
   const organizationWidget = layout.widgets.find(w => w.id === 'organization')
   const showOrganization = organizationWidget?.visible ?? true
 
-  // 매출/미수금/설치 위젯만 필터링 (조직 제외)
-  const chartWidgets = visibleWidgets.filter(w => w.id !== 'organization')
+  // 주간 브리핑 위젯 표시 여부 확인
+  const weeklyScorecardWidget = layout.widgets.find(w => w.id === 'weekly-scorecard')
+  const showWeeklyScorecard = weeklyScorecardWidget?.visible ?? true
+
+  // 매출/미수금/설치 위젯만 필터링 (조직, 주간 브리핑 제외)
+  const chartWidgets = visibleWidgets.filter(w => w.id !== 'organization' && w.id !== 'weekly-scorecard')
   const revenueWidget = chartWidgets.find(w => w.id === 'revenue')
   const otherCharts = chartWidgets.filter(w => ['receivable', 'installation'].includes(w.id))
   const monthlyLeadsWidget = chartWidgets.find(w => w.id === 'monthly-leads')
@@ -341,8 +352,12 @@ export default function AdminDashboard() {
       description="전체 시스템 현황을 한눈에 확인하세요"
     >
       <div className="max-w-[2000px] mx-auto pb-24">
-        {/* 필터 패널 */}
-        <FilterPanel onFilterChange={handleFilterChange} />
+        {/* 주간 브리핑 스코어카드 */}
+        {showWeeklyScorecard && (
+          <div className="mb-4">
+            <WeeklyScorecard />
+          </div>
+        )}
 
         {/* ✅ 차트 로딩 상태 표시 */}
         {chartsLoading && (
@@ -368,7 +383,7 @@ export default function AdminDashboard() {
         {monthlyLeadsWidget && renderWidget(monthlyLeadsWidget.id)}
 
         {/* 차트 위젯이 모두 숨겨진 경우 */}
-        {chartWidgets.length === 0 && !showOrganization && (
+        {chartWidgets.length === 0 && !showOrganization && !showWeeklyScorecard && (
           <div className="text-center py-8">
             <p className="text-sm text-gray-500 mb-2">표시할 위젯이 없습니다.</p>
             <p className="text-xs text-gray-400">
@@ -405,13 +420,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* 푸터 정보 */}
-        <div className="mt-6 text-center text-xs text-gray-500">
-          <p>
-            데이터는 최근 12개월 기준으로 표시됩니다.
-            실시간 업데이트를 원하시면 각 차트의 새로고침 버튼을 클릭하세요.
-          </p>
-        </div>
       </div>
 
       {/* 커스터마이징 컴포넌트 */}
