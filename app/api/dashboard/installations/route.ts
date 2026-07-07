@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { queryAll } from '@/lib/supabase-direct'
+import { requireAdmin } from '@/lib/auth/require-admin'
 import {
   determineAggregationLevel,
   getAggregationKey,
@@ -13,6 +14,9 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
 

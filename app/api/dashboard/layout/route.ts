@@ -1,42 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
 import { queryOne, query as pgQuery } from '@/lib/supabase-direct'
-import { verifyToken } from '@/lib/secure-jwt'
+import { requireAdmin } from '@/lib/auth/require-admin'
 
 // 기본 레이아웃 설정
 const DEFAULT_LAYOUT = {
   widgets: [
-    { id: 'organization', visible: true, order: 1 },
-    { id: 'revenue', visible: true, order: 2 },
-    { id: 'receivable', visible: true, order: 3 },
-    { id: 'installation', visible: true, order: 4 }
+    { id: 'weekly-scorecard', visible: true, order: 1 },
+    { id: 'organization', visible: true, order: 2 },
+    { id: 'revenue', visible: true, order: 3 },
+    { id: 'receivable', visible: true, order: 4 },
+    { id: 'installation', visible: true, order: 5 }
   ]
 };
 
 // GET: 사용자의 레이아웃 설정 조회
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
-    // 토큰에서 사용자 정보 추출 (쿠키 또는 헤더에서)
-    let token = request.cookies.get('auth-token')?.value ||
-                 request.cookies.get('auth_token')?.value;
-
-    // 헤더에서도 확인
-    if (!token) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      }
-    }
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: '인증이 필요합니다.' },
-        { status: 401 }
-      );
-    }
-
-    const decoded = await verifyToken(token);
-    const userId = decoded.userId || decoded.id;
+    const userId = auth.user.id;
 
     // 사용자의 레이아웃 설정 조회 - 직접 PostgreSQL 연결 사용
     const data = await queryOne(
@@ -68,28 +52,11 @@ export async function GET(request: NextRequest) {
 
 // POST: 레이아웃 설정 저장
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
-    // 토큰에서 사용자 정보 추출 (쿠키 또는 헤더에서)
-    let token = request.cookies.get('auth-token')?.value ||
-                 request.cookies.get('auth_token')?.value;
-
-    // 헤더에서도 확인
-    if (!token) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      }
-    }
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: '인증이 필요합니다.' },
-        { status: 401 }
-      );
-    }
-
-    const decoded = await verifyToken(token);
-    const userId = decoded.userId || decoded.id;
+    const userId = auth.user.id;
 
     const body = await request.json();
     const { layout_config } = body;
@@ -132,28 +99,11 @@ export async function POST(request: NextRequest) {
 
 // DELETE: 레이아웃 설정 초기화 (기본값으로 되돌림)
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
-    // 토큰에서 사용자 정보 추출 (쿠키 또는 헤더에서)
-    let token = request.cookies.get('auth-token')?.value ||
-                 request.cookies.get('auth_token')?.value;
-
-    // 헤더에서도 확인
-    if (!token) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      }
-    }
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: '인증이 필요합니다.' },
-        { status: 401 }
-      );
-    }
-
-    const decoded = await verifyToken(token);
-    const userId = decoded.userId || decoded.id;
+    const userId = auth.user.id;
 
     // 레이아웃 삭제 - 직접 PostgreSQL 연결 사용
     await pgQuery(

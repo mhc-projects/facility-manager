@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
+import { requireAdmin } from '@/lib/auth/require-admin'
 
 // GET: 목표값 조회
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const targetType = searchParams.get('target_type'); // 'revenue', 'receivable', 'installation'
@@ -46,6 +50,9 @@ export async function GET(request: NextRequest) {
 
 // POST: 목표값 생성 또는 업데이트
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { target_type, month, target_value } = body;
@@ -125,6 +132,9 @@ export async function POST(request: NextRequest) {
 
 // DELETE: 목표값 삭제
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');

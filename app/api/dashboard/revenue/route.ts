@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryAll } from '@/lib/supabase-direct'
 import { getManufacturerAliases } from '@/constants/manufacturers'
+import { requireAdmin } from '@/lib/auth/require-admin'
 import {
   determineAggregationLevel,
   getAggregationKey,
@@ -20,6 +21,9 @@ interface RevenueQueryParams {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
 
