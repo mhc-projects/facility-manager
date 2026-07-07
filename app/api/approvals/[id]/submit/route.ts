@@ -263,60 +263,6 @@ export async function POST(
       });
     }
 
-    // 업무품의서: 작성팀 + 협조팀 직원에게 상신 알림
-    if (doc.document_type === 'business_proposal') {
-      const formData = typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : (doc.form_data || {});
-
-      const writingTeamId   = formData?.department_id;
-      const coopTeamId      = formData?.cooperative_team_id;
-
-      // teams.id로 팀 정보 조회 → 해당 팀 직원만 필터
-      const fetchTeamStaff = async (teamId?: string): Promise<string[]> => {
-        if (!teamId) return [];
-        const teamInfo = await queryOne(
-          `SELECT t.name AS team_name, d.name AS dept_name
-           FROM teams t JOIN departments d ON d.id = t.department_id
-           WHERE t.id = $1`,
-          [teamId]
-        );
-        if (!teamInfo) return [];
-        const rows = await queryAll(
-          `SELECT id FROM employees WHERE department = $1 AND team = $2 AND is_deleted = FALSE AND is_active = TRUE`,
-          [teamInfo.dept_name, teamInfo.team_name]
-        );
-        return (rows || []).map((r: any) => r.id);
-      };
-
-      const [writingStaff, coopStaff] = await Promise.all([
-        fetchTeamStaff(writingTeamId),
-        fetchTeamStaff(coopTeamId),
-      ]);
-
-      // 중복 제거 + 작성자 본인 제외 (작성자는 이미 알고 있음)
-      const notifySet = new Set([...writingStaff, ...coopStaff]);
-      notifySet.delete(userId);
-
-      const teamLabel = [formData?.department, formData?.cooperative_team].filter(Boolean).join(' / ');
-      const notifyMessage = `${requesterName}님이 업무품의서(${doc.document_number})를 ${actionWord}했습니다.`;
-
-      await Promise.all(
-        Array.from(notifySet).map(targetId =>
-          sendApprovalNotification({
-            targetUserId: targetId,
-            title: '[업무품의서 상신]',
-            message: notifyMessage,
-            documentId: params.id,
-            documentNumber: doc.document_number,
-            documentType: doc.document_type,
-          })
-        )
-      );
-
-      if (notifySet.size > 0) {
-        console.log(`[APPROVAL] 업무품의서 상신 알림 → ${notifySet.size}명 (${teamLabel})`);
-      }
-    }
-
     // 문서 상세 페이지 실시간 갱신 트리거
     await supabaseAdmin.channel(`approval-doc:${params.id}`)
       .send({ type: 'broadcast', event: 'doc_updated', payload: { id: params.id, status: newStatus } });
