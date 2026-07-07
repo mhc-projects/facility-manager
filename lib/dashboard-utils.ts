@@ -73,6 +73,27 @@ export function getAggregationKey(date: Date, level: AggregationLevel): string {
 }
 
 /**
+ * 주차 집계 키(YYYY-Www)의 시작일을 역산
+ * getAggregationKey의 주차 계산식을 그대로 역으로 검증하며 찾으므로 두 함수가 항상 일치함
+ *
+ * @param weekKey 주차 집계 키 (예: "2026-W28")
+ * @returns 해당 주차의 시작일(Date) 또는 형식이 잘못된 경우 null
+ */
+export function getWeekStartDate(weekKey: string): Date | null {
+  const match = weekKey.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return null;
+
+  const year = parseInt(match[1], 10);
+  const current = new Date(year, 0, 1);
+  // 연초부터 하루씩 확인하며 동일한 주차 키가 나오는 첫 날을 찾음 (최대 400일 탐색)
+  for (let i = 0; i < 400; i++) {
+    if (getAggregationKey(current, 'weekly') === weekKey) return new Date(current);
+    current.setDate(current.getDate() + 1);
+  }
+  return null;
+}
+
+/**
  * 집계 키를 표시용 레이블로 변환
  *
  * @param key 집계 키
@@ -86,10 +107,13 @@ export function formatAggregationLabel(key: string, level: AggregationLevel): st
       const [, month, day] = key.split('-');
       return `${month}/${day}`;
 
-    case 'weekly':
-      // 2025-W43 -> 43주차
+    case 'weekly': {
+      // 2025-W43 -> 43주차(10/20) - 시작일을 괄호로 덧붙여 실제 날짜를 바로 알 수 있게 함
       const weekNum = key.split('-W')[1];
-      return `${weekNum}주차`;
+      const start = getWeekStartDate(key);
+      const dateHint = start ? `(${start.getMonth() + 1}/${start.getDate()})` : '';
+      return `${weekNum}주차${dateHint}`;
+    }
 
     case 'monthly':
       // 2025-10 -> 2025-10 (기존 형식 유지)

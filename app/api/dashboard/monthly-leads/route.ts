@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryAll } from '@/lib/supabase-direct'
+import { requireAdmin } from '@/lib/auth/require-admin'
+import { determineAggregationLevel, getAggregationKey, generateAggregationKeys, type AggregationLevel } from '@/lib/dashboard-utils'
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
 
@@ -25,13 +30,16 @@ export async function GET(request: NextRequest) {
     // 기간 범위 계산
     let dateStart: string;
     let dateEnd: string;
+    let level: AggregationLevel = 'monthly';
 
     if (startDate && endDate) {
       dateStart = startDate;
       dateEnd = endDate;
+      level = determineAggregationLevel(startDate, endDate);
     } else if (year) {
       dateStart = `${year}-01-01`;
       dateEnd = `${year}-12-31`;
+      level = 'monthly';
     } else {
       const monthsToShow = months || 12;
       const now = new Date();
@@ -39,6 +47,7 @@ export async function GET(request: NextRequest) {
       const start = new Date(now.getFullYear(), now.getMonth() - monthsToShow + 1, 1);
       dateStart = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`;
       dateEnd = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+      level = 'monthly';
     }
 
     // 쿼리 구성
@@ -81,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     console.log('📊 [Dashboard Monthly Leads API] Filtered businesses:', filteredBusinesses.length);
 
-    // 월별 집계 맵 초기화
+    // 집계 맵 초기화 (일/주/월 단위 - level에 따라 키 포맷이 다름)
     const aggregationData: Map<string, { total: number; byOffice: Record<string, number>; businessesByOffice: Record<string, Array<{ id: string; business_name: string; receipt_date: string; progress_status: string | null }>> }> = new Map();
 
     if (year) {
@@ -90,15 +99,10 @@ export async function GET(request: NextRequest) {
         aggregationData.set(key, { total: 0, byOffice: {}, businessesByOffice: {} });
       }
     } else if (startDate && endDate) {
-      // 기간 내 모든 월 초기화
-      const start = new Date(dateStart);
-      const end = new Date(dateEnd);
-      const current = new Date(start.getFullYear(), start.getMonth(), 1);
-      while (current <= end) {
-        const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+      // 기간 내 모든 버킷 초기화 (level에 맞는 키 생성)
+      generateAggregationKeys(dateStart, dateEnd, level).forEach(key => {
         aggregationData.set(key, { total: 0, byOffice: {}, businessesByOffice: {} });
-        current.setMonth(current.getMonth() + 1);
-      }
+      });
     } else {
       const monthsToShow = months || 12;
       const now = new Date();
@@ -123,7 +127,9 @@ export async function GET(request: NextRequest) {
       const d = new Date(receiptDate);
       if (isNaN(d.getTime())) return;
 
-      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const monthKey = year || !(startDate && endDate)
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        : getAggregationKey(d, level);
 
       if (!aggregationData.has(monthKey)) return; // 집계 기간 밖
 

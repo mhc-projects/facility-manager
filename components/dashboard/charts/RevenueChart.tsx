@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   ComposedChart,
   Bar,
@@ -14,49 +14,40 @@ import {
   ReferenceLine
 } from 'recharts'
 import { RevenueData, RevenueSummary, DashboardFilters } from '@/types/dashboard'
-import { RefreshCw, Target } from 'lucide-react'
-import TargetSettingModal from '../modals/TargetSettingModal'
+import { RefreshCw, ChevronDown } from 'lucide-react'
 import MonthDetailModal from '../modals/MonthDetailModal'
-import { determineAggregationLevel, getCurrentTimeKey } from '@/lib/dashboard-utils'
+import { formatAggregationLabel, getCurrentTimeKey, type AggregationLevel } from '@/lib/dashboard-utils'
+import {
+  PeriodPresetControl, PeriodPresetKey, resolvePeriodParams,
+  formatFullAmount, formatAbbrCurrency, HeroStat, DeltaTag, periodLabels
+} from './chart-kit'
 
 interface RevenueChartProps {
   filters?: DashboardFilters;
 }
+
+const TABLE_ROW_LIMIT = 6
 
 export default function RevenueChart({ filters }: RevenueChartProps) {
   const [data, setData] = useState<RevenueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedMonthData, setSelectedMonthData] = useState<any>(null);
+  const [periodPreset, setPeriodPreset] = useState<PeriodPresetKey>('8w');
+  const [showAllRows, setShowAllRows] = useState(false);
+  const [aggLevel, setAggLevel] = useState<AggregationLevel>('weekly');
 
   useEffect(() => {
     loadData();
-  }, [filters]);
+  }, [filters, periodPreset]);
 
   const loadData = async () => {
     try {
       setLoading(true);
 
-      // 기간 필터 파라미터 구성
-      const periodParams: Record<string, string> = {};
-
-      // startDate/endDate가 있으면 우선 사용 (빠른 필터 지원)
-      if (filters?.startDate && filters?.endDate) {
-        // YYYY-MM-DD 형식 그대로 전달 (API에서 자동으로 집계 단위 결정)
-        periodParams.startDate = filters.startDate;
-        periodParams.endDate = filters.endDate;
-      } else if (filters?.periodMode === 'custom') {
-        if (filters.startDate) periodParams.startDate = filters.startDate;
-        if (filters.endDate) periodParams.endDate = filters.endDate;
-      } else if (filters?.periodMode === 'yearly') {
-        periodParams.year = String(filters.year || new Date().getFullYear());
-      } else {
-        // recent 모드 (기본값)
-        periodParams.months = String(filters?.months || 12);
-      }
+      const { params: periodParams, level } = resolvePeriodParams(filters, periodPreset);
 
       const params = new URLSearchParams({
         ...periodParams,
@@ -72,6 +63,7 @@ export default function RevenueChart({ filters }: RevenueChartProps) {
       if (result.success) {
         setData(result.data);
         setSummary(result.summary);
+        setAggLevel(level);
         setLastUpdate(new Date());
       }
     } catch (error) {
@@ -81,6 +73,23 @@ export default function RevenueChart({ filters }: RevenueChartProps) {
     }
   };
 
+  // 집계 키는 어떤 포맷이든(YYYY-MM-DD/YYYY-Www/YYYY-MM) 문자열 정렬이 곧 시간순
+  const chronological = useMemo(() => [...data].sort((a, b) => a.month.localeCompare(b.month)), [data]);
+  const tableRows = useMemo(() => [...chronological].reverse(), [chronological]);
+
+  const latest = chronological[chronological.length - 1];
+  const prior = chronological[chronological.length - 2];
+  const revenueDelta = latest && prior && prior.revenue !== 0
+    ? ((latest.revenue - prior.revenue) / Math.abs(prior.revenue)) * 100
+    : null;
+  const profitRateDeltaPts = latest && prior ? latest.profitRate - prior.profitRate : null;
+
+  const sparkRevenue = chronological.slice(-8).map(d => d.revenue);
+  const sparkProfit = chronological.slice(-8).map(d => d.profit);
+  const sparkProfitRate = chronological.slice(-8).map(d => d.profitRate);
+
+  const { comparedTo: comparedToLabel, columnName: periodLabelName, current: currentLabel } = periodLabels(aggLevel);
+
   const handleBarClick = (event: any) => {
     if (event && event.activeLabel) {
       const clickedMonth = event.activeLabel;
@@ -88,7 +97,7 @@ export default function RevenueChart({ filters }: RevenueChartProps) {
 
       if (clickedData) {
         setSelectedMonthData({
-          month: clickedData.month,
+          month: formatAggregationLabel(clickedData.month, aggLevel),
           type: 'revenue',
           data: clickedData
         });
@@ -97,76 +106,22 @@ export default function RevenueChart({ filters }: RevenueChartProps) {
     }
   };
 
-  const handleTargetSave = () => {
-    loadData();
-  };
-
-  const formatCurrency = (value: number) => {
-    if (value >= 100000000) {
-      return `${(value / 100000000).toFixed(1)}억`;
-    }
-    return `${(value / 10000).toFixed(0)}만`;
-  };
-
-  // 현재 시점 계산
-  const getCurrentTimePoint = () => {
-    if (!filters) return null;
-
-    // 집계 레벨 결정
-    let aggregationLevel: 'daily' | 'weekly' | 'monthly' = 'monthly';
-
-    if (filters.startDate && filters.endDate) {
-      aggregationLevel = determineAggregationLevel(filters.startDate, filters.endDate);
-    } else if (filters.periodMode === 'yearly' || filters.periodMode === 'recent' || !filters.periodMode) {
-      aggregationLevel = 'monthly';
-    }
-
-    return getCurrentTimeKey(aggregationLevel);
-  };
-
-  const currentTimeKey = getCurrentTimePoint();
-
-  // X축 레이블 포맷 함수
-  const formatXAxisLabel = (value: string) => {
-    // YYYY-MM-DD 형식 (일별): MM/DD로 변환
-    if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [, month, day] = value.split('-');
-      return `${month}/${day}`;
-    }
-    // YYYY-Www 형식 (주별): ww주차로 변환
-    if (value.match(/^\d{4}-W\d{2}$/)) {
-      const weekNum = value.split('-W')[1];
-      return `${weekNum}주`;
-    }
-    // 그 외 (월별): 그대로 표시
-    return value;
-  };
+  const currentTimeKey = getCurrentTimeKey(aggLevel);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const point = payload[0].payload;
       return (
-        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-bold mb-2">{label}</p>
+        <div className="bg-white p-4 border border-gray-100 rounded-xl shadow-lg">
+          <p className="font-semibold mb-2 text-gray-900">{formatAggregationLabel(label, aggLevel)}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }} className="text-sm">
-              {entry.name}: {entry.value.toLocaleString()}원
+            <p key={index} className="text-sm flex items-center gap-2 text-gray-700">
+              <span className="inline-block w-2.5 h-0.5 rounded" style={{ backgroundColor: entry.color }} />
+              {entry.name}: <span className="font-semibold tabular-nums">{entry.value.toLocaleString()}원</span>
             </p>
           ))}
-          <div className="mt-2 pt-2 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              이익률: {data.profitRate.toFixed(1)}%
-            </p>
-            {data.target && (
-              <p className="text-sm text-purple-600">
-                목표 대비: {data.achievementRate.toFixed(1)}%
-              </p>
-            )}
-            {data.prevMonthChange !== 0 && (
-              <p className={`text-sm ${data.prevMonthChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                전월 대비: {data.prevMonthChange > 0 ? '+' : ''}{data.prevMonthChange.toFixed(1)}%
-              </p>
-            )}
+          <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
+            <p className="text-xs text-gray-500">이익률: {point.profitRate.toFixed(1)}%</p>
           </div>
         </div>
       );
@@ -174,157 +129,219 @@ export default function RevenueChart({ filters }: RevenueChartProps) {
     return null;
   };
 
-  if (loading) {
+  if (loading && data.length === 0) {
     return (
       <div className="bg-white p-6 rounded-lg shadow">
-        <div className="h-8 bg-gray-200 rounded w-48 mb-4 animate-pulse" />
-        <div className="h-96 bg-gray-100 rounded animate-pulse" />
+        <div className="h-8 bg-gray-100 rounded w-48 mb-4 animate-pulse" />
+        <div className="h-24 bg-gray-50 rounded mb-4 animate-pulse" />
+        <div className="h-96 bg-gray-50 rounded animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white p-4 md:p-6 rounded-lg shadow">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-        <h2 className="text-lg md:text-xl font-bold">월별 매출/매입/이익 현황</h2>
+    <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100">
+      {/* 헤더: 타이틀 + 기간 프리셋 + 액션 */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-5 gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900">매출·매입·이익 현황</h2>
+          <PeriodPresetControl
+            value={periodPreset}
+            onChange={setPeriodPreset}
+            disabled={!!(filters?.startDate && filters?.endDate)}
+          />
+        </div>
         <div className="flex items-center gap-2">
           {lastUpdate && (
-            <span className="text-xs text-gray-500">
-              {lastUpdate.toLocaleTimeString()}
-            </span>
+            <span className="text-xs text-gray-400 hidden sm:inline">{lastUpdate.toLocaleTimeString()}</span>
           )}
-          <button
-            onClick={() => setIsTargetModalOpen(true)}
-            className="px-3 py-1.5 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-1 text-sm"
-          >
-            <Target className="w-4 h-4" />
-            <span className="hidden sm:inline">목표설정</span>
-          </button>
           <button
             onClick={loadData}
             disabled={loading}
-            className="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1 text-sm"
+            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 text-sm transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">새로고침</span>
           </button>
         </div>
       </div>
 
+      {/* 핵심 지표 - 스파크라인 + 증감 항상 노출, 금액은 전체 자릿수 콤마 표기 */}
+      {latest && (
+        <div className="flex flex-wrap gap-3 mb-3">
+          <HeroStat
+            label="매출"
+            valueLabel={formatFullAmount(latest.revenue)}
+            delta={revenueDelta}
+            comparedTo={comparedToLabel}
+            sparkValues={sparkRevenue}
+          />
+          <HeroStat
+            label="순이익"
+            valueLabel={formatFullAmount(latest.profit)}
+            delta={latest.prevMonthChange}
+            comparedTo={comparedToLabel}
+            sparkValues={sparkProfit}
+            valueClassName="text-violet-600"
+          />
+          <HeroStat
+            label="이익률"
+            valueLabel={`${latest.profitRate.toFixed(1)}%`}
+            delta={profitRateDeltaPts}
+            deltaSuffix="%p"
+            comparedTo={comparedToLabel}
+            sparkValues={sparkProfitRate}
+            valueClassName="text-emerald-600"
+          />
+        </div>
+      )}
+
+      {/* 보조 지표 - 누적 총액, 스파크라인 없이 간결하게 */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">
-          <div className="bg-green-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 매출금액</p>
-            <p className="text-sm font-bold text-green-600">{summary.totalRevenue.toLocaleString()}원</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+          <div className="px-3 py-2 rounded-lg bg-gray-50">
+            <p className="text-[11px] text-gray-500">총 매입금액</p>
+            <p className="text-sm font-semibold text-gray-700 tabular-nums">{formatFullAmount(summary.totalCost || 0)}</p>
           </div>
-          <div className="bg-teal-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 매입금액</p>
-            <p className="text-sm font-bold text-teal-600">{(summary.totalCost || 0).toLocaleString()}원</p>
+          <div className="px-3 py-2 rounded-lg bg-gray-50">
+            <p className="text-[11px] text-gray-500">총 영업비용</p>
+            <p className="text-sm font-semibold text-gray-700 tabular-nums">{formatFullAmount(summary.totalSalesCommission || 0)}</p>
           </div>
-          <div className="bg-orange-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 영업비용</p>
-            <p className="text-sm font-bold text-orange-600">{(summary.totalSalesCommission || 0).toLocaleString()}원</p>
+          <div className="px-3 py-2 rounded-lg bg-gray-50">
+            <p className="text-[11px] text-gray-500">총 설치비용</p>
+            <p className="text-sm font-semibold text-gray-700 tabular-nums">{formatFullAmount(summary.totalInstallationCost || 0)}</p>
           </div>
-          <div className="bg-blue-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 설치비용</p>
-            <p className="text-sm font-bold text-blue-600">{(summary.totalInstallationCost || 0).toLocaleString()}원</p>
-          </div>
-          <div className="bg-amber-50 p-3 rounded">
-            <p className="text-xs text-gray-600">기타 비용</p>
-            <p className="text-sm font-bold text-amber-600">{(summary.totalOtherCosts || 0).toLocaleString()}원</p>
-          </div>
-          <div className="bg-purple-50 p-3 rounded">
-            <p className="text-xs text-gray-600">총 이익금액</p>
-            <p className="text-sm font-bold text-purple-600">{summary.totalProfit.toLocaleString()}원</p>
-          </div>
-          <div className="bg-indigo-50 p-3 rounded">
-            <p className="text-xs text-gray-600">사업장 평균 이익률</p>
-            <p className="text-sm font-bold text-indigo-600">{summary.avgProfitRateByBiz || 0}%</p>
+          <div className="px-3 py-2 rounded-lg bg-gray-50">
+            <p className="text-[11px] text-gray-500">사업장 평균 이익률</p>
+            <p className="text-sm font-semibold text-gray-700 tabular-nums">{summary.avgProfitRateByBiz || 0}%</p>
           </div>
         </div>
       )}
 
-      <ResponsiveContainer width="100%" height={400}>
-        <ComposedChart data={data} onClick={handleBarClick}>
-          <CartesianGrid strokeDasharray="3 3" />
+      <ResponsiveContainer width="100%" height={340}>
+        <ComposedChart data={chronological} onClick={handleBarClick} barGap={4} barCategoryGap="24%">
+          <CartesianGrid strokeDasharray="none" stroke="#f1f2f4" vertical={false} />
           <XAxis
             dataKey="month"
-            tickFormatter={formatXAxisLabel}
-            tick={{ fontSize: 12 }}
-            angle={-45}
-            textAnchor="end"
-            height={80}
+            tickFormatter={(v) => formatAggregationLabel(v, aggLevel)}
+            tick={{ fontSize: 12, fill: '#9ca3af' }}
+            axisLine={{ stroke: '#e5e7eb' }}
+            tickLine={false}
+            angle={chronological.length > 8 ? -45 : 0}
+            textAnchor={chronological.length > 8 ? 'end' : 'middle'}
+            height={chronological.length > 8 ? 70 : 30}
           />
           <YAxis
-            tickFormatter={formatCurrency}
-            tick={{ fontSize: 12 }}
+            tickFormatter={formatAbbrCurrency}
+            tick={{ fontSize: 12, fill: '#9ca3af' }}
+            axisLine={false}
+            tickLine={false}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
           <Legend
-            wrapperStyle={{ fontSize: '14px' }}
-            iconType="square"
+            wrapperStyle={{ fontSize: '13px' }}
+            iconType="circle"
+            iconSize={8}
           />
 
           {/* 평균 라인 */}
           {summary && (
             <ReferenceLine
               y={summary.avgProfit}
-              stroke="#888"
-              strokeDasharray="3 3"
-              label={{ value: '평균', fontSize: 12, fill: '#888' }}
+              stroke="#d1d5db"
+              strokeDasharray="4 3"
+              label={{ value: '평균', fontSize: 11, fill: '#9ca3af' }}
             />
           )}
 
           {/* 현재 시점 강조 */}
-          {currentTimeKey && data.some(d => d.month === currentTimeKey) && (
+          {currentTimeKey && chronological.some(d => d.month === currentTimeKey) && (
             <ReferenceLine
               x={currentTimeKey}
               stroke="#ef4444"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              label={{ value: '현재', position: 'top', fontSize: 11, fill: '#ef4444', fontWeight: 'bold' }}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              label={{ value: currentLabel, position: 'top', fontSize: 11, fill: '#ef4444', fontWeight: 600 }}
             />
           )}
 
-          <Bar dataKey="revenue" fill="#3b82f6" name="매출" cursor="pointer" />
-          <Bar dataKey="cost" fill="#f59e0b" name="매입" cursor="pointer" />
+          <Bar dataKey="revenue" fill="#2563eb" name="매출" cursor="pointer" radius={[4, 4, 0, 0]} barSize={22} />
+          <Bar dataKey="cost" fill="#fbbf24" name="매입" cursor="pointer" radius={[4, 4, 0, 0]} barSize={22} />
           <Line
             type="monotone"
             dataKey="profit"
-            stroke="#10b981"
-            strokeWidth={3}
-            name="순이익"
-            dot={{ r: 4 }}
-            activeDot={{ r: 6 }}
-          />
-          {/* 목표 라인 (있는 경우) */}
-          <Line
-            type="monotone"
-            dataKey="target"
-            stroke="#8b5cf6"
+            stroke="#7c3aed"
             strokeWidth={2}
-            strokeDasharray="5 5"
-            name="목표"
-            dot={false}
+            name="순이익"
+            dot={{ r: 4, fill: '#7c3aed', strokeWidth: 2, stroke: '#fff' }}
+            activeDot={{ r: 6 }}
+            label={(props: any) => {
+              if (props.index !== chronological.length - 1) return null;
+              return (
+                <text x={props.x} y={props.y - 12} textAnchor="middle" fontSize={11} fontWeight={600} fill="#111827">
+                  {formatAbbrCurrency(props.value)}
+                </text>
+              );
+            }}
           />
         </ComposedChart>
       </ResponsiveContainer>
 
       {data.length === 0 && !loading && (
-        <div className="text-center text-gray-500 py-8">
+        <div className="text-center text-gray-400 py-8 text-sm">
           데이터가 없습니다.
         </div>
       )}
 
-      {/* 목표 설정 모달 */}
-      <TargetSettingModal
-        isOpen={isTargetModalOpen}
-        onClose={() => setIsTargetModalOpen(false)}
-        targetType="revenue"
-        onSave={handleTargetSave}
-      />
+      {/* 항상 보이는 기간별 비교 표 - 호버 없이 바로 수치 확인, 금액은 전체 자릿수 콤마 표기 */}
+      {tableRows.length > 0 && (
+        <div className="mt-5">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                  <th className="pb-2 font-medium">{periodLabelName}</th>
+                  <th className="pb-2 font-medium text-right">매출</th>
+                  <th className="pb-2 font-medium text-right">매입</th>
+                  <th className="pb-2 font-medium text-right">순이익</th>
+                  <th className="pb-2 font-medium text-right">{comparedToLabel}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(showAllRows ? tableRows : tableRows.slice(0, TABLE_ROW_LIMIT)).map((d, i) => (
+                  <tr key={d.month} className={`border-b border-gray-50 ${i === 0 ? 'bg-blue-50/50' : ''}`}>
+                    <td className="py-2 text-gray-700">
+                      {formatAggregationLabel(d.month, aggLevel)}
+                      {i === 0 && (
+                        <span className="ml-1.5 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">
+                          {currentLabel}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right tabular-nums text-gray-700">{formatFullAmount(d.revenue)}</td>
+                    <td className="py-2 text-right tabular-nums text-gray-500">{formatFullAmount(d.cost)}</td>
+                    <td className="py-2 text-right tabular-nums font-semibold text-gray-900">{formatFullAmount(d.profit)}</td>
+                    <td className="py-2 text-right">
+                      <DeltaTag value={d.prevMonthChange} comparedTo="" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {tableRows.length > TABLE_ROW_LIMIT && (
+            <button
+              onClick={() => setShowAllRows(v => !v)}
+              className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllRows ? 'rotate-180' : ''}`} />
+              {showAllRows ? '접기' : `${tableRows.length - TABLE_ROW_LIMIT}개 더보기`}
+            </button>
+          )}
+        </div>
+      )}
 
-      {/* 월별 상세보기 모달 */}
+      {/* 기간별 상세보기 모달 */}
       <MonthDetailModal
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
