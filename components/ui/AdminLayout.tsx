@@ -704,69 +704,73 @@ export default function AdminLayout({ children, title, description, actions }: A
             <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md lg:bg-transparent border-b border-gray-200 lg:border-gray-300 shadow-sm lg:shadow-none">
               <div className="px-4 py-3 lg:px-5 lg:py-4">
                 {/* Mobile Layout (< 640px) - Minimal */}
-                <div className="flex items-center justify-between sm:hidden">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <button
-                      onClick={() => setSidebarOpen(true)}
-                      className="flex-shrink-0 p-3 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors duration-200 touch-manipulation"
-                      aria-label="메뉴 열기"
-                    >
-                      <Menu className="w-6 h-6" />
-                    </button>
+                <div className="sm:hidden">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="flex-shrink-0 p-3 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors duration-200 touch-manipulation"
+                        aria-label="메뉴 열기"
+                      >
+                        <Menu className="w-6 h-6" />
+                      </button>
 
-                    <div className="min-w-0 flex-1">
-                      {title && (
-                        <h1 className="text-base font-semibold text-gray-900 truncate">{title}</h1>
-                      )}
-                      {/* Description hidden on very small screens */}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* 매우 작은 모바일에서도 핵심 액션 표시 */}
-                    {actions && (
-                      <div className="flex items-center">
-                        {actions}
+                      <div className="min-w-0 flex-1">
+                        {title && (
+                          <h1 className="text-base font-semibold text-gray-900 truncate">{title}</h1>
+                        )}
+                        {/* Description hidden on very small screens */}
                       </div>
-                    )}
+                    </div>
 
                     {/* 알림 버튼 */}
                     <NotificationBell />
                   </div>
+
+                  {/* 액션은 별도 줄에 배치 — 메뉴 버튼/타이틀이 밀려나 사라지는 것 방지 */}
+                  {actions && (
+                    <div className="mt-2 overflow-x-auto">
+                      <div className="flex items-center gap-2 w-max">
+                        {actions}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Small Mobile Layout (640px - 768px) - Add Description */}
-                <div className="hidden sm:flex md:hidden items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <button
-                      onClick={() => setSidebarOpen(true)}
-                      className="flex-shrink-0 p-2.5 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors duration-200 touch-manipulation"
-                      aria-label="메뉴 열기"
-                    >
-                      <Menu className="w-5 h-5" />
-                    </button>
+                <div className="hidden sm:block md:hidden">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="flex-shrink-0 p-2.5 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors duration-200 touch-manipulation"
+                        aria-label="메뉴 열기"
+                      >
+                        <Menu className="w-5 h-5" />
+                      </button>
 
-                    <div className="min-w-0 flex-1">
-                      {title && (
-                        <h1 className="text-lg font-semibold text-gray-900 truncate">{title}</h1>
-                      )}
-                      {description && (
-                        <p className="text-sm text-gray-500 truncate">{description}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Compact actions on medium mobile */}
-                    {actions && (
-                      <div className="flex items-center">
-                        {actions}
+                      <div className="min-w-0 flex-1">
+                        {title && (
+                          <h1 className="text-lg font-semibold text-gray-900 truncate">{title}</h1>
+                        )}
+                        {description && (
+                          <p className="text-sm text-gray-500 truncate">{description}</p>
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     {/* 알림 버튼 */}
                     <NotificationBell />
                   </div>
+
+                  {/* 액션은 별도 줄에 배치 — 메뉴 버튼/타이틀이 밀려나 사라지는 것 방지 */}
+                  {actions && (
+                    <div className="mt-2 overflow-x-auto">
+                      <div className="flex items-center gap-2 w-max">
+                        {actions}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Desktop Layout (≥ 768px) */}
