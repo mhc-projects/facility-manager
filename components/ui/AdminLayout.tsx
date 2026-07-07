@@ -41,7 +41,8 @@ import {
   BookOpen,
   HeartHandshake,
   ShieldAlert,
-  Recycle
+  Recycle,
+  Mail
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -175,6 +176,14 @@ const navigationConfig: NavigationEntry[] = [
           icon: Wrench,
           description: 'AS 접수, 진행 현황 및 단가표 관리',
           requiredLevel: 1
+        },
+        {
+          name: '메일함',
+          href: '/admin/mail',
+          icon: Mail,
+          description: '회사 Gmail 수신함 열람 (읽기 전용)',
+          requiredLevel: 1,
+          departmentOnly: '영업팀'
         },
       ]
     }

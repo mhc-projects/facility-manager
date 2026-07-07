@@ -57,6 +57,7 @@
     "googleapis": "^160.0.0",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
+    "isomorphic-dompurify": "^3.18.0",
     "jotai": "^2.14.0",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^4.1.0",
