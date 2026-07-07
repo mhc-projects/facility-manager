@@ -17,6 +17,7 @@ import { formatAggregationLabel, type AggregationLevel } from '@/lib/dashboard-u
 import { PeriodPresetControl, PeriodPresetKey, resolvePeriodParams, HeroStat, DeltaTag, periodLabels } from './chart-kit'
 
 const RANK_ROW_LIMIT = 8
+const PERIOD_ROW_LIMIT = 6
 
 // 월별 집계는 "26.02" 형태를 그대로 쓰고, 주별 집계만 "N주차"로 변환
 function formatAxisLabel(value: string, level: AggregationLevel) {
@@ -293,6 +294,7 @@ export default function MonthlyLeadsChart({ filters }: MonthlyLeadsChartProps) {
   const [periodPreset, setPeriodPreset] = useState<PeriodPresetKey>('8w');
   const [aggLevel, setAggLevel] = useState<AggregationLevel>('weekly');
   const [showAllOfficeRanks, setShowAllOfficeRanks] = useState(false);
+  const [showAllPeriods, setShowAllPeriods] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -390,25 +392,40 @@ export default function MonthlyLeadsChart({ filters }: MonthlyLeadsChartProps) {
     return { entries, grandTotal };
   }, [chronological, offices]);
 
-  // 차트 클릭 → 해당 월 상세 모달
-  const handleBarClick = useCallback((chartPayload: any) => {
-    if (!chartPayload?.activeLabel) return;
-    const clickedMonth = chartPayload.activeLabel as string;
-    const monthData = data.find(d => d.month === clickedMonth);
+  // 기간별 인입 건수 표 - 최신 기간이 먼저 오도록 정렬, 전기간 대비 증감률 포함
+  const periodRows = useMemo(() => {
+    return chronological
+      .map((d, idx) => {
+        const prev = idx > 0 ? chronological[idx - 1] : undefined;
+        const delta = prev && prev.total !== 0 ? ((d.total - prev.total) / Math.abs(prev.total)) * 100 : null;
+        return { ...d, delta, unassigned: d.byOffice['미지정'] || 0 };
+      })
+      .reverse();
+  }, [chronological]);
+
+  // 해당 기간 상세 모달 열기 - 차트 막대 클릭과 기간별 표 행 클릭이 공유
+  const openPeriodDetail = useCallback((monthKey: string) => {
+    const monthData = data.find(d => d.month === monthKey);
     if (!monthData || monthData.total === 0) return;
 
     // 해당 월에 실제 데이터가 있는 영업점만
     const activeOffices = offices.filter(o => (monthData.byOffice[o] || 0) > 0);
 
     setModalData({
-      month: clickedMonth,
-      monthLabel: formatPeriodLabel(clickedMonth, aggLevel),
+      month: monthKey,
+      monthLabel: formatPeriodLabel(monthKey, aggLevel),
       total: monthData.total,
       offices: activeOffices,
       businessesByOffice: monthData.businessesByOffice || {},
       officeColorMap
     });
   }, [data, offices, officeColorMap, aggLevel]);
+
+  // 차트 클릭 → 해당 월 상세 모달
+  const handleBarClick = useCallback((chartPayload: any) => {
+    if (!chartPayload?.activeLabel) return;
+    openPeriodDetail(chartPayload.activeLabel as string);
+  }, [openPeriodDetail]);
 
   // 영업점이 많으면 전부 나열 시 겹쳐 보여서, 상위 4개 + 나머지 합계만 표시 (전체는 클릭해서 상세보기)
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -530,7 +547,9 @@ export default function MonthlyLeadsChart({ filters }: MonthlyLeadsChartProps) {
           </div>
         )}
 
-        {/* 차트 - 다른 섹션과 동일하게 그래프를 표보다 먼저 배치 */}
+        {/* 차트+표 좌우 배치 - 기간 변경 시 페이지 스크롤 없이 표를 바로 확인할 수 있도록 배치 */}
+        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="lg:flex-1 lg:min-w-0 flex flex-col justify-center">
         {chartData.length > 0 && offices.length > 0 ? (
           <>
             <p className="text-xs text-gray-400 text-right mb-1">막대를 클릭하면 상세 내역을 확인할 수 있습니다</p>
@@ -567,14 +586,18 @@ export default function MonthlyLeadsChart({ filters }: MonthlyLeadsChartProps) {
             </ResponsiveContainer>
           </>
         ) : (
-          <div className="h-80 flex items-center justify-center text-gray-400 mb-5">
+          <div className="h-80 flex items-center justify-center text-gray-400">
             <p className="text-sm">해당 기간의 인입 데이터가 없습니다.</p>
           </div>
         )}
+        </div>
+
+        {/* 표 영역 - 차트와 나란히 배치, 내용이 넘치면 페이지 대신 이 영역만 스크롤 */}
+        <div className="lg:w-[360px] lg:shrink-0 lg:max-h-[420px] lg:overflow-y-auto lg:pr-1 space-y-5">
 
         {/* 영업점이 30개 이상이라 전부 표로 펼치면 못 읽힘 - 이번주(달) 상위 5개 + 기타로 요약, 호버 없이 바로 확인 */}
         {officeBreakdown.top5.length > 0 && (
-          <div className="mt-5 mb-5">
+          <div>
             <p className="text-xs font-medium text-gray-500 mb-2">{periodLabels(aggLevel).current} 영업점 TOP 5</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -611,7 +634,7 @@ export default function MonthlyLeadsChart({ filters }: MonthlyLeadsChartProps) {
 
         {/* 선택 기간 전체 영업점 순위 - 특정 시점이 아니라 조회기간 전체 누계를 자유롭게 확인 */}
         {officeTotals.entries.length > 0 && (
-          <div className="mb-1">
+          <div>
             <p className="text-xs font-medium text-gray-500 mb-2">조회기간 전체 영업점 순위</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -649,6 +672,57 @@ export default function MonthlyLeadsChart({ filters }: MonthlyLeadsChartProps) {
             )}
           </div>
         )}
+        </div>
+
+        {/* 기간별 인입 건수 표 - 영업점 TOP5 컬럼 오른쪽에 별도 컬럼으로 배치, 차트 막대만으로는 정확한 수치를 읽기 어려워서 기간별 합계를 표로도 제공 */}
+        {periodRows.length > 0 && (
+          <div className="lg:w-[360px] lg:shrink-0 lg:max-h-[420px] lg:overflow-y-auto lg:pr-1">
+            <p className="text-xs font-medium text-gray-500 mb-2">{periodLabels(aggLevel).columnName}별 인입 건수</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                    <th className="pb-2 font-medium">{periodLabels(aggLevel).columnName}</th>
+                    <th className="pb-2 font-medium text-right">총 건수</th>
+                    <th className="pb-2 font-medium text-right">미지정</th>
+                    <th className="pb-2 font-medium text-right">{periodLabels(aggLevel).comparedTo}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllPeriods ? periodRows : periodRows.slice(0, PERIOD_ROW_LIMIT)).map((d, i) => (
+                    <tr
+                      key={d.month}
+                      className={`border-b border-gray-50 cursor-pointer hover:bg-blue-50 transition-colors ${i === 0 ? 'bg-blue-50/50' : ''}`}
+                      onClick={() => openPeriodDetail(d.month)}
+                    >
+                      <td className="py-2 text-gray-700">
+                        {formatPeriodLabel(d.month, aggLevel)}
+                        {i === 0 && (
+                          <span className="ml-1.5 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">
+                            {periodLabels(aggLevel).current}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right tabular-nums font-semibold text-gray-900">{d.total.toLocaleString()}건</td>
+                      <td className="py-2 text-right tabular-nums text-gray-400">{d.unassigned > 0 ? `${d.unassigned}건` : '-'}</td>
+                      <td className="py-2 text-right"><DeltaTag value={d.delta} comparedTo="" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {periodRows.length > PERIOD_ROW_LIMIT && (
+              <button
+                onClick={() => setShowAllPeriods(v => !v)}
+                className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllPeriods ? 'rotate-180' : ''}`} />
+                {showAllPeriods ? '접기' : `${periodRows.length - PERIOD_ROW_LIMIT}개 더보기`}
+              </button>
+            )}
+          </div>
+        )}
+        </div>
       </div>
 
       {/* 상세 모달 */}
