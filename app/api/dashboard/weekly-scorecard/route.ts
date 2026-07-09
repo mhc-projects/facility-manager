@@ -200,8 +200,10 @@ export async function GET(request: NextRequest) {
 
     // 4. 미수금 (자비/보조금) + 상중하 위험도
     //    매출관리(business-invoices/batch) 페이지와 완전히 동일한 lib/receivables-engine 공식을 사용해
-    //    두 화면의 미수금 총액이 항상 일치하도록 한다. 모집단도 매출관리(is_deleted=false만 필터)와
-    //    동일하게 맞춘다 — is_active/installation_date로 사전 배제하지 않는다.
+    //    두 화면의 미수금 총액이 항상 일치하도록 한다.
+    //    모집단은 매출관리에서 "정확한 미수금"으로 취급하는 필터(설치연도 전체 선택 = 설치완료 사업장만)와
+    //    동일하게 installation_date IS NOT NULL로 제한한다. 설치 전 사업장은 고시가 기반 계약금액이
+    //    아직 실제 채권으로 간주되지 않아 제외해야 총액이 매출관리 화면과 맞는다.
     const equipmentSelect = EQUIPMENT_FIELDS.join(', ');
     const [businesses, pricingRows]: [ReceivableRow[], any[]] = await Promise.all([
       queryAll(
@@ -214,7 +216,7 @@ export async function GET(request: NextRequest) {
           invoice_balance_amount, invoice_balance_date, payment_balance_amount, payment_balance_date,
           ${equipmentSelect}
          FROM business_info
-         WHERE is_deleted = false`
+         WHERE is_deleted = false AND installation_date IS NOT NULL`
       ),
       queryAll(
         `SELECT equipment_type, official_price FROM government_pricing WHERE is_active = true`
