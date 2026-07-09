@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import AdminLayout from '@/components/ui/AdminLayout';
 import Modal from '@/components/ui/Modal';
+import { useAuth } from '@/contexts/AuthContext';
 import { TokenManager } from '@/lib/api-client';
 import { Mail, RefreshCw, ExternalLink, ShieldAlert, Loader2, Paperclip, Download, Search, X } from 'lucide-react';
 
@@ -61,6 +62,9 @@ function formatDate(raw: string): string {
 }
 
 export default function MailPage() {
+  const { user } = useAuth();
+  const isSystemAdmin = (user?.permission_level ?? 0) >= 4;
+
   const [checking, setChecking] = useState(true);
   const [accessDenied, setAccessDenied] = useState<string | null>(null);
   const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
@@ -238,7 +242,7 @@ export default function MailPage() {
       title="메일함"
       description={connectedEmail ? `${connectedEmail} 수신함 (읽기 전용)` : 'Gmail 수신함 열람'}
       actions={
-        connectedEmail ? (
+        connectedEmail && isSystemAdmin ? (
           <button
             onClick={handleConnect}
             disabled={connecting}
@@ -265,15 +269,21 @@ export default function MailPage() {
         <div className="flex flex-col items-center justify-center py-24 text-center bg-white border border-gray-200 rounded-xl">
           <Mail className="w-12 h-12 text-gray-300 mb-4" />
           <p className="text-lg font-medium text-gray-900 mb-1">연결된 Gmail 계정이 없습니다</p>
-          <p className="text-sm text-gray-500 mb-6">회사 Gmail 계정을 연결하면 수신함을 열람할 수 있습니다.</p>
-          <button
-            onClick={handleConnect}
-            disabled={connecting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-            Gmail 연결하기
-          </button>
+          {isSystemAdmin ? (
+            <>
+              <p className="text-sm text-gray-500 mb-6">회사 Gmail 계정을 연결하면 수신함을 열람할 수 있습니다.</p>
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                Gmail 연결하기
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500">Gmail 계정 연결은 시스템 관리자만 할 수 있습니다. 관리자에게 요청해주세요.</p>
+          )}
         </div>
       ) : (
         <>

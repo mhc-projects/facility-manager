@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
-import { requireSalesOrAdmin } from '@/lib/auth/require-sales-or-admin';
+import { requireSystemAdmin } from '@/lib/auth/require-system-admin';
 import { buildAuthUrl } from '@/lib/services/gmail-oauth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET: Google 계정 연결 동의 화면 URL 생성 (CSRF 방지용 state를 httpOnly 쿠키에 저장)
+// 공유 계정을 바꾸는 작업이라 시스템관리자(레벨4)만 허용
 export async function GET(request: NextRequest) {
-  const auth = await requireSalesOrAdmin(request);
+  const auth = await requireSystemAdmin(request);
   if (!auth.ok) return auth.response;
 
   try {
