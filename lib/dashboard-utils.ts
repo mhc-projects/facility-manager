@@ -226,3 +226,35 @@ export function getCurrentTimeKey(level: AggregationLevel): string {
   const now = new Date();
   return getAggregationKey(now, level);
 }
+
+function formatDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * 집계 버킷의 종료일(YYYY-MM-DD) 계산 - 버킷을 "그 시점까지의 스냅샷"으로 재구성할 때 asOfDate로 사용.
+ * getAggregationKey/getWeekStartDate와 동일한 방식(로컬 Date getter)으로 계산해 키 생성과 어긋나지 않게 함.
+ *
+ * @param key 집계 키 (YYYY-MM-DD, YYYY-Www, YYYY-MM)
+ * @param level 집계 단위
+ * @returns 그 버킷의 마지막 날짜 (YYYY-MM-DD)
+ */
+export function getBucketEndDate(key: string, level: AggregationLevel): string {
+  if (level === 'daily') {
+    return key;
+  }
+  if (level === 'weekly') {
+    const start = getWeekStartDate(key);
+    if (!start) return key;
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return formatDateOnly(end);
+  }
+  // monthly: 'YYYY-MM' -> 그 달의 마지막 날 (다음달 0일 = 이번달 마지막날)
+  const [y, m] = key.split('-').map(Number);
+  const end = new Date(y, m, 0);
+  return formatDateOnly(end);
+}

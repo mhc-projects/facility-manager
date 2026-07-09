@@ -197,7 +197,7 @@ export default function ReceivableChart({ filters }: ReceivableChartProps) {
       {summary && (
         <div className="grid grid-cols-2 gap-2 mb-5">
           <div className="px-3 py-2 rounded-lg bg-gray-50">
-            <p className="text-[11px] text-gray-500">총 미수금 (조회기간 누계)</p>
+            <p className="text-[11px] text-gray-500">총 미수금 (최근 시점 기준)</p>
             <p className="text-sm font-semibold text-gray-700 tabular-nums">{formatFullAmount(summary.totalOutstanding)}</p>
           </div>
           <div className="px-3 py-2 rounded-lg bg-gray-50">
