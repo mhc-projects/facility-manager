@@ -2,6 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryAll } from '@/lib/supabase-direct';
 import { requireAdmin } from '@/lib/auth/require-admin';
+import {
+  EQUIPMENT_FIELDS,
+  calculateContractAmount,
+  buildRecordsMap,
+  computeBusinessReceivableNow,
+  computeBusinessReceivableAsOf,
+  type ReceivableBusiness,
+} from '@/lib/receivables-engine';
+import type { InvoiceRecordsByStage } from '@/types/invoice';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,7 +50,7 @@ function daysBetween(fromDateStr: string, toDateStr: string): number {
 
 // 설치일 기준 경과일로 미수금 위험도 산출 (상: 90일+, 중: 60일+, 하: 30일+)
 // revenue 페이지의 calcAutoRisk와 동일한 기준. 순수 날짜 함수라 과거 시점도 그대로 재계산 가능.
-function calcRiskTier(installationDate: string | null, asOfDate: string): '상' | '중' | '하' | null {
+function calcRiskTier(installationDate: string | null | undefined, asOfDate: string): '상' | '중' | '하' | null {
   if (!installationDate) return null;
   const elapsed = daysBetween(installationDate, asOfDate);
   if (elapsed >= 90) return '상';
@@ -50,53 +59,8 @@ function calcRiskTier(installationDate: string | null, asOfDate: string): '상' 
   return null;
 }
 
-// 발행일/입금일이 기준일 이후면 그 시점엔 아직 반영되지 않은 것으로 간주 (과거 시점 스냅샷 재구성용)
-function amountAsOf(amount: any, dateCol: string | null, asOfDate: string): number {
-  if (!dateCol || dateCol > asOfDate) return 0;
-  return Number(amount) || 0;
-}
-
-interface ReceivableRow {
-  id: string;
+interface ReceivableRow extends ReceivableBusiness {
   business_name: string;
-  progress_status: string | null;
-  installation_date: string | null;
-  invoice_1st_amount: any; invoice_1st_date: string | null;
-  payment_1st_amount: any; payment_1st_date: string | null;
-  invoice_2nd_amount: any; invoice_2nd_date: string | null;
-  payment_2nd_amount: any; payment_2nd_date: string | null;
-  additional_cost: any; invoice_additional_date: string | null;
-  payment_additional_amount: any; payment_additional_date: string | null;
-  invoice_advance_amount: any; invoice_advance_date: string | null;
-  payment_advance_amount: any; payment_advance_date: string | null;
-  invoice_balance_amount: any; invoice_balance_date: string | null;
-  payment_balance_amount: any; payment_balance_date: string | null;
-}
-
-// business_info의 진행구분/계산서·입금 컬럼을 기준으로 특정 시점의 미수금(자비/보조금)을 계산
-// app/api/dashboard/receivables/route.ts의 현재 시점 계산 로직을 과거 시점 재구성 가능하도록 확장한 버전
-function computeReceivableAsOf(biz: ReceivableRow, asOfDate: string): { self: number; subsidy: number } {
-  const status = (biz.progress_status || '').trim();
-  let self = 0;
-  let subsidy = 0;
-
-  if (status === '보조금' || status === '보조금 동시진행') {
-    const receivable1st = amountAsOf(biz.invoice_1st_amount, biz.invoice_1st_date, asOfDate)
-      - amountAsOf(biz.payment_1st_amount, biz.payment_1st_date, asOfDate);
-    const receivable2nd = amountAsOf(biz.invoice_2nd_amount, biz.invoice_2nd_date, asOfDate)
-      - amountAsOf(biz.payment_2nd_amount, biz.payment_2nd_date, asOfDate);
-    const receivableAdditional = amountAsOf(biz.additional_cost, biz.invoice_additional_date, asOfDate)
-      - amountAsOf(biz.payment_additional_amount, biz.payment_additional_date, asOfDate);
-    subsidy = receivable1st + receivable2nd + receivableAdditional;
-  } else if (status === '자비' || status === '대리점' || status === 'AS') {
-    const receivableAdvance = amountAsOf(biz.invoice_advance_amount, biz.invoice_advance_date, asOfDate)
-      - amountAsOf(biz.payment_advance_amount, biz.payment_advance_date, asOfDate);
-    const receivableBalance = amountAsOf(biz.invoice_balance_amount, biz.invoice_balance_date, asOfDate)
-      - amountAsOf(biz.payment_balance_amount, biz.payment_balance_date, asOfDate);
-    self = receivableAdvance + receivableBalance;
-  }
-
-  return { self, subsidy };
 }
 
 // ========================================
@@ -234,17 +198,49 @@ export async function GET(request: NextRequest) {
       completion: toCountPair(completionRows, period, r => ({ id: r.id, business_name: r.business_name }))
     };
 
-    // 4. 미수금 (자비/보조금) + 상중하 위험도 — 두 시점 모두 실시간 재계산 (별도 이력 저장 불필요)
-    const businesses: ReceivableRow[] = await queryAll(
-      `SELECT id, business_name, progress_status, installation_date,
-        invoice_1st_amount, invoice_1st_date, payment_1st_amount, payment_1st_date,
-        invoice_2nd_amount, invoice_2nd_date, payment_2nd_amount, payment_2nd_date,
-        additional_cost, invoice_additional_date, payment_additional_amount, payment_additional_date,
-        invoice_advance_amount, invoice_advance_date, payment_advance_amount, payment_advance_date,
-        invoice_balance_amount, invoice_balance_date, payment_balance_amount, payment_balance_date
-       FROM business_info
-       WHERE is_active = true AND is_deleted = false AND installation_date IS NOT NULL`
-    );
+    // 4. 미수금 (자비/보조금) + 상중하 위험도
+    //    매출관리(business-invoices/batch) 페이지와 완전히 동일한 lib/receivables-engine 공식을 사용해
+    //    두 화면의 미수금 총액이 항상 일치하도록 한다. 모집단도 매출관리(is_deleted=false만 필터)와
+    //    동일하게 맞춘다 — is_active/installation_date로 사전 배제하지 않는다.
+    const equipmentSelect = EQUIPMENT_FIELDS.join(', ');
+    const [businesses, pricingRows]: [ReceivableRow[], any[]] = await Promise.all([
+      queryAll(
+        `SELECT id, business_name, progress_status, installation_date,
+          additional_cost, negotiation, revenue_adjustments,
+          invoice_1st_amount, invoice_1st_date, payment_1st_amount, payment_1st_date,
+          invoice_2nd_amount, invoice_2nd_date, payment_2nd_amount, payment_2nd_date,
+          invoice_additional_date, payment_additional_amount, payment_additional_date,
+          invoice_advance_amount, invoice_advance_date, payment_advance_amount, payment_advance_date,
+          invoice_balance_amount, invoice_balance_date, payment_balance_amount, payment_balance_date,
+          ${equipmentSelect}
+         FROM business_info
+         WHERE is_deleted = false`
+      ),
+      queryAll(
+        `SELECT equipment_type, official_price FROM government_pricing WHERE is_active = true`
+      ),
+    ]);
+
+    const officialPrices: Record<string, number> = {};
+    for (const row of pricingRows || []) {
+      officialPrices[row.equipment_type] = Number(row.official_price) || 0;
+    }
+
+    const businessIds = businesses.map(b => b.id);
+    const idPlaceholders = businessIds.map((_, i) => `$${i + 1}`).join(', ');
+    const recordsRows = businessIds.length
+      ? await queryAll(
+          `SELECT id, business_id, invoice_stage, record_type, parent_record_id,
+                  issue_date, total_amount, supply_amount, payment_date, payment_amount, is_active
+           FROM invoice_records
+           WHERE business_id IN (${idPlaceholders}) AND is_active = TRUE
+           ORDER BY business_id, invoice_stage, record_type, created_at ASC`,
+          businessIds
+        )
+      : [];
+    const recordsMap = buildRecordsMap(businessIds, recordsRows);
+
+    const isLiveCurrentWeek = currentEnd === todayKST;
 
     let selfCurrent = 0, selfPrevious = 0, subsidyCurrent = 0, subsidyPrevious = 0;
     const selfCurrentBiz: BusinessRef[] = [];
@@ -259,25 +255,43 @@ export async function GET(request: NextRequest) {
     const subsidyChange: { id: string; business_name: string; amount: number }[] = [];
 
     for (const biz of businesses) {
-      const curR = computeReceivableAsOf(biz, currentEnd);
-      const prevR = computeReceivableAsOf(biz, previousSunday);
-      selfCurrent += curR.self;
-      subsidyCurrent += curR.subsidy;
-      selfPrevious += prevR.self;
-      subsidyPrevious += prevR.subsidy;
+      const stages: InvoiceRecordsByStage = recordsMap.get(biz.id) || {
+        subsidy_1st: [], subsidy_2nd: [], subsidy_additional: [],
+        self_advance: [], self_balance: [], extra: [],
+      };
+      const bizWithContract: ReceivableBusiness = {
+        ...biz,
+        contract_amount: calculateContractAmount(biz, officialPrices),
+      };
 
-      if (curR.self > 0) selfCurrentBiz.push({ id: biz.id, business_name: biz.business_name, amount: curR.self });
-      if (prevR.self > 0) selfPreviousBiz.push({ id: biz.id, business_name: biz.business_name, amount: prevR.self });
-      if (curR.subsidy > 0) subsidyCurrentBiz.push({ id: biz.id, business_name: biz.business_name, amount: curR.subsidy });
-      if (prevR.subsidy > 0) subsidyPreviousBiz.push({ id: biz.id, business_name: biz.business_name, amount: prevR.subsidy });
-      if (curR.self !== prevR.self) selfChange.push({ id: biz.id, business_name: biz.business_name, amount: curR.self - prevR.self });
-      if (curR.subsidy !== prevR.subsidy) subsidyChange.push({ id: biz.id, business_name: biz.business_name, amount: curR.subsidy - prevR.subsidy });
+      const curResult = isLiveCurrentWeek
+        ? computeBusinessReceivableNow(bizWithContract, stages)
+        : computeBusinessReceivableAsOf(bizWithContract, stages, currentEnd);
+      const prevResult = computeBusinessReceivableAsOf(bizWithContract, stages, previousSunday);
 
-      if (curR.self + curR.subsidy > 0) {
+      const isSubsidy = curResult.category === '보조금';
+      const curAmount = curResult.receivable;
+      const prevAmount = prevResult.receivable;
+
+      if (isSubsidy) {
+        subsidyCurrent += curAmount;
+        subsidyPrevious += prevAmount;
+        if (curAmount > 0) subsidyCurrentBiz.push({ id: biz.id, business_name: biz.business_name, amount: curAmount });
+        if (prevAmount > 0) subsidyPreviousBiz.push({ id: biz.id, business_name: biz.business_name, amount: prevAmount });
+        if (curAmount !== prevAmount) subsidyChange.push({ id: biz.id, business_name: biz.business_name, amount: curAmount - prevAmount });
+      } else {
+        selfCurrent += curAmount;
+        selfPrevious += prevAmount;
+        if (curAmount > 0) selfCurrentBiz.push({ id: biz.id, business_name: biz.business_name, amount: curAmount });
+        if (prevAmount > 0) selfPreviousBiz.push({ id: biz.id, business_name: biz.business_name, amount: prevAmount });
+        if (curAmount !== prevAmount) selfChange.push({ id: biz.id, business_name: biz.business_name, amount: curAmount - prevAmount });
+      }
+
+      if (curAmount > 0) {
         const tier = calcRiskTier(biz.installation_date, currentEnd);
         if (tier) riskCurrent[tier].push({ id: biz.id, business_name: biz.business_name, elapsedDays: daysBetween(biz.installation_date!, currentEnd) });
       }
-      if (prevR.self + prevR.subsidy > 0) {
+      if (prevAmount > 0) {
         const tier = calcRiskTier(biz.installation_date, previousSunday);
         if (tier) riskPrevious[tier].push({ id: biz.id, business_name: biz.business_name, elapsedDays: daysBetween(biz.installation_date!, previousSunday) });
       }

@@ -14,63 +14,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query as pgQuery } from '@/lib/supabase-direct';
-import { calculateReceivables } from '@/lib/receivables-calculator';
-import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
+import {
+  EQUIPMENT_FIELDS,
+  calculateContractAmount,
+  buildRecordsMap,
+  computeBusinessReceivableNow,
+} from '@/lib/receivables-engine';
+import type { InvoiceRecordsByStage } from '@/types/invoice';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-// 고시가 기반 매출 계산에 사용되는 기기 필드
-const EQUIPMENT_FIELDS = [
-  'ph_meter', 'differential_pressure_meter', 'temperature_meter',
-  'discharge_current_meter', 'fan_current_meter', 'pump_current_meter',
-  'gateway', 'gateway_1_2', 'gateway_3_4', 'vpn_wired', 'vpn_wireless',
-  'explosion_proof_differential_pressure_meter_domestic',
-  'explosion_proof_temperature_meter_domestic', 'expansion_device',
-  'relay_8ch', 'relay_16ch', 'main_board_replacement', 'multiple_stack'
-];
-
-function mapProgressToCategory(s: string | null | undefined): '보조금' | '자비' {
-  const v = (s || '').trim();
-  if (v === '보조금' || v === '보조금 동시진행' || v === '보조금 추가승인') return '보조금';
-  return '자비';
-}
-
-/**
- * 서버 사이드 contract_amount 계산
- * 환경부 고시가 × 수량 + 추가공사비 - 협의사항 + 매출비용조정 (부가세 포함)
- */
-function calculateServerContractAmount(
-  business: any,
-  officialPrices: Record<string, number>
-): number {
-  let revenue = 0;
-  for (const field of EQUIPMENT_FIELDS) {
-    const qty = Number(business[field]) || 0;
-    if (qty > 0) {
-      revenue += (officialPrices[field] || 0) * qty;
-    }
-  }
-  // 추가공사비
-  revenue += Number(business.additional_cost) || 0;
-  // 협의사항
-  const negotiation = business.negotiation
-    ? parseFloat(String(business.negotiation)) || 0
-    : 0;
-  revenue -= negotiation;
-  // 매출비용 조정 (JSONB 배열)
-  try {
-    const raw = business.revenue_adjustments;
-    if (raw) {
-      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (Array.isArray(arr)) {
-        revenue += arr.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
-      }
-    }
-  } catch { /* ignore */ }
-  // 부가세 포함
-  return Math.round(revenue * 1.1);
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -154,7 +107,7 @@ async function handleIdsMode(ids: string[]) {
     if (!biz) return null;
     return {
       ...biz,
-      contract_amount: calculateServerContractAmount(biz, officialPrices),
+      contract_amount: calculateContractAmount(biz, officialPrices),
     };
   }).filter(Boolean);
 
@@ -191,30 +144,8 @@ async function handleBusinessesMode(businesses: any[]) {
 }
 
 /**
- * invoice_records 맵 구성
- */
-function buildRecordsMap(ids: string[], rows: any[]): Map<string, InvoiceRecordsByStage> {
-  const recordsMap = new Map<string, InvoiceRecordsByStage>();
-  for (const id of ids) {
-    recordsMap.set(id, {
-      subsidy_1st: [], subsidy_2nd: [], subsidy_additional: [],
-      self_advance: [], self_balance: [], extra: [],
-    });
-  }
-
-  for (const row of rows as InvoiceRecord[]) {
-    if (row.parent_record_id) continue;
-    const stageMap = recordsMap.get(row.business_id);
-    if (!stageMap) continue;
-    const stage = row.invoice_stage as keyof InvoiceRecordsByStage;
-    if (stageMap[stage]) stageMap[stage].push(row);
-  }
-
-  return recordsMap;
-}
-
-/**
- * 사업장별 미수금·입금액 일괄 계산
+ * 사업장별 미수금·입금액 일괄 계산 - lib/receivables-engine의 공유 공식을 사용
+ * (주간 브리핑도 동일 공식을 써서 두 화면의 미수금 총액이 항상 일치한다)
  */
 function calculateBatchReceivables(
   businesses: any[],
@@ -224,81 +155,13 @@ function calculateBatchReceivables(
   const paymentsResult: Record<string, number> = {};
 
   for (const b of businesses) {
-    const category = mapProgressToCategory(b.progress_status);
     const stages = recordsMap.get(b.id) || {
       subsidy_1st: [], subsidy_2nd: [], subsidy_additional: [],
       self_advance: [], self_balance: [], extra: [],
     };
-
-    const getOriginal = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
-      stages[stage].find((r: InvoiceRecord) => r.record_type === 'original') || null;
-
-    // 총 입금액 집계
-    let allPayments = 0;
-    if (category === '보조금') {
-      const r1 = getOriginal('subsidy_1st');
-      const r2 = getOriginal('subsidy_2nd');
-      const rA = getOriginal('subsidy_additional');
-      allPayments =
-        (r1 !== null ? (r1.payment_amount || 0) : (Number(b.payment_1st_amount) || 0)) +
-        (r2 !== null ? (r2.payment_amount || 0) : (Number(b.payment_2nd_amount) || 0)) +
-        (rA !== null ? (rA.payment_amount || 0) : (Number(b.payment_additional_amount) || 0));
-    } else {
-      const rAdv = getOriginal('self_advance');
-      const rBal = getOriginal('self_balance');
-      allPayments =
-        (rAdv !== null ? (rAdv.payment_amount || 0) : (Number(b.payment_advance_amount) || 0)) +
-        (rBal !== null ? (rBal.payment_amount || 0) : (Number(b.payment_balance_amount) || 0));
-    }
-    allPayments += stages.extra
-      .filter((r: InvoiceRecord) => r.record_type !== 'cancelled')
-      .reduce((sum: number, r: InvoiceRecord) => sum + (r.payment_amount || 0), 0);
-
-    // 기준금액: 실제 발행된 계산서 합산
-    let invoicedFallback = 0;
-    if (category === '보조금') {
-      const r1 = getOriginal('subsidy_1st');
-      const r2 = getOriginal('subsidy_2nd');
-      const rA = getOriginal('subsidy_additional');
-      invoicedFallback =
-        (r1 ? (r1.total_amount || 0) : (Number(b.invoice_1st_amount) || 0)) +
-        (r2 ? (r2.total_amount || 0) : (Number(b.invoice_2nd_amount) || 0)) +
-        (rA
-          ? (rA.issue_date ? (rA.total_amount || 0) : 0)
-          : (b.invoice_additional_date
-              ? Math.round((Number(b.additional_cost) || 0) * 1.1)
-              : 0));
-    } else {
-      const rAdv = getOriginal('self_advance');
-      const rBal = getOriginal('self_balance');
-      invoicedFallback =
-        (rAdv ? (rAdv.total_amount || 0) : (Number(b.invoice_advance_amount) || 0)) +
-        (rBal ? (rBal.total_amount || 0) : (Number(b.invoice_balance_amount) || 0));
-    }
-    invoicedFallback += stages.extra
-      .filter((r: InvoiceRecord) => r.record_type !== 'cancelled')
-      .reduce((sum: number, r: InvoiceRecord) => sum + (r.total_amount || 0), 0);
-
-    // extra 계산서 공급가액 합계 — contract_amount 보정용
-    const extraSupplyTotal = stages.extra
-      .filter((r: InvoiceRecord) => r.record_type !== 'cancelled')
-      .reduce((sum: number, r: InvoiceRecord) => sum + (r.supply_amount || 0), 0);
-    const contractAmountWithExtra = Math.round((b.contract_amount || 0) + extraSupplyTotal * 1.1);
-
-    // contract_amount(extra 보정 후)와 실제 발행 계산서 중 큰 값 사용
-    const baseFromInvoice = Math.max(contractAmountWithExtra, invoicedFallback);
-
-    // 계산서 발행이 없고 입금만 있는 경우: 입금액이 실질 기준
-    const baseAmount = baseFromInvoice > 0 ? baseFromInvoice : allPayments;
-
-    paymentsResult[b.id] = allPayments;
-    result[b.id] = baseAmount === 0
-      ? 0
-      : calculateReceivables({
-          installationDate: b.installation_date,
-          totalRevenueWithTax: baseAmount,
-          totalPayments: allPayments,
-        });
+    const { receivable, payment } = computeBusinessReceivableNow(b, stages);
+    result[b.id] = receivable;
+    paymentsResult[b.id] = payment;
   }
 
   return { receivables: result, payments: paymentsResult };
