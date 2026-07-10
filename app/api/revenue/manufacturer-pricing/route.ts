@@ -177,8 +177,8 @@ export async function POST(request: NextRequest) {
       notes
     }: ManufacturerPricingData = body;
 
-    // 입력 값 검증
-    if (!equipment_type || !equipment_name || !manufacturer || !cost_price || !effective_from) {
+    // 입력 값 검증 (cost_price는 0원도 유효한 값이므로 falsy 체크가 아닌 누락 여부로 검증)
+    if (!equipment_type || !equipment_name || !manufacturer || cost_price === undefined || cost_price === null || !effective_from) {
       return NextResponse.json({
         success: false,
         message: '필수 필드가 누락되었습니다.'
