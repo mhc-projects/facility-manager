@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TokenManager } from '@/lib/api-client';
 import Modal, { ModalActions } from '@/components/ui/Modal';
+import AutocompleteSelectInput from '@/components/ui/AutocompleteSelectInput';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import {
   Percent,
   History,
@@ -18,28 +20,30 @@ import {
 } from 'lucide-react';
 import type {
   CommissionRate,
-  CommissionRateHistory,
-  Manufacturer,
-  MANUFACTURER_LABELS
+  CommissionRateHistory
 } from '@/types/commission';
 
 interface CommissionRateManagerProps {
   onClose?: () => void;
 }
 
+// 기존 4개사는 영문 코드로 저장되어 있음 (하위 호환용). 신규 제조사는 한글명을 그대로 키로 사용한다.
+const LEGACY_MANUFACTURER_CODES: Record<string, string> = {
+  '에코센스': 'ecosense',
+  '가이아씨앤에스': 'gaia_cns',
+  '크린어스': 'cleanearth',
+  '이브이에스': 'evs'
+};
+
 export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
+  const { manufacturers } = useAdminData();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [salesOffices, setSalesOffices] = useState<string[]>([]);
   const [selectedOffice, setSelectedOffice] = useState('');
   const [rates, setRates] = useState<CommissionRate[]>([]);
   const [editMode, setEditMode] = useState(false);
-  const [editedRates, setEditedRates] = useState<Record<Manufacturer, number>>({
-    ecosense: 0,
-    gaia_cns: 0,
-    cleanearth: 0,
-    evs: 0
-  });
+  const [editedRates, setEditedRates] = useState<Record<string, number>>({});
   const [effectiveFrom, setEffectiveFrom] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -50,6 +54,15 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
   const [historyData, setHistoryData] = useState<CommissionRateHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // 제조사 목록: 설정(제조사 관리)에 등록된 마스터 목록 기준 → 제조사별 원가 탭에 추가한 제조사도 자동 반영
+  const manufacturerOptions = useMemo(
+    () => manufacturers
+      .filter(m => m.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(m => ({ key: LEGACY_MANUFACTURER_CODES[m.name] || m.name, label: m.name })),
+    [manufacturers]
+  );
+
   useEffect(() => {
     loadSalesOffices();
   }, []);
@@ -58,7 +71,7 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
     if (selectedOffice) {
       loadCommissionRates();
     }
-  }, [selectedOffice]);
+  }, [selectedOffice, manufacturerOptions]);
 
   const getAuthHeaders = () => {
     const token = TokenManager.getToken();
@@ -77,7 +90,9 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
       const data = await response.json();
       if (data.success && data.data && data.data.settings) {
         // sales_office_cost_settings에서 영업점 목록 추출 (중복 제거)
-        const uniqueOffices = [...new Set(data.data.settings.map((s: any) => s.sales_office))];
+        const uniqueOffices = Array.from(
+          new Set<string>(data.data.settings.map((s: any) => s.sales_office as string))
+        );
         setSalesOffices(uniqueOffices);
         if (uniqueOffices.length > 0) {
           setSelectedOffice(uniqueOffices[0]);
@@ -92,23 +107,21 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/revenue/commission-rates?sales_office=${selectedOffice}`,
+        `/api/revenue/commission-rates?sales_office=${encodeURIComponent(selectedOffice)}`,
         { headers: getAuthHeaders() }
       );
 
       const data = await response.json();
       if (data.success) {
-        setRates(data.data.rates || []);
+        const loadedRates: CommissionRate[] = data.data.rates || [];
+        setRates(loadedRates);
 
-        // 현재 수수료율을 editedRates에 설정
-        const currentRates: Record<Manufacturer, number> = {
-          ecosense: 0,
-          gaia_cns: 0,
-          cleanearth: 0,
-          evs: 0
-        };
-
-        data.data.rates?.forEach((rate: CommissionRate) => {
+        // 현재 수수료율을 editedRates에 설정 (제조사 목록 기준으로 초기화)
+        const currentRates: Record<string, number> = {};
+        manufacturerOptions.forEach(opt => {
+          currentRates[opt.key] = 0;
+        });
+        loadedRates.forEach(rate => {
           currentRates[rate.manufacturer] = rate.commission_rate;
         });
 
@@ -132,9 +145,9 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
       return;
     }
 
-    const ratesArray = Object.entries(editedRates).map(([manufacturer, commission_rate]) => ({
-      manufacturer: manufacturer as Manufacturer,
-      commission_rate,
+    const ratesArray = manufacturerOptions.map(opt => ({
+      manufacturer: opt.key,
+      commission_rate: editedRates[opt.key] ?? 0,
       notes
     }));
 
@@ -153,9 +166,10 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
       const data = await response.json();
       if (data.success) {
         alert('수수료율이 성공적으로 업데이트되었습니다');
+        // 새로고침 없이 즉시 반영: 서버가 반환한 새 수수료율로 화면을 바로 갱신
+        setRates(data.data.rates || []);
         setEditMode(false);
         setNotes('');
-        await loadCommissionRates();
       } else {
         alert(`업데이트 실패: ${data.error}`);
       }
@@ -194,11 +208,12 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
     }
   };
 
-  const MANUFACTURER_LABELS: Record<Manufacturer, string> = {
-    ecosense: '에코센스',
-    gaia_cns: '가이아씨앤에스',
-    cleanearth: '크린어스',
-    evs: '이브이에스'
+  // 수수료율 이력 등에 남아있는 제조사 키(레거시 코드 포함)를 한글 표시명으로 변환
+  const getManufacturerLabel = (key: string): string => {
+    const found = manufacturerOptions.find(opt => opt.key === key);
+    if (found) return found.label;
+    const legacyEntry = Object.entries(LEGACY_MANUFACTURER_CODES).find(([, code]) => code === key);
+    return legacyEntry ? legacyEntry[0] : key;
   };
 
   return (
@@ -267,16 +282,14 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
           <Building2 className="w-4 h-4 inline mr-1" />
           영업점 선택
         </label>
-        <select
+        <AutocompleteSelectInput
           value={selectedOffice}
-          onChange={(e) => setSelectedOffice(e.target.value)}
+          onChange={(id) => setSelectedOffice(id)}
+          options={salesOffices.map(office => ({ id: office, name: office }))}
+          placeholder="영업점을 입력해 검색하세요"
           disabled={editMode}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
-        >
-          {salesOffices.map(office => (
-            <option key={office} value={office}>{office}</option>
-          ))}
-        </select>
+        />
       </div>
 
       {/* 수수료율 테이블 */}
@@ -301,15 +314,22 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {(['ecosense', 'gaia_cns', 'cleanearth', 'evs'] as Manufacturer[]).map((manufacturer) => {
-                const rate = rates.find(r => r.manufacturer === manufacturer);
+              {manufacturerOptions.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
+                    등록된 제조사가 없습니다. 설정에서 제조사를 먼저 추가하세요.
+                  </td>
+                </tr>
+              )}
+              {manufacturerOptions.map((opt) => {
+                const rate = rates.find(r => r.manufacturer === opt.key);
                 return (
-                  <tr key={manufacturer}>
+                  <tr key={opt.key}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-gray-400" />
                         <span className="text-sm font-medium text-gray-900">
-                          {MANUFACTURER_LABELS[manufacturer]}
+                          {opt.label}
                         </span>
                       </div>
                     </td>
@@ -320,10 +340,10 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
                           step="0.01"
                           min="0"
                           max="100"
-                          value={editedRates[manufacturer]}
+                          value={editedRates[opt.key] ?? 0}
                           onChange={(e) => setEditedRates({
                             ...editedRates,
-                            [manufacturer]: parseFloat(e.target.value) || 0
+                            [opt.key]: parseFloat(e.target.value) || 0
                           })}
                           className="w-24 px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         />
@@ -417,7 +437,7 @@ export function CommissionRateManager({ onClose }: CommissionRateManagerProps) {
                     {historyData.map((history) => (
                       <tr key={history.id}>
                         <td className="px-4 py-3 text-sm text-gray-900">
-                          {MANUFACTURER_LABELS[history.manufacturer]}
+                          {getManufacturerLabel(history.manufacturer)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900">
                           {history.commission_rate}%
