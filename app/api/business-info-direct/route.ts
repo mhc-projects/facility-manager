@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryAll, queryOne, query as pgQuery, transaction } from '@/lib/supabase-direct';
+import { calculateRevenue, preloadMasterData } from '@/lib/services/revenue-calculator';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,22 @@ export const runtime = 'nodejs';
 const DEBUG = process.env.NODE_ENV === 'development';
 const log = (...args: any[]) => DEBUG && console.log(...args);
 const logError = (...args: any[]) => console.error(...args); // Always log errors
+
+// 매출 계산(lib/services/revenue-calculator.ts)이 실제로 참조하는 business_info 컬럼 목록
+// 이 필드가 수정되면 revenue_calculations 캐시가 최신 값을 반영하도록 재계산을 트리거한다
+const REVENUE_AFFECTING_FIELDS = [
+  'ph_meter', 'differential_pressure_meter', 'temperature_meter',
+  'discharge_current_meter', 'fan_current_meter', 'pump_current_meter',
+  'gateway', 'gateway_1_2', 'gateway_3_4', 'vpn_wired', 'vpn_wireless',
+  'explosion_proof_differential_pressure_meter_domestic',
+  'explosion_proof_temperature_meter_domestic', 'expansion_device',
+  'relay_8ch', 'relay_16ch', 'main_board_replacement', 'multiple_stack',
+  'multiple_stack_install_extra', 'manufacturer', 'sales_office',
+  'additional_cost', 'negotiation', 'installation_extra_cost',
+  'survey_fee_adjustment', 'as_cost', 'custom_additional_costs',
+  'revenue_adjustments', 'purchase_adjustments',
+  'estimate_survey_date', 'pre_construction_survey_date', 'completion_survey_date',
+];
 
 // UTF-8 normalization function
 function normalizeUTF8(str: string): string {
@@ -1076,6 +1093,24 @@ export async function PUT(request: Request) {
     }
     // ── 설치비 마감 트리거 끝 ──
 
+    // ── 매출 재계산 트리거: 이번 요청이 매출 계산에 쓰이는 필드를 건드렸으면 즉시 재계산 ──
+    // (엑셀 업로드 등 클라이언트가 재계산을 별도로 호출하지 않는 경로도 이 API를 거치므로
+    //  서버에서 직접 트리거해 revenue_calculations 캐시가 stale해지는 것을 막는다)
+    if (updateFields.some(field => REVENUE_AFFECTING_FIELDS.includes(field))) {
+      try {
+        await calculateRevenue({
+          business_id: id,
+          save_result: true,
+          userId: null,
+          permissionLevel: 4,
+        });
+        log('✅ [REVENUE-TRIGGER] 매출 재계산 완료:', updatedBusiness.business_name);
+      } catch (revenueErr) {
+        console.error('⚠️ [REVENUE-TRIGGER] 매출 재계산 실패:', revenueErr);
+      }
+    }
+    // ── 매출 재계산 트리거 끝 ──
+
     return NextResponse.json({
       success: true,
       message: '사업장 정보가 성공적으로 수정되었습니다.',
@@ -1280,6 +1315,24 @@ export async function POST(request: Request) {
 
     log('✅ [BUSINESS-INFO-DIRECT] POST 성공:', `사업장 ${newBusiness.business_name} 생성 완료`);
 
+    // 생성 시점에 매출 관련 필드가 이미 채워져 있으면 매출 재계산 트리거
+    if (REVENUE_AFFECTING_FIELDS.some(field => {
+      const v = (normalizedData as any)[field];
+      return v !== undefined && v !== null && v !== '' && v !== 0;
+    })) {
+      try {
+        await calculateRevenue({
+          business_id: newBusiness.id,
+          save_result: true,
+          userId: null,
+          permissionLevel: 4,
+        });
+        log('✅ [REVENUE-TRIGGER] 신규 사업장 매출 계산 완료:', newBusiness.business_name);
+      } catch (revenueErr) {
+        console.error('⚠️ [REVENUE-TRIGGER] 신규 사업장 매출 계산 실패:', revenueErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: '사업장이 성공적으로 생성되었습니다.',
@@ -1374,6 +1427,11 @@ async function executeBatchUpload(
   const invoiceRecordsResult = await syncInvoiceRecordsFromBatch(businesses);
   log(`📋 [BATCH-UPLOAD] invoice_records 동기화 - 삽입: ${invoiceRecordsResult.inserted}, 업데이트: ${invoiceRecordsResult.updated}`);
 
+  // 매출 관련 필드가 포함된 사업장은 revenue_calculations 캐시를 재계산
+  // (엑셀 업로드로 additional_cost 등이 바뀌어도 매출관리 테이블이 stale한 값을 보여주는 것을 방지)
+  const revenueRecalcResult = await recalculateRevenueFromBatch(businesses);
+  log(`💰 [BATCH-UPLOAD] 매출 재계산 - 대상: ${revenueRecalcResult.recalculated}, 오류: ${revenueRecalcResult.errors}`);
+
   return NextResponse.json({
     success: true,
     message: '배치 업로드가 완료되었습니다.',
@@ -1387,6 +1445,7 @@ async function executeBatchUpload(
         errorDetails: errorDetails.slice(0, 10),
         elapsedTime,
         invoice_records_synced: invoiceRecordsResult,
+        revenue_recalculated: revenueRecalcResult,
       }
     }
   });
@@ -1974,4 +2033,76 @@ async function syncInvoiceRecordsFromBatch(
   }
 
   return { inserted, updated, errors };
+}
+
+/**
+ * 배치 업로드로 저장된 사업장 중 매출 계산에 쓰이는 필드가 포함된 사업장만
+ * revenue_calculations 캐시를 재계산한다. (엑셀 업로드가 재계산을 트리거하지 않아
+ * business_info.additional_cost 등을 반영 못 하고 매출관리 테이블이 stale해지는 문제 방지)
+ */
+async function recalculateRevenueFromBatch(
+  businesses: any[]
+): Promise<{ recalculated: number; errors: number }> {
+  let recalculated = 0;
+  let errors = 0;
+
+  // 매출 관련 필드가 하나라도 있는 사업장만 대상으로 함 (전량 재계산 시 대량 업로드에서 과도하게 느려짐)
+  const withRevenueFields = businesses.filter(b =>
+    REVENUE_AFFECTING_FIELDS.some(field => {
+      const v = b[field];
+      return v !== undefined && v !== null && v !== '' && v !== 0;
+    })
+  );
+
+  if (withRevenueFields.length === 0) return { recalculated, errors };
+
+  log(`💰 [RECALC-BATCH] 매출 관련 필드 있는 사업장: ${withRevenueFields.length}개`);
+
+  // 사업장명 → id 매핑 조회
+  const names = withRevenueFields.map(b => normalizeUTF8(b.business_name || '')).filter(Boolean);
+  if (names.length === 0) return { recalculated, errors };
+
+  const placeholders = names.map((_, i) => `$${i + 1}`).join(', ');
+  const bizRows = await queryAll(
+    `SELECT id, business_name FROM business_info
+     WHERE business_name IN (${placeholders}) AND is_active = true AND is_deleted = false`,
+    names
+  );
+  const nameToId: Record<string, string> = {};
+  for (const row of bizRows) {
+    nameToId[row.business_name] = row.id;
+  }
+
+  // 마스터 가격 데이터 1회 선로딩 (N+1 방지)
+  const masterData = await preloadMasterData();
+
+  // 동시 실행 제한 (10개씩)
+  const CONCURRENCY = 10;
+  const targetIds = withRevenueFields
+    .map(b => nameToId[normalizeUTF8(b.business_name || '')])
+    .filter(Boolean);
+
+  for (let i = 0; i < targetIds.length; i += CONCURRENCY) {
+    const chunk = targetIds.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(businessId =>
+        calculateRevenue({
+          business_id: businessId,
+          save_result: true,
+          userId: null,
+          permissionLevel: 4,
+          preloadedMasterData: masterData,
+        })
+      )
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') recalculated++;
+      else {
+        errors++;
+        logError('❌ [RECALC-BATCH] 재계산 실패:', r.reason?.message || r.reason);
+      }
+    }
+  }
+
+  return { recalculated, errors };
 }

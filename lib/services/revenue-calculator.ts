@@ -105,7 +105,8 @@ export interface CalculateRevenueParams {
   business_id: string | number;
   calculation_date?: string;
   save_result?: boolean;
-  userId: string | number;
+  /** null = 시스템 자동 트리거(사업장 정보 저장 후 재계산 등, 사용자 세션 없음) */
+  userId: string | number | null;
   permissionLevel: number;
   /** 배치 계산 시 루프 밖에서 사전 로드된 글로벌 마스터 데이터 (있으면 해당 테이블 재조회 생략) */
   preloadedMasterData?: PreloadedMasterData;
