@@ -4,10 +4,66 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getEmbedding } from '@/lib/embedding';
 import { verifyToken } from '@/utils/auth';
-import { generateStream } from '@/lib/ollama';
+import { generateStream, decideToolCalls, type ToolDef } from '@/lib/ollama';
+import { getBusinessReceivable, getInvoiceStatus, getRevenueSummary } from '@/lib/revenue-tools';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const REVENUE_TOOLS: ToolDef[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_business_receivable',
+      description: '특정 사업장의 계약금액, 입금액, 미수금을 조회한다.',
+      parameters: {
+        type: 'object',
+        properties: { business_name: { type: 'string', description: '사업장명 (전체 또는 일부)' } },
+        required: ['business_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_invoice_status',
+      description: '특정 사업장의 세금계산서 발행·입금 현황(차수별)을 조회한다.',
+      parameters: {
+        type: 'object',
+        properties: { business_name: { type: 'string', description: '사업장명 (전체 또는 일부)' } },
+        required: ['business_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_revenue_summary',
+      description: '특정 기간 전체 사업장의 세금계산서 발행/입금 합계를 조회한다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          start_date: { type: 'string', description: 'YYYY-MM-DD 형식 시작일' },
+          end_date: { type: 'string', description: 'YYYY-MM-DD 형식 종료일' },
+        },
+        required: ['start_date', 'end_date'],
+      },
+    },
+  },
+];
+
+async function executeRevenueTool(call: { name: string; arguments: Record<string, unknown> }) {
+  switch (call.name) {
+    case 'get_business_receivable':
+      return getBusinessReceivable(String(call.arguments.business_name ?? ''));
+    case 'get_invoice_status':
+      return getInvoiceStatus(String(call.arguments.business_name ?? ''));
+    case 'get_revenue_summary':
+      return getRevenueSummary(String(call.arguments.start_date ?? ''), String(call.arguments.end_date ?? ''));
+    default:
+      return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -127,6 +183,32 @@ export async function POST(request: NextRequest) {
 
     console.log(`[QA] memo search → ${memos.length}개 (top: ${memos[0]?.similarity?.toFixed(3) ?? 'N/A'}, auth=${isAuthenticated})`);
 
+    // 2.6 매출/미수금 조회 (실시간 계산 도구 호출, 관리자 전용)
+    // 미수금은 텍스트로 저장되지 않고 매번 재계산되는 값이라 임베딩 검색이 아니라
+    // receivables-engine을 직접 호출하는 도구 호출 방식으로 조회한다.
+    const canAccessRevenue = isAuthenticated && (Number(tokenPayload?.permission_level) || 0) >= 3;
+    let revenueContext: string | null = null;
+    if (canAccessRevenue) {
+      try {
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+        const toolCalls = await decideToolCalls(
+          question,
+          REVENUE_TOOLS,
+          `오늘 날짜는 ${today}입니다. 매출/미수금/계산서 조회가 필요한 질문일 때만 적절한 도구를 호출하세요. 그렇지 않으면 도구를 호출하지 마세요.`
+        );
+        if (toolCalls.length > 0) {
+          const results = await Promise.all(toolCalls.map(executeRevenueTool));
+          revenueContext = `[매출/미수금 조회 결과]\n${results
+            .filter(Boolean)
+            .map(r => JSON.stringify(r))
+            .join('\n\n')}`;
+          console.log(`[QA] revenue tools → ${toolCalls.map(t => t.name).join(', ')}`);
+        }
+      } catch (revErr) {
+        console.error('[QA] revenue tool error:', revErr);
+      }
+    }
+
     // 3. 공지사항 + 전달사항 최근 항목 조회
     const [announcementsRes, messagesRes] = await Promise.all([
       supabaseAdmin
@@ -168,7 +250,7 @@ export async function POST(request: NextRequest) {
         ).join('\n\n')}`
       : null;
 
-    if (!scored.length && !boardContext && !memoContext) {
+    if (!scored.length && !boardContext && !memoContext && !revenueContext) {
       return NextResponse.json(
         { answer: '해당 지침에서 관련 내용을 찾지 못했습니다. 다른 키워드로 질문해보세요.' },
         { status: 200 }
@@ -197,12 +279,15 @@ export async function POST(request: NextRequest) {
 4. 답변은 한국어로 작성하고, 출처(챕터/섹션명 또는 공지사항)를 언급하세요.
 5. 공지사항이나 전달사항에서 관련 내용을 찾았을 경우, 해당 공지의 작성자와 날짜를 언급하세요.
 6. 사업장 메모에서 관련 내용을 찾았을 경우, 반드시 해당 사업장명을 답변에 명시하세요.
+7. 매출/미수금 조회 결과가 있으면 그 안의 숫자만 그대로 인용하세요. 직접 계산하거나 추정하지 마세요. found:false인 항목은 "조회되지 않음"으로 안내하세요.
 
 ${wikiContext ? `[업무처리지침]\n${wikiContext}` : ''}
 
 ${boardContext ? `[회사 공지사항 및 전달사항]\n${boardContext}` : ''}
 
 ${memoContext ?? ''}
+
+${revenueContext ?? ''}
 
 [질문]
 ${question}`;

@@ -42,3 +42,49 @@ export async function* generateStream(prompt: string, options?: { think?: boolea
     }
   }
 }
+
+export type ToolDef = {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+};
+
+export type ToolCall = { name: string; arguments: Record<string, unknown> };
+
+/** 질문을 보고 어떤 도구를 어떤 인자로 호출할지 모델이 결정하게 한다 (도구 실행은 호출부 책임). */
+export async function decideToolCalls(
+  question: string,
+  tools: ToolDef[],
+  systemContext?: string
+): Promise<ToolCall[]> {
+  const messages = [
+    ...(systemContext ? [{ role: 'system', content: systemContext }] : []),
+    { role: 'user', content: question },
+  ];
+
+  const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      messages,
+      tools,
+      stream: false,
+      think: false,
+      keep_alive: '30m',
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Ollama 서버 응답 오류 (${res.status}). 로컬 모델 서버가 실행 중인지 확인하세요.`);
+  }
+
+  const data = await res.json();
+  const rawToolCalls: any[] = data?.message?.tool_calls ?? [];
+  return rawToolCalls
+    .map((tc): ToolCall => ({ name: tc.function?.name, arguments: tc.function?.arguments ?? {} }))
+    .filter(tc => !!tc.name);
+}
