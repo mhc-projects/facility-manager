@@ -1,19 +1,17 @@
 // app/api/wiki/qa/route.ts
-// AI Q&A: HuggingFace 임베딩 + Supabase pgvector + Gemini Flash 스트리밍
+// AI Q&A: Gemini 임베딩 + Supabase pgvector 검색 + 로컬 Ollama 모델 스트리밍 답변
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getEmbedding } from '@/lib/embedding';
 import { verifyToken } from '@/utils/auth';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateStream } from '@/lib/ollama';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '');
-
 export async function POST(request: NextRequest) {
   try {
-    const { question, domain } = await request.json();
+    const { question, domain, think } = await request.json();
     if (!question?.trim()) {
       return NextResponse.json({ error: '질문을 입력하세요' }, { status: 400 });
     }
@@ -177,15 +175,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Gemini Flash 스트리밍 답변
-    if (!process.env.GEMINI_API_KEY) {
-      const context = scored.map(c => c.chunk_text).join('\n\n');
-      return NextResponse.json({
-        answer: `다음 내용에서 관련 정보를 찾았습니다:\n\n${context.slice(0, 500)}...`,
-        sources: scored.map(c => ({ title: c.node_title, slug: c.node_slug })),
-      });
-    }
-
+    // 4. 로컬 Ollama 모델 스트리밍 답변
     const wikiContext = scored.map(c => c.chunk_text).join('\n\n---\n\n');
     const sources = [...new Map(
       scored.map(c => [c.node_id, { title: c.node_title, slug: c.node_slug }])
@@ -196,8 +186,6 @@ export async function POST(request: NextRequest) {
       : domain === 'iot'
       ? 'IoT 방지시설 운영·모니터링'
       : 'DPF 운행차 배출가스 저감사업 및 IoT 방지시설 운영';
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `당신은 블루온(주식회사) 환경설비 업무 전문가로, ${domainLabel} 업무를 담당합니다.
 아래 참고자료(업무처리지침, 공지사항, 전달사항)를 근거로 질문에 답변하세요.
@@ -219,8 +207,6 @@ ${memoContext ?? ''}
 [질문]
 ${question}`;
 
-    const result = await model.generateContentStream(prompt);
-
     const stream = new ReadableStream({
       async start(controller) {
         controller.enqueue(
@@ -228,15 +214,22 @@ ${question}`;
             `data: ${JSON.stringify({ type: 'sources', sources })}\n\n`
           )
         );
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) {
+        try {
+          for await (const text of generateStream(prompt, { think: !!think })) {
             controller.enqueue(
               new TextEncoder().encode(
                 `data: ${JSON.stringify({ type: 'text', text })}\n\n`
               )
             );
           }
+        } catch (genErr) {
+          const msg = genErr instanceof Error ? genErr.message : String(genErr);
+          console.error('[QA] generation error:', msg);
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify({ type: 'text', text: `\n\n(답변 생성 중 오류: ${msg})` })}\n\n`
+            )
+          );
         }
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
         controller.close();

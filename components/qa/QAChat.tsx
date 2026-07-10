@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Send, Bot, User, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, ExternalLink, Brain } from 'lucide-react';
 import { TokenManager } from '@/lib/api-client';
 
 type Domain = 'all' | 'dpf' | 'iot';
@@ -47,6 +47,8 @@ export default function QAChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  // 사고과정(chain-of-thought) 모드. 단순 조회형 질문은 꺼두는 쪽이 훨씬 빠르고 품질 차이가 없다.
+  const [thinkMode, setThinkMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,7 +81,7 @@ export default function QAChat() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ question, domain: domain === 'all' ? undefined : domain }),
+        body: JSON.stringify({ question, domain: domain === 'all' ? undefined : domain, think: thinkMode }),
       });
 
       if (!res.ok) throw new Error('API 오류');
@@ -249,6 +251,21 @@ export default function QAChat() {
 
       {/* 입력 영역 */}
       <div className="pt-3 border-t border-gray-200">
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => setThinkMode(v => !v)}
+            title="켜면 답변 전에 사고과정을 거쳐 더 신중하게 답변하지만, 응답 속도가 느려집니다"
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
+              thinkMode
+                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+            }`}
+          >
+            <Brain className="w-3.5 h-3.5" />
+            생각 모드 {thinkMode ? 'ON' : 'OFF'}
+          </button>
+        </div>
         <form
           onSubmit={(e) => { e.preventDefault(); sendMessage(input); }}
           className="flex gap-2"
