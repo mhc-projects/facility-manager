@@ -6,6 +6,7 @@ import {
   determineAggregationLevel,
   generateAggregationKeys,
   getBucketEndDate,
+  getPriorBucketEndDate,
   getCurrentTimeKey,
   type AggregationLevel
 } from '@/lib/dashboard-utils'
@@ -193,12 +194,35 @@ export async function GET(request: NextRequest) {
           ? computeBusinessReceivableNow(business, stages)
           : computeBusinessReceivableAsOf(business, stages, asOfDate);
         bucketData.outstanding += receivable;
-        bucketData.collected += payment;
+        bucketData.collected += payment; // 아직은 "그 시점까지의 누적 회수 총액" — 아래에서 기간 플로우로 변환
+      }
+    }
+
+    // 3.5. 회수금을 누적 총액에서 "그 주/달에 새로 걷힌 금액"(기간 플로우)으로 변환.
+    //    누적값 그대로 두면 항상 우상향만 해서 이번 기간의 회수 실적을 알 수 없다.
+    //    첫 버킷의 플로우를 구하려면 그 이전 시점(조회 기간 밖)의 누적값도 필요해서 별도로 계산한다.
+    const sortedMonths = Array.from(aggregationData.keys()).sort();
+    if (sortedMonths.length > 0) {
+      const baselineAsOfDate = getPriorBucketEndDate(sortedMonths[0], aggregationLevel);
+      let prevCumulativeCollected = 0;
+      for (const business of businessesWithContract) {
+        if (!business.installation_date || business.installation_date > baselineAsOfDate) continue;
+        const stages = recordsMap.get(business.id) || {
+          subsidy_1st: [], subsidy_2nd: [], subsidy_additional: [],
+          self_advance: [], self_balance: [], extra: [],
+        };
+        prevCumulativeCollected += computeBusinessReceivableAsOf(business, stages, baselineAsOfDate).payment;
+      }
+
+      for (const key of sortedMonths) {
+        const bucketData = aggregationData.get(key);
+        const cumulativeCollected = bucketData.collected;
+        bucketData.collected = cumulativeCollected - prevCumulativeCollected;
+        prevCumulativeCollected = cumulativeCollected;
       }
     }
 
     // 4. 회수율 및 전월 대비 계산
-    const sortedMonths = Array.from(aggregationData.keys()).sort();
     let prevOutstanding = 0;
 
     sortedMonths.forEach((monthKey, index) => {

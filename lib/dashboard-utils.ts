@@ -258,3 +258,31 @@ export function getBucketEndDate(key: string, level: AggregationLevel): string {
   const end = new Date(y, m, 0);
   return formatDateOnly(end);
 }
+
+/**
+ * 주어진 버킷 "바로 이전" 버킷의 종료일(YYYY-MM-DD) 계산 - 조회 기간의 첫 버킷에 대해
+ * "기간 내 발생분(그 기간에 새로 걷힌 회수금 등)"을 구하려면 그 이전 시점의 스냅샷이
+ * 기준값(baseline)으로 필요한데, 그 버킷은 aggregationData에 없어서 별도로 계산해야 함.
+ *
+ * @param key 기준이 되는 버킷의 집계 키
+ * @param level 집계 단위
+ * @returns 바로 이전 버킷의 마지막 날짜 (YYYY-MM-DD)
+ */
+export function getPriorBucketEndDate(key: string, level: AggregationLevel): string {
+  if (level === 'daily') {
+    const d = new Date(key);
+    d.setDate(d.getDate() - 1);
+    return formatDateOnly(d);
+  }
+  if (level === 'weekly') {
+    const start = getWeekStartDate(key);
+    if (!start) return key;
+    const priorEnd = new Date(start);
+    priorEnd.setDate(priorEnd.getDate() - 1); // 이번 주 시작일 하루 전 = 이전 주 마지막날
+    return formatDateOnly(priorEnd);
+  }
+  // monthly: 'YYYY-MM' -> 이번 달 1일 하루 전 = 이전 달 마지막날
+  const [y, m] = key.split('-').map(Number);
+  const priorEnd = new Date(y, m - 1, 0);
+  return formatDateOnly(priorEnd);
+}
