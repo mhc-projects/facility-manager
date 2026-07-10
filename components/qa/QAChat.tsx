@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Send, Bot, User, ExternalLink } from 'lucide-react';
+import { TokenManager } from '@/lib/api-client';
 
 type Domain = 'all' | 'dpf' | 'iot';
 
@@ -71,9 +72,13 @@ export default function QAChat() {
     setMessages(prev => [...prev, assistantMessage]);
 
     try {
+      const token = TokenManager.getToken();
       const res = await fetch('/api/wiki/qa', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ question, domain: domain === 'all' ? undefined : domain }),
       });
 

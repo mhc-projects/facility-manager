@@ -3,6 +3,7 @@ import { query as pgQuery, queryOne } from '@/lib/supabase-direct'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { TASK_STATUS_KR, TASK_TYPE_KR } from '@/lib/task-status-utils'
 import { logDebug, logError } from '@/lib/logger'
+import { upsertMemoEmbedding } from '@/lib/memo-embedding'
 
 /**
  * 업무 메모를 사업장 메모로 동기화 (이력 누적 방식)
@@ -23,7 +24,8 @@ export async function addTaskMemoToBusinessHistory({
   status,
   taskType,
   userId,
-  userName
+  userName,
+  skipEmbedding = false
 }: {
   taskId: string
   businessId: string
@@ -33,6 +35,9 @@ export async function addTaskMemoToBusinessHistory({
   taskType: string
   userId: string
   userName: string
+  /** 대량 업로드 등 반복 호출 시 Gemini 임베딩 호출로 인한 타임아웃을 피하려면 true로 설정.
+   *  임베딩이 없는 메모는 /api/business-memos/reindex 백필로 나중에 채워진다. */
+  skipEmbedding?: boolean
 }): Promise<{ success: boolean; memoId?: string; error?: string }> {
   try {
     // 메모가 비어있으면 동기화하지 않음
@@ -89,6 +94,15 @@ export async function addTaskMemoToBusinessHistory({
       memoId,
       title
     })
+
+    // ✅ AI Q&A 검색용 임베딩 생성 (실패해도 메모 동기화는 성공 처리)
+    if (!skipEmbedding) {
+      try {
+        await upsertMemoEmbedding(memoId, title, notes)
+      } catch (embedError: any) {
+        logError('TASK-MEMO-SYNC', '메모 임베딩 생성 실패', { memoId, error: embedError.message })
+      }
+    }
 
     return { success: true, memoId }
   } catch (error: any) {

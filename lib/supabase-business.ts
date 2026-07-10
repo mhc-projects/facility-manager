@@ -1,5 +1,6 @@
 // lib/supabase-business.ts - 비즈니스 데이터 Supabase 서비스 (기존 시스템 활용)
 import { supabase, supabaseAdmin, getSupabaseAdminClient } from './supabase';
+import { upsertMemoEmbedding } from './memo-embedding';
 import type {
   BusinessInfo,
   AirPermitInfo,
@@ -323,6 +324,13 @@ export async function createBusinessMemo(memoData: CreateBusinessMemoInput) {
     // 메모 생성은 성공했으므로 에러 throw 하지 않음
   }
 
+  // ✅ AI Q&A 검색용 임베딩 생성 (실패해도 메모 생성은 성공 처리)
+  try {
+    await upsertMemoEmbedding(data.id, data.title, data.content);
+  } catch (embedError) {
+    console.warn('⚠️ [SUPABASE] 메모 임베딩 생성 실패:', embedError);
+  }
+
   return data as BusinessMemo;
 }
 
@@ -352,6 +360,13 @@ export async function updateBusinessMemo(id: string, updates: UpdateBusinessMemo
       console.warn('⚠️ [SUPABASE] 사업장 updated_at 업데이트 실패:', updateError);
       // 메모 수정은 성공했으므로 에러 throw 하지 않음
     }
+  }
+
+  // ✅ AI Q&A 검색용 임베딩 갱신 (실패해도 메모 수정은 성공 처리)
+  try {
+    await upsertMemoEmbedding(data.id, data.title, data.content);
+  } catch (embedError) {
+    console.warn('⚠️ [SUPABASE] 메모 임베딩 갱신 실패:', embedError);
   }
 
   return data as BusinessMemo;

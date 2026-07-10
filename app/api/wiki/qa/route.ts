@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getEmbedding } from '@/lib/embedding';
+import { verifyToken } from '@/utils/auth';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +94,41 @@ export async function POST(request: NextRequest) {
 
     console.log(`[QA] query="${question}" domain=${domain ?? 'all'} → ${scored.length}개 청크 (top: ${scored[0]?.similarity?.toFixed(3) ?? 'N/A'})`);
 
+    // 2.5 사업장 메모 검색 (RAG, pgvector 코사인 유사도)
+    // 사업장 메모는 AS/불만/재무 관련 민감한 내용을 포함할 수 있어 로그인한 사용자에게만 제공한다.
+    const authToken = request.headers.get('authorization')?.replace('Bearer ', '') ||
+      request.headers.get('cookie')?.match(/auth-token=([^;]+)/)?.[1];
+    const tokenPayload = authToken ? verifyToken(authToken) : null;
+    const isAuthenticated = !!tokenPayload;
+
+    type MemoMatch = {
+      memo_id: string;
+      business_id: string;
+      business_name: string;
+      title: string;
+      content: string;
+      created_at: string;
+      similarity: number;
+    };
+
+    let memos: MemoMatch[] = [];
+    if (isAuthenticated) {
+      // vector(768) 파라미터에 JS number[]를 그대로 넘기면 실패하므로 문자열로 직렬화한다
+      const { data: memoMatches, error: memoError } = await supabaseAdmin.rpc('search_memo_embeddings', {
+        query_embedding: `[${queryEmbedding.join(',')}]`,
+        match_count: 5,
+        similarity_threshold: 0.5,
+      });
+
+      if (memoError) {
+        console.error('[QA] memo search error:', memoError);
+      }
+
+      memos = (memoMatches as MemoMatch[] | null) ?? [];
+    }
+
+    console.log(`[QA] memo search → ${memos.length}개 (top: ${memos[0]?.similarity?.toFixed(3) ?? 'N/A'}, auth=${isAuthenticated})`);
+
     // 3. 공지사항 + 전달사항 최근 항목 조회
     const [announcementsRes, messagesRes] = await Promise.all([
       supabaseAdmin
@@ -127,7 +163,14 @@ export async function POST(request: NextRequest) {
         : null,
     ].filter(Boolean).join('\n\n');
 
-    if (!scored.length && !boardContext) {
+    // 사업장 메모 텍스트 구성
+    const memoContext = memos.length > 0
+      ? `[사업장 메모]\n${memos.map(m =>
+          `• [사업장: ${m.business_name}] ${m.title} (${new Date(m.created_at).toLocaleDateString('ko-KR')})\n  ${m.content}`
+        ).join('\n\n')}`
+      : null;
+
+    if (!scored.length && !boardContext && !memoContext) {
       return NextResponse.json(
         { answer: '해당 지침에서 관련 내용을 찾지 못했습니다. 다른 키워드로 질문해보세요.' },
         { status: 200 }
@@ -165,10 +208,13 @@ export async function POST(request: NextRequest) {
 3. 참고자료에 전혀 관련 내용이 없을 때만 "해당 자료에서 확인되지 않습니다"라고 답하세요.
 4. 답변은 한국어로 작성하고, 출처(챕터/섹션명 또는 공지사항)를 언급하세요.
 5. 공지사항이나 전달사항에서 관련 내용을 찾았을 경우, 해당 공지의 작성자와 날짜를 언급하세요.
+6. 사업장 메모에서 관련 내용을 찾았을 경우, 반드시 해당 사업장명을 답변에 명시하세요.
 
 ${wikiContext ? `[업무처리지침]\n${wikiContext}` : ''}
 
 ${boardContext ? `[회사 공지사항 및 전달사항]\n${boardContext}` : ''}
+
+${memoContext ?? ''}
 
 [질문]
 ${question}`;

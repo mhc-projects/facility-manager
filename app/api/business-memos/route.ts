@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server'
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils'
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct'
+import { upsertMemoEmbedding } from '@/lib/memo-embedding'
 import type { BusinessMemo, CreateBusinessMemoInput, UpdateBusinessMemoInput } from '@/types/database'
 
 // Force dynamic rendering for API routes
@@ -188,6 +189,13 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       }
     }
 
+    // ✅ AI Q&A 검색용 임베딩 생성 (실패해도 메모 생성은 성공 처리)
+    try {
+      await upsertMemoEmbedding(newMemo.id, newMemo.title, newMemo.content);
+    } catch (embedError) {
+      console.warn('⚠️ [BUSINESS-MEMOS] 메모 임베딩 생성 실패:', embedError);
+    }
+
     return createSuccessResponse({
       data: newMemo,
       message: '메모가 성공적으로 추가되었습니다.'
@@ -264,6 +272,13 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
         console.warn('⚠️ [BUSINESS-MEMOS] 사업장 updated_at 업데이트 실패:', updateError);
         // 메모 수정은 성공했으므로 에러 throw 하지 않음
       }
+    }
+
+    // ✅ AI Q&A 검색용 임베딩 갱신 (실패해도 메모 수정은 성공 처리)
+    try {
+      await upsertMemoEmbedding(updatedMemo.id, updatedMemo.title, updatedMemo.content);
+    } catch (embedError) {
+      console.warn('⚠️ [BUSINESS-MEMOS] 메모 임베딩 갱신 실패:', embedError);
     }
 
     return createSuccessResponse({

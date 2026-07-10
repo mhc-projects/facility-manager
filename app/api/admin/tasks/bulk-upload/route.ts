@@ -315,7 +315,8 @@ export const POST = withApiHandler(async (request: NextRequest) => {
                   status: validation.statusCode || '',
                   taskType: validation.taskTypeCode || '',
                   userId: user.id,
-                  userName: user.name
+                  userName: user.name,
+                  skipEmbedding: true // 대량 반복 호출이므로 Gemini 호출은 생략, /api/business-memos/reindex 백필로 채움
                 });
 
                 if (syncResult.success) {
@@ -423,7 +424,8 @@ export const POST = withApiHandler(async (request: NextRequest) => {
               status: validation.statusCode || '',
               taskType: validation.taskTypeCode || '',
               userId: user.id,
-              userName: user.name
+              userName: user.name,
+              skipEmbedding: true // 대량 반복 호출이므로 Gemini 호출은 생략, /api/business-memos/reindex 백필로 채움
             });
 
             if (syncResult.success) {
