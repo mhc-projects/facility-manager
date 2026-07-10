@@ -46,7 +46,7 @@ export default function WikiSlugPage({ params }: { params: { slug: string } }) {
   }
 
   const actions = (
-    <Link href="/wiki/qa"
+    <Link href="/blueon-ai"
       className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
       <MessageSquare className="w-4 h-4" /> AI에게 질문
     </Link>

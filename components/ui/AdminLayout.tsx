@@ -42,7 +42,8 @@ import {
   HeartHandshake,
   ShieldAlert,
   Recycle,
-  Mail
+  Mail,
+  Sparkles
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -90,7 +91,18 @@ const navigationConfig: NavigationEntry[] = [
       name: '업무지침',
       href: '/wiki',
       icon: BookOpen,
-      description: 'DPF·IoT 방지시설 업무처리지침 Wiki 및 AI Q&A',
+      description: 'DPF·IoT 방지시설 업무처리지침 Wiki',
+      requiredLevel: 1
+    }
+  },
+  // 블루온AI (단독)
+  {
+    type: 'item',
+    item: {
+      name: '블루온AI',
+      href: '/blueon-ai',
+      icon: Sparkles,
+      description: '업무지침·공지사항·사업장 메모 기반 AI Q&A',
       requiredLevel: 1
     }
   },

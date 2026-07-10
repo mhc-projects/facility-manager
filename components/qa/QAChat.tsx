@@ -179,7 +179,7 @@ export default function QAChat() {
               <Bot className="w-6 h-6 text-blue-600" />
             </div>
             <h3 className="font-semibold text-gray-800 mb-1">
-              {domain === 'all' ? '업무지침 AI Q&A' : domain === 'dpf' ? 'DPF 업무지침 AI Q&A' : 'IoT 방지시설 AI Q&A'}
+              {domain === 'all' ? '블루온AI' : domain === 'dpf' ? 'DPF 업무지침 AI Q&A' : 'IoT 방지시설 AI Q&A'}
             </h3>
             <p className="text-sm text-gray-500 mb-6">
               {domain === 'all'

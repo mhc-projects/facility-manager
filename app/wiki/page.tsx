@@ -218,13 +218,13 @@ export default function WikiPage() {
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 flex items-center justify-between">
             <div>
               <div className="font-semibold text-gray-800 text-sm">
-                업무지침 AI Q&A
+                블루온AI
               </div>
               <div className="text-xs text-gray-500 mt-0.5">
                 DPF·IoT 지침 내용과 회사 공지사항을 AI가 통합 검색하여 답변합니다
               </div>
             </div>
-            <Link href="/wiki/qa"
+            <Link href="/blueon-ai"
               className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors shrink-0">
               <MessageSquare className="w-4 h-4" /> AI에게 질문
             </Link>

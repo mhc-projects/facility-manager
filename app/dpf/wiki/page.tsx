@@ -64,7 +64,7 @@ export default function WikiPage() {
 
   const actions = (
     <div className="flex gap-2">
-      <Link href="/dpf/wiki/qa"
+      <Link href="/blueon-ai"
         className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
         <MessageSquare className="w-4 h-4" /> AI Q&A
       </Link>
@@ -181,7 +181,7 @@ export default function WikiPage() {
             </div>
             <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
               <p className="text-xs text-gray-500">더 자세한 내용은 AI Q&A에서 질문하세요.</p>
-              <Link href="/dpf/wiki/qa"
+              <Link href="/blueon-ai"
                 className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 font-medium">
                 <MessageSquare className="w-3.5 h-3.5" /> AI에게 질문하기
               </Link>
