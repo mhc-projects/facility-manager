@@ -183,7 +183,7 @@ export default function QAChat() {
             </h3>
             <p className="text-sm text-gray-500 mb-6">
               {domain === 'all'
-                ? 'DPF·IoT 방지시설 업무처리지침에 대해 질문하세요.'
+                ? '업무지침, 공지사항·전달사항, 사업장 메모, 매출·미수금(권한 있는 경우)까지 검색해 답변합니다.'
                 : domain === 'dpf'
                 ? '운행차 배출가스 저감사업 업무처리지침에 대해 질문하세요.'
                 : 'IoT 방지시설 운영·모니터링 지침에 대해 질문하세요.'}
@@ -277,7 +277,9 @@ export default function QAChat() {
             placeholder={
               domain === 'iot'
                 ? 'IoT 방지시설 지침에 대해 질문하세요...'
-                : 'DPF·IoT 업무지침에 대해 질문하세요...'
+                : domain === 'dpf'
+                ? 'DPF 업무지침에 대해 질문하세요...'
+                : '업무지침, 메모, 매출 등 무엇이든 질문하세요...'
             }
             disabled={loading}
             className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm
@@ -293,7 +295,7 @@ export default function QAChat() {
           </button>
         </form>
         <p className="mt-1.5 text-xs text-gray-400 text-center">
-          AI가 업무처리지침과 공지사항을 기반으로 답변합니다. 중요 사항은 지침 원문을 확인하세요.
+          AI가 업무지침, 공지사항, 사업장 메모, 매출/미수금(권한 있는 경우)을 기반으로 답변합니다. 중요 사항은 원문을 확인하세요.
         </p>
       </div>
     </div>

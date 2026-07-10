@@ -102,7 +102,7 @@ const navigationConfig: NavigationEntry[] = [
       name: '블루온AI',
       href: '/blueon-ai',
       icon: Sparkles,
-      description: '업무지침·공지사항·사업장 메모 기반 AI Q&A',
+      description: '업무지침·공지사항·사업장 메모·매출/미수금 기반 AI Q&A',
       requiredLevel: 1
     }
   },
