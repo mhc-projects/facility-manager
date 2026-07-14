@@ -11,6 +11,7 @@ import {
   MeetingMinutesListResponse,
   ApiResponse
 } from '@/types/meeting-minutes'
+import { isFullAccessUser } from '@/lib/meeting-minutes-access'
 
 // Supabase 클라이언트 설정
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -63,13 +64,10 @@ async function getUserFromToken(request: NextRequest) {
   }
 }
 
-// 전체 회의록 접근 권한을 가진 특별 허용 이메일 목록
-const FULL_ACCESS_EMAILS = ['dpf@kakao.com']
-
 /**
  * GET /api/meeting-minutes
  * 회의록 목록 조회 (참석자 기반 접근 제어 + 필터링, 페이지네이션)
- * - permission_level >= 4 또는 FULL_ACCESS_EMAILS: 전체 조회
+ * - permission_level >= 4 또는 MEETING_MINUTES_FULL_ACCESS_EMAILS: 전체 조회
  * - 그 외: 본인이 organizer, created_by, 또는 participants 인 회의록만 조회
  */
 export async function GET(request: NextRequest) {
@@ -95,11 +93,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')
 
     // 접근 권한 판별
-    const isFullAccess =
-      user.permission_level >= 4 ||
-      FULL_ACCESS_EMAILS.includes(user.email) ||
-      user.role === 'ceo' ||
-      user.role === 'executive'
+    const isFullAccess = isFullAccessUser(user)
 
     const offset = (page - 1) * limit
 

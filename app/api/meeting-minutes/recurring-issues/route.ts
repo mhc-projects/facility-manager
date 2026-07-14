@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import jwt from 'jsonwebtoken'
+import { isFullAccessUser, canAccessMeetingMinute } from '@/lib/meeting-minutes-access'
 
 // Supabase 클라이언트 설정
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     // 정기회의에서 미해결 이슈 조회
     let query = supabase
       .from('meeting_minutes')
-      .select('id, title, meeting_date, meeting_type, content, agenda')
+      .select('id, title, meeting_date, meeting_type, content, agenda, organizer_id, created_by, participants')
       .eq('meeting_type', '정기회의')
       .neq('status', 'archived')
       .order('meeting_date', { ascending: false })
@@ -118,11 +119,17 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // 참석자 기반 접근 제어: 본인이 참여하지 않은 정기회의는 이슈 추출 대상에서 제외
+    const isFullAccess = isFullAccessUser(user)
+    const accessibleMeetings = meetings.filter(meeting =>
+      canAccessMeetingMinute(user.id, isFullAccess, meeting)
+    )
+
     // 미해결 이슈 추출
     const recurringIssues: any[] = []
     const today = new Date()
 
-    for (const meeting of meetings) {
+    for (const meeting of accessibleMeetings) {
       const meetingDate = new Date(meeting.meeting_date)
       const daysElapsed = Math.floor((today.getTime() - meetingDate.getTime()) / (1000 * 60 * 60 * 24))
 

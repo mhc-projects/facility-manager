@@ -10,6 +10,7 @@ import {
   MeetingMinuteResponse,
   ApiResponse
 } from '@/types/meeting-minutes'
+import { isFullAccessUser, canAccessMeetingMinute } from '@/lib/meeting-minutes-access'
 
 // Supabase 클라이언트 설정
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -82,7 +83,6 @@ export async function GET(
 
     const { id } = params
 
-    // 회의록 조회 (RLS로 권한 자동 체크)
     const { data: minute, error } = await supabase
       .from('meeting_minutes')
       .select('*')
@@ -93,6 +93,13 @@ export async function GET(
       return NextResponse.json(
         { success: false, error: '회의록을 찾을 수 없습니다.' },
         { status: 404 }
+      )
+    }
+
+    if (!canAccessMeetingMinute(user.id, isFullAccessUser(user), minute)) {
+      return NextResponse.json(
+        { success: false, error: '이 회의록에 접근할 권한이 없습니다.' },
+        { status: 403 }
       )
     }
 
@@ -130,6 +137,27 @@ export async function PUT(
     }
 
     const { id } = params
+
+    const { data: existingMinute, error: fetchError } = await supabase
+      .from('meeting_minutes')
+      .select('organizer_id, created_by, participants')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingMinute) {
+      return NextResponse.json(
+        { success: false, error: '회의록을 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+    }
+
+    if (!canAccessMeetingMinute(user.id, isFullAccessUser(user), existingMinute)) {
+      return NextResponse.json(
+        { success: false, error: '이 회의록을 수정할 권한이 없습니다.' },
+        { status: 403 }
+      )
+    }
+
     const body: UpdateMeetingMinuteRequest = await request.json()
 
     // 수정할 데이터 구성
@@ -138,7 +166,6 @@ export async function PUT(
       updated_by: user.id
     }
 
-    // 회의록 수정 (RLS로 권한 자동 체크)
     const { data: updatedMinute, error } = await supabase
       .from('meeting_minutes')
       .update(updateData)
@@ -208,7 +235,7 @@ export async function PATCH(
     // 현재 회의록 조회
     const { data: minute, error: fetchError } = await supabase
       .from('meeting_minutes')
-      .select('id, content')
+      .select('id, content, organizer_id, created_by, participants')
       .eq('id', id)
       .single()
 
@@ -216,6 +243,13 @@ export async function PATCH(
       return NextResponse.json(
         { success: false, error: '회의록을 찾을 수 없습니다.' },
         { status: 404 }
+      )
+    }
+
+    if (!canAccessMeetingMinute(user.id, isFullAccessUser(user), minute)) {
+      return NextResponse.json(
+        { success: false, error: '이 회의록에 접근할 권한이 없습니다.' },
+        { status: 403 }
       )
     }
 
@@ -287,7 +321,26 @@ export async function DELETE(
 
     const { id } = params
 
-    // 회의록 삭제 (RLS로 권한 자동 체크)
+    const { data: existingMinute, error: fetchError } = await supabase
+      .from('meeting_minutes')
+      .select('organizer_id, created_by, participants')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingMinute) {
+      return NextResponse.json(
+        { success: false, error: '회의록을 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+    }
+
+    if (!canAccessMeetingMinute(user.id, isFullAccessUser(user), existingMinute)) {
+      return NextResponse.json(
+        { success: false, error: '이 회의록을 삭제할 권한이 없습니다.' },
+        { status: 403 }
+      )
+    }
+
     const { error } = await supabase
       .from('meeting_minutes')
       .delete()
