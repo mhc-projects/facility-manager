@@ -343,19 +343,23 @@ function getAllItems(config: NavigationEntry[]): NavigationItem[] {
 
 // 특정 부서는 지정된 메뉴만 이용 가능 (그 외 메뉴는 숨김 처리 및 접근 차단)
 const DEPARTMENT_MENU_RESTRICTIONS: Record<string, string[]> = {
-  '기술개발부': ['/admin/e-pto', '/admin/approvals'],
+  '기술개발부': ['/admin/e-pto', '/admin/approvals', '/admin/meeting-minutes', '/profile'],
 }
 
 function isPathAllowedForRestrictedDept(pathname: string, allowedHrefs: string[]): boolean {
   return allowedHrefs.some(href => pathname === href || pathname.startsWith(href + '/'))
 }
 
-// 현재 사용자의 부서명 비동기 로드 (전자결재/게시판 메뉴 제한, departmentOnly 항목 판별에 공통 사용)
+// 현재 사용자의 부서명 로드 (전자결재/게시판 메뉴 제한, departmentOnly 항목 판별에 공통 사용)
+// 로그인/인증 확인 응답에 이미 department가 포함되어 있으므로 우선 그 값을 쓰고,
+// 비어있을 때만 폴백으로 /api/employees/me/department-info를 호출한다.
+// (부서 정보를 기다리는 동안 제한이 풀린 "전체 메뉴"가 잠깐 보이는 깜빡임 방지)
 function useUserDepartmentName(user: unknown): string | null {
-  const [userDeptName, setUserDeptName] = useState<string | null>(null)
+  const directDeptName = (user as any)?.department || null
+  const [fetchedDeptName, setFetchedDeptName] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!user) return
+    if (!user || directDeptName) return
     const token = TokenManager.getToken()
     if (!token) return
     fetch('/api/employees/me/department-info', {
@@ -363,12 +367,13 @@ function useUserDepartmentName(user: unknown): string | null {
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        setUserDeptName(data?.data?.department_name || data?.department?.name || '')
+        setFetchedDeptName(data?.data?.department_name || data?.department?.name || '')
       })
-      .catch(() => setUserDeptName(''))
-  }, [user])
+      .catch(() => setFetchedDeptName(''))
+  }, [user, directDeptName])
 
-  return userDeptName
+  if (!user) return null
+  return directDeptName || fetchedDeptName
 }
 
 function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: string, onItemClick: () => void, collapsed: boolean }) {
