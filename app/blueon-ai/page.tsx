@@ -16,7 +16,7 @@ export default function BlueonAIPage() {
   return (
     <AdminLayout
       title="블루온AI"
-      description="업무지침, 공지사항·전달사항, 사업장 메모, 매출·미수금(권한 있는 경우)까지 검색해 답변합니다"
+      description="업무지침, 공지사항·전달사항, 사업장 메모까지 검색해 답변합니다"
       actions={actions}
     >
       <div className="h-full">

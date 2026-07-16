@@ -10,6 +10,9 @@ import { getBusinessReceivable, getInvoiceStatus, getRevenueSummary } from '@/li
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// 2026-07-16 보류: 매출/미수금 연동은 추가 검토 후 재활성화 예정 (도구 정의는 그대로 둠)
+const REVENUE_TOOLS_ENABLED = false;
+
 const REVENUE_TOOLS: ToolDef[] = [
   {
     type: 'function',
@@ -186,7 +189,7 @@ export async function POST(request: NextRequest) {
     // 2.6 매출/미수금 조회 (실시간 계산 도구 호출, 관리자 전용)
     // 미수금은 텍스트로 저장되지 않고 매번 재계산되는 값이라 임베딩 검색이 아니라
     // receivables-engine을 직접 호출하는 도구 호출 방식으로 조회한다.
-    const canAccessRevenue = isAuthenticated && (Number(tokenPayload?.permission_level) || 0) >= 3;
+    const canAccessRevenue = REVENUE_TOOLS_ENABLED && isAuthenticated && (Number(tokenPayload?.permission_level) || 0) >= 3;
     let revenueContext: string | null = null;
     if (canAccessRevenue) {
       try {
