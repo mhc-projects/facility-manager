@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Send, Bot, User, ExternalLink, Brain } from 'lucide-react';
+import { Send, Bot, User, ExternalLink, Brain, Plus, Trash2, MessageSquare } from 'lucide-react';
 import { TokenManager } from '@/lib/api-client';
+import type { QAConversation } from '@/types/qa';
 
 type Domain = 'all' | 'dpf' | 'iot';
 
@@ -11,6 +12,10 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: Array<{ title: string; slug: string }>;
+}
+
+function domainToApi(d: Domain): 'dpf' | 'iot' | undefined {
+  return d === 'all' ? undefined : d;
 }
 
 const DOMAIN_TABS: { value: Domain; label: string; color: string }[] = [
@@ -51,15 +56,92 @@ export default function QAChat() {
   const [thinkMode, setThinkMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // 로그인 계정 전용 대화 히스토리 (클로드 스타일 대화 목록)
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<QAConversation[]>([]);
+  const conversationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setIsLoggedIn(!!TokenManager.getToken());
+  }, []);
+
+  useEffect(() => {
+    if (isLoggedIn) loadConversations();
+  }, [isLoggedIn]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 도메인 변경 시 대화 초기화
-  function handleDomainChange(d: Domain) {
-    setDomain(d);
+  async function loadConversations() {
+    const token = TokenManager.getToken();
+    if (!token) return;
+    try {
+      const res = await fetch('/api/wiki/qa/conversations', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setConversations(data.conversations ?? []);
+    } catch {
+      // 목록 갱신 실패는 조용히 무시 (핵심 채팅 기능에 영향 없음)
+    }
+  }
+
+  async function loadConversation(id: string) {
+    const token = TokenManager.getToken();
+    if (!token || loading) return;
+    try {
+      const res = await fetch(`/api/wiki/qa/conversations/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setConversationId(data.conversation.id);
+      conversationIdRef.current = data.conversation.id;
+      setDomain((data.conversation.domain as Domain) ?? 'all');
+      setMessages(
+        (data.messages ?? []).map((m: { role: 'user' | 'assistant'; content: string; sources?: Message['sources'] }) => ({
+          role: m.role,
+          content: m.content,
+          sources: m.sources ?? undefined,
+        }))
+      );
+    } catch {
+      // 대화 불러오기 실패는 조용히 무시
+    }
+  }
+
+  async function deleteConversation(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    const token = TokenManager.getToken();
+    if (!token) return;
+    try {
+      await fetch(`/api/wiki/qa/conversations/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setConversations(prev => prev.filter(c => c.id !== id));
+      if (conversationIdRef.current === id) {
+        startNewConversation();
+      }
+    } catch {
+      // 삭제 실패는 조용히 무시
+    }
+  }
+
+  function startNewConversation() {
+    setConversationId(null);
+    conversationIdRef.current = null;
     setMessages([]);
     setInput('');
+  }
+
+  // 도메인 변경 시 대화 초기화 (도메인 전환 = 새 대화)
+  function handleDomainChange(d: Domain) {
+    setDomain(d);
+    startNewConversation();
   }
 
   async function sendMessage(question: string) {
@@ -81,7 +163,12 @@ export default function QAChat() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ question, domain: domain === 'all' ? undefined : domain, think: thinkMode }),
+        body: JSON.stringify({
+          question,
+          domain: domainToApi(domain),
+          think: thinkMode,
+          conversation_id: conversationIdRef.current,
+        }),
       });
 
       if (!res.ok) throw new Error('API 오류');
@@ -104,7 +191,10 @@ export default function QAChat() {
             if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === 'sources') {
+              if (parsed.type === 'conversation') {
+                setConversationId(parsed.id);
+                conversationIdRef.current = parsed.id;
+              } else if (parsed.type === 'sources') {
                 sources = parsed.sources;
               } else if (parsed.type === 'text') {
                 setMessages(prev => {
@@ -146,6 +236,7 @@ export default function QAChat() {
       });
     } finally {
       setLoading(false);
+      if (isLoggedIn) loadConversations();
     }
   }
 
@@ -153,7 +244,45 @@ export default function QAChat() {
   const quickQuestions = QUICK_QUESTIONS[domain];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full gap-4">
+      {isLoggedIn && (
+        <div className="hidden sm:flex flex-col w-64 shrink-0 border-r border-gray-200 pr-3">
+          <button
+            onClick={startNewConversation}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50
+                       hover:bg-blue-100 rounded-lg transition-colors mb-2"
+          >
+            <Plus className="w-4 h-4" /> 새 대화
+          </button>
+          <div className="flex-1 overflow-y-auto space-y-0.5">
+            {conversations.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-4">대화 기록이 없습니다</p>
+            )}
+            {conversations.map(c => (
+              <div
+                key={c.id}
+                onClick={() => loadConversation(c.id)}
+                className={`group flex items-center gap-1.5 px-2.5 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                  c.id === conversationId
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 truncate">{c.title}</span>
+                <button
+                  onClick={(e) => deleteConversation(c.id, e)}
+                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 shrink-0"
+                  title="대화 삭제"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col h-full flex-1 min-w-0">
       {/* 도메인 필터 탭 */}
       <div className="flex gap-1.5 mb-4 p-1 bg-gray-50 rounded-lg border border-gray-200">
         {DOMAIN_TABS.map(tab => (
@@ -174,26 +303,26 @@ export default function QAChat() {
       {/* 메시지 영역 */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
         {messages.length === 0 && (
-          <div className="text-center py-8">
-            <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Bot className="w-6 h-6 text-blue-600" />
+          <div className="text-center py-12">
+            <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Bot className="w-7 h-7 text-blue-600" />
             </div>
-            <h3 className="font-semibold text-gray-800 mb-1">
+            <h3 className="font-semibold text-gray-800 text-lg mb-1">
               {domain === 'all' ? '블루온AI' : domain === 'dpf' ? 'DPF 업무지침 AI Q&A' : 'IoT 방지시설 AI Q&A'}
             </h3>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 mb-8">
               {domain === 'all'
                 ? '업무지침, 공지사항·전달사항, 사업장 메모, 매출·미수금(권한 있는 경우)까지 검색해 답변합니다.'
                 : domain === 'dpf'
                 ? '운행차 배출가스 저감사업 업무처리지침에 대해 질문하세요.'
                 : 'IoT 방지시설 운영·모니터링 지침에 대해 질문하세요.'}
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
               {quickQuestions.map(q => (
                 <button
                   key={q}
                   onClick={() => sendMessage(q)}
-                  className="text-left px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg
+                  className="text-left px-4 py-3 text-sm bg-white border border-gray-200 rounded-lg
                              hover:bg-blue-50 hover:border-blue-300 transition-colors text-gray-700"
                 >
                   {q}
@@ -210,7 +339,7 @@ export default function QAChat() {
                 <Bot className="w-4 h-4 text-blue-600" />
               </div>
             )}
-            <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-first' : ''}`}>
+            <div className={`max-w-[85%] lg:max-w-2xl ${msg.role === 'user' ? 'order-first' : ''}`}>
               <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white rounded-br-sm'
@@ -297,6 +426,7 @@ export default function QAChat() {
         <p className="mt-1.5 text-xs text-gray-400 text-center">
           AI가 업무지침, 공지사항, 사업장 메모, 매출/미수금(권한 있는 경우)을 기반으로 답변합니다. 중요 사항은 원문을 확인하세요.
         </p>
+      </div>
       </div>
     </div>
   );

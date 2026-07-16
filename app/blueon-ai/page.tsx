@@ -19,9 +19,9 @@ export default function BlueonAIPage() {
       description="업무지침, 공지사항·전달사항, 사업장 메모, 매출·미수금(권한 있는 경우)까지 검색해 답변합니다"
       actions={actions}
     >
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5" style={{ minHeight: '60vh' }}>
-          <div className="h-full flex flex-col" style={{ minHeight: '55vh' }}>
+      <div className="h-full">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 h-full" style={{ minHeight: '80vh' }}>
+          <div className="h-full flex flex-col">
             <QAChat />
           </div>
         </div>

@@ -67,7 +67,7 @@ async function executeRevenueTool(call: { name: string; arguments: Record<string
 
 export async function POST(request: NextRequest) {
   try {
-    const { question, domain, think } = await request.json();
+    const { question, domain, think, conversation_id } = await request.json();
     if (!question?.trim()) {
       return NextResponse.json({ error: '질문을 입력하세요' }, { status: 400 });
     }
@@ -292,31 +292,88 @@ ${revenueContext ?? ''}
 [질문]
 ${question}`;
 
+    // 4.5 로그인 사용자의 대화 히스토리 저장 (대화 생성/이어쓰기 + 질문 메시지 저장)
+    // 대화 목록은 계정(employee) 단위로만 남기며, 임베딩/청크 조회 오류 등 스트리밍 이전
+    // 조기 반환 분기(위쪽의 NextResponse.json 응답들)는 기록하지 않는다.
+    let conversationId: string | null = null;
+    if (isAuthenticated) {
+      const employeeId = tokenPayload.userId || tokenPayload.id;
+      if (conversation_id) {
+        const { data: existing } = await supabaseAdmin
+          .from('qa_conversations')
+          .select('id, created_by, is_deleted')
+          .eq('id', conversation_id)
+          .single();
+        if (existing && !existing.is_deleted && existing.created_by === employeeId) {
+          conversationId = existing.id;
+        }
+      }
+      if (!conversationId) {
+        const trimmed = question.trim();
+        const title = trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
+        const { data: created, error: createErr } = await supabaseAdmin
+          .from('qa_conversations')
+          .insert({ created_by: employeeId, domain: domain ?? null, title })
+          .select('id')
+          .single();
+        if (createErr) {
+          console.error('[QA] conversation create error:', createErr);
+        } else {
+          conversationId = created?.id ?? null;
+        }
+      }
+      if (conversationId) {
+        const { error: userMsgErr } = await supabaseAdmin
+          .from('qa_messages')
+          .insert({ conversation_id: conversationId, role: 'user', content: question });
+        if (userMsgErr) console.error('[QA] user message save error:', userMsgErr);
+      }
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode(
-            `data: ${JSON.stringify({ type: 'sources', sources })}\n\n`
-          )
-        );
+        // 스트림 전송(enqueue) 실패는 DB 저장과 분리한다 — 클라이언트 연결이 끊겨도
+        // 답변 저장까지는 항상 시도한다.
+        function safeEnqueue(payload: string) {
+          try {
+            controller.enqueue(new TextEncoder().encode(payload));
+          } catch (enqueueErr) {
+            console.error('[QA] enqueue error (client disconnected?):', enqueueErr);
+          }
+        }
+
+        if (conversationId) {
+          safeEnqueue(`data: ${JSON.stringify({ type: 'conversation', id: conversationId })}\n\n`);
+        }
+        safeEnqueue(`data: ${JSON.stringify({ type: 'sources', sources })}\n\n`);
+
+        let fullAnswer = '';
         try {
           for await (const text of generateStream(prompt, { think: !!think })) {
-            controller.enqueue(
-              new TextEncoder().encode(
-                `data: ${JSON.stringify({ type: 'text', text })}\n\n`
-              )
-            );
+            fullAnswer += text;
+            safeEnqueue(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
           }
         } catch (genErr) {
           const msg = genErr instanceof Error ? genErr.message : String(genErr);
           console.error('[QA] generation error:', msg);
-          controller.enqueue(
-            new TextEncoder().encode(
-              `data: ${JSON.stringify({ type: 'text', text: `\n\n(답변 생성 중 오류: ${msg})` })}\n\n`
-            )
-          );
+          const errText = `\n\n(답변 생성 중 오류: ${msg})`;
+          fullAnswer += errText;
+          safeEnqueue(`data: ${JSON.stringify({ type: 'text', text: errText })}\n\n`);
         }
-        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+
+        if (conversationId && fullAnswer.trim()) {
+          const { error: assistantMsgErr } = await supabaseAdmin
+            .from('qa_messages')
+            .insert({ conversation_id: conversationId, role: 'assistant', content: fullAnswer, sources });
+          if (assistantMsgErr) console.error('[QA] assistant message save error:', assistantMsgErr);
+          const { error: touchErr } = await supabaseAdmin
+            .from('qa_conversations')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', conversationId);
+          if (touchErr) console.error('[QA] conversation touch error:', touchErr);
+        }
+
+        safeEnqueue('data: [DONE]\n\n');
         controller.close();
       },
     });
