@@ -1,6 +1,8 @@
-# API 인증 누락 — 사업장/시설 도메인 밖으로 확장된 시스템 전체 조사
+# API 인증 누락 — 사업장/시설 도메인 밖으로 확장된 시스템 전체 조사 (1차 표본조사)
 
 2026-07-16 조사. 미착수 — 실행 승인 대상 아님. `business-facility-api-auth-gap.md`(사업장/시설 도메인), `external-business-page-security.md`(외부인용 페이지)와 별개로, 다른 도메인까지 훑어본 결과.
+
+**⚠️ 이 문서는 1차 표본조사다. 훨씬 심각한 심층 재조사 결과는 `claudedocs/api-auth-gap-critical-findings.md`를 먼저 읽을 것** — 특히 `auth/social-unified`가 인증(로그인) 자체를 완전히 우회할 수 있는 최우선 CRITICAL 항목이다.
 
 ## 구조적 원인 (가장 중요)
 
