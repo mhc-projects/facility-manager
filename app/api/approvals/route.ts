@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query as pgQuery, queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { isApprovalFullAccessEmail } from '@/lib/approval-access';
+import { normalizeApproverIds } from '@/lib/approval-line';
 
 export const dynamic = 'force-dynamic';
 
@@ -316,6 +317,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '문서 유형과 제목은 필수입니다' }, { status: 400 });
     }
 
+    // role상 불필요한 결재자 ID는 저장하지 않음 (예: 본인이 팀장인데 team_leader_id에 본인 id가 남아있는 경우)
+    const requesterEmp = await queryOne(`SELECT role FROM employees WHERE id = $1`, [userId]);
+    const normalizedIds = normalizeApproverIds(requesterEmp?.role, {
+      team_leader_id,
+      executive_id,
+      vice_president_id,
+    });
+
     // 문서번호 자동생성 (PostgreSQL 함수 호출)
     const numResult = await queryOne(
       `SELECT generate_document_number($1) AS doc_number`,
@@ -339,9 +348,9 @@ export async function POST(request: NextRequest) {
         title,
         userId,
         department || null,
-        team_leader_id || null,
-        executive_id || null,
-        vice_president_id || null,
+        normalizedIds.team_leader_id,
+        normalizedIds.executive_id,
+        normalizedIds.vice_president_id,
         ceo_id || null,
         JSON.stringify(form_data || {})
       ]

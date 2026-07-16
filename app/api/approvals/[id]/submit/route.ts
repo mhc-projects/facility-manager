@@ -4,6 +4,7 @@ import { verifyTokenString } from '@/utils/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendWebPushToUser } from '@/lib/send-push';
 import { sendTelegramToUser } from '@/lib/send-telegram';
+import { getRequiredApprovalSteps, normalizeApproverIds } from '@/lib/approval-line';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,9 +165,7 @@ export async function POST(
 
     // role별 필수 결재자 검증
     const requesterRole = doc.requester_role as string | null;
-    const needTeamLeader    = requesterRole !== 'executive' && requesterRole !== 'team_leader' && requesterRole !== 'vice_president';
-    const needExecutive     = requesterRole !== 'executive' && requesterRole !== 'vice_president';
-    const needVicePresident = requesterRole !== 'vice_president';
+    const { needTeamLeader, needExecutive, needVicePresident } = getRequiredApprovalSteps(requesterRole);
 
     if (needTeamLeader && !doc.team_leader_id) {
       return NextResponse.json({ success: false, error: '팀장을 선택해 주세요' }, { status: 400 });
@@ -181,8 +180,15 @@ export async function POST(
       return NextResponse.json({ success: false, error: '대표이사를 선택해 주세요' }, { status: 400 });
     }
 
+    // role상 불필요한 결재자 ID는 저장된 값이 남아있어도 무시 (예: 본인이 팀장인데 team_leader_id에 본인 id가 남아있는 경우)
+    const normalizedIds = normalizeApproverIds(requesterRole, {
+      team_leader_id: doc.team_leader_id,
+      executive_id: doc.executive_id,
+      vice_president_id: doc.vice_president_id,
+    });
+
     // 결재자 이름 조회 (null 제외)
-    const approverIds = [doc.requester_id, doc.team_leader_id, doc.executive_id, doc.vice_president_id, doc.ceo_id].filter(Boolean);
+    const approverIds = [doc.requester_id, normalizedIds.team_leader_id, normalizedIds.executive_id, normalizedIds.vice_president_id, doc.ceo_id].filter(Boolean);
     const approverNames = await queryAll(
       `SELECT id, name FROM employees WHERE id = ANY($1::UUID[])`,
       [approverIds]
@@ -201,11 +207,11 @@ export async function POST(
     // 결재 단계 생성 (5단계)
     // approver_id가 null(role로 인해 스킵된 단계)이거나 작성자와 동일하면 자동 승인
     const steps = [
-      { order: 1, label: '담당',     approver_id: doc.requester_id,        name: nameMap[doc.requester_id] },
-      { order: 2, label: '팀장',     approver_id: doc.team_leader_id,      name: nameMap[doc.team_leader_id] ?? '' },
-      { order: 3, label: '중역',     approver_id: doc.executive_id,        name: nameMap[doc.executive_id] ?? '' },
-      { order: 4, label: '부사장',   approver_id: doc.vice_president_id,   name: nameMap[doc.vice_president_id] ?? '' },
-      { order: 5, label: '대표이사', approver_id: doc.ceo_id,              name: nameMap[doc.ceo_id] },
+      { order: 1, label: '담당',     approver_id: doc.requester_id,             name: nameMap[doc.requester_id] },
+      { order: 2, label: '팀장',     approver_id: normalizedIds.team_leader_id,    name: nameMap[normalizedIds.team_leader_id || ''] ?? '' },
+      { order: 3, label: '중역',     approver_id: normalizedIds.executive_id,      name: nameMap[normalizedIds.executive_id || ''] ?? '' },
+      { order: 4, label: '부사장',   approver_id: normalizedIds.vice_president_id, name: nameMap[normalizedIds.vice_president_id || ''] ?? '' },
+      { order: 5, label: '대표이사', approver_id: doc.ceo_id,                   name: nameMap[doc.ceo_id] },
     ];
 
     // approver_id가 null이거나, 1단계이거나, 작성자와 동일하면 자동 승인(스킵)
@@ -239,12 +245,15 @@ export async function POST(
       `UPDATE approval_documents
        SET status = '${newStatus}',
            current_step = $2,
+           team_leader_id = $3,
+           executive_id = $4,
+           vice_president_id = $5,
            submitted_at = COALESCE(submitted_at, NOW()),
            ${isResubmit ? 'resubmitted_at = NOW(),' : ''}
            completed_at = ${completedAt},
            updated_at = NOW()
        WHERE id = $1`,
-      [params.id, initialStep]
+      [params.id, initialStep, normalizedIds.team_leader_id, normalizedIds.executive_id, normalizedIds.vice_president_id]
     );
 
     const typeLabel = DOC_TYPE_LABEL[doc.document_type] || doc.document_type;

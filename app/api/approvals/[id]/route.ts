@@ -3,6 +3,7 @@ import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isApprovalFullAccessEmail } from '@/lib/approval-access';
+import { normalizeApproverIds } from '@/lib/approval-line';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,6 +143,14 @@ export async function PUT(
     const body = await request.json();
     const { title, team_leader_id, executive_id, vice_president_id, ceo_id, form_data, department } = body;
 
+    // role상 불필요한 결재자 ID는 저장하지 않음 (예: 본인이 팀장인데 team_leader_id에 본인 id가 남아있는 경우)
+    const requesterEmp = await queryOne(`SELECT role FROM employees WHERE id = $1`, [userId]);
+    const normalizedIds = normalizeApproverIds(requesterEmp?.role, {
+      team_leader_id,
+      executive_id,
+      vice_president_id,
+    });
+
     // pending 상태에서 수정 시: draft로 되돌리고 결재 단계 초기화 (재상신 필요)
     const wasPending = doc.status === 'pending';
 
@@ -161,9 +170,9 @@ export async function PUT(
       [
         title || null,
         department || null,
-        team_leader_id || null,
-        executive_id || null,
-        vice_president_id || null,
+        normalizedIds.team_leader_id,
+        normalizedIds.executive_id,
+        normalizedIds.vice_president_id,
         ceo_id || null,
         form_data ? JSON.stringify(form_data) : null,
         params.id
