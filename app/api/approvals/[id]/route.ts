@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { isApprovalFullAccessEmail } from '@/lib/approval-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,7 @@ export async function GET(
     const userId = decoded.userId || decoded.id;
     const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
     const isSuperAdmin = permissionLevel >= 4;
+    const hasFullViewAccess = isSuperAdmin || isApprovalFullAccessEmail(decoded.email);
 
     const doc = await queryOne(
       `SELECT
@@ -49,8 +51,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: '문서를 찾을 수 없습니다' }, { status: 404 });
     }
 
-    // 접근 권한 체크: 슈퍼 관리자, 작성자 본인, 결재선 포함자만 허용
-    if (!isSuperAdmin) {
+    // 접근 권한 체크: 슈퍼 관리자, 전체 열람 예외 계정, 작성자 본인, 결재선 포함자만 허용
+    if (!hasFullViewAccess) {
       const isRequester = doc.requester_id === userId;
       const isInApprovalLine =
         doc.team_leader_id === userId ||

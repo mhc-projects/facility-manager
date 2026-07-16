@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query as pgQuery, queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { isApprovalFullAccessEmail } from '@/lib/approval-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
     const userId = decoded.userId || decoded.id;
     const permissionLevel = decoded.permissionLevel || decoded.permission_level || 1;
     const isSuperAdmin = permissionLevel >= 4;
+    const hasFullViewAccess = isSuperAdmin || isApprovalFullAccessEmail(decoded.email);
 
     const { searchParams } = new URL(request.url);
     const typeFilter      = searchParams.get('type');
@@ -152,9 +154,9 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 일반 탭 (기존 로직) ──
-    // 총무팀 여부 확인 (슈퍼어드민이 아닌 경우)
+    // 총무팀 여부 확인 (슈퍼어드민 및 전체 열람 예외 계정이 아닌 경우)
     let isManagementSupportGeneral = false;
-    if (!isSuperAdmin) {
+    if (!hasFullViewAccess) {
       const empGeneral = await queryOne(
         `SELECT e.department, e.team FROM employees e WHERE e.id = $1 AND e.is_deleted = FALSE`,
         [userId]
@@ -193,8 +195,8 @@ export async function GET(request: NextRequest) {
     } else if (mine) {
       conditions.push(`d.requester_id = $${idx++}`);
       values.push(userId);
-    } else if (isSuperAdmin) {
-      // 권한 4(슈퍼 관리자): 모든 문서 열람 가능
+    } else if (hasFullViewAccess) {
+      // 권한 4(슈퍼 관리자) 또는 전체 열람 예외 계정: 모든 문서 열람 가능
     } else if (isManagementSupportGeneral) {
       // 총무팀: 승인완료 + 결재중 문서 열람 가능
       conditions.push(`d.status IN ('approved', 'pending')`);
