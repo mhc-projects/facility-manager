@@ -24,6 +24,7 @@
 3. `withApiHandler`(`lib/api-utils.ts:79`)의 `requiresAuth` 옵션은 선언만 있고 미구현 — Phase B에서도 손대지 않고, 그 래퍼를 쓰는 라우트는 핸들러 내부에 인라인으로 체크 추가.
 4. 같은 도메인 내 이미 올바르게 인증된 선례: `app/api/facility-tasks/route.ts` — 조회/수정은 레벨1, 삭제는 레벨4.
 5. `app/api/business/[id]/route.ts`는 캘린더 모달용으로 **의도적 공개**(주석 명시) — Phase B 대상에서 완전히 제외, 필드 축소만 별도 검토.
+6. **(2026-07-16 정정)** `app/business/[businessName]/` 페이지(외부 협력업체/설치기사용 현장 사진 업로드 + 정보 입력 폼)는 `business-info-direct`/`business-info-update`/`business-unified`를 **쓰지 않는다** — 별도 조사 결과 상세는 `claudedocs/external-business-page-security.md` 참고. 이 페이지 고유의 무인증 쓰기/삭제 API(`facilities-supabase` POST, `facility-photos` DELETE 등)가 따로 있고, 처리 방침도 B-2~B-4와 다르다(로그인 자체를 요구할 수 없는 페이지라 별도 토큰 기반 설계 필요).
 
 ## Phase B — 미착수, 검토 후 진행
 
@@ -38,12 +39,17 @@
 ### B-3. 대기필증/배출구 (레벨1, DELETE만 레벨3)
 `air-permit`(GET/POST/PUT), `air-permit-pdf`, `air-permits/[id]`(GET/PUT), `air-permits/outlets/[outletId]`(GET/PUT), `outlet-facility`(GET/POST/PUT), `outlet-gateway`
 
-### B-4. 시설/업무 (레벨1)
+### B-4. 시설/업무 (레벨1) — **주의: `facilities-supabase`/`facility-management`/`facility-photos`는 외부인용 페이지도 씀**
 `facilities-supabase/[businessName]`, `facility-detail`, `facility-management`, `facility-measurement`, `facility-photos`(POST/GET), `facility-photos/download-zip`, `facility-stats`, `facility-tasks/[id]/history`, `facility-tasks/advance`
+
+이 중 `facilities-supabase`, `facility-management`, `facility-photos`, `business-photo-categories`, `upload-supabase`는 `app/business/[businessName]/` 외부인용 페이지도 호출한다 — 이 4~5개는 **레벨1(직원 로그인) 요구로 막으면 외부 협력업체가 아예 못 쓰게 되므로 B-2~B-4와 같은 방식(직원 로그인 요구)을 적용하면 안 된다.** 별도 토큰 기반 설계 필요 — `claudedocs/external-business-page-security.md` 참고.
 
 ### B-5. 개별 확인 필요 (삭제도 수정도 아직 판단 보류)
 - `app/api/migrate-business-id/route.ts` — GET 미리보기 + **POST가 실제 DB 스키마 마이그레이션 실행**. 프론트 호출부는 없지만 운영 도구로 수동 호출됐을 가능성이 있어 임의 삭제 안 함. 아직 필요한 도구인지 사용자 확인 필요.
 - `app/api/business/[id]/route.ts` — 인증은 추가 안 하되, 사업자등록번호/담당자연락처/이메일까지 반환하는 게 맞는지(주석상 "공개 정보만"과 실제 구현이 다름) 필드 축소 여부 검토 필요.
+
+### B-6. (신규, 2026-07-16) 사업장/시설 도메인 밖으로 조사 범위를 넓혀보니 훨씬 큰 문제였음
+`claudedocs/api-auth-gap-systemwide.md` 참고 — 재무(`invoice-records`, `business-invoices`), 공지사항, 캘린더, 파일삭제, 스키마/마이그레이션 엔드포인트까지 무인증인 것을 확인. 이 문서(B) 범위보다 훨씬 넓은 별도 문서로 관리.
 
 ### Phase B 진행 시 권장 절차
 - 배치 단위(B-2 → B-3 → B-4 → B-1 순 등)로 나눠 각 배치마다: 수정 → `tsc --noEmit` → curl로 무인증 401 확인 → 실사용자 세션(claude-in-chrome, JWT 위조 없이)으로 화면 스모크 테스트 → 커밋. 앞 배치 검증 통과 후 다음 배치 진행.
