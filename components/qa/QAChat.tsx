@@ -179,16 +179,21 @@ export default function QAChat() {
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let sources: Array<{ title: string; slug: string }> = [];
+        // 네트워크 청크 경계가 SSE 이벤트(줄바꿈) 경계와 일치한다는 보장이 없으므로,
+        // 청크 끝의 미완성 줄은 버퍼에 남겨뒀다가 다음 청크와 이어붙여 처리한다.
+        let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const lines = decoder.decode(value).split('\n');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
             const data = line.slice(6);
-            if (data === '[DONE]') break;
+            if (data === '[DONE]') continue;
             try {
               const parsed = JSON.parse(data);
               if (parsed.type === 'conversation') {
