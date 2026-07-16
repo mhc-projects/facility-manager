@@ -1,10 +1,10 @@
 // app/api/wiki/qa/route.ts
-// AI Q&A: Gemini 임베딩 + Supabase pgvector 검색 + 로컬 Ollama 모델 스트리밍 답변
+// AI Q&A: Gemini 임베딩 + Supabase pgvector 검색 + Gemini 스트리밍 답변
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getEmbedding } from '@/lib/embedding';
 import { verifyToken } from '@/utils/auth';
-import { generateStream, decideToolCalls, type ToolDef } from '@/lib/ollama';
+import { generateStream, decideToolCalls, type ToolDef } from '@/lib/gemini-chat';
 import { getBusinessReceivable, getInvoiceStatus, getRevenueSummary } from '@/lib/revenue-tools';
 
 export const dynamic = 'force-dynamic';
@@ -257,7 +257,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. 로컬 Ollama 모델 스트리밍 답변
+    // 4. Gemini 스트리밍 답변
     const wikiContext = scored.map(c => c.chunk_text).join('\n\n---\n\n');
     const sources = [...new Map(
       scored.map(c => [c.node_id, { title: c.node_title, slug: c.node_slug }])
