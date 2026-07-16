@@ -2,6 +2,10 @@
 
 `api-auth-gap-systemwide.md`(1차 표본조사)를 이어서, 사업장/시설 도메인 밖 전체를 더 깊이 판 결과. 전체 API 라우트 375개 중 grep 기준 202개가 인증 심볼 0건이었고, 이번에 그중 핵심 클러스터를 직접 Read로 검증했다. **미착수 — 실행 승인 대상 아님, 조사만.**
 
+## ✅ 조치 완료 (2026-07-16, 커밋 `2dc40ed`)
+
+`auth/social-unified`는 **임시 차단**했다(삭제 아님). 실제 소셜 로그인은 별도의 `/api/auth/social/{provider}(+callback)` 경로(OAuth 코드교환, 안전)로 처리되고, 이 라우트를 호출하는 프론트엔드 코드가 전혀 없음을 재확인(`apiClient.socialLogin`도 정의만 있고 호출부 0건) — 지금 막아도 사용자 영향 없음. 관리자 계정이 예전에 소셜로 만들어졌더라도 그건 정상 `/api/auth/social/{provider}` 경로였고, 나중에 다시 쓸 가능성을 남겨두기 위해 코드는 삭제 안 하고 POST 핸들러 최상단에서 503을 조기 반환하도록만 막아뒀다. curl로 CSRF 우회까지 재현해서 라우트 자체가 막혔음을 확인함. 재사용하려면 실제 OAuth 액세스 토큰을 provider에 검증받는 로직을 추가한 뒤 이 차단(early return)을 제거할 것.
+
 ## 🔴 가장 심각한 단일 발견: 로그인 자체가 우회된다
 
 **`app/api/auth/social-unified/route.ts` [POST]** — 인증 절차가 전무하다. 클라이언트가 보낸 `{provider, social_id, email, name}`을 그대로 신뢰하고, 사용자 조회 시 이메일이 일치하면(OR 조건) 그 계정으로 매칭해 **정상적으로 유효한 JWT를 발급**한다. 즉:
