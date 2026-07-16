@@ -18,6 +18,19 @@ interface SocialUserInfo {
 }
 
 export async function POST(request: NextRequest) {
+  // 2026-07-16 임시 차단: 이 라우트는 OAuth 토큰 검증 없이 클라이언트가 보낸 email만으로
+  // 기존 계정(관리자 포함)의 정상 JWT를 발급해줘서 완전한 인증 우회가 가능했다
+  // (claudedocs/api-auth-gap-critical-findings.md 참고). 실제 소셜 로그인은 별도의
+  // /api/auth/social/{provider}(+/callback) 경로가 client_secret 기반 OAuth 코드교환으로
+  // 정상 처리하며, 이 라우트를 호출하는 프론트엔드 코드는 현재 없음(확인됨) — 지금 막아도
+  // 사용자에게 영향 없음. 나중에 재사용하려면 실제 OAuth 액세스 토큰을 provider에 검증받는
+  // 로직을 추가한 뒤에만 이 차단을 해제할 것.
+  return NextResponse.json(
+    { success: false, error: '현재 사용할 수 없는 로그인 방식입니다.' },
+    { status: 503 }
+  );
+
+  // eslint-disable-next-line no-unreachable
   try {
     const socialUser: SocialUserInfo = await request.json();
 
