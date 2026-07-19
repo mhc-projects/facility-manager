@@ -109,9 +109,8 @@ function ApprovalDetailContent() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const id = params?.id as string
-  const fromTab = searchParams?.get('from') || 'my'
-  const fromSortBy = searchParams?.get('sort_by') || ''
-  const backUrl = `/admin/approvals?tab=${fromTab}${fromSortBy ? `&sort_by=${fromSortBy}` : ''}`
+  const backParam = searchParams?.get('back')
+  const backUrl = backParam ? `/admin/approvals?${backParam}` : '/admin/approvals?tab=my'
 
   const [doc, setDoc] = useState<ApprovalDoc | null>(null)
   const [loading, setLoading] = useState(true)

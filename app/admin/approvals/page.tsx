@@ -162,37 +162,43 @@ function ApprovalsContent() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
 
-  const [tab, setTab] = useState<TabType>(() => {
+  const initialTab = (() => {
     const t = searchParams?.get('tab')
     return (t === 'pending' || t === 'my' || t === 'all' || t === 'completed') ? t as TabType : 'my'
-  })
+  })()
+
+  const [tab, setTab] = useState<TabType>(initialTab)
   const [docs, setDocs] = useState<ApprovalDoc[]>([])
   const [total, setTotal] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   // 내 문서 서브탭
-  const [mySubTab, setMySubTab] = useState<'active' | 'approved'>('active')
+  const [mySubTab, setMySubTab] = useState<'active' | 'approved'>(
+    () => (initialTab === 'my' && searchParams?.get('my_sub') === 'approved') ? 'approved' : 'active'
+  )
 
-  // 일반 탭 필터
-  const [typeFilter, setTypeFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const allSortBy = searchParams?.get('sort_by') === 'completed_at' ? 'completed_at' as const : 'submitted_at' as const
+  // 일반 탭 필터 (상세 화면 복귀 시 유지되도록 URL에서 초기화)
+  const [typeFilter, setTypeFilter] = useState(() => initialTab !== 'completed' ? (searchParams?.get('type') || '') : '')
+  const [statusFilter, setStatusFilter] = useState(() => initialTab === 'all' ? (searchParams?.get('status') || '') : '')
+  const [allSortBy, setAllSortBy] = useState<'submitted_at' | 'completed_at'>(
+    () => searchParams?.get('sort_by') === 'completed_at' ? 'completed_at' : 'submitted_at'
+  )
 
   // 일반 탭 검색 (클라이언트 사이드 필터링)
-  const [generalSearchQuery, setGeneralSearchQuery] = useState('')
-  const [generalSearchInput, setGeneralSearchInput] = useState('')
+  const [generalSearchQuery, setGeneralSearchQuery] = useState(() => initialTab !== 'completed' ? (searchParams?.get('q') || '') : '')
+  const [generalSearchInput, setGeneralSearchInput] = useState(() => initialTab !== 'completed' ? (searchParams?.get('q') || '') : '')
   const isGeneralComposingRef = useRef(false)
 
-  // 결재완료 탭 필터
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchInput, setSearchInput] = useState('')  // IME 조합 중 표시용 (searchQuery와 분리)
+  // 결재완료 탭 필터 (상세 화면 복귀 시 유지되도록 URL에서 초기화)
+  const [searchQuery, setSearchQuery] = useState(() => initialTab === 'completed' ? (searchParams?.get('q') || '') : '')
+  const [searchInput, setSearchInput] = useState(() => initialTab === 'completed' ? (searchParams?.get('q') || '') : '')  // IME 조합 중 표시용 (searchQuery와 분리)
   const isComposingRef = useRef(false)
-  const [completedTypeFilter, setCompletedTypeFilter] = useState('')
-  const [processedFilter, setProcessedFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [departmentFilter, setDepartmentFilter] = useState('')
+  const [completedTypeFilter, setCompletedTypeFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('type') || '') : '')
+  const [processedFilter, setProcessedFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('processed') || '') : '')
+  const [dateFrom, setDateFrom] = useState(() => initialTab === 'completed' ? (searchParams?.get('date_from') || '') : '')
+  const [dateTo, setDateTo] = useState(() => initialTab === 'completed' ? (searchParams?.get('date_to') || '') : '')
+  const [departmentFilter, setDepartmentFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('department') || '') : '')
 
   // 처리확인 모달
   const [processTarget, setProcessTarget] = useState<ApprovalDoc | null>(null)
@@ -206,6 +212,29 @@ function ApprovalsContent() {
   const [submitToast, setSubmitToast] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const tabRef = useRef<TabType>(tab)
+
+  // 목록 URL 필터 파라미터 계산: 탭 전환/필터 변경 시 URL 동기화, 상세 이동 시 복귀 정보로 사용
+  const buildListQuery = () => {
+    const p = new URLSearchParams()
+    p.set('tab', tab)
+    if (tab === 'completed') {
+      if (searchQuery) p.set('q', searchQuery)
+      if (completedTypeFilter) p.set('type', completedTypeFilter)
+      if (processedFilter) p.set('processed', processedFilter)
+      if (dateFrom) p.set('date_from', dateFrom)
+      if (dateTo) p.set('date_to', dateTo)
+      if (departmentFilter) p.set('department', departmentFilter)
+    } else {
+      if (typeFilter) p.set('type', typeFilter)
+      if (tab === 'all' && statusFilter) p.set('status', statusFilter)
+      if (generalSearchQuery) p.set('q', generalSearchQuery)
+      if (tab === 'all' && allSortBy !== 'submitted_at') p.set('sort_by', allSortBy)
+      if (tab === 'my' && mySubTab === 'approved') p.set('my_sub', 'approved')
+    }
+    return p.toString()
+  }
+
+  const goDetail = (id: string) => router.push(`/admin/approvals/${id}?back=${encodeURIComponent(buildListQuery())}`)
 
   // 총무팀 여부 확인 (최초 1회)
   useEffect(() => {
@@ -288,6 +317,12 @@ function ApprovalsContent() {
     const t = searchParams?.get('tab')
     if (t === 'pending' || t === 'my' || t === 'all' || t === 'completed') setTab(t as TabType)
   }, [searchParams])
+
+  // 필터 상태 변경 시 목록 URL에 반영: 브라우저 뒤로가기로 복귀할 때 필터가 담긴 URL로 돌아오게 하기 위함
+  const listQuery = buildListQuery()
+  useEffect(() => {
+    router.replace(`/admin/approvals?${listQuery}`, { scroll: false })
+  }, [listQuery])
 
   // _t 파라미터 변경 감지: 상세 페이지에서 수정/결재 후 복귀 시 강제 refetch
   const refreshToken = searchParams?.get('_t')
@@ -537,7 +572,7 @@ function ApprovalsContent() {
                 >
                   <button
                     className="w-full text-left"
-                    onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
+                    onClick={() => goDetail(doc.id)}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0 flex-1">
@@ -609,7 +644,7 @@ function ApprovalsContent() {
                     <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
                       <td
                         className="px-4 py-3 text-xs text-gray-500 font-mono cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
+                        onClick={() => goDetail(doc.id)}
                       >
                         {doc.document_number}
                       </td>
@@ -620,7 +655,7 @@ function ApprovalsContent() {
                       </td>
                       <td
                         className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[180px] truncate cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
+                        onClick={() => goDetail(doc.id)}
                       >
                         {doc.title}
                       </td>
@@ -703,6 +738,7 @@ function ApprovalsContent() {
                   setMySubTab('active')
                   setGeneralSearchInput('')
                   setGeneralSearchQuery('')
+                  setAllSortBy('submitted_at')
                   router.push(`/admin/approvals?tab=${t}`)
                 }}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -793,11 +829,7 @@ function ApprovalsContent() {
               {tab === 'all' && (
                 <select
                   value={allSortBy}
-                  onChange={e => router.push(
-                    e.target.value === 'completed_at'
-                      ? '/admin/approvals?tab=all&sort_by=completed_at'
-                      : '/admin/approvals?tab=all'
-                  )}
+                  onChange={e => setAllSortBy(e.target.value === 'completed_at' ? 'completed_at' : 'submitted_at')}
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="submitted_at">제출일순</option>
@@ -819,7 +851,7 @@ function ApprovalsContent() {
                   {filteredDocs.map(doc => (
                     <button
                       key={doc.id}
-                      onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
+                      onClick={() => goDetail(doc.id)}
                       className={`w-full text-left bg-white rounded-xl border border-gray-200 border-l-4 ${STATUS_BORDER[doc.status] || 'border-l-gray-300'} px-4 py-3.5 active:bg-gray-50 transition-colors`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -881,7 +913,7 @@ function ApprovalsContent() {
                       {filteredDocs.map(doc => (
                         <tr
                           key={doc.id}
-                          onClick={() => router.push(`/admin/approvals/${doc.id}?from=${tab}${tab === 'all' && allSortBy !== 'submitted_at' ? `&sort_by=${allSortBy}` : ''}`)}
+                          onClick={() => goDetail(doc.id)}
                           className="hover:bg-blue-50 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3 text-xs text-gray-500 font-mono">{doc.document_number}</td>
