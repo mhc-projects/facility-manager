@@ -1,7 +1,7 @@
 'use client'
 
 // E-PTO 순환자원정보센터 전자입찰 공고 조회 페이지
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import AdminLayout from '@/components/ui/AdminLayout'
 import { useAuth } from '@/contexts/AuthContext'
@@ -26,6 +26,8 @@ import {
 
 const PAGE_SIZE = 20
 const AUTO_REFRESH_MS = 5 * 60 * 1000
+// 포함 키워드 필터가 켜졌을 때 전체 검색 결과를 한 번에 가져오기 위한 상한
+const FULL_FETCH_CAP = 1000
 
 // 날짜 포맷: "202012140000" → "2020.12.14 00:00"
 function fmtDt(s: string): string {
@@ -358,6 +360,24 @@ export default function EptoPage() {
   const [resultSearch, setResultSearch] = useState('전기자동차')
   const [resultSearchInput, setResultSearchInput] = useState('전기자동차')
 
+  // 공고명 검색(pbancNm) 결과 중에서 추가로 포함해야 할 키워드 (클라이언트에서 필터링)
+  const [bidFilter2, setBidFilter2] = useState('sm3')
+  const [resultFilter2, setResultFilter2] = useState('sm3')
+  const bidFilter2Active = bidFilter2.trim().length > 0
+  const resultFilter2Active = resultFilter2.trim().length > 0
+
+  // 포함 키워드 필터가 켜졌을 때 전체 검색 결과를 담아두는 목록 (클라이언트에서 페이지네이션)
+  const [bidFullList, setBidFullList] = useState<BidPbancItem[]>([])
+  const [bidFullTruncated, setBidFullTruncated] = useState(false)
+  const [bidFilterPage, setBidFilterPage] = useState(1)
+  const [resultFullList, setResultFullList] = useState<BidResultItem[]>([])
+  const [resultFullTruncated, setResultFullTruncated] = useState(false)
+  const [resultFilterPage, setResultFilterPage] = useState(1)
+
+  // 입찰결과 API는 물품명이 없어서, 같은 공고번호(pbancNo)의 입찰공고 물품명(bidCmdtyCn)을 대조해서 필터링한다
+  const [resultCmdtyMap, setResultCmdtyMap] = useState<Record<string, string>>({})
+  const [resultCmdtyMapTruncated, setResultCmdtyMapTruncated] = useState(false)
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -394,24 +414,131 @@ export default function EptoPage() {
     finally { setLoading(false) }
   }, [resultPage, resultSearch, resultStatus])
 
+  // 포함 키워드 필터가 켜졌을 때: 페이지 단위가 아니라 검색 결과 전체를 가져와 클라이언트에서 필터링+페이지네이션한다
+  const fetchBidsFull = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const p = new URLSearchParams({ pageNo: '1', numOfRows: String(FULL_FETCH_CAP) })
+      if (bidSearch) p.set('pbancNm', bidSearch)
+      if (bidStatus) p.set('pbancSttsNm', bidStatus)
+      const res = await fetch(`/api/e-pto/bids?${p}`)
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || `오류 ${res.status}`) }
+      const data: EptoListResponse<BidPbancItem> = await res.json()
+      setBidFullList(data.items); setBidTotal(data.totalCount)
+      setBidFullTruncated(data.totalCount > data.items.length)
+      setLastUpdated(new Date())
+    } catch (e) { setError(e instanceof Error ? e.message : '데이터를 불러오지 못했습니다.') }
+    finally { setLoading(false) }
+  }, [bidSearch, bidStatus])
+
+  const fetchResultsFull = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const p = new URLSearchParams({ pageNo: '1', numOfRows: String(FULL_FETCH_CAP) })
+      if (resultSearch) p.set('pbancNm', resultSearch)
+      if (resultStatus) p.set('pbancRsltNm', resultStatus)
+      // 입찰결과 API는 물품명이 없으므로, 같은 검색어의 입찰공고를 함께 가져와 공고번호로 물품명을 대조한다
+      const bp = new URLSearchParams({ pageNo: '1', numOfRows: String(FULL_FETCH_CAP) })
+      if (resultSearch) bp.set('pbancNm', resultSearch)
+
+      const [res, bidsRes] = await Promise.all([
+        fetch(`/api/e-pto/results?${p}`),
+        fetch(`/api/e-pto/bids?${bp}`),
+      ])
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || `오류 ${res.status}`) }
+      const data: EptoListResponse<BidResultItem> = await res.json()
+      setResultFullList(data.items); setResultTotal(data.totalCount)
+      setResultFullTruncated(data.totalCount > data.items.length)
+
+      if (bidsRes.ok) {
+        const bidsData: EptoListResponse<BidPbancItem> = await bidsRes.json()
+        const map: Record<string, string> = {}
+        bidsData.items.forEach(b => { map[b.pbancNo] = b.bidCmdtyCn })
+        setResultCmdtyMap(map)
+        setResultCmdtyMapTruncated(bidsData.totalCount > bidsData.items.length)
+      } else {
+        setResultCmdtyMap({})
+        setResultCmdtyMapTruncated(false)
+      }
+      setLastUpdated(new Date())
+    } catch (e) { setError(e instanceof Error ? e.message : '데이터를 불러오지 못했습니다.') }
+    finally { setLoading(false) }
+  }, [resultSearch, resultStatus])
+
+  // 검색 조건이 그대로인데 탭만 왔다갔다 하는 경우, 이미 가져온 데이터를 재사용하고 재조회하지 않는다
+  // (외부 공공API 응답이 느려서, 탭 전환마다 매번 다시 불러오면 체감 속도가 크게 떨어진다)
+  const bidsFetchKeyRef = useRef<string | null>(null)
+  const resultsFetchKeyRef = useRef<string | null>(null)
+
   useEffect(() => {
-    if (activeTab === 'bids') fetchBids(bidPage)
+    if (activeTab !== 'bids') return
+    const key = bidFilter2Active ? `full:${bidSearch}:${bidStatus}` : `page:${bidPage}:${bidSearch}:${bidStatus}`
+    if (bidsFetchKeyRef.current === key) return
+    bidsFetchKeyRef.current = key
+    if (bidFilter2Active) fetchBidsFull()
+    else fetchBids(bidPage)
+  }, [activeTab, bidPage, bidSearch, bidStatus, bidFilter2Active, fetchBidsFull, fetchBids])
+
+  useEffect(() => {
+    if (activeTab !== 'results') return
+    const key = resultFilter2Active ? `full:${resultSearch}:${resultStatus}` : `page:${resultPage}:${resultSearch}:${resultStatus}`
+    if (resultsFetchKeyRef.current === key) return
+    resultsFetchKeyRef.current = key
+    if (resultFilter2Active) fetchResultsFull()
     else fetchResults(resultPage)
-  }, [activeTab, bidPage, bidSearch, bidStatus, resultPage, resultSearch, resultStatus])
+  }, [activeTab, resultPage, resultSearch, resultStatus, resultFilter2Active, fetchResultsFull, fetchResults])
+
+  // 검색 조건이 바뀌면 포함 키워드 필터의 클라이언트 페이지도 1페이지로 초기화
+  useEffect(() => { setBidFilterPage(1) }, [bidSearch, bidStatus, bidFilter2Active])
+  useEffect(() => { setResultFilterPage(1) }, [resultSearch, resultStatus, resultFilter2Active])
 
   useEffect(() => {
     if (autoRefreshTimer.current) clearInterval(autoRefreshTimer.current)
     if (autoRefresh) {
       autoRefreshTimer.current = setInterval(() => {
-        if (activeTab === 'bids') fetchBids(bidPage)
-        else fetchResults(resultPage)
+        if (activeTab === 'bids') { bidFilter2Active ? fetchBidsFull() : fetchBids(bidPage) }
+        else { resultFilter2Active ? fetchResultsFull() : fetchResults(resultPage) }
       }, AUTO_REFRESH_MS)
     }
     return () => { if (autoRefreshTimer.current) clearInterval(autoRefreshTimer.current) }
-  }, [autoRefresh, activeTab, fetchBids, fetchResults, bidPage, resultPage])
+  }, [autoRefresh, activeTab, fetchBids, fetchResults, fetchBidsFull, fetchResultsFull, bidPage, resultPage, bidFilter2Active, resultFilter2Active])
 
   const handleBidSearch = () => { setBidSearch(bidSearchInput); setBidPage(1) }
   const handleResultSearch = () => { setResultSearch(resultSearchInput); setResultPage(1) }
+
+  // 입찰물품(bidCmdtyCn)에 포함 키워드가 있는지로, 전체 검색 결과(bidFullList)를 기준으로 필터링
+  const filteredBids = useMemo(() => {
+    if (!bidFilter2Active) return []
+    const kw = bidFilter2.trim().toLowerCase()
+    return bidFullList.filter(b => b.bidCmdtyCn.toLowerCase().includes(kw))
+  }, [bidFullList, bidFilter2, bidFilter2Active])
+
+  // 입찰결과 API에는 물품명이 없어 같은 공고번호의 입찰공고 물품명(resultCmdtyMap)을 대조해 필터링.
+  // 대응하는 입찰공고를 찾지 못한 경우에만 공고명으로 대체 판정한다.
+  const filteredResults = useMemo(() => {
+    if (!resultFilter2Active) return []
+    const kw = resultFilter2.trim().toLowerCase()
+    return resultFullList.filter(r => {
+      const cmdty = resultCmdtyMap[r.pbancNo]
+      if (cmdty !== undefined) return cmdty.toLowerCase().includes(kw)
+      return r.pbancNm.toLowerCase().includes(kw)
+    })
+  }, [resultFullList, resultFilter2, resultFilter2Active, resultCmdtyMap])
+
+  // 화면에 보여줄 목록/총건수/현재 페이지: 포함 키워드가 켜져 있으면 필터링된 전체 결과를 클라이언트에서 페이지네이션
+  const bidDisplayList = bidFilter2Active
+    ? filteredBids.slice((bidFilterPage - 1) * PAGE_SIZE, bidFilterPage * PAGE_SIZE)
+    : bids
+  const bidDisplayTotal = bidFilter2Active ? filteredBids.length : bidTotal
+  const bidDisplayPage = bidFilter2Active ? bidFilterPage : bidPage
+  const setBidDisplayPage = bidFilter2Active ? setBidFilterPage : setBidPage
+
+  const resultDisplayList = resultFilter2Active
+    ? filteredResults.slice((resultFilterPage - 1) * PAGE_SIZE, resultFilterPage * PAGE_SIZE)
+    : results
+  const resultDisplayTotal = resultFilter2Active ? filteredResults.length : resultTotal
+  const resultDisplayPage = resultFilter2Active ? resultFilterPage : resultPage
+  const setResultDisplayPage = resultFilter2Active ? setResultFilterPage : setResultPage
 
   const actions = (
     <div className="flex items-center gap-2">
@@ -431,7 +558,10 @@ export default function EptoPage() {
         {autoRefresh ? '자동갱신 ON' : '자동갱신 OFF'}
       </button>
       <button
-        onClick={() => activeTab === 'bids' ? fetchBids(bidPage) : fetchResults(resultPage)}
+        onClick={() => {
+          if (activeTab === 'bids') { bidFilter2Active ? fetchBidsFull() : fetchBids(bidPage) }
+          else { resultFilter2Active ? fetchResultsFull() : fetchResults(resultPage) }
+        }}
         disabled={loading}
         className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
       >
@@ -506,6 +636,27 @@ export default function EptoPage() {
 
             <div className="h-6 w-px bg-gray-200" />
 
+            {/* 추가 포함 키워드 (검색 결과 내 클라이언트 필터링) */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="포함 키워드 (예: SM3)"
+                value={activeTab === 'bids' ? bidFilter2 : resultFilter2}
+                onChange={e => activeTab === 'bids' ? setBidFilter2(e.target.value) : setResultFilter2(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-40 focus:outline-none focus:border-blue-500 bg-gray-50 focus:bg-white transition-all"
+              />
+            </div>
+            {(activeTab === 'bids' ? bidFilter2 : resultFilter2) && (
+              <button
+                onClick={() => activeTab === 'bids' ? setBidFilter2('') : setResultFilter2('')}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg border border-gray-200 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            <div className="h-6 w-px bg-gray-200" />
+
             {/* 상태 필터 */}
             {activeTab === 'bids' ? (
               <div className="relative">
@@ -551,6 +702,15 @@ export default function EptoPage() {
           </div>
         )}
 
+        {/* 포함 키워드 필터 시 검색 결과가 너무 많아 일부만 가져온 경우 안내 */}
+        {((activeTab === 'bids' && bidFilter2Active && bidFullTruncated) ||
+          (activeTab === 'results' && resultFilter2Active && (resultFullTruncated || resultCmdtyMapTruncated))) && (
+          <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            검색 결과가 {FULL_FETCH_CAP.toLocaleString()}건을 초과하여 포함 키워드 필터는 최근 {FULL_FETCH_CAP.toLocaleString()}건 내에서만 적용됩니다. 정확한 확인을 위해 공고명 검색어를 좁혀주세요.
+          </div>
+        )}
+
         {/* 테이블 카드 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           {loading ? (
@@ -559,15 +719,21 @@ export default function EptoPage() {
               <p className="text-sm text-gray-400">불러오는 중...</p>
             </div>
           ) : activeTab === 'bids' ? (
-            bids.length === 0 ? (
+            bidDisplayList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center">
                   <Recycle className="w-7 h-7 text-gray-300" />
                 </div>
-                <p className="text-sm text-gray-500 font-medium">조회된 입찰 공고가 없습니다.</p>
-                {bidSearch && (
+                <p className="text-sm text-gray-500 font-medium">
+                  {bidTotal === 0 ? '조회된 입찰 공고가 없습니다.' : '포함 키워드에 맞는 공고가 없습니다.'}
+                </p>
+                {bidTotal === 0 && bidSearch && (
                   <button onClick={() => { setBidSearchInput(''); setBidSearch(''); setBidPage(1) }}
                     className="text-blue-600 text-xs hover:underline">검색어 초기화</button>
+                )}
+                {bidTotal > 0 && bidFilter2Active && (
+                  <button onClick={() => setBidFilter2('')}
+                    className="text-blue-600 text-xs hover:underline">포함 키워드 초기화</button>
                 )}
               </div>
             ) : (
@@ -586,7 +752,7 @@ export default function EptoPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {bids.map((bid, i) => {
+                      {bidDisplayList.map((bid, i) => {
                         const dday = getDDay(bid.bidDdlnDt)
                         return (
                           <tr key={`${bid.pbancNo}-${i}`}
@@ -641,21 +807,24 @@ export default function EptoPage() {
                     </tbody>
                   </table>
                 </div>
-                {bidTotal > PAGE_SIZE && (
-                  <Pagination current={bidPage} total={Math.ceil(bidTotal / PAGE_SIZE)} count={bidTotal} pageSize={PAGE_SIZE} onChange={setBidPage} />
-                )}
               </>
             )
           ) : (
-            results.length === 0 ? (
+            resultDisplayList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center">
                   <Recycle className="w-7 h-7 text-gray-300" />
                 </div>
-                <p className="text-sm text-gray-500 font-medium">조회된 입찰 결과가 없습니다.</p>
-                {resultSearch && (
+                <p className="text-sm text-gray-500 font-medium">
+                  {resultTotal === 0 ? '조회된 입찰 결과가 없습니다.' : '포함 키워드에 맞는 결과가 없습니다.'}
+                </p>
+                {resultTotal === 0 && resultSearch && (
                   <button onClick={() => { setResultSearchInput(''); setResultSearch(''); setResultPage(1) }}
                     className="text-blue-600 text-xs hover:underline">검색어 초기화</button>
+                )}
+                {resultTotal > 0 && resultFilter2Active && (
+                  <button onClick={() => setResultFilter2('')}
+                    className="text-blue-600 text-xs hover:underline">포함 키워드 초기화</button>
                 )}
               </div>
             ) : (
@@ -674,7 +843,7 @@ export default function EptoPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {results.map((item, i) => (
+                      {resultDisplayList.map((item, i) => (
                         <tr key={`${item.pbancNo}-${i}`}
                           className="hover:bg-blue-50/30 cursor-pointer transition-colors group"
                           onClick={() => setSelectedResult(item)}
@@ -723,11 +892,15 @@ export default function EptoPage() {
                     </tbody>
                   </table>
                 </div>
-                {resultTotal > PAGE_SIZE && (
-                  <Pagination current={resultPage} total={Math.ceil(resultTotal / PAGE_SIZE)} count={resultTotal} pageSize={PAGE_SIZE} onChange={setResultPage} />
-                )}
               </>
             )
+          )}
+
+          {!loading && activeTab === 'bids' && bidDisplayTotal > PAGE_SIZE && (
+            <Pagination current={bidDisplayPage} total={Math.ceil(bidDisplayTotal / PAGE_SIZE)} count={bidDisplayTotal} pageSize={PAGE_SIZE} onChange={setBidDisplayPage} />
+          )}
+          {!loading && activeTab === 'results' && resultDisplayTotal > PAGE_SIZE && (
+            <Pagination current={resultDisplayPage} total={Math.ceil(resultDisplayTotal / PAGE_SIZE)} count={resultDisplayTotal} pageSize={PAGE_SIZE} onChange={setResultDisplayPage} />
           )}
         </div>
       </div>
