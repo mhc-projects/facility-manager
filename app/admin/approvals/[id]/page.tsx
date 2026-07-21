@@ -15,6 +15,7 @@ import BusinessProposalForm from '@/components/approvals/forms/BusinessProposalF
 import OvertimeLogForm from '@/components/approvals/forms/OvertimeLogForm'
 import InstallationClosingForm from '@/components/approvals/forms/InstallationClosingForm'
 import BusinessTripReportForm from '@/components/approvals/forms/BusinessTripReportForm'
+import InspectionReportForm from '@/components/approvals/forms/InspectionReportForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap, Clock, CheckSquare, Printer } from 'lucide-react'
@@ -94,6 +95,13 @@ function FormViewer({
     case 'installation_closing': return <InstallationClosingForm {...props} />
     case 'business_trip_report': return (
       <BusinessTripReportForm
+        {...props}
+        onFileUpload={editing ? onFileUpload : undefined}
+        onFileDelete={editing ? onFileDelete : undefined}
+      />
+    )
+    case 'inspection_report': return (
+      <InspectionReportForm
         {...props}
         onFileUpload={editing ? onFileUpload : undefined}
         onFileDelete={editing ? onFileDelete : undefined}

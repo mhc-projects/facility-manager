@@ -12,6 +12,7 @@ import BusinessProposalForm, { BusinessProposalData } from '@/components/approva
 import OvertimeLogForm, { OvertimeLogData } from '@/components/approvals/forms/OvertimeLogForm'
 import InstallationClosingForm, { InstallationClosingData } from '@/components/approvals/forms/InstallationClosingForm'
 import BusinessTripReportForm, { BusinessTripReportData } from '@/components/approvals/forms/BusinessTripReportForm'
+import InspectionReportForm, { InspectionReportData } from '@/components/approvals/forms/InspectionReportForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Save, Send, ChevronLeft } from 'lucide-react'
@@ -24,6 +25,7 @@ const DOC_TYPES = [
   { value: 'overtime_log',      label: '연장근무일지', desc: '연장근무 내역 보고' },
   { value: 'installation_closing', label: '설치비 마감', desc: '설치비 예측/본마감 결재' },
   { value: 'business_trip_report', label: '출장보고서',  desc: '출장 결과 보고 및 승인 요청' },
+  { value: 'inspection_report', label: '검수보고서',  desc: '입고 물품 검수 결과 보고' },
 ] as const
 
 type DocType = typeof DOC_TYPES[number]['value']
@@ -32,7 +34,7 @@ const TODAY = new Date().toISOString().split('T')[0]
 const NOW = new Date()
 const THIS_MONTH_TITLE = `${NOW.getFullYear()}년 ${NOW.getMonth() + 1}월 연장근무일지`
 
-function getDefaultFormData(type: DocType, writerName: string, dept: string): any {
+function getDefaultFormData(type: DocType, writerName: string, dept: string, position: string = ''): any {
   switch (type) {
     case 'expense_claim':
       return { writer: writerName, department: dept, written_date: TODAY, note: '', items: [{ date: TODAY, description: '', amount: 0, note: '' }] } as ExpenseClaimData
@@ -48,6 +50,8 @@ function getDefaultFormData(type: DocType, writerName: string, dept: string): an
       return { writer: writerName, department: dept, written_date: TODAY, closing_type: 'forecast', closing_month: '', items: [], total_count: 0, total_amount: 0, note: '' } as InstallationClosingData
     case 'business_trip_report':
       return { writer: writerName, department: dept, written_date: TODAY, trip_purpose: '', trip_period: '', trip_region: '', traveler: writerName, visited_company: '', companion_count: '', schedule_items: [{ date: TODAY, time: '', main_schedule: '', location: '', note: '' }, { date: '', time: '', main_schedule: '', location: '', note: '' }, { date: '', time: '', main_schedule: '', location: '', note: '' }], work_content: '', discussion_items: '', special_notes: '', other_notes: '' } as BusinessTripReportData
+    case 'inspection_report':
+      return { inspection_date: TODAY, department: dept, inspector_name: writerName, inspector_position: position, usage_department: '', usage_purpose: '', items: [{ seq: 1, name: '', spec: '', unit: '', quantity: 0, result: '' }] } as InspectionReportData
   }
 }
 
@@ -78,7 +82,7 @@ export default function NewApprovalPage() {
 
   useEffect(() => {
     if (user) {
-      setFormData(getDefaultFormData(docType, user.name || '', (user as any).department || ''))
+      setFormData(getDefaultFormData(docType, user.name || '', (user as any).department || '', (user as any).position || ''))
     }
   }, [docType, user])
 
@@ -363,6 +367,14 @@ export default function NewApprovalPage() {
             )}
             {docType === 'business_trip_report' && (
               <BusinessTripReportForm
+                data={formData}
+                onChange={setFormData}
+                onFileUpload={handleFileUpload}
+                onFileDelete={handleFileDelete}
+              />
+            )}
+            {docType === 'inspection_report' && (
+              <InspectionReportForm
                 data={formData}
                 onChange={setFormData}
                 onFileUpload={handleFileUpload}
