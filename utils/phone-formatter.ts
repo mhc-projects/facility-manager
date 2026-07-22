@@ -53,6 +53,17 @@ export function formatLandlinePhone(value: string): string {
     }
   }
 
+  // 070 (인터넷전화) - xxx-xxxx-xxxx (11자리)
+  if (numbers.startsWith('070')) {
+    if (numbers.length <= 3) {
+      return numbers
+    } else if (numbers.length <= 7) {
+      return `${numbers.slice(0, 3)}-${numbers.slice(3)}`
+    } else {
+      return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`
+    }
+  }
+
   // 031, 032, etc. (지역번호 3자리)
   if (numbers.length <= 3) {
     return numbers
