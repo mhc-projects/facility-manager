@@ -880,3 +880,103 @@ input[type="date"]:focus {
   background-color: #f3f4f6;
   font-weight: 600;
 }
+
+/* =================================
+   Blockquote / 구분선 / 링크 / 체크리스트 스타일
+   (editor / readonly / memo-display 공통)
+   ================================= */
+.tiptap-editor-content blockquote,
+.tiptap-readonly blockquote,
+.tiptap-memo-display blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 0.75em;
+  margin: 0.5em 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.tiptap-editor-content hr,
+.tiptap-readonly hr,
+.tiptap-memo-display hr {
+  border: none;
+  border-top: 1px solid #d1d5db;
+  margin: 1em 0;
+}
+
+.tiptap-editor-content a.tiptap-link,
+.tiptap-readonly a.tiptap-link,
+.tiptap-memo-display a.tiptap-link {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap-editor-content mark,
+.tiptap-readonly mark,
+.tiptap-memo-display mark {
+  border-radius: 0.15em;
+  padding: 0 0.05em;
+}
+
+.tiptap-editor-content ul[data-type='taskList'],
+.tiptap-readonly ul[data-type='taskList'],
+.tiptap-memo-display ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap-editor-content ul[data-type='taskList'] li,
+.tiptap-readonly ul[data-type='taskList'] li,
+.tiptap-memo-display ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4em;
+}
+
+.tiptap-editor-content ul[data-type='taskList'] li > label,
+.tiptap-readonly ul[data-type='taskList'] li > label,
+.tiptap-memo-display ul[data-type='taskList'] li > label {
+  flex: 0 0 auto;
+  margin-top: 0.2em;
+  user-select: none;
+}
+
+/* .tiptap-memo-display 는 dangerouslySetInnerHTML로 정적 HTML을 주입하는 미리보기 영역이라
+   Tiptap의 NodeView(및 isEditable 가드)가 붙지 않는다. 체크박스를 클릭 가능한 상태로 두면
+   토글만 되고 저장되지 않는 가짜 인터랙션이 되므로 클릭을 막는다. */
+.tiptap-memo-display ul[data-type='taskList'] li > label input[type='checkbox'] {
+  pointer-events: none;
+}
+
+.tiptap-editor-content ul[data-type='taskList'] li > div,
+.tiptap-readonly ul[data-type='taskList'] li > div,
+.tiptap-memo-display ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+}
+
+.tiptap-editor-content ul[data-type='taskList'] li[data-checked='true'] > div > p,
+.tiptap-readonly ul[data-type='taskList'] li[data-checked='true'] > div > p,
+.tiptap-memo-display ul[data-type='taskList'] li[data-checked='true'] > div > p {
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+
+/* Presentation mode(다크 배경) 오버라이드 */
+.tiptap-presentation blockquote {
+  border-left-color: rgba(255, 255, 255, 0.3);
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.tiptap-presentation hr {
+  border-top-color: rgba(255, 255, 255, 0.2);
+}
+
+.tiptap-presentation a.tiptap-link {
+  color: #93c5fd;
+}
+
+/* 하이라이트 배경은 항상 밝은 파스텔 톤이므로, 다크 배경용 밝은 글자색을 상속받으면
+   가독성이 떨어진다. 하이라이트된 글자만 어두운 색으로 고정한다. */
+.tiptap-presentation mark {
+  color: #1f2937;
+}
