@@ -5,6 +5,16 @@ import { verifyTokenString } from '@/utils/auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const PROGRESS_TYPE_LABELS: Record<string, string> = {
+  self: '자비',
+  subsidy: '보조금',
+  subsidy_parallel: '보조금동시',
+  subsidy_extra: '추가승인',
+  dealer: '대리점',
+  outsourcing: '외주',
+  etc: '기타',
+};
+
 /**
  * POST /api/commission-closing/approval
  * 영업비 마감 결재 상신
@@ -67,21 +77,25 @@ export async function POST(request: NextRequest) {
     }
 
     // 포함된 commission_payments 조회 (영업점·금액 집계용)
+    // 결재 문서에는 스냅샷을 저장하므로 business_name도 이 시점에 함께 고정해둔다
+    // (installation_closing과 동일 패턴 — 이후 사업장명이 바뀌어도 이미 상신된 문서 내용은 유지됨).
     const payments = await queryOne(
       `SELECT
          COUNT(*)::int                          AS count,
-         SUM(actual_amount)::bigint             AS total_amount,
-         array_agg(DISTINCT sales_office)       AS sales_offices,
+         SUM(cp.actual_amount)::bigint          AS total_amount,
+         array_agg(DISTINCT cp.sales_office)    AS sales_offices,
          jsonb_agg(jsonb_build_object(
-           'id',            id,
-           'business_id',   business_id,
-           'sales_office',  sales_office,
-           'progress_type', progress_type,
-           'actual_amount', actual_amount
+           'id',            cp.id,
+           'business_id',   cp.business_id,
+           'business_name', bi.business_name,
+           'sales_office',  cp.sales_office,
+           'progress_type', cp.progress_type,
+           'actual_amount', cp.actual_amount
          ))                                     AS items
-       FROM commission_payments
-       WHERE id = ANY($1::uuid[])
-         AND status = 'eligible'`,
+       FROM commission_payments cp
+       LEFT JOIN business_info bi ON bi.id = cp.business_id
+       WHERE cp.id = ANY($1::uuid[])
+         AND cp.status = 'eligible'`,
       [commission_payment_ids]
     );
 

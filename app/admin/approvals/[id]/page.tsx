@@ -14,6 +14,7 @@ import LeaveRequestForm from '@/components/approvals/forms/LeaveRequestForm'
 import BusinessProposalForm from '@/components/approvals/forms/BusinessProposalForm'
 import OvertimeLogForm from '@/components/approvals/forms/OvertimeLogForm'
 import InstallationClosingForm from '@/components/approvals/forms/InstallationClosingForm'
+import CommissionClosingForm from '@/components/approvals/forms/CommissionClosingForm'
 import BusinessTripReportForm from '@/components/approvals/forms/BusinessTripReportForm'
 import InspectionReportForm from '@/components/approvals/forms/InspectionReportForm'
 import { TokenManager } from '@/lib/api-client'
@@ -93,6 +94,7 @@ function FormViewer({
     )
     case 'overtime_log':      return <OvertimeLogForm {...props} />
     case 'installation_closing': return <InstallationClosingForm {...props} />
+    case 'commission_closing': return <CommissionClosingForm {...props} />
     case 'business_trip_report': return (
       <BusinessTripReportForm
         {...props}
