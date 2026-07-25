@@ -68,11 +68,13 @@ export default function ProfilePage() {
 
   // 비밀번호 변경 폼
   const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
 
   const [showPasswords, setShowPasswords] = useState({
+    current: false,
     new: false,
     confirm: false
   });
@@ -229,6 +231,11 @@ export default function ProfilePage() {
     e.preventDefault();
     if (!user) return;
 
+    if (!passwordForm.currentPassword) {
+      setErrorMessage('현재 비밀번호를 입력해주세요.');
+      return;
+    }
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setErrorMessage('새 비밀번호가 일치하지 않습니다.');
       return;
@@ -239,8 +246,6 @@ export default function ProfilePage() {
       return;
     }
 
-    // 로그인 상태에서는 현재 비밀번호 확인 불필요 (보안상 이유로 주석 처리)
-
     try {
       setSaving(true);
       setErrorMessage('');
@@ -249,7 +254,10 @@ export default function ProfilePage() {
 
       // 모든 사용자에게 통일된 change-password API 사용
       const apiEndpoint = '/api/auth/change-password';
-      const requestBody = { newPassword: passwordForm.newPassword };
+      const requestBody = {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      };
 
       const response = await fetch(apiEndpoint, {
         method: 'POST',
@@ -263,7 +271,7 @@ export default function ProfilePage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setPasswordForm({ newPassword: '', confirmPassword: '' });
+          setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
           setShowPasswordForm(false);
           setSuccessMessage('비밀번호가 성공적으로 변경되었습니다.');
 
@@ -674,17 +682,35 @@ export default function ProfilePage() {
 
             {showPasswordForm && (
               <form onSubmit={handlePasswordChange} className="space-y-6">
-                {/* 로그인 상태에서는 현재 비밀번호 입력 불필요 */}
-
-                {/* 간소화된 비밀번호 변경 설명 */}
+                {/* 비밀번호 변경 설명 */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center gap-2 text-gray-800">
                     <Shield className="w-4 h-4" />
                     <span className="text-sm font-medium">비밀번호 변경</span>
                   </div>
                   <p className="text-sm text-gray-700 mt-1">
-                    로그인 상태에서는 새 비밀번호만 입력하면 변경할 수 있습니다.
+                    보안을 위해 현재 비밀번호를 확인한 후 새 비밀번호로 변경할 수 있습니다.
                   </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">현재 비밀번호</label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.current ? 'text' : 'password'}
+                      value={passwordForm.currentPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-3 pr-12 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>

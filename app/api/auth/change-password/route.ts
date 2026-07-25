@@ -84,8 +84,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 현재 비밀번호가 제공된 경우에만 확인 (선택적)
-    if (currentPassword && existingUser.password_hash) {
+    // 기존 비밀번호가 설정된 계정은 현재 비밀번호 확인이 필수
+    if (existingUser.password_hash) {
+      if (!currentPassword) {
+        return NextResponse.json(
+          { success: false, error: '현재 비밀번호를 입력해주세요.' },
+          { status: 400 }
+        );
+      }
       const isCurrentPasswordValid = await bcrypt.compare(currentPassword, existingUser.password_hash);
       if (!isCurrentPasswordValid) {
         return NextResponse.json(
