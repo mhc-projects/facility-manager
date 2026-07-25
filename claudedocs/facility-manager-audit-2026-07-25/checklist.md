@@ -23,117 +23,117 @@
 
 ## 🔴 Critical (40건)
 
-- [ ] **BUG-053** [버그 / 수정위험도:낮음] PUT /api/order-management/[businessId] crashes on every authenticated save (block-scoped `params` shadows the destructured route param, TDZ ReferenceError caught as 500)
+- [x] **BUG-053** (완료, 2026-07-25) [버그 / 수정위험도:낮음] PUT /api/order-management/[businessId] crashes on every authenticated save (block-scoped `params` shadows the destructured route param, TDZ ReferenceError caught as 500)
   - 위치: `app/api/order-management/[businessId]/route.ts:219-227, 250`
   - The original claim's mechanism (module-level SyntaxError making the file unparseable) is FALSE and is refuted: I hit the live dev server's GET and PUT endpoints and both compiled fine ('✓ Compiled /api/order-management/[businessId] in 249ms (211 modules)') and returned normal…
   - 권장 조치: Rename the local `const params: any[] = []` at route.ts L250 (and its later references) to e.g. `queryValues`, since it currently shadows the destructured route parameter `{ params }` used at L227 and, due to const/TDZ hoisting, throws a ReferenceError on every single authenticated PUT request — this is the single highest-priority fix in the list.
 
-- [ ] **BUG-098** [버그 / 수정위험도:낮음] 영업비마감 지급명세 조회 API의 month 파라미터가 SQL 문자열에 그대로 삽입되어 SQL 인젝션 가능
+- [x] **BUG-098** (완료, 2026-07-25) [버그 / 수정위험도:낮음] 영업비마감 지급명세 조회 API의 month 파라미터가 SQL 문자열에 그대로 삽입되어 SQL 인젝션 가능
   - 위치: `app/api/commission-closing/summary/route.ts:27-51`
   - monthClause를 `AND cp.payment_month = '${month}'` 형태로 이스케이프 없이 문자열 템플릿에 직접 삽입한 뒤 queryAll(sql)을 params 배열 없이 호출한다(29-51행). lib/supabase-direct.ts의 query()는 pool.query(text, params)를 그대로 호출하는데(62행) params가 undefined면 node-postgres가 simple query protocol을 사용해 세미콜론으로 구분된 다중…
   - 권장 조치: Parameterize the month filter as `AND cp.payment_month = $1` and pass `[month]` through queryAll's params argument instead of interpolating month directly into the SQL string; treat this as top priority given the security severity even though the code change itself is small.
 
-- [ ] **BUG-104** [버그 / 수정위험도:낮음] /api/meeting-departments has zero authentication and is also CSRF-exempt
+- [x] **BUG-104** (완료, 2026-07-25) [버그 / 수정위험도:낮음] /api/meeting-departments has zero authentication and is also CSRF-exempt
   - 위치: `app/api/meeting-departments/route.ts:19-99`
   - GET/POST/DELETE never call getUserFromToken or any auth check (no jwt import even present in this file), unlike every sibling meeting-* route which all implement the same getUserFromToken() + 401 pattern. lib/security/csrf-protection.ts explicitly lists…
   - 권장 조치: Add the same getUserFromToken()+401 check used by every sibling meeting-* route to GET/POST/DELETE in meeting-departments/route.ts; existing callers already run same-origin with the session cookie so no frontend change is needed.
 
-- [ ] **BUG-209** [버그 / 수정위험도:낮음] Reflected XSS in Google OAuth callback popup page via unescaped query params
+- [x] **BUG-209** (완료, 2026-07-25) [버그 / 수정위험도:낮음] Reflected XSS in Google OAuth callback popup page via unescaped query params
   - 위치: `app/api/auth/social/google/callback/route.ts:41-42`
   - code/error query params are interpolated unescaped into a JS string literal inside an inline <script> (`const code = "${code}";`). A URL like ?code=x";alert(document.cookie);// breaks out of the string literal and executes arbitrary JS on the app's own origin. Critically, this…
   - 권장 조치: Replace the raw `"${code}"` / `"${error}"` interpolation in the inline <script> with `JSON.stringify(code)` / `JSON.stringify(error)` so query values can't break out of the string literal; single-file, mechanical templating fix.
 
-- [ ] **BUG-210** [버그 / 수정위험도:낮음] Reflected XSS in Naver OAuth callback popup page via unescaped query params
+- [x] **BUG-210** (완료, 2026-07-25) [버그 / 수정위험도:낮음] Reflected XSS in Naver OAuth callback popup page via unescaped query params
   - 위치: `app/api/auth/social/naver/callback/route.ts:42-44`
   - Identical pattern to the Google callback: code/state/error are interpolated unescaped into an inline <script> string literal (`const code = "${code}";` etc.). Same exploit: a crafted URL breaks out of the string and runs arbitrary JS on the app origin for any visitor,…
   - 권장 조치: Apply the same JSON.stringify() escaping to the code/state/error values embedded in the Naver callback's inline script; identical mechanical fix to the Google callback.
 
-- [ ] **BUG-221** [버그 / 수정위험도:낮음] /api/data-history GET and POST have no authentication check at all
+- [x] **BUG-221** (완료, 2026-07-25) [버그 / 수정위험도:낮음] /api/data-history GET and POST have no authentication check at all
   - 위치: `app/api/data-history/route.ts:11-85`
   - GET and POST handlers never read any Authorization header or cookie. GET returns full change history (old_data/new_data) for business_info, contract_history, etc. to any unauthenticated caller. POST { historyId, reason } calls DatabaseService.restoreFromHistory() to roll back…
   - 권장 조치: Mirror access-logs/route.ts: read the Bearer/session_token cookie and call verifyToken() at the top of both GET and POST before touching DatabaseService.
 
-- [ ] **BUG-264** [버그 / 수정위험도:낮음] commission-closing summary API — month 쿼리 파라미터 SQL 인젝션
+- [x] **BUG-264** (완료, 2026-07-25) [버그 / 수정위험도:낮음] commission-closing summary API — month 쿼리 파라미터 SQL 인젝션
   - 위치: `app/api/commission-closing/summary/route.ts:27-51`
   - month URL 파라미터를 이스케이프 없이 문자열 템플릿으로 SQL에 직접 삽입한 뒤(`AND cp.payment_month = '${month}'`) queryAll()로 실행한다. lib/supabase-direct.ts의 query()는 text를 그대로 pg Pool.query(text, params)에 전달하는 원시 실행 함수이므로 이스케이프 처리가 없다. 같은 폴더의 export/route.ts는 동일 패턴에 `.replace(/'/g, '')`로 작은따옴표 제거 방어를 하지만…
   - 권장 조치: Pass `month` as a bound parameter (e.g. `$1`) through queryAll's params array instead of string-interpolating it into the SQL text, mirroring a proper parameterized query rather than export/route.ts's incomplete quote-stripping workaround.
 
-- [ ] **BUG-277** [버그 / 수정위험도:낮음] 견적서 DELETE API에 인증/권한 검증이 전혀 없음
+- [x] **BUG-277** (완료, 2026-07-25) [버그 / 수정위험도:낮음] 견적서 DELETE API에 인증/권한 검증이 전혀 없음
   - 위치: `app/api/estimates/[id]/route.ts:10-43`
   - 주석은 '권한 4 이상 필요'라고 명시하지만 DELETE 핸들러 본문(11-43행)에는 토큰 파싱, verifyTokenHybrid 호출, permissionLevel 비교 등 어떤 인증 코드도 없다. middleware.ts는 /api/ 경로에 대해 rate limit과 CSRF 검증만 수행하고(protectAPIRoute, 137-231행), 실제 서명 검증은 '페이지/API에서 수행됨'이라고 스스로 명시한다(286행 주석). CSRF 토큰은 인증 없이 GET /api/csrf-token으로…
   - 권장 조치: Add the standard Bearer-token + token-verify + permissionLevel>=4 check (matching the route's own 'Level 4+' comment) to the DELETE handler, mirroring the auth pattern already used in app/api/installation-closing/transfers/route.ts.
 
-- [ ] **BUG-039** [버그 / 수정위험도:중간] 삭제한 사용자재가 DB에서 실제로 삭제되지 않음
+- [x] **BUG-039** (완료, 2026-07-25) [버그 / 수정위험도:중간] 삭제한 사용자재가 DB에서 실제로 삭제되지 않음
   - 위치: `app/admin/as-management/components/AsRecordModal.tsx:278-280, 417-448`
   - removeMaterial()은 setMaterials(prev => prev.filter(...))로 로컬 state만 갱신하고 DELETE 요청을 전혀 보내지 않는다. handleSave()의 저장 루프는 현재 materials 배열만 순회하며 신규 항목(POST)과 기존 항목(PATCH)만 처리하고, 로드 시점엔 있었지만 배열에서 제거된 항목에 대한 DELETE 호출이 없다. (evidence: AsRecordModal.tsx:278-280 removeMaterial()이 filter로…
   - 권장 조치: Track the set of material IDs present when the record was loaded, and in handleSave()'s material loop, call DELETE /api/as-materials/[id] (endpoint already exists) for any of those IDs no longer present in the current materials array.
 
-- [ ] **BUG-040** [버그 / 수정위험도:중간] 단가표 삭제 시 AS건의 출동단가 참조를 확인하지 않아 하드 삭제로 과거 매출 데이터가 소급 손실됨
+- [x] **BUG-040** (완료, 2026-07-25) [버그 / 수정위험도:중간] 단가표 삭제 시 AS건의 출동단가 참조를 확인하지 않아 하드 삭제로 과거 매출 데이터가 소급 손실됨
   - 위치: `app/api/as-price-list/[id]/route.ts:84-114`
   - DELETE 핸들러의 usageCheck는 as_material_usage.price_list_id만 확인하고 as_records.dispatch_cost_price_id/dispatch_revenue_price_id는 조회하지 않는다. 신규 AS건은 등록 시 첫 번째 출동 단가표 항목을 자동 선택하므로 대다수 AS건이 이를 참조한다. 관리자가 해당 단가표 항목을 삭제하면 usageCount=0으로 판정되어 실제 DELETE가 실행되고, FK의 ON DELETE SET NULL로 인해 과거…
   - 권장 조치: Extend the usageCheck in as-price-list/[id]/route.ts's DELETE handler to also COUNT as_records referencing the price entry via dispatch_cost_price_id/dispatch_revenue_price_id, and block hard-delete (offering a deactivate/hide-from-list flag instead) when any reference exists.
 
-- [ ] **BUG-054** [버그 / 수정위험도:중간] Clicking '발주 완료' without first successfully saving permanently loses the user's entered step dates - and Save is currently 100% broken too (see TDZ bug above), so there is presently no way to persist step dates at all
+- [x] **BUG-054** (완료, 2026-07-25) [버그 / 수정위험도:중간] Clicking '발주 완료' without first successfully saving permanently loses the user's entered step dates - and Save is currently 100% broken too (see TDZ bug above), so there is presently no way to persist step dates at all
   - 위치: `app/admin/order-management/components/OrderDetailModal.tsx:284-336`
   - handleComplete() (lines 284-336) validates 'no missing steps' purely against the local React state `stepDates` (lines 288-291), then calls only POST /api/order-management/[businessId]/complete (lines 309-316) - it never calls PUT to persist stepDates. I confirmed by reading…
   - 권장 조치: In handleComplete() (OrderDetailModal.tsx L284-336), issue the same PUT save request used by handleSave and confirm it succeeds before calling POST .../complete, so entered step dates are guaranteed to be persisted before the record is marked completed and its date inputs become permanently disabled — this must land together with the item 12 fix since PUT is currently non-functional.
 
-- [ ] **BUG-067** [버그 / 수정위험도:중간] 문서 이력 삭제 API에 인증/권한 검증이 전혀 없음 (인증 우회로 임의 문서·계약서 삭제 가능)
+- [x] **BUG-067** (완료, 2026-07-25) [버그 / 수정위험도:중간] 문서 이력 삭제 API에 인증/권한 검증이 전혀 없음 (인증 우회로 임의 문서·계약서 삭제 가능)
   - 위치: `app/api/document-automation/history/[id]/route.ts:11-83`
   - DELETE 핸들러는 Authorization 헤더나 쿠키를 전혀 읽지 않고 verifyTokenString 등 어떤 인증 함수도 호출하지 않은 채 supabaseAdmin(SERVICE_ROLE_KEY)으로 곧바로 document_history를 조회·삭제하며, document_type이 'contract'이면 contract_history까지 연쇄 삭제한다. 같은 파일 계열의 app/api/document-automation/contract/route.ts DELETE 핸들러(라인…
   - 권장 조치: Add the same Bearer-token verifyTokenString + permissionLevel check used in app/api/document-automation/contract/route.ts's DELETE handler (line 537, permissionLevel>=4) to this history DELETE route — both existing frontend callers (ContractManagement.tsx L417-421, page.tsx L224-229) already send an Authorization header, so this can be wired in without a frontend change, but confirm the intended permission threshold for non-contract document types before deploying.
 
-- [ ] **BUG-079** [버그 / 수정위험도:중간] POST /api/subsidy-crawler/manual has no authentication and is CSRF-exempt
+- [x] **BUG-079** (완료, 2026-07-25) [버그 / 수정위험도:중간] POST /api/subsidy-crawler/manual has no authentication and is CSRF-exempt
   - 위치: `app/api/subsidy-crawler/manual/route.ts:28-118`
   - The POST handler only checks that process.env.GITHUB_TOKEN is configured (line 32-43); it never validates a caller identity, bearer token, or session anywhere in the function. middleware.ts's isCSRFExemptAPI (line 118) whitelists the '/api/subsidy-crawler' prefix, which this…
   - 권장 조치: Require the same Bearer CRAWLER_SECRET check already used in app/api/subsidy-crawler/route.ts (line 510-511) in this manual/route.ts POST handler, remove '/api/subsidy-crawler' from middleware's CSRF-exempt prefix list (or scope the exemption more narrowly), and update the one caller in monitoring-dashboard/page.tsx (line 208-215) to send the required credential/token — this triggers real paid GitHub Actions runs so validate end-to-end before deploying.
 
-- [ ] **BUG-103** [버그 / 수정위험도:중간] PATCH /api/meeting-minutes/[id]/sections has no participant/organizer access check
+- [x] **BUG-103** (완료, 2026-07-25) [버그 / 수정위험도:중간] PATCH /api/meeting-minutes/[id]/sections has no participant/organizer access check
   - 위치: `app/api/meeting-minutes/[id]/sections/route.ts:58-333`
   - The PATCH handler calls only getUserFromToken() (line 63) to confirm authentication, then fetches the meeting_minutes row (77-81) and mutates it (316-321) with no call to canAccessMeetingMinute/isFullAccessUser anywhere in the file (confirmed: no import of…
   - 권장 조치: Import canAccessMeetingMinute/isFullAccessUser (as [id]/route.ts already does) into sections/route.ts and reject the PATCH with 403 before any section-mutation branch runs if the caller isn't organizer/creator/participant/full-access.
 
-- [ ] **BUG-122** [버그 / 수정위험도:중간] GET/POST /api/weekly-reports has no authentication check at all
+- [x] **BUG-122** (완료, 2026-07-25) [버그 / 수정위험도:중간] GET/POST /api/weekly-reports has no authentication check at all
   - 위치: `app/api/weekly-reports/route.ts:83-95, 394-403`
   - GET (line 83) reads userId straight from searchParams and POST (line 394) reads userId straight from request.json() — neither ever reads an Authorization header, a cookie token, nor calls verifyToken. withApiHandler (lib/api-utils.ts:79-90) declares an unused `requiresAuth`…
   - 권장 조치: Add the same verifyToken(Authorization header or auth_token cookie) check used in app/api/weekly-reports/admin/route.ts and realtime/route.ts to both GET and POST handlers, returning 401 on failure; the only live caller (app/admin/weekly-reports/[userId]/page.tsx) already sends a Bearer token so this should be a drop-in fix, but scan for any other untracked callers (cron/internal scripts) before deploying.
 
-- [ ] **BUG-150** [버그 / 수정위험도:중간] Stored XSS via unauthenticated wiki node content modification (+ JWT theft path)
+- [x] **BUG-150** (완료, 2026-07-25) [버그 / 수정위험도:중간] Stored XSS via unauthenticated wiki node content modification (+ JWT theft path)
   - 위치: `app/api/wiki/nodes/[id]/route.ts:30-55`
   - PATCH /api/wiki/nodes/[id] has zero authentication/authorization check. It reads the body, loops over allowedFields = ['title','content_md','tags','is_published','sort_order','metadata'] and writes whatever the caller sends directly to…
   - 권장 조치: Add the same JWT + permission_level>=4 check used in app/api/wiki/guideline-uploads/[id]/route.ts to the PATCH handler (no current frontend caller relies on it being open, so this is safe to add), and separately HTML-escape content_md's `<`, `>`, `&` in WikiContent.tsx before applying the markdown regex replacements, since that component renders on every wiki page.
 
-- [ ] **BUG-198** [버그 / 수정위험도:중간] /api/users/employees has zero authentication on GET/POST/PUT
+- [x] **BUG-198** (완료, 2026-07-25) [버그 / 수정위험도:중간] /api/users/employees has zero authentication on GET/POST/PUT
   - 위치: `app/api/users/employees/route.ts:25, 142, 220`
   - GET/POST/PUT are only wrapped in withApiHandler(handler,{logLevel:'debug'}); withApiHandler's body (lib/api-utils.ts:79-125) never reads options.requiresAuth or checks any token. middleware.ts's protectAPIRoute (lines 142-217) only does rate-limiting, request-size checks, and…
   - 권장 조치: Wire the existing requireAuth() helper from lib/auth/require-auth.ts into GET (minLevel=1, matching the pattern already used elsewhere) and a higher minLevel into POST/PUT of app/api/users/employees/route.ts before it touches is_active/permission_level, then smoke-test AdminManagerPicker, MultiAssigneeSelector, and the meeting-minutes create/edit pages since they call this route via same-origin cookie auth with no explicit Authorization header.
 
-- [ ] **BUG-199** [버그 / 수정위험도:중간] change-password allows changing password with no proof of the old one
+- [x] **BUG-199** (완료, 2026-07-25) [버그 / 수정위험도:중간] change-password allows changing password with no proof of the old one
   - 위치: `app/api/auth/change-password/route.ts:87-96`
   - currentPassword is checked only 'if (currentPassword && existingUser.password_hash)' -- omitting currentPassword in the request body skips verification entirely, so any request bearing a valid JWT (however obtained) can silently change the account's password with only…
   - 권장 조치: This needs a coordinated frontend+backend change: add a '현재 비밀번호' input to app/profile/page.tsx's password form (it currently sends only {newPassword}, confirmed at L252) and include it in the request, then make change-password/route.ts L87-96 require currentPassword whenever existingUser.password_hash is non-null, leaving the null-hash path (app/set-password/page.tsx) unaffected.
 
-- [ ] **BUG-219** [버그 / 수정위험도:중간] checkUserPermission() in organization members API is a fake auth stub — any non-empty Bearer token grants full admin
+- [x] **BUG-219** (완료, 2026-07-25) [버그 / 수정위험도:중간] checkUserPermission() in organization members API is a fake auth stub — any non-empty Bearer token grants full admin
   - 위치: `app/api/organization/members/route.ts:9-23`
   - checkUserPermission() only checks that the Authorization header starts with 'Bearer ' and unconditionally returns { authorized: true, user: { id: 'admin-user', permission_level: 3, name: '관리자' } } with no token verification. The middleware (middleware.ts protectAPIRoute) only…
   - 권장 조치: Replace checkUserPermission()'s hardcoded admin object with a real verifyTokenHybrid(token) call, copying the pattern already used correctly in the sibling app/api/organization/departments/route.ts and teams/route.ts files; single file but gates live position_level/member-mutation endpoints so verify the frontend already sends real Bearer tokens before deploying.
 
-- [ ] **BUG-220** [버그 / 수정위험도:중간] /api/organization/members and /api/organization/task-assignments allow full org mutation with a forged Bearer header
+- [x] **BUG-220** (완료, 2026-07-25) [버그 / 수정위험도:중간] /api/organization/members and /api/organization/task-assignments allow full org mutation with a forged Bearer header
   - 위치: `app/api/organization/task-assignments/route.ts:11-25`
   - Because checkUserPermission() (identical stub, duplicated in this file) never validates the token, a forged `Authorization: Bearer x` header is treated as permission_level 3 admin. POST /api/organization/members with action='promote' directly updates employees.position_level…
   - 권장 조치: Apply the identical verifyTokenHybrid(token) fix to task-assignments/route.ts's checkUserPermission(), ideally extracting one shared helper used by both this file and members/route.ts to prevent the same stub from drifting back in later.
 
-- [ ] **BUG-258** [버그 / 수정위험도:중간] verifyAuth() stub from lib/auth.ts makes /api/tasks/[id]/comments effectively unauthenticated and crashes POST
+- [x] **BUG-258** (완료, 2026-07-25) [버그 / 수정위험도:중간] verifyAuth() stub from lib/auth.ts makes /api/tasks/[id]/comments effectively unauthenticated and crashes POST
   - 위치: `app/api/tasks/[id]/comments/route.ts:3, 16, 62, 122`
   - Route imports verifyAuth from @/lib/auth (a 9-line stub: `export function verifyAuth() { return true }`) instead of @/lib/auth/middleware used by sibling routes app/api/tasks/route.ts and app/api/tasks/[id]/route.ts. `const { user, error: authError } = await verifyAuth() as any`…
   - 권장 조치: Switch the import in app/api/tasks/[id]/comments/route.ts from the stub in @/lib/auth to verifyAuth(request) in @/lib/auth/middleware, matching the sibling routes app/api/tasks/route.ts and app/api/tasks/[id]/route.ts, and verify GET/POST both use the returned AuthResult correctly.
 
-- [ ] **BUG-278** [버그 / 수정위험도:중간] 캘린더 이벤트 CRUD API 전체(PUT/DELETE/POST)에 인증/권한 검증이 없음
+- [x] **BUG-278** (완료, 2026-07-25) [버그 / 수정위험도:중간] 캘린더 이벤트 CRUD API 전체(PUT/DELETE/POST)에 인증/권한 검증이 없음
   - 위치: `app/api/calendar/[id]/route.ts:53-249`
   - PUT(53-186행)과 DELETE(194-249행) 핸들러 모두 요청자의 토큰을 검증하지 않는다. 같은 도메인의 app/api/calendar/route.ts POST(109-236행)도 author_id/author_name을 body에서 그대로 신뢰하며 인증 검증이 없다. 주석(51행 'Level 1+ 수정 가능', 107행 'Level 1+ 쓰기 가능')만 있을 뿐 실제 레벨 체크 코드는 없다. estimates DELETE와 동일하게 middleware는 CSRF/rate-limit만…
   - 권장 조치: Add the Bearer-token + permissionLevel check to PUT/DELETE in calendar/[id]/route.ts and POST in calendar/route.ts, and also add the Authorization header to the corresponding fetch calls in CalendarModal.tsx/CalendarBoard.tsx (they currently send no token at all) — server-only enforcement without the client change will break calendar writes for every user.
 
-- [ ] **BUG-279** [버그 / 수정위험도:중간] 계산서 발행 레코드(재무 데이터) CRUD API에 인증이 전혀 없음
+- [x] **BUG-279** (완료, 2026-07-25) [버그 / 수정위험도:중간] 계산서 발행 레코드(재무 데이터) CRUD API에 인증이 전혀 없음
   - 위치: `app/api/invoice-records/route.ts:26-353`
   - POST(26-179행)/PUT(185-305행)/DELETE(311-353행) 모두 토큰 검증 코드가 없다. 특히 middleware.ts의 isCSRFExemptAPI 목록에 '/api/invoice-records'가 '쿠키 인증'이라는 주석과 함께 CSRF 예외로 등록되어 있는데(middleware.ts:120행), 실제로는 CSRF 검증도 건너뛰고 쿠키 기반 인증 로직도 라우트 코드에 전혀 구현되어 있지 않다. 이는 다른 CSRF-exempt 라우트들(delivery-addresses…
   - 권장 조치: Implement real auth (Bearer token + permissionLevel check matching sibling revenue-closing routes) on invoice-records POST/PUT/DELETE and add the Authorization header in the 5 consuming components (InvoiceRecordForm, InvoiceRevisionForm, ExtraInvoiceForm, ExtraInvoiceList, InvoiceTabSection), which currently call fetch() with no auth header at all — then correct or remove the stale '쿠키 인증' comment in middleware.ts's CSRF-exempt list.
