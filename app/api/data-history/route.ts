@@ -1,15 +1,41 @@
 // app/api/data-history/route.ts - 데이터 이력 및 복구 관리 API
 import { NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/lib/database-service'
+import { verifyToken } from '@/utils/auth'
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// 인증 확인 (access-logs/route.ts와 동일 패턴) - 권한 레벨 4(슈퍼관리자) 전용
+async function requireSuperAdmin(request: NextRequest) {
+  const token =
+    request.headers.get('authorization')?.replace('Bearer ', '') ||
+    request.cookies.get('session_token')?.value ||
+    request.headers.get('cookie')?.match(/session_token=([^;]+)/)?.[1];
+
+  if (!token) {
+    return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
+  }
+
+  const payload = await verifyToken(token);
+  if (!payload) {
+    return NextResponse.json({ error: '유효하지 않은 토큰입니다' }, { status: 401 });
+  }
+
+  if ((payload.permission_level ?? 0) < 4) {
+    return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 });
+  }
+
+  return null
+}
 
 // GET: 데이터 변경 이력 조회
 export async function GET(request: NextRequest) {
   try {
+    const authError = await requireSuperAdmin(request)
+    if (authError) return authError
+
     const { searchParams } = new URL(request.url)
     const tableNames = searchParams.get('tables')?.split(',')
     const recordId = searchParams.get('recordId') || undefined
@@ -46,6 +72,9 @@ export async function GET(request: NextRequest) {
 // POST: 데이터 복구 실행
 export async function POST(request: NextRequest) {
   try {
+    const authError = await requireSuperAdmin(request)
+    if (authError) return authError
+
     const body = await request.json()
     const { historyId, reason } = body
 
