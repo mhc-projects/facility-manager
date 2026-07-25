@@ -114,6 +114,8 @@ export default function AsRecordModal({
 
   // 자재 상태
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
+  // 로드 시점의 자재 ID 목록 (삭제 대상 판별용)
+  const [initialMaterialIds, setInitialMaterialIds] = useState<string[]>([]);
   const priceList = priceLists.cost;
   const revenuePriceList = priceLists.revenue;
   const dispatchCostList = priceLists.dispatchCost;
@@ -160,6 +162,7 @@ export default function AsRecordModal({
             revenue_unit_price: m.revenue_unit_price ?? null,
             notes: m.notes || '',
           })));
+          setInitialMaterialIds(json.data.materials.map((m: any) => m.id));
         }
       } catch (e) {
         console.error('자재 로딩 실패:', e);
@@ -413,6 +416,16 @@ export default function AsRecordModal({
       }
 
       const recordId = isEdit ? record!.id : json.data.id;
+
+      // 로드 시점에 있었지만 현재 목록에서 제거된 자재는 DB에서도 삭제
+      const currentMaterialIds = new Set(materials.filter(m => m.id).map(m => m.id));
+      const removedMaterialIds = initialMaterialIds.filter(id => !currentMaterialIds.has(id));
+      for (const removedId of removedMaterialIds) {
+        await fetch(`/api/as-materials/${removedId}`, {
+          method: 'DELETE',
+          headers: authHeader(),
+        });
+      }
 
       for (const mat of materials) {
         if (!mat.material_name.trim()) continue;
