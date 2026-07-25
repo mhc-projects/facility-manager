@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
-    const monthClause = month ? `AND cp.payment_month = '${month}'` : '';
+    const monthClause = month ? `AND cp.payment_month = $1` : '';
 
     const rows = await queryAll(`
       SELECT
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       WHERE cp.status IN ('approved', 'paid')
         ${monthClause}
       ORDER BY cp.sales_office, b.business_name
-    `);
+    `, month ? [month] : []);
 
     // 영업점별 그룹화
     const grouped: Record<string, any> = {};
