@@ -1,6 +1,7 @@
 // app/api/calendar/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { queryAll, queryOne } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Next.js 캐싱 완전 비활성화 - 실시간 이벤트 업데이트를 위해 필수
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
 
     const { title, description, event_date, end_date, start_time, end_time, event_type, is_completed, author_id, author_name, attached_files, labels, business_id, business_name } = body;

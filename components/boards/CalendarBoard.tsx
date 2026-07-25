@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, CheckSquare, Square, Search, X } from 'lucide-react';
 import { getLabelColor } from '@/lib/label-colors';
+import { TokenManager } from '@/lib/api-client';
 
 // Lazy load modals for better initial load performance
 const CalendarModal = lazy(() => import('@/components/modals/CalendarModal'));
@@ -451,7 +452,10 @@ export default function CalendarBoard() {
     try {
       const response = await fetch(`/api/calendar/${eventId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TokenManager.getToken()}`
+        },
         body: JSON.stringify({ is_completed: !currentStatus })
       });
 
@@ -498,7 +502,8 @@ export default function CalendarBoard() {
       } else {
         // 일반 일정은 calendar API 사용
         response = await fetch(`/api/calendar/${eventId}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
         });
       }
 
@@ -1409,7 +1414,10 @@ export default function CalendarBoard() {
               try {
                 const response = await fetch(`/api/calendar/${eventId}`, {
                   method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${TokenManager.getToken()}`
+                  },
                   body: JSON.stringify({ is_completed: !currentStatus })
                 });
 
@@ -1462,7 +1470,10 @@ export default function CalendarBoard() {
               try {
                 const response = await fetch(`/api/calendar/${eventId}`, {
                   method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${TokenManager.getToken()}`
+                  },
                   body: JSON.stringify({ is_completed: !currentStatus })
                 });
 

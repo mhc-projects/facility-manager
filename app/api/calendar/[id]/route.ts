@@ -1,6 +1,7 @@
 // app/api/calendar/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Next.js 캐싱 완전 비활성화 - 실시간 이벤트 업데이트를 위해 필수
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,9 @@ export async function PUT(
   { params: routeParams }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { id } = routeParams;
     const body = await request.json();
 
@@ -196,6 +200,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { id } = params;
 
     // 실사 이벤트 감지 → survey-events API로 리다이렉트

@@ -7,6 +7,7 @@ import BusinessAutocomplete from '@/components/inputs/BusinessAutocomplete';
 import BusinessInfoPanel from '@/components/business/BusinessInfoPanel';
 import DateInput from '@/components/ui/DateInput';
 import { useAuth } from '@/contexts/AuthContext';
+import { TokenManager } from '@/lib/api-client';
 
 /**
  * 첨부 파일 메타데이터 타입
@@ -502,7 +503,10 @@ export default function CalendarModal({
         // 생성
         const response = await fetch('/api/calendar', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${TokenManager.getToken()}`
+          },
           body: JSON.stringify({
             title,
             description: description || null,
@@ -531,7 +535,10 @@ export default function CalendarModal({
         // 수정
         const response = await fetch(`/api/calendar/${event.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${TokenManager.getToken()}`
+          },
           body: JSON.stringify({
             title,
             description: description || null,
@@ -581,7 +588,8 @@ export default function CalendarModal({
       setError(null);
 
       const response = await fetch(`/api/calendar/${event.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
       });
 
       const result = await response.json();
