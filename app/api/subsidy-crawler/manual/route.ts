@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/auth/require-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,9 @@ const WORKFLOWS = [
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ManualCrawlResponse>> {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response as NextResponse<ManualCrawlResponse>;
+
   try {
     const githubToken = process.env.GITHUB_TOKEN;
     const githubRepo = process.env.GITHUB_REPOSITORY || 'mhc-projects/facility-manager';
