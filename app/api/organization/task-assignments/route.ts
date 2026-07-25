@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendWebPushToUser } from '@/lib/send-push';
 import { sendTelegramToUser } from '@/lib/send-telegram';
+import { verifyTokenHybrid } from '@/lib/secure-jwt';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -14,14 +15,22 @@ async function checkUserPermission(request: NextRequest) {
     return { authorized: false, user: null };
   }
 
-  return {
-    authorized: true,
-    user: {
-      id: 'admin-user',
-      permission_level: 3,
-      name: '관리자'
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    const result = await verifyTokenHybrid(token);
+
+    if (!result.user) {
+      return { authorized: false, user: null };
     }
-  };
+
+    return {
+      authorized: true,
+      user: result.user
+    };
+  } catch (error) {
+    console.error('❌ [TASK-ASSIGNMENTS] 권한 확인 오류:', error);
+    return { authorized: false, user: null };
+  }
 }
 
 // 업무 담당자 변경 알림 헬퍼
