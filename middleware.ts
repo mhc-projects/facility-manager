@@ -134,6 +134,7 @@ function isCSRFExemptAPI(pathname: string): boolean {
     '/api/dev-work-log',     // 개발 업무 일지 API (Bearer 토큰 인증)
     '/api/commission-closing/', // 영업비 마감 API (Bearer 토큰 인증)
     '/api/internal/',          // 내부 전용 API (시크릿 헤더 인증)
+    '/api/push-subscription',  // 푸시 구독 등록 API (Bearer 토큰 또는 device_token 인증, 세션 만료 시에도 호출됨)
   ];
   return exemptPaths.some(path => pathname.startsWith(path));
 }
