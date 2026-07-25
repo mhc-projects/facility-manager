@@ -17,6 +17,7 @@ export async function GET(
       .from('wiki_nodes')
       .select('*, children:wiki_nodes(id, title, slug, node_type, sort_order, is_published)')
       .eq('id', params.id)
+      .eq('is_published', true)
       .single();
 
     if (error || !data) {
