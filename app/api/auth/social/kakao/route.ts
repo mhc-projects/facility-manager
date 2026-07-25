@@ -150,6 +150,12 @@ async function getEmailDomainPolicy(email: string) {
 
 // GET: 카카오 로그인 URL 생성 및 리다이렉트
 export async function GET(request: NextRequest) {
+  // 2026-07-25: 소셜 로그인 기능 비활성화 (현재 프론트엔드 어디에서도 사용하지 않음 - 로그인/가입 페이지에 진입 버튼 없음). 아래 원래 로직은 재활성화 시 참고용으로 남겨둔다.
+  return NextResponse.json(
+    { success: false, error: { code: 'FEATURE_DISABLED', message: '소셜 로그인 기능은 현재 비활성화되어 있습니다.' } },
+    { status: 503 }
+  );
+
   try {
     const { searchParams } = new URL(request.url);
     const redirectUri = searchParams.get('redirect_uri') ||
@@ -200,6 +206,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // 2026-07-25: 소셜 로그인 기능 비활성화 (현재 프론트엔드 어디에서도 사용하지 않음 - 로그인/가입 페이지에 진입 버튼 없음). 아래 원래 로직은 재활성화 시 참고용으로 남겨둔다.
+  return NextResponse.json(
+    { success: false, error: { code: 'FEATURE_DISABLED', message: '소셜 로그인 기능은 현재 비활성화되어 있습니다.' } },
+    { status: 503 }
+  );
+
   try {
     const body = await request.json();
     const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
