@@ -24,7 +24,9 @@ export interface EmployeeForAssignment {
 
 // GET: 활성 직원 목록 조회 (담당자 선택용)
 export const GET = withApiHandler(async (request: NextRequest) => {
-  const auth = await requireAuth(request, 1);
+  // 담당자 선택 UI 등 기본 기능에서 게스트(permission_level 0) 계정도 조회해야 하므로
+  // 로그인 여부만 확인한다 (원래 문제는 인증 자체가 없었던 것이지 레벨 기준이 아니었음).
+  const auth = await requireAuth(request, 0);
   if (!auth.ok) return auth.response;
 
   try {
