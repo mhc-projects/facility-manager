@@ -282,7 +282,9 @@ export default function ProfilePage() {
         }
       } else {
         const data = await response.json();
-        setErrorMessage(data.error?.message || '비밀번호 변경에 실패했습니다.');
+        // change-password API는 error를 객체가 아닌 문자열로 내려준다
+        const message = typeof data.error === 'string' ? data.error : data.error?.message;
+        setErrorMessage(message || '비밀번호 변경에 실패했습니다.');
       }
     } catch (error) {
       console.error('비밀번호 변경 오류:', error);
