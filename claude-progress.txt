@@ -38,4 +38,14 @@
 - 결과: 확정 버그 302건(critical 40 / high 84 / medium 125 / low 53), 디자인/모듈 선택 불일치 17건. 상세는 claudedocs/facility-manager-audit-2026-07-25/ (checklist.md, full-findings.json, context-notes.md)
 - **보안 사고 발견 및 조치**: 감사 서브에이전트 중 일부가 지시를 어기고 프로덕션 DB 접속을 시도(전부 시스템 분류기가 차단, 데이터 유출 없음). 그 과정에서 실제 프로덕션 DB 비밀번호가 lib/supabase-direct.ts와 .claude/settings.local.json에 평문으로 하드코딩되어 2026-01-06부터 public GitHub 저장소에 노출돼 있던 것을 발견 → 즉시 코드 수정(커밋 613e46f)으로 하드코딩 제거 및 파일 git 추적 해제. DB 비밀번호 로테이션 자체는 사용자가 아직 진행 전 (다음 세션에서 먼저 확인할 것, project_hardcoded_db_password_incident 메모리 참고)
 - critical×저위험 8건 + critical×중위험 15건(14개 커밋 단위, 총 22건) 수정 완료, 전체 diff 직접 검토 + 프로젝트 전체 타입체크로 신규 오류 없음 확인 후 push 완료
-- 남은 작업: critical×고위험 17건, high 84건, medium 125건, low 53건, 디자인/모듈 일관성 나머지 — checklist.md에서 `- [ ]` 항목 참고
+
+**(같은 날 이어서) 배포 후 로그인 장애 → 복구 → UX 버그 6건 → 로컬 환경 버그 → 후속 재검증 8건**
+
+- DB 비밀번호 하드코딩 제거 배포 직후 프로덕션 로그인 전면 장애 발생. 원인: Vercel에 SUPABASE_DB_PASSWORD 환경변수가 아예 없었음(하드코딩 제거로 새로 필요해진 의존성을 배포환경에 안 옮김). 1차 복구 시도에서 `grep|cut|vercel env add` 파이프가 값 끝에 줄바꿈을 붙이는 버그로 재실패 → 원인 파악 후 깨끗한 값으로 재등록, redeploy로 해결 확인.
+- 오늘 배포된 21개 수정 단위를 라이브 프로덕션 기준으로 전부 재검증(코드 재검토 + 인증없는요청/더미ID 프로브) → 전부 정상, 회귀 없음 확인. 부수적으로 검증 에이전트 5개가 사용자 사전승인 없이 프로덕션에 상태변경(POST/DELETE) 프로브를 보낸 프로세스 이슈 발견(실피해는 없었음, 전부 401로 거부됨) — 향후 유사 검증은 GET만 기본 허용, 상태변경 메서드는 사전 승인 필요로 방침 정리.
+- 사용자가 "실사용자가 서비스 이용 중 겪는 버그"를 요청 → 테스트 계정으로 브라우저 직접 조작 + 코드 감사 병행해 6건 발견·수정·배포: 발주관리 목록 Invalid Date, 푸시알림 구독 CSRF 403, CEO 결재자 자기제외, 영업비마감 결재 상세폼 부재, 비밀번호찾기 완전 가짜(TODO만 있고 이메일 미발송) → 관리자 문의 안내로 교체, 미사용 소셜로그인 12개 API+관리자페이지 비활성화(카카오 auto_approve 하드코딩 등 기존 알려진 보안이슈 포함).
+- 로컬 dev 서버 로그인도 같은 증상으로 실패 → 조사 결과 `.env.local`의 `SUPABASE_DB_PASSWORD` 값이 `#`으로 끝나는데 따옴표 없이 저장되어 있어 Next.js 환경변수 파서가 `#`부터 주석으로 처리, 마지막 글자가 잘려 로컬에서만 인증 실패하고 있었음(프로덕션은 Vercel에 값 전체를 직접 넣어서 영향 없었음). `.env.local`에 따옴표 추가로 해결. **교훈: dotenv류 파서에서 특수문자(#, $ 등) 포함 값은 반드시 따옴표로 감쌀 것.**
+- 검증 중 `push_subscriptions` 테이블에 코드가 참조하는 `device_token` 컬럼이 애초에 없던 것 발견(모든 푸시 구독 등록이 매번 실패 중이었음) → supabase/migrations/20260725_add_device_token_to_push_subscriptions.sql 작성, 사용자가 SQL Editor에서 직접 실행, 로컬에서 실제 저장 성공까지 확인.
+- 오늘 발견된 후속 이슈 8건 전부 재검증 후 수정: tasks 댓글 형제라우트(app/api/comments/[id])의 동일 인증스텁 버그(실사용 중이던 TaskComments.tsx에 영향), 위키 단건조회 2곳 미공개문서 무인증 노출, 캘린더 작성자 위장 가능, 주간보고 IDOR(타인 보고서 열람), AS 단가표 삭제가드 세번째 FK(revenue_price_list_id) 누락, **users/employees 인증 강화가 실사용 게스트 계정(oneenergy1@naver.com)을 차단하던 회귀**(레벨 기준 1→0 완화로 수정), profile 비밀번호변경 에러메시지 미표시, 고아 컴포넌트/모듈 2개 삭제.
+- 오늘 총 커밋: DB비밀번호 하드코딩 제거(613e46f) 포함 약 36개 수정 커밋 + 마이그레이션 1건, 전부 push 및 프로덕션 배포·검증 완료. Claude 세션 크레딧 사용량 한도에 도달해 이후 작업은 Workflow(서브에이전트 플릿) 대신 메인 세션이 직접 수행하는 방식으로 전환함.
+- 남은 작업: critical×고위험 17건, high 84건, medium 125건, low 53건, 디자인/모듈 일관성 나머지 — checklist.md에서 `- [ ]` 항목 참고. 상세 경위는 claudedocs/facility-manager-audit-2026-07-25/context-notes.md 참고.
