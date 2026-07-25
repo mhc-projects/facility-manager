@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
       <script>
         (async function() {
           try {
-            const code = "${code}";
-            const state = "${state}";
-            const error = "${error}";
+            const code = ${JSON.stringify(code).replace(/</g, '\\u003c')};
+            const state = ${JSON.stringify(state).replace(/</g, '\\u003c')};
+            const error = ${JSON.stringify(error).replace(/</g, '\\u003c')};
 
             if (error) {
               window.opener?.postMessage({
