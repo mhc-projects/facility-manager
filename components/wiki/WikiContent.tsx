@@ -9,8 +9,14 @@ interface Props {
 export default function WikiContent({ node }: Props) {
   const content = node.content_md ?? '';
 
+  // XSS 방지: 마크다운 변환 전 HTML 특수문자 이스케이프
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
   // 마크다운 → HTML 간단 변환 (heading, bold, list, paragraph)
-  const html = content
+  const html = escaped
     .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold text-gray-800 mt-4 mb-2">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold text-gray-900 mt-6 mb-3 pb-1 border-b border-gray-200">$1</h2>')
     .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold text-gray-900 mt-2 mb-4">$1</h1>')
