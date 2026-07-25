@@ -114,7 +114,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const { title, description, event_date, end_date, start_time, end_time, event_type, is_completed, author_id, author_name, attached_files, labels, business_id, business_name } = body;
+    const { title, description, event_date, end_date, start_time, end_time, event_type, is_completed, attached_files, labels, business_id, business_name } = body;
+    // author_id/author_name은 요청 body를 신뢰하지 않고 인증된 사용자 정보로 서버측에서 강제한다
+    // (그렇지 않으면 로그인한 사용자가 다른 직원 이름으로 일정을 생성할 수 있었음).
+    const author_id = auth.user.id;
+    const author_name = auth.user.name;
 
     // 🔍 디버깅: 전체 요청 바디 로깅
     console.log('📥 [캘린더 생성] 요청 데이터:', {
@@ -132,9 +136,9 @@ export async function POST(request: NextRequest) {
     });
 
     // 필수 필드 검증
-    if (!title || !event_date || !event_type || !author_id || !author_name) {
+    if (!title || !event_date || !event_type) {
       return NextResponse.json(
-        { error: '제목, 날짜, 이벤트 타입, 작성자 정보는 필수입니다.' },
+        { error: '제목, 날짜, 이벤트 타입은 필수입니다.' },
         { status: 400 }
       );
     }
