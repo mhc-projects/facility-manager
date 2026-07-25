@@ -242,34 +242,38 @@ export default function OrderDetailModal({
     handleDateChange(stepField, assembled)
   }
 
+  // 단계별 날짜 저장 (PUT) - handleSave와 handleComplete가 공통으로 사용
+  const saveStepDates = async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+
+    console.log('🔍 [ORDER-SAVE] 저장 시도:', stepDates)
+
+    const response = await fetch(`/api/order-management/${businessId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify(stepDates)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error('❌ [ORDER-SAVE] 서버 응답 오류:', errorData)
+      throw new Error(errorData.error || 'Failed to update order')
+    }
+
+    const result = await response.json()
+    console.log('✅ [ORDER-SAVE] 저장 성공:', result)
+    return result
+  }
+
   // 저장
   const handleSave = async () => {
     try {
       setSaving(true)
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-
-      console.log('🔍 [ORDER-SAVE] 저장 시도:', stepDates)
-
-      const response = await fetch(`/api/order-management/${businessId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        credentials: 'include',
-        body: JSON.stringify(stepDates)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ [ORDER-SAVE] 서버 응답 오류:', errorData)
-        throw new Error(errorData.error || 'Failed to update order')
-      }
-
-      const result = await response.json()
-      console.log('✅ [ORDER-SAVE] 저장 성공:', result)
-
+      await saveStepDates()
       alert('저장되었습니다.')
       await loadOrderDetail() // 데이터 새로고침
     } catch (error) {
@@ -303,6 +307,10 @@ export default function OrderDetailModal({
 
     try {
       setCompleting(true)
+
+      // 완료 처리 전에 입력된 단계 날짜를 먼저 저장한다.
+      // 저장이 실패하면 완료 처리로 넘어가지 않고 아래 catch에서 에러를 표시한다.
+      await saveStepDates()
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
 
