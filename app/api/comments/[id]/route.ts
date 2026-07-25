@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { verifyAuth } from '@/lib/auth';
+import { verifyAuth } from '@/lib/auth/middleware';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -13,9 +13,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error: authError } = await verifyAuth() as any;
-    if (authError) {
-      return NextResponse.json({ success: false, error: authError }, { status: 401 });
+    const { user, error: authError } = await verifyAuth(request);
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: authError || '인증이 필요합니다.' }, { status: 401 });
     }
 
     const commentId = params.id;
@@ -53,7 +53,7 @@ export async function PUT(
     }
 
     // 작성자만 수정 가능
-    if (comment.user_id !== user.id) {
+    if (comment.user_id !== user.userId) {
       return NextResponse.json(
         { success: false, error: '자신의 댓글만 수정할 수 있습니다.' },
         { status: 403 }
@@ -90,14 +90,14 @@ export async function PUT(
 
     const mentions = extractMentions(content);
     if (mentions.length > 0) {
-      await processMentions(commentId, mentions, user.id);
+      await processMentions(commentId, mentions, user.userId);
     }
 
     // 활동 로그 기록
     await supabaseAdmin
       .from('activity_logs')
       .insert({
-        user_id: user.id,
+        user_id: user.userId,
         action: 'comment_updated',
         entity_type: 'task',
         entity_id: comment.task_id,
@@ -128,9 +128,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error: authError } = await verifyAuth() as any;
-    if (authError) {
-      return NextResponse.json({ success: false, error: authError }, { status: 401 });
+    const { user, error: authError } = await verifyAuth(request);
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: authError || '인증이 필요합니다.' }, { status: 401 });
     }
 
     const commentId = params.id;
@@ -151,7 +151,7 @@ export async function DELETE(
     }
 
     // 작성자 또는 관리자만 삭제 가능
-    if (comment.user_id !== user.id && user.permission_level < 2) {
+    if (comment.user_id !== user.userId && user.permissionLevel < 2) {
       return NextResponse.json(
         { success: false, error: '댓글을 삭제할 권한이 없습니다.' },
         { status: 403 }
@@ -186,7 +186,7 @@ export async function DELETE(
     await supabaseAdmin
       .from('activity_logs')
       .insert({
-        user_id: user.id,
+        user_id: user.userId,
         action: 'comment_deleted',
         entity_type: 'task',
         entity_id: comment.task_id,
