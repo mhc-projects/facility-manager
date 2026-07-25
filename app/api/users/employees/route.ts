@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,9 @@ export interface EmployeeForAssignment {
 
 // GET: 활성 직원 목록 조회 (담당자 선택용)
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search'); // 검색어
@@ -140,6 +144,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
 // POST: 새로운 직원 등록 (관리자 전용)
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 3);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const {
@@ -218,6 +225,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
 // PUT: 직원 정보 수정
 export const PUT = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 3);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const {
