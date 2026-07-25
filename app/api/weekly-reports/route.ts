@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyToken } from '@/lib/secure-jwt';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -82,6 +83,26 @@ function getWeekRange(dateStr?: string) {
 // GET: 주간 업무 리포트 조회
 export const GET = withApiHandler(async (request: NextRequest) => {
   try {
+    // JWT 토큰 검증
+    const authHeader = request.headers.get('authorization');
+    let token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      const cookieToken = request.cookies.get('auth_token')?.value;
+      if (cookieToken) token = cookieToken;
+    }
+
+    if (!token) {
+      console.log('❌ [WEEKLY-REPORTS] 토큰 없음');
+      return createErrorResponse('인증이 필요합니다', 401);
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      console.log('❌ [WEEKLY-REPORTS] 토큰 검증 실패');
+      return createErrorResponse('유효하지 않은 토큰입니다', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const weekDate = searchParams.get('weekDate'); // YYYY-MM-DD 형식
@@ -393,6 +414,26 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 // POST: 주간 리포트 저장/이메일 발송
 export const POST = withApiHandler(async (request: NextRequest) => {
   try {
+    // JWT 토큰 검증
+    const authHeader = request.headers.get('authorization');
+    let token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      const cookieToken = request.cookies.get('auth_token')?.value;
+      if (cookieToken) token = cookieToken;
+    }
+
+    if (!token) {
+      console.log('❌ [WEEKLY-REPORTS] 토큰 없음');
+      return createErrorResponse('인증이 필요합니다', 401);
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      console.log('❌ [WEEKLY-REPORTS] 토큰 검증 실패');
+      return createErrorResponse('유효하지 않은 토큰입니다', 401);
+    }
+
     const body = await request.json();
     const { userId, weekDate, sendEmail = false, recipients = [] } = body;
 
@@ -400,8 +441,10 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       return createErrorResponse('사용자 ID가 필요합니다', 400);
     }
 
-    // 주간 리포트 생성 (GET 로직 재사용)
-    const reportResponse = await GET(new NextRequest(`${request.url}?userId=${userId}&weekDate=${weekDate || ''}`));
+    // 주간 리포트 생성 (GET 로직 재사용, 인증 토큰 전달)
+    const reportResponse = await GET(new NextRequest(`${request.url}?userId=${userId}&weekDate=${weekDate || ''}`, {
+      headers: { authorization: `Bearer ${token}` }
+    }));
     const reportData = await reportResponse.json();
 
     if (!reportData.success) {
