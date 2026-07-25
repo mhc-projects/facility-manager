@@ -113,6 +113,13 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       return createErrorResponse('사용자 ID가 필요합니다', 400);
     }
 
+    // 본인 리포트가 아니면 관리자 권한(레벨 3+) 필요 - admin/route.ts와 동일 기준
+    const requesterId = decoded.userId || decoded.id;
+    const requesterLevel = decoded.permissionLevel || decoded.permission_level || 0;
+    if (userId !== requesterId && requesterLevel < 3) {
+      return createErrorResponse('다른 직원의 주간보고를 조회할 권한이 없습니다', 403);
+    }
+
     const { start: weekStart, end: weekEnd } = getWeekRange(weekDate || undefined);
 
     // 사용자 정보 조회
