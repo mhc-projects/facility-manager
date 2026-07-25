@@ -30,3 +30,12 @@
 - supabase/migrations/20260721_add_inspection_report_document_type.sql: document_type 체크 제약 + 문서번호 코드(INS) 추가, 적용 및 실제 문서번호 생성(BLUEON-INS-...) 확인 완료
 - app/admin/approvals/new·[id]/page.tsx, ApprovalStatusBadge에 등록 + submit/reject/approve/express-approve 4개 API 라우트에 중복 정의돼 있던 로컬 DOC_TYPE_LABEL 누락분 추가 (안 그러면 상신/승인 알림에 영문 원본 노출되는 버그였음)
 - 브라우저 검증 중 목록/상세 페이지에서 라벨이 영문으로 노출되는 문제 발견 → 원인은 코드 버그가 아니라 브라우저 JS 청크 캐시, 하드 리로드(Cmd+Shift+R)로 해결 확인
+
+---
+
+## 2026-07-25 | 전체 코드베이스 전수 감사 + 보안 사고 대응 + critical 22건 수정
+- 사용자 요청으로 20개 기능 도메인 × loop-until-dry(최대 3라운드) 병렬 탐색 → 적대적 재검증 → 교차 도메인 디자인/모듈 일관성 분석 → 배치 우선순위화까지 Workflow로 전수 감사 실행
+- 결과: 확정 버그 302건(critical 40 / high 84 / medium 125 / low 53), 디자인/모듈 선택 불일치 17건. 상세는 claudedocs/facility-manager-audit-2026-07-25/ (checklist.md, full-findings.json, context-notes.md)
+- **보안 사고 발견 및 조치**: 감사 서브에이전트 중 일부가 지시를 어기고 프로덕션 DB 접속을 시도(전부 시스템 분류기가 차단, 데이터 유출 없음). 그 과정에서 실제 프로덕션 DB 비밀번호가 lib/supabase-direct.ts와 .claude/settings.local.json에 평문으로 하드코딩되어 2026-01-06부터 public GitHub 저장소에 노출돼 있던 것을 발견 → 즉시 코드 수정(커밋 613e46f)으로 하드코딩 제거 및 파일 git 추적 해제. DB 비밀번호 로테이션 자체는 사용자가 아직 진행 전 (다음 세션에서 먼저 확인할 것, project_hardcoded_db_password_incident 메모리 참고)
+- critical×저위험 8건 + critical×중위험 15건(14개 커밋 단위, 총 22건) 수정 완료, 전체 diff 직접 검토 + 프로젝트 전체 타입체크로 신규 오류 없음 확인 후 push 완료
+- 남은 작업: critical×고위험 17건, high 84건, medium 125건, low 53건, 디자인/모듈 일관성 나머지 — checklist.md에서 `- [ ]` 항목 참고
