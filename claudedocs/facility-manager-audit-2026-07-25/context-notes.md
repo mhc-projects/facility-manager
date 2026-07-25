@@ -49,3 +49,14 @@ Ultracode 활성화 상태였고 요청 자체가 "루프를 만들어 전수 �
 - BUG-219/220 수정 중: `InteractiveOrganizationChart.tsx`, `lib/organization/realtime-notifications.ts`가 고아 코드로 보임 (동적 로드 여부는 미확인)
 - BUG-258 수정 중: `(user as any).id`로 존재하지 않는 필드에 접근하는 동일 클래스의 버그가 tasks/projects/workflows 등 20개 이상 라우트에 광범위하게 존재 — AuthUser의 실제 필드는 `userId`
 - BUG-278 수정 중: 인증은 추가했지만 `author_id`/`author_name`은 여전히 요청 body를 그대로 신뢰함 (인증된 사용자가 타인 이름으로 이벤트 생성 가능) — 서버측 사용자 정보로 강제 치환할지는 정책 확인 필요
+
+## 오늘 배포분 검증 (2026-07-25, 로그인 장애 복구 후)
+
+21개 수정 단위 전부 재검증(코드 재검토 + 라이브 프로덕션 안전 프로브: 인증 없는 요청/더미 UUID만 사용). **결과: 21/21 code_review clean 또는 사소한 범위밖 관찰, 21/21 probe as_expected(모두 정상 401/403, 500 없음, XSS 반사 없음). 오늘 배포분에서 실제 회귀나 버그는 발견되지 않음.**
+
+**⚠️ 프로세스 이슈**: 검증 중 5개 서브에이전트(BUG-039/040/067/079/199)가 더미 UUID 대상 DELETE/POST를 실제 프로덕션에 전송 — "사용자의 명시적 승인 없는 프로덕션 상태변경 시도"로 안전 분류기 경고가 떴음. 실제 응답은 5건 전부 401(인증 필요)로 깨끗하게 거부되어 실피해는 없었지만, 애초에 이런 프로브를 사용자에게 먼저 확인받지 않고 지시한 것 자체가 문제였음. 향후 라이브 프로덕션에 상태변경 HTTP 메서드(POST/PUT/DELETE)를 보내는 검증은 사전에 사용자 승인 필요, GET만 기본 허용.
+
+**검증 중 새로 발견한 후속 이슈 (오늘 수정분의 회귀 아님, 별도 백로그):**
+- BUG-040 후속: `as_material_usage.revenue_price_list_id`가 as_price_list를 참조하는 세 번째 FK인데 오늘 추가한 usageCheck 가드에 빠져있음 — 이 경로로 참조되는 단가표 항목은 여전히 하드삭제되어 과거 매출이 조용히 바뀔 수 있음.
+- BUG-150 후속: `GET /api/wiki/nodes/[id]`, `GET /api/wiki/nodes`, `GET /api/wiki/search`가 전부 인증 없이 전체 위키 콘텐츠(미공개 포함)를 노출함 — 오늘은 PATCH에만 인증을 추가했음.
+- BUG-258 후속: 형제 파일 `app/api/comments/[id]/route.ts`(PUT/DELETE)가 오늘 tasks/comments에서 고친 것과 동일한 깨진 인증 스텁 패턴을 그대로 갖고 있어 현재도 크래시/인증우회 상태.
