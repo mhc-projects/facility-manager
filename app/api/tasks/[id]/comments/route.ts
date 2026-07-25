@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { verifyAuth } from '@/lib/auth';
+import { verifyAuth } from '@/lib/auth/middleware';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -13,8 +13,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error: authError } = await verifyAuth() as any;
-    if (authError) {
+    const { user, error: authError } = await verifyAuth(request);
+    if (authError || !user) {
       return NextResponse.json({ success: false, error: authError }, { status: 401 });
     }
 
@@ -59,8 +59,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error: authError } = await verifyAuth() as any;
-    if (authError) {
+    const { user, error: authError } = await verifyAuth(request);
+    if (authError || !user) {
       return NextResponse.json({ success: false, error: authError }, { status: 401 });
     }
 
@@ -119,7 +119,7 @@ export async function POST(
       .from('task_comments')
       .insert({
         task_id: taskId,
-        user_id: user.id,
+        user_id: user.userId,
         content: content.trim(),
         parent_id: parent_id || null
       })
@@ -140,7 +140,7 @@ export async function POST(
     // 멘션 처리
     const mentions = extractMentions(content);
     if (mentions.length > 0) {
-      await processMentions(comment.id, mentions, user.id);
+      await processMentions(comment.id, mentions, user.userId);
     }
 
     // 업무 관찰자로 자동 추가
@@ -148,7 +148,7 @@ export async function POST(
       .from('task_watchers')
       .insert({
         task_id: taskId,
-        user_id: user.id
+        user_id: user.userId
       })
       .select()
       .single(); // 이미 존재하면 무시
