@@ -1,6 +1,7 @@
 // app/api/document-automation/history/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyTokenString } from '@/utils/auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +14,35 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    // JWT 토큰 검증
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({
+        success: false,
+        error: '인증이 필요합니다.'
+      }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = verifyTokenString(token);
+
+    if (!decoded) {
+      return NextResponse.json({
+        success: false,
+        error: '유효하지 않은 토큰입니다.'
+      }, { status: 401 });
+    }
+
+    const permissionLevel = decoded.permissionLevel || decoded.permission_level;
+
+    // 권한 확인: 권한 4 이상 필요
+    if (!permissionLevel || permissionLevel < 4) {
+      return NextResponse.json({
+        success: false,
+        error: '문서 삭제 권한이 없습니다. (권한 4 이상 필요)'
+      }, { status: 403 });
+    }
+
     const { id } = params;
 
     // 먼저 문서 정보 조회 (document_type과 document_data 확인용)
