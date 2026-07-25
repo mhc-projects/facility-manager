@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import jwt from 'jsonwebtoken'
+import { isFullAccessUser, canAccessMeetingMinute } from '@/lib/meeting-minutes-access'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -76,12 +77,16 @@ export async function PATCH(
     // 회의록 존재 확인
     const { data: minute, error: fetchError } = await supabase
       .from('meeting_minutes')
-      .select('id, content, agenda, participants')
+      .select('id, content, agenda, participants, organizer_id, created_by')
       .eq('id', id)
       .single()
 
     if (fetchError || !minute) {
       return NextResponse.json({ success: false, error: '회의록을 찾을 수 없습니다.' }, { status: 404 })
+    }
+
+    if (!canAccessMeetingMinute(user.id, isFullAccessUser(user), minute)) {
+      return NextResponse.json({ success: false, error: '이 회의록을 수정할 권한이 없습니다.' }, { status: 403 })
     }
 
     let updatePayload: Record<string, any> = { updated_by: user.id }
