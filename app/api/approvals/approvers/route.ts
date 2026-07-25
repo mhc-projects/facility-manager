@@ -22,12 +22,14 @@ export async function GET(request: NextRequest) {
     const userId = decoded.userId || decoded.id;
 
     // 본인은 후보에서 제외 (본인 결재라인에 본인을 상위 결재자로 선택하는 것을 방지)
+    // 단, 대표이사(ceo)는 조직 최상위라 위임할 상위 결재자가 없으므로 본인 제외 규칙에서 예외로 둔다
+    // (그렇지 않으면 대표이사 본인이 작성하는 문서는 대표이사 결재선을 아예 구성할 수 없게 된다).
     const rows = await queryAll(
       `SELECT id, name, department, position, role
        FROM employees
        WHERE is_active = TRUE AND is_deleted = FALSE
          AND role IN ('team_leader', 'executive', 'vice_president', 'ceo')
-         AND id != $1
+         AND (role = 'ceo' OR id != $1)
        ORDER BY
          CASE role WHEN 'team_leader' THEN 1 WHEN 'executive' THEN 2 WHEN 'vice_president' THEN 3 WHEN 'ceo' THEN 4 END,
          name ASC`,
