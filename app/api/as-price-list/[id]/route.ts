@@ -82,12 +82,16 @@ export async function DELETE(
     }
 
     const { id } = params;
-    // 자재에서 참조 중인지 확인
+    // 자재 사용 이력 및 AS건의 출동단가 참조 여부 확인
     const usageCheck = await pgQuery(
-      `SELECT COUNT(*) FROM as_material_usage WHERE price_list_id = $1`,
+      `SELECT
+        (SELECT COUNT(*) FROM as_material_usage WHERE price_list_id = $1) AS material_usage_count,
+        (SELECT COUNT(*) FROM as_records WHERE (dispatch_cost_price_id = $1 OR dispatch_revenue_price_id = $1) AND is_deleted = false) AS dispatch_usage_count`,
       [id]
     );
-    const usageCount = parseInt(usageCheck.rows[0]?.count || '0');
+    const usageCount =
+      parseInt(usageCheck.rows[0]?.material_usage_count || '0') +
+      parseInt(usageCheck.rows[0]?.dispatch_usage_count || '0');
 
     if (usageCount > 0) {
       // 참조 중이면 비활성화만 (스냅샷이 보존되어야 하므로)
