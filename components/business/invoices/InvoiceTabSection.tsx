@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, f
 import type { InvoiceCategory, InvoiceStage, InvoiceRecord, InvoiceRecordsByStage, BusinessInvoicesResponse, LegacyInvoiceStage } from '@/types/invoice';
 import { INVOICE_STAGE_LABELS, getStagesForCategory } from '@/types/invoice';
 import { formatDate } from '@/utils/formatters';
+import { TokenManager } from '@/lib/api-client';
 import InvoiceRecordForm, { type InvoiceRecordFormHandle, type FormState, emptyForm } from './InvoiceRecordForm';
 import ExtraInvoiceList from './ExtraInvoiceList';
 
@@ -161,10 +162,15 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
       payment_memo: formState.payment_memo || null,
     };
 
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${TokenManager.getToken()}`,
+    };
+
     if (existingRecord) {
       const res = await fetch('/api/invoice-records', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ id: existingRecord.id, ...payload }),
       });
       const result = await res.json();
@@ -172,7 +178,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
     } else {
       const res = await fetch('/api/invoice-records', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify(payload),
       });
       const result = await res.json();

@@ -2,10 +2,18 @@
 // 계산서 발행 상세 레코드 CRUD API
 import { NextRequest, NextResponse } from 'next/server';
 import { query as pgQuery, queryOne } from '@/lib/supabase-direct';
+import { verifyTokenString } from '@/utils/auth';
 import type { CreateInvoiceRecordRequest } from '@/types/invoice';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+// Bearer 토큰 인증 (as-records, business-collection-manager와 동일 패턴)
+function authGuard(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  return verifyTokenString(authHeader.substring(7));
+}
 
 // invoice_stage → business_info 컬럼 매핑
 const STAGE_TO_COLUMNS: Record<string, { date: string; amount?: string; paymentDate: string; paymentAmount: string } | null> = {
@@ -25,6 +33,11 @@ const STAGE_TO_COLUMNS: Record<string, { date: string; amount?: string; paymentD
  */
 export async function POST(request: NextRequest) {
   try {
+    const decoded = authGuard(request);
+    if (!decoded) {
+      return NextResponse.json({ success: false, message: '인증이 필요합니다' }, { status: 401 });
+    }
+
     const body: CreateInvoiceRecordRequest = await request.json();
     const {
       business_id,
@@ -184,6 +197,11 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    const decoded = authGuard(request);
+    if (!decoded) {
+      return NextResponse.json({ success: false, message: '인증이 필요합니다' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       id,
@@ -310,6 +328,15 @@ export async function PUT(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const decoded = authGuard(request);
+    if (!decoded) {
+      return NextResponse.json({ success: false, message: '인증이 필요합니다' }, { status: 401 });
+    }
+    const level = decoded.permissionLevel ?? decoded.permission_level;
+    if (!level || level < 3) {
+      return NextResponse.json({ success: false, message: '권한이 없습니다' }, { status: 403 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
 

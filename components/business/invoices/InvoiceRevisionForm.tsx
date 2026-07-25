@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { InvoiceRecord, InvoiceStage } from '@/types/invoice';
+import { TokenManager } from '@/lib/api-client';
 
 interface InvoiceRevisionFormProps {
   businessId: string;
@@ -62,7 +63,10 @@ export default function InvoiceRevisionForm({
 
       const res = await fetch('/api/invoice-records', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TokenManager.getToken()}`,
+        },
         body: JSON.stringify({
           business_id: businessId,
           invoice_stage: stage,

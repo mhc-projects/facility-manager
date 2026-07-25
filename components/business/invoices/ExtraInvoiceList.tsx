@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { formatDate } from '@/utils/formatters';
 import type { InvoiceRecord } from '@/types/invoice';
+import { TokenManager } from '@/lib/api-client';
 import ExtraInvoiceForm from './ExtraInvoiceForm';
 
 interface ExtraInvoiceListProps {
@@ -26,7 +27,10 @@ export default function ExtraInvoiceList({
     if (!confirm('이 추가 계산서를 삭제하시겠습니까?')) return;
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/invoice-records?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/invoice-records?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` },
+      });
       const result = await res.json();
       if (!result.success) throw new Error(result.message);
       onRefresh();

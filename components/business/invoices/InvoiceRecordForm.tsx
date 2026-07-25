@@ -5,6 +5,7 @@ import { formatDate } from '@/utils/formatters';
 import type { InvoiceRecord, InvoiceStage, LegacyInvoiceStage } from '@/types/invoice';
 import { INVOICE_STAGE_LABELS as STAGE_LABELS } from '@/types/invoice';
 import { CacheManager } from '@/utils/cache-manager';
+import { TokenManager } from '@/lib/api-client';
 import InvoiceRevisionForm from './InvoiceRevisionForm';
 
 export interface InvoiceRecordFormHandle {
@@ -167,10 +168,15 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
     try {
       setSaving(true);
 
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TokenManager.getToken()}`,
+      };
+
       if (existingRecord) {
         const res = await fetch('/api/invoice-records', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({ id: existingRecord.id, ...payload }),
         });
         const result = await res.json();
@@ -184,7 +190,7 @@ const InvoiceRecordForm = forwardRef<InvoiceRecordFormHandle, InvoiceRecordFormP
         }
         const res = await fetch('/api/invoice-records', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(payload),
         });
         const result = await res.json();

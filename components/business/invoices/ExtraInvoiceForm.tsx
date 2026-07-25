@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { InvoiceRecord } from '@/types/invoice';
+import { TokenManager } from '@/lib/api-client';
 
 interface ExtraInvoiceFormProps {
   businessId: string;
@@ -89,10 +90,15 @@ export default function ExtraInvoiceForm({
     const tax = parseInt(form.tax_amount.replace(/,/g, ''), 10) || 0;
 
     try {
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TokenManager.getToken()}`,
+      };
+
       if (existingRecord) {
         const res = await fetch('/api/invoice-records', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             id: existingRecord.id,
             extra_title: form.extra_title,
@@ -110,7 +116,7 @@ export default function ExtraInvoiceForm({
       } else {
         const res = await fetch('/api/invoice-records', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             business_id: businessId,
             invoice_stage: 'extra',
