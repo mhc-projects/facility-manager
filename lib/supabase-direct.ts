@@ -27,7 +27,7 @@ export function getDirectConnection() {
       port: 6543, // Transaction Mode port (5432 = Session Mode, 6543 = Transaction Mode)
       database: 'postgres',
       user: `postgres.${projectRef}`,
-      password: 'chlansgh35855#',
+      password: process.env.SUPABASE_DB_PASSWORD,
       ssl: {
         rejectUnauthorized: false, // Supabase SSL 인증서 허용
       },
