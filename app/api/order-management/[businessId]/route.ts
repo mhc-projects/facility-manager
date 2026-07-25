@@ -247,45 +247,45 @@ export const PUT = withApiHandler(
 
       // 2. 발주 정보 업데이트 - Direct PostgreSQL
       const updateFields: string[] = []
-      const params: any[] = []
+      const queryParams: any[] = []
       let paramIndex = 1
 
       // 날짜 필드만 업데이트 (null 포함)
       if ('layout_date' in body) {
         updateFields.push(`layout_date = $${paramIndex}`)
-        params.push(body.layout_date)
+        queryParams.push(body.layout_date)
         paramIndex++
       }
       if ('order_form_date' in body) {
         updateFields.push(`order_form_date = $${paramIndex}`)
-        params.push(body.order_form_date)
+        queryParams.push(body.order_form_date)
         paramIndex++
       }
       if ('ip_request_date' in body) {
         updateFields.push(`ip_request_date = $${paramIndex}`)
-        params.push(body.ip_request_date)
+        queryParams.push(body.ip_request_date)
         paramIndex++
       }
       if ('greenlink_ip_setting_date' in body) {
         updateFields.push(`greenlink_ip_setting_date = $${paramIndex}`)
-        params.push(body.greenlink_ip_setting_date)
+        queryParams.push(body.greenlink_ip_setting_date)
         paramIndex++
       }
       if ('router_request_date' in body) {
         updateFields.push(`router_request_date = $${paramIndex}`)
-        params.push(body.router_request_date)
+        queryParams.push(body.router_request_date)
         paramIndex++
       }
 
       // WHERE 조건용 파라미터 추가
-      params.push(businessId)
+      queryParams.push(businessId)
 
       const updatedOrder = await queryOne(
         `UPDATE order_management
          SET ${updateFields.join(', ')}
          WHERE business_id = $${paramIndex}
          RETURNING *`,
-        params
+        queryParams
       )
 
       if (!updatedOrder) {
