@@ -674,14 +674,17 @@ async function createTierNotification(notificationData: any) {
 // PUT: 알림 읽음 처리
 export const PUT = withApiHandler(async (request: NextRequest) => {
   try {
+    const authUser = await getUserFromToken(request);
+    if (!authUser) {
+      return createErrorResponse('인증이 필요합니다', 401);
+    }
+
     const body = await request.json();
-    const { notification_ids, user_id, mark_all_read, is_task_notification } = body;
+    const { notification_ids, mark_all_read, is_task_notification } = body;
+    // user_id는 요청 body를 신뢰하지 않고 인증된 사용자로 고정한다 (타인 알림 조작 방지)
+    const user_id = authUser.id;
 
     console.log('📢 [NOTIFICATIONS] 읽음 처리:', { notification_ids, user_id, mark_all_read, is_task_notification });
-
-    if (!user_id) {
-      return createErrorResponse('사용자 ID가 필요합니다', 400);
-    }
 
     const tableName = is_task_notification ? 'task_notifications' : 'user_notifications';
 
@@ -727,16 +730,18 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 // DELETE: 알림 삭제
 export const DELETE = withApiHandler(async (request: NextRequest) => {
   try {
+    const authUser = await getUserFromToken(request);
+    if (!authUser) {
+      return createErrorResponse('인증이 필요합니다', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const notificationId = searchParams.get('id');
-    const userId = searchParams.get('userId');
+    // userId는 쿼리 파라미터를 신뢰하지 않고 인증된 사용자로 고정한다 (타인 알림 삭제 방지)
+    const userId = authUser.id;
     const deleteExpired = searchParams.get('deleteExpired') === 'true';
 
     console.log('📢 [NOTIFICATIONS] 알림 삭제:', { notificationId, userId, deleteExpired });
-
-    if (!userId) {
-      return createErrorResponse('사용자 ID가 필요합니다', 400);
-    }
 
     // 만료된 알림 일괄 삭제
     if (deleteExpired) {

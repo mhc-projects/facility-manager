@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { TokenManager } from '@/lib/api-client';
 import {
   FileText,
   Edit3,
@@ -199,11 +200,11 @@ export default function BusinessProgressSection({
       await fetch('/api/notifications', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TokenManager.getToken()}`
         },
         body: JSON.stringify({
-          notification_ids: [notificationId],
-          user_id: user?.id
+          notification_ids: [notificationId]
         })
       });
 
