@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryAll, queryOne, query as pgQuery, transaction } from '@/lib/supabase-direct';
 import { calculateRevenue, preloadMasterData } from '@/lib/services/revenue-calculator';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -137,8 +138,11 @@ function normalizeBusinessData(business: any, normalizedName: string) {
   };
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const searchQuery = searchParams.get('search') || '';
     const limit = parseInt(searchParams.get('limit') || '5000');
@@ -490,8 +494,11 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { id } = body;
 
@@ -1134,8 +1141,11 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const businessData = await request.json();
 
     // 배치 업로드 모드 확인
@@ -1850,8 +1860,11 @@ async function executeReplaceAll(businesses: any[], startTime: number, forceRepl
   });
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { id } = await request.json();
 
     if (!id) {
