@@ -59,5 +59,8 @@
 - 전부 `requireAuth(request, 1)`(로그인 여부만 확인, DB에서 최신 permission_level 재조회) 패턴으로 통일. 항목당 1커밋씩 총 8커밋(7d42d07~e842f9d). 매 커밋 전 tsc --noEmit로 직전 체크포인트 대비 신규 오류 0건 확인, git diff 직접 검토 후 커밋.
 - DPF의 import/route.ts에 "미들웨어에서 JWT 검증이 완료된 상태"라는 잘못된 주석이 있었음 → middleware.ts 확인 결과 API 경로는 rate-limit/CSRF만 검사하고 세션 인증은 안 함(페이지 인증과 별개 로직). 주석도 함께 수정.
 - 기존 프론트엔드는 전부 동일 출처 fetch라 로그인 시 설정되는 httpOnly `session_token` 쿠키(sameSite=lax)가 자동 전송되어 프론트 수정 없이 인증 통과됨 — notifications(BUG-167)만 예외로, 해당 파일이 쿠키가 아닌 Authorization 헤더만 보는 자체 헬퍼를 써서 BusinessProgressSection.tsx에 헤더 추가 필요했음.
-- checklist.md에서 이 8건 체크 완료. **아직 push는 안 함 — 사용자 확인 필요.**
+- checklist.md에서 이 8건 체크 완료.
+- **push 전 안전성 검증**: 8개 그룹 전부의 프론트엔드/서버사이드 호출부를 전수 조사. 유일한 서버-to-서버 내부호출(business-management/route.ts → facilities-supabase/[businessName])은 business-management 자체가 프론트엔드 호출자 없는 죽은 라우트라 실트래픽 영향 없음 확인. credentials:'omit' 사용처, 크론/웹훅 연관성도 전무 확인.
+- push 완료(63e4585까지, 문서 커밋 1건 포함) → Vercel 프로덕션 배포 성공(dpl_7b6HgJR6MCSHoE6faVw4t8mj5iqT) → 8개 그룹 대표 엔드포인트 7곳 curl 401 정상 확인 + 홈페이지/로그인 정상 동작 스모크테스트까지 완료.
+- 부수 발견(미수정, 별도 항목화 필요): business-management/route.ts 자체가 완전히 죽은 코드이면서 인증도 없음 — checklist.md에 없는 신규 항목, 다음 전수 재검토 시 반영 필요.
 - 남은 작업: critical×고위험 9건(Group 2 금액계산/로직 3건: BUG-090/096/097, Group 3 개별 보안취약점 5건: BUG-105/202/211/214/240), high 84건, medium 125건, low 53건, 디자인/모듈 일관성 나머지.
