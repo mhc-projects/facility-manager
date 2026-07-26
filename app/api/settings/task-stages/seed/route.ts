@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryAll, queryOne } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -93,7 +94,10 @@ const SEED_STAGES: { key: string; label: string }[] = [
   { key: 'etc_status', label: '기타' },
 ];
 
-export const POST = withApiHandler(async (_request: NextRequest) => {
+export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   // 이미 시드된 경우 스킵
   const existing = await queryOne(`SELECT COUNT(*) as cnt FROM task_stages`);
   if (existing && Number(existing.cnt) > 0) {

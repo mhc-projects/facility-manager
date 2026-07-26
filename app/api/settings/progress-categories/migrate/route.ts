@@ -2,12 +2,16 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET: 현재 business_info에 실제 사용 중인 진행구분 값 목록 + 사업장 수
-export const GET = withApiHandler(async (_request: NextRequest) => {
+export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const rows = await queryAll(
     `SELECT
        COALESCE(progress_status, '') AS progress_status,
@@ -22,6 +26,9 @@ export const GET = withApiHandler(async (_request: NextRequest) => {
 
 // POST: 진행구분 일괄 변경 (from → to)
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const from = (body?.from ?? '').trim();
   const to = (body?.to ?? '').trim();

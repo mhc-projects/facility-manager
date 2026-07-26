@@ -2,12 +2,16 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryAll, queryOne } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET: 진행구분 목록 조회
-export const GET = withApiHandler(async (_request: NextRequest) => {
+export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const categories = await queryAll(
     `SELECT id, name, task_type, sort_order, is_active
      FROM progress_categories
@@ -30,6 +34,9 @@ function inferTaskType(name: string): ValidTaskType {
 
 // POST: 진행구분 추가
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const name = (body?.name ?? '').trim();
   const taskTypeRaw = (body?.task_type ?? '').trim();
@@ -62,6 +69,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
 // PUT: 진행구분 수정
 export const PUT = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const { id, name, sort_order, is_active } = body ?? {};
 
@@ -110,6 +120,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
 // DELETE: 진행구분 삭제
 export const DELETE = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) return createErrorResponse('id가 필요합니다.', 400);

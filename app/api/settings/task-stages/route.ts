@@ -2,12 +2,16 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryAll, queryOne } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET: 업무단계 목록 조회 (전체 or 카테고리 필터)
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const categoryId = searchParams.get('category_id');
 
@@ -28,6 +32,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
 // POST: 업무단계 추가
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const { progress_category_id, stage_key, stage_label } = body ?? {};
 
@@ -68,6 +75,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
 // PUT: 업무단계 수정
 export const PUT = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const { id, stage_label, sort_order, is_active, is_forecast_target } = body ?? {};
 
@@ -105,6 +115,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
 // DELETE: 업무단계 삭제
 export const DELETE = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) return createErrorResponse('id가 필요합니다.', 400);

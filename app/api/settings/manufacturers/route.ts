@@ -2,12 +2,16 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryAll, queryOne } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET: 제조사 목록 조회
-export const GET = withApiHandler(async (_request: NextRequest) => {
+export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const manufacturers = await queryAll(
     `SELECT id, name, sort_order, is_active
      FROM manufacturers
@@ -19,6 +23,9 @@ export const GET = withApiHandler(async (_request: NextRequest) => {
 
 // POST: 제조사 추가
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const name = (body?.name ?? '').trim();
 
@@ -55,6 +62,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
 // PUT: 제조사 수정 (이름 변경 또는 순서/활성화 상태 변경)
 export const PUT = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const body = await request.json();
   const { id, name, sort_order, is_active } = body ?? {};
 
@@ -115,6 +125,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
 // DELETE: 제조사 삭제
 export const DELETE = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 

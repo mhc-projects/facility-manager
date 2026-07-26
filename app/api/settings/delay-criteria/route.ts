@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,9 @@ const DEFAULT_CRITERIA: DelayCriteria = {
 // GET: 현재 설정 조회
 export const GET = withApiHandler(async (request: NextRequest) => {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     console.log('📊 [DELAY-CRITERIA] 설정 조회 요청');
 
     let criteria = DEFAULT_CRITERIA;
@@ -83,6 +87,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 // POST: 설정 저장
 export const POST = withApiHandler(async (request: NextRequest) => {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
 
     console.log('💾 [DELAY-CRITERIA] 설정 저장 요청:', body);
