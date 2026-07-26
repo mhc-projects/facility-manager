@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
 import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
 import { calculateReceivables, sumAllPayments } from '@/lib/receivables-calculator';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,9 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const searchParams = request.nextUrl.searchParams;
     const businessId = searchParams.get('business_id');
 
@@ -393,6 +397,9 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const {
       business_id,

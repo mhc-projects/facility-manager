@@ -21,12 +21,16 @@ import {
   computeBusinessReceivableNow,
 } from '@/lib/receivables-engine';
 import type { InvoiceRecordsByStage } from '@/types/invoice';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
 
     // ids 모드: 서버에서 business_info 조회 + contract_amount 직접 계산
