@@ -1,6 +1,7 @@
 // app/api/air-permit/route.ts - 대기필증 정보 관리 API
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,9 @@ interface AirPermitInfo {
 // GET: 대기필증 정보 조회
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get('businessId');
     const permitId = searchParams.get('id');
@@ -215,6 +219,9 @@ export async function GET(request: NextRequest) {
 // POST: 새 대기필증 생성
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
 
     // 필수 필드 검증
@@ -421,6 +428,9 @@ export async function PUT(request: NextRequest) {
   let body: any = null;
 
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     console.log('🔄 [AIR-PERMIT] PUT - 업데이트 요청 시작');
 
     // Step 1: JSON 파싱
@@ -712,6 +722,9 @@ export async function PUT(request: NextRequest) {
 // DELETE: 대기필증 삭제 (논리 삭제)
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const permitId = searchParams.get('id');
 
