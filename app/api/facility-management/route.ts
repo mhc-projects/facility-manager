@@ -1,6 +1,7 @@
 // app/api/facility-management/route.ts - 시설 관리 통합 API
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,9 @@ export const runtime = 'nodejs';
 // 사업장 시설 관리 정보 조회 (GET)
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const businessName = searchParams.get('businessName');
     const businessId = searchParams.get('businessId');
@@ -115,6 +119,9 @@ export async function GET(request: NextRequest) {
 // 사업장 시설 관리 정보 업데이트 (PUT)
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const {
       businessId,

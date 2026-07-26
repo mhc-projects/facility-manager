@@ -1,6 +1,7 @@
 // app/api/facility-detail/route.ts - 시설 상세정보 업데이트 API
 import { NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/lib/database-service'
+import { requireAuth } from '@/lib/auth/require-auth'
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,9 @@ export const runtime = 'nodejs';
 // PUT: 시설 상세정보 업데이트
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json()
     const { facilityId, facilityType, updates } = body
     

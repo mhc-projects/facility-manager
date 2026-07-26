@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { memoryCache } from '@/lib/cache';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,9 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const facilityId = searchParams.get('id');
     const facilityType = searchParams.get('type'); // 'discharge' or 'prevention'
@@ -101,6 +105,9 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const {
       id,

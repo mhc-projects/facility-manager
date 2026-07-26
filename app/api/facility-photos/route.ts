@@ -9,6 +9,7 @@ import { createHash } from 'crypto';
 import { createFacilityPhotoTracker } from '@/utils/facility-photo-tracker';
 import { generateFacilityFileName, generateBasicFileName } from '@/utils/filename-generator';
 import { generateBusinessId, convertLegacyPath } from '@/utils/business-id-generator';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -145,6 +146,9 @@ export async function POST(request: NextRequest) {
   console.log(`🏗️ [FACILITY-PHOTOS] 시설별 업로드 시작: ${requestId}`);
 
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const formData = await request.formData();
     
     // 요청 데이터 파싱
@@ -423,6 +427,9 @@ export async function POST(request: NextRequest) {
 // 시설별 사진 조회 (GET)
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const businessName = searchParams.get('businessName');
     const facilityType = searchParams.get('facilityType') as 'discharge' | 'prevention' | 'basic' | null;

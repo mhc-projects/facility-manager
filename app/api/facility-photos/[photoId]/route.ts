@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryOne, query } from '@/lib/supabase-direct';
 import { generatePathVariants } from '@/utils/business-id-generator';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,9 @@ export async function DELETE(
   { params }: { params: { photoId: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { photoId } = params;
 
     console.log('🗑️ [PHOTO-DELETE] 사진 삭제 시작:', { photoId });
@@ -106,6 +110,9 @@ export async function GET(
   { params }: { params: { photoId: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { photoId } = params;
     const { searchParams } = new URL(request.url);
     const download = searchParams.get('download') === 'true';

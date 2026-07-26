@@ -1,6 +1,7 @@
 // 업무 단계 이력 조회 API
 import { NextRequest, NextResponse } from 'next/server';
 import { getTaskStatusHistory, getTaskTimeline } from '@/lib/task-status-history';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,9 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const taskId = params.id;
     const { searchParams } = new URL(request.url);
     const includeTimeline = searchParams.get('timeline') === 'true';

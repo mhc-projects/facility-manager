@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateBusinessId } from '@/utils/business-id-generator';
 import JSZip from 'jszip';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,9 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { businessName, facilityType, facilityNumber, outletNumber, category } = body;
 

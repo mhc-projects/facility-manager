@@ -5,6 +5,7 @@ import { memoryCache } from '@/lib/cache';
 import { FacilitiesData, Facility } from '@/types';
 import { generateFacilityNumbering, type FacilityNumberingResult } from '@/utils/facility-numbering';
 import { AirPermitWithOutlets } from '@/types/database';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -22,8 +23,11 @@ export async function GET(
   { params }: { params: { businessName: string } }
 ) {
   const startTime = Date.now();
-  
+
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const businessName = decodeURIComponent(params.businessName);
     console.log('🏭 [FACILITIES-SUPABASE] API 시작:', businessName);
     
@@ -653,6 +657,9 @@ export async function POST(
   { params }: { params: { businessName: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const businessName = decodeURIComponent(params.businessName);
     const body = await request.json();
 

@@ -1,6 +1,7 @@
 // app/api/facility-stats/route.ts - 시설 데이터 통계 및 검증 API
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,9 @@ interface FacilityStats {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     console.log('📊 [FACILITY-STATS] 시설 데이터 통계 조회 시작');
 
     // 배출시설 데이터 조회 (제한 없이 모든 데이터)
