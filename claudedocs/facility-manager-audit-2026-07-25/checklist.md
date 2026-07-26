@@ -138,17 +138,17 @@
   - POST(26-179행)/PUT(185-305행)/DELETE(311-353행) 모두 토큰 검증 코드가 없다. 특히 middleware.ts의 isCSRFExemptAPI 목록에 '/api/invoice-records'가 '쿠키 인증'이라는 주석과 함께 CSRF 예외로 등록되어 있는데(middleware.ts:120행), 실제로는 CSRF 검증도 건너뛰고 쿠키 기반 인증 로직도 라우트 코드에 전혀 구현되어 있지 않다. 이는 다른 CSRF-exempt 라우트들(delivery-addresses…
   - 권장 조치: Implement real auth (Bearer token + permissionLevel check matching sibling revenue-closing routes) on invoice-records POST/PUT/DELETE and add the Authorization header in the 5 consuming components (InvoiceRecordForm, InvoiceRevisionForm, ExtraInvoiceForm, ExtraInvoiceList, InvoiceTabSection), which currently call fetch() with no auth header at all — then correct or remove the stale '쿠키 인증' comment in middleware.ts's CSRF-exempt list.
 
-- [ ] **BUG-001** [버그 / 수정위험도:높음] 대부분의 시설(facility) API 라우트에 인증 검사가 없어 미인증 접근으로 데이터 조회/변조 가능
+- [x] **BUG-001** [버그 / 수정위험도:높음] 대부분의 시설(facility) API 라우트에 인증 검사가 없어 미인증 접근으로 데이터 조회/변조 가능
   - 위치: `app/api/facility-management/route.ts, app/api/facility-measurement/route.ts, app/api/facility-detail/route.ts, app/api/facility-stats/route.ts, app/api/facility-photos/route.ts, app/api/facility-photos/[photoId]/route.ts, app/api/facility-photos/download-zip/route.ts, app/api/outlet-facility/route.ts, app/api/outlet-gateway/route.ts, app/api/gateway-devices/route.ts, app/api/measurement-devices/route.ts, app/api/equipment-field-checks/route.ts, app/api/equipment-field-checks/sync/[checkId]/route.ts, app/api/facilities-supabase/[businessName]/route.ts, app/api/facility-tasks/advance/route.ts, app/api/facility-tasks/[id]/history/route.ts:whole-file GET/POST/PUT/DELETE handlers`
   - middleware.ts:326-343 confirms API routes only get CSRF+rate-limit checks and explicitly skip checkPageAuthentication (the comment literally says '페이지 인증 체크 건너뛰기'). I opened every listed route file and none of them call any session/JWT verification helper (contrast with…
   - 권장 조치: Apply the existing checkUserPermission/verifyTokenHybrid helper (already used in app/api/facility-tasks/route.ts and app/api/router-inventory/*) to all 16 routes one file at a time, verifying first whether any (e.g. equipment-field-checks, called from field devices) need a service token issued rather than a browser session before enforcing 401.
 
-- [ ] **BUG-011** [버그 / 수정위험도:높음] Primary air-permit CRUD API has zero authentication/authorization
+- [x] **BUG-011** [버그 / 수정위험도:높음] Primary air-permit CRUD API has zero authentication/authorization
   - 위치: `app/api/air-permit/route.ts:33-781`
   - GET/POST/PUT/DELETE go straight from request.json()/searchParams to raw SQL via lib/supabase-direct with no identity check anywhere in the file. (evidence: Read the entire file: only imports `queryOne, queryAll, query` from '@/lib/supabase-direct' (line 3) — no…
   - 권장 조치: Add the same checkUserPermission/verifyTokenHybrid guard already used in app/api/air-permit/update/route.ts to every handler in this file, verify the admin UI and EstimatePreviewModal already send auth_token, then correct the false '/api/air-permit ... JWT 인증 사용' comment in csrf-protection.ts's excludePaths.
 
-- [ ] **BUG-012** [버그 / 수정위험도:높음] Legacy air-permits (plural) [id] API is unauthenticated and exposes an irreversible hard-delete
+- [x] **BUG-012** [버그 / 수정위험도:높음] Legacy air-permits (plural) [id] API is unauthenticated and exposes an irreversible hard-delete
   - 위치: `app/api/air-permits/[id]/route.ts:12-254`
   - GET/PUT/DELETE perform no auth check; DELETE with ?hard=true issues a genuine hard delete on air_permit_info with no identity check and no undo path. (evidence: Read the full file: no auth check appears anywhere in GET(12-117), PUT(120-201), or DELETE(204-254). DELETE reads…
   - 권장 조치: Add auth requiring an elevated permission level specifically for the `hard=true` DELETE branch, and first check whether this legacy plural 'air-permits/[id]' route is still called anywhere — if not, delete the route instead of patching it.
@@ -173,12 +173,12 @@
   - Agenda item description (rich HTML persisted via PATCH /api/meeting-minutes/[id]/sections, 'agenda'/'agenda-add'/bulk cases) is rendered via dangerouslySetInnerHTML after only being passed through sanitizeLegacyEscapedHtml() (lib/rich-text.ts, lines 57-88). I read that function…
   - 권장 조치: Introduce an allowlist-based HTML sanitizer (e.g. isomorphic-dompurify) applied server-side when agenda descriptions are persisted via sections/route.ts and defensively again before both dangerouslySetInnerHTML call sites ([id]/page.tsx and PresentationMode.tsx), choosing the allowed tag/attribute set carefully to avoid breaking existing rich-text formatting.
 
-- [ ] **BUG-138** [버그 / 수정위험도:높음] DPF API 라우트 전체에 인증/인가가 없어 PII 무인증 조회 및 무인증 CRUD 가능
+- [x] **BUG-138** [버그 / 수정위험도:높음] DPF API 라우트 전체에 인증/인가가 없어 PII 무인증 조회 및 무인증 CRUD 가능
   - 위치: `app/api/dpf/search/route.ts (외 app/api/dpf/** 전체):search/route.ts 1-58; middleware.ts 326-343; lib/security/csrf-protection.ts 172`
   - app/api/dpf 아래 모든 route.ts는 supabaseAdmin(서비스 키)만 사용하고 session_token/JWT 검증 코드가 전혀 없다(grep 결과 session_token/jwt/verifyToken/requireAuth/Authorization 매칭 0건). middleware.ts 327-343행을 직접 확인한 결과, API 경로는 protectAPIRoute()(rate-limit·요청크기·CSRF만 검사)를 통과하면 340행에서 즉시…
   - 권장 조치: Add the same verifyToken(Authorization/auth_token cookie) check used elsewhere in the app to all 13 app/api/dpf/**/route.ts handlers (ideally via a shared middleware/wrapper to avoid repeating it 13 times), remove the false 'JWT 인증 사용' CSRF exclusion comment and correct the exclusion to only apply once auth is actually enforced, and add authorization checks for the write endpoints (PUT/DELETE) since this exposes PII with zero current gating.
 
-- [ ] **BUG-167** [버그 / 수정위험도:높음] PUT/DELETE /api/notifications have zero authentication — any caller can mark-read or delete any user's notifications
+- [x] **BUG-167** [버그 / 수정위험도:높음] PUT/DELETE /api/notifications have zero authentication — any caller can mark-read or delete any user's notifications
   - 위치: `app/api/notifications/route.ts:675-725 (PUT), 728-822 (DELETE)`
   - Neither the PUT handler (line 675) nor the DELETE handler (line 728) calls getUserFromToken() or checks any Authorization header — they trust `user_id`/`userId` taken straight from the request body/query string and run `.eq('user_id', user_id)` updates/deletes with the…
   - 권장 조치: Add getUserFromToken() to both PUT and DELETE, derive the acting user's id from the verified JWT instead of trusting body/query user_id (or at minimum assert the supplied user_id === token user's id before running the update/delete), and update BusinessProgressSection.tsx and TierNotificationContext.tsx to send an Authorization header — coordinate the backend and both frontend call sites together since this endpoint is actively used by real users.
@@ -198,7 +198,7 @@
   - getEmailDomainPolicy() returns auto_approve:true as the default for any domain lacking an explicit social_auth_policies row, despite a comment calling it 'the most restrictive default'. Worse, even when an explicit policy has auto_approve:false, the else-branch (517-611) is…
   - 권장 조치: Flip the default policy to auto_approve:false and replace the 'temporary auto-approve' else-branch with the real pending-approval flow (insert into social_auth_approvals, return 202) already implemented correctly in google/route.ts, but roll out only after admins pre-configure policies for domains that currently rely on Kakao auto-login, since flipping the default could otherwise lock out real users mid-flow.
 
-- [ ] **BUG-222** [버그 / 수정위험도:높음] All /api/settings/* mutation endpoints have no auth check — withApiHandler() never enforces its own requiresAuth option
+- [x] **BUG-222** [버그 / 수정위험도:높음] All /api/settings/* mutation endpoints have no auth check — withApiHandler() never enforces its own requiresAuth option
   - 위치: `app/api/settings/progress-categories/migrate/route.ts:10-57`
   - withApiHandler() (lib/api-utils.ts lines 79-122) accepts a `requiresAuth?: boolean` option but the returned handler never reads it — it only measures duration and catches errors. None of manufacturers/route.ts, manufacturers/reorder/route.ts, progress-categories/route.ts,…
   - 권장 조치: Decide the required auth/permission model for /api/settings/* first, then implement enforcement inside withApiHandler's requiresAuth branch and opt in the 8 settings routes one by one, testing each after the change since withApiHandler is shared by 52 route files.
@@ -213,12 +213,12 @@
   - getDirectConnection() builds the pg Pool with a literal password string 'chlansgh35855#' instead of reading from an environment variable such as SUPABASE_DB_PASSWORD. This is a direct Postgres superuser-level connection (Transaction Mode pooler, port 6543) that bypasses Supabase…
   - 권장 조치: Rotate the leaked Postgres password immediately, move the new credential to SUPABASE_DB_PASSWORD (already used elsewhere per project memory) read via process.env in lib/supabase-direct.ts, and purge the old literal from git history.
 
-- [ ] **BUG-251** [버그 / 수정위험도:높음] business-info-direct route has zero authentication on GET/POST/PUT/DELETE (full CRUD on business_info)
+- [x] **BUG-251** [버그 / 수정위험도:높음] business-info-direct route has zero authentication on GET/POST/PUT/DELETE (full CRUD on business_info)
   - 위치: `app/api/business-info-direct/route.ts:140 (GET), 493 (PUT), 1137 (POST), 1853 (DELETE)`
   - None of the four exported handlers call verifyToken/verifyTokenHybrid, check a session cookie, or check an Authorization header as a gate. Grep across the entire file confirms the only token usage is at lines 1052-1084, where an incoming bearer token is optionally forwarded to a…
   - 권장 조치: Add the same auth gate used elsewhere (verifyTokenHybrid/session check) to all four handlers in business-info-direct/route.ts, remove it from csrf-protection.ts's exclusion list, and regression-test every page that calls this route since it's core to business detail/list views.
 
-- [ ] **BUG-252** [버그 / 수정위험도:높음] business-invoices route has zero authentication and is actively used to read/write live payment data
+- [x] **BUG-252** [버그 / 수정위험도:높음] business-invoices route has zero authentication and is actively used to read/write live payment data
   - 위치: `app/api/business-invoices/route.ts:15 (GET), 394 (PUT)`
   - Neither the GET handler (line 15) nor the PUT handler (line 394) checks a token, session cookie, or Authorization header anywhere in the file (confirmed by full read -- no auth-related code exists). csrf-protection.ts explicitly excludes '/api/business-invoices' from CSRF checks…
   - 권장 조치: Add auth checks to GET/PUT in business-invoices/route.ts and fix the false csrf-protection.ts exclusion comment; test InvoiceDisplay, InvoiceFormInput, InvoiceTabSection, admin/business, admin/revenue, and admin/tasks pages since all six actively call this route.
