@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { getSupabaseAdminClient } from '@/lib/supabase';
 import { toKSTDateString } from '@/utils/date-utils';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { id } = params;
     const url = new URL(request.url);
     const includeBusinessInfo = url.searchParams.get('include_business') === 'true';
@@ -122,6 +126,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { id } = params;
     const updateData = await request.json();
 
@@ -206,6 +213,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { id } = params;
     const url = new URL(request.url);
     const hardDelete = url.searchParams.get('hard') === 'true';

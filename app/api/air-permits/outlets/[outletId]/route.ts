@@ -1,6 +1,7 @@
 // app/api/air-permits/outlets/[outletId]/route.ts - 배출구 게이트웨이 정보 관리 API
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,9 @@ export async function GET(
   { params }: { params: { outletId: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { outletId } = params;
 
     if (!outletId) {
@@ -57,6 +61,9 @@ export async function PUT(
   { params }: { params: { outletId: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { outletId } = params;
     const body = await request.json();
     const { gateway_number, vpn_type } = body;
@@ -134,6 +141,9 @@ export async function DELETE(
   { params }: { params: { outletId: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { outletId } = params;
 
     if (!outletId) {
