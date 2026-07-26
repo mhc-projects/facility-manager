@@ -2,6 +2,7 @@
 // 차량 상세 + 전체 이력 조회
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,6 +12,9 @@ export async function PUT(
   { params }: { params: { vin: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const vin = decodeURIComponent(params.vin);
     const body = await request.json();
     const {
@@ -56,10 +60,13 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { vin: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const vin = decodeURIComponent(params.vin);
 
     const { error } = await supabaseAdmin
@@ -78,10 +85,13 @@ export async function DELETE(
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { vin: string } }
 ) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const vin = decodeURIComponent(params.vin);
 
     const { data: vehicle, error: vehicleError } = await supabaseAdmin

@@ -2,12 +2,16 @@
 // 차량 검색: VIN, 번호판, 소유자명, 연락처, 시리얼번호
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.trim() ?? '';
     const localGov = searchParams.get('local_government')?.trim() ?? '';

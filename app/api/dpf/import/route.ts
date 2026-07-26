@@ -2,6 +2,7 @@
 // 엑셀 청크 데이터를 dpf_import_staging 테이블에 저장
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,6 +16,9 @@ interface ImportChunkBody {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const body: ImportChunkBody = await request.json();
     const { batchId, rows, chunkIndex, vendor = 'fujino' } = body;
 
@@ -24,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     const validVendor = vendor === 'mz' ? 'mz' : 'fujino';
 
-    // 미들웨어에서 JWT 검증이 완료된 상태 — supabaseAdmin은 서비스키로 RLS 우회
+    // supabaseAdmin은 서비스키로 RLS 우회 (인증은 위 requireAuth에서 확인됨)
     const staging = rows.map((row, i) => ({
       import_batch_id: batchId,
       row_index: chunkIndex * 1000 + i,

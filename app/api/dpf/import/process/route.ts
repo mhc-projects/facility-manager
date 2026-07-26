@@ -2,6 +2,7 @@
 // 스테이징 → dpf_vehicles 본 테이블 처리 (벌크 UPSERT via RPC)
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,6 +10,9 @@ export const maxDuration = 60; // Vercel 함수 최대 실행 시간 60초
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, 1);
+    if (!auth.ok) return auth.response;
+
     const { batchId } = await request.json();
 
     if (!batchId) {
