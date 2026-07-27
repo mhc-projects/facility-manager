@@ -166,7 +166,15 @@ export async function POST(request: NextRequest) {
     console.log('✅ [AUTH] 로그인 성공:', { email: employee.email, name: employee.name });
 
     // 응답 데이터 (password_hash 제외)
-    const { password_hash, ...safeEmployee } = employee;
+    // permission_level을 role로 매핑하여 반환 (verify API와 동일한 구조 —
+    // 그렇지 않으면 emailLogin 직후 user.role이 결재역할 문자열이 되어
+    // "(user?.role ?? 0) >= 4" 같은 권한 비교가 전부 실패함)
+    const { password_hash, ...rest } = employee;
+    const safeEmployee = {
+      ...rest,
+      approval_role: rest.role,
+      role: rest.permission_level,
+    };
 
     // 쿠키 기반 토큰 관리 - httpOnly 쿠키 설정
     const response = NextResponse.json({

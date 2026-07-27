@@ -189,7 +189,13 @@ export async function POST(request: NextRequest) {
     );
 
     // 응답 데이터 (password_hash 제외)
-    const { password_hash, ...safeEmployee } = employee;
+    // permission_level을 role로 매핑하여 반환 (verify/login API와 동일한 구조)
+    const { password_hash, ...rest } = employee;
+    const safeEmployee = {
+      ...rest,
+      approval_role: rest.role,
+      role: rest.permission_level,
+    };
 
     const response = NextResponse.json({
       success: true,
