@@ -225,17 +225,35 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
               <tbody>
                 {data.items.map((item, idx) => (
                   <tr key={idx} className="border-b border-black last:border-b-0">
-                    <td className="border-r border-black text-center text-sm py-1.5">{item.seq}</td>
-                    <td className="border-r border-black p-0">
-                      <input className={cellInput} value={item.name} onChange={e => updateItem(idx, 'name', e.target.value)} disabled={disabled} placeholder="품명" />
+                    <td className="border-r border-black text-center text-sm py-1.5 align-top">{item.seq}</td>
+                    <td className="border-r border-black p-0 align-top">
+                      <textarea
+                        className={`${cellInput} resize-none overflow-hidden leading-snug`}
+                        rows={1}
+                        value={item.name}
+                        onChange={e => { updateItem(idx, 'name', e.target.value); autoResize(e.target) }}
+                        onFocus={e => autoResize(e.target)}
+                        ref={el => { if (el) autoResize(el) }}
+                        disabled={disabled}
+                        placeholder="품명"
+                      />
                     </td>
-                    <td className="border-r border-black p-0">
-                      <input className={cellInput} value={item.spec} onChange={e => updateItem(idx, 'spec', e.target.value)} disabled={disabled} placeholder="규격/형식" />
+                    <td className="border-r border-black p-0 align-top">
+                      <textarea
+                        className={`${cellInput} resize-none overflow-hidden leading-snug`}
+                        rows={1}
+                        value={item.spec}
+                        onChange={e => { updateItem(idx, 'spec', e.target.value); autoResize(e.target) }}
+                        onFocus={e => autoResize(e.target)}
+                        ref={el => { if (el) autoResize(el) }}
+                        disabled={disabled}
+                        placeholder="규격/형식"
+                      />
                     </td>
-                    <td className="border-r border-black p-0">
+                    <td className="border-r border-black p-0 align-top">
                       <input className={cellInput} value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} disabled={disabled} placeholder="개" />
                     </td>
-                    <td className="border-r border-black p-0">{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
+                    <td className="border-r border-black p-0 align-top">{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
                     <td className={`p-0 align-top ${!disabled ? 'border-r border-black' : ''}`}>
                       <textarea
                         className={`${cellInput} resize-none overflow-hidden leading-snug`}
@@ -249,7 +267,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
                       />
                     </td>
                     {!disabled && (
-                      <td className="text-center">
+                      <td className="text-center align-top">
                         <button type="button" onClick={() => removeItem(idx)} disabled={data.items.length <= 1} className="text-red-400 hover:text-red-600 p-1 disabled:opacity-30">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
