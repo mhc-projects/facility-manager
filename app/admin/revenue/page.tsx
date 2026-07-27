@@ -2467,13 +2467,13 @@ function RevenueDashboard() {
                 />
               </div>
 
-              {/* 설치/발주: 연도 + 월 묶음 (대리점은 발주일 기준) */}
+              {/* 설치/발주: 연도 + 월 묶음 (대리점만 선택 시 라벨을 발주로 표시, 필터 기준일도 발주일로 전환) */}
               <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
                 <span
                   className="text-xs font-medium whitespace-nowrap shrink-0"
-                  title="설치일 기준 (대리점은 발주일 기준)"
+                  title={selectedCategories.length === 1 && selectedCategories[0] === '대리점' ? '발주일 기준' : '설치일 기준 (대리점은 발주일 기준)'}
                 >
-                  설치/발주
+                  {selectedCategories.length === 1 && selectedCategories[0] === '대리점' ? '발주' : '설치'}
                 </span>
                 <div className="flex-1 min-w-0">
                   <MultiSelectDropdown
