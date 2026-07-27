@@ -68,18 +68,20 @@ function setSecurityHeaders(response: NextResponse): void {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests"
   ];
 
-  response.headers.set('Content-Security-Policy', cspDirectives.join('; '));
-
-  // HTTPS 강제 (프로덕션 환경)
+  // HTTPS 강제 (프로덕션 환경) - 개발 서버는 TLS 없이 http로만 서빙되므로
+  // upgrade-insecure-requests를 켜면 Safari가 후속 요청/리다이렉트를 https로
+  // 승격시키다 접속 자체가 실패함 (Chrome은 이 케이스를 더 관대하게 처리)
   if (process.env.NODE_ENV === 'production') {
+    cspDirectives.push('upgrade-insecure-requests');
     response.headers.set(
       'Strict-Transport-Security',
       'max-age=31536000; includeSubDomains; preload'
     );
   }
+
+  response.headers.set('Content-Security-Policy', cspDirectives.join('; '));
 }
 
 // 인증 면제 경로 확인 (로그인 없이 접근 가능한 페이지)
