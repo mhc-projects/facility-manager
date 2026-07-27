@@ -1814,11 +1814,11 @@ function RevenueDashboard() {
       if (r === 0 || r === null || r === undefined) return false;
       return true;
     }).filter(business => {
-      // 미설치 필터 적용
+      // 미설치 필터 적용 (대리점은 발주일 기준 → 미발주)
       if (!showUninstalledOnly) {
         return true;
       }
-      return !(business as any).installation_date || (business as any).installation_date === '';
+      return !getFilterInstallDate(business as any);
     }).filter(business => {
       // 업무단계 필터 (미수금 필터 활성화 시에만 적용)
       if (!showReceivablesOnly) return true;
@@ -2689,7 +2689,7 @@ function RevenueDashboard() {
                     className="w-3.5 h-3.5 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
                   />
                   <label htmlFor="uninstalled-filter" className="text-xs sm:text-sm font-medium text-gray-700 cursor-pointer whitespace-nowrap">
-                    미설치
+                    {selectedCategories.length === 1 && selectedCategories[0] === '대리점' ? '미발주' : '미설치'}
                   </label>
                 </div>
               </div>
