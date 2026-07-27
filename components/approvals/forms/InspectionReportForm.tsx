@@ -53,6 +53,10 @@ function FileIcon({ type }: { type?: string }) {
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 border-0 outline-none`
 const labelCell = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center justify-center whitespace-nowrap`
 const mobileInput = `w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50`
+// 검수물품 표의 칸 구분선: border-r 대신 box-shadow로 그린다 — 인쇄(PDF 변환) 시
+// border-collapse 표에서 행 높이가 옆 칸(검수결과 등)보다 짧은 칸의 세로 테두리가
+// 행 끝까지 이어지지 않고 중간에서 끊기는 크로미움 렌더링 문제를 피하기 위함
+const cellDivider = `shadow-[inset_-1px_0_0_#000]`
 
 const EMPTY_ITEM: InspectionItem = { seq: 1, name: '', spec: '', unit: '', quantity: 0, result: '' }
 
@@ -244,18 +248,18 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
               <tbody>
                 {data.items.map((item, idx) => (
                   <tr key={idx} className="border-b border-black last:border-b-0">
-                    <td className="border-r border-black text-center text-sm py-1.5 align-top">{item.seq}</td>
-                    <td className="border-r border-black p-0 align-top">
+                    <td className={`${cellDivider} text-center text-sm py-1.5 align-top`}>{item.seq}</td>
+                    <td className={`${cellDivider} p-0 align-top`}>
                       {wrapCell(item.name, v => updateItem(idx, 'name', v), '품명')}
                     </td>
-                    <td className="border-r border-black p-0 align-top">
+                    <td className={`${cellDivider} p-0 align-top`}>
                       {wrapCell(item.spec, v => updateItem(idx, 'spec', v), '규격/형식')}
                     </td>
-                    <td className="border-r border-black p-0 align-top">
+                    <td className={`${cellDivider} p-0 align-top`}>
                       <input className={cellInput} value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} disabled={disabled} placeholder="개" />
                     </td>
-                    <td className="border-r border-black p-0 align-top">{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
-                    <td className={`p-0 align-top ${!disabled ? 'border-r border-black' : ''}`}>
+                    <td className={`${cellDivider} p-0 align-top`}>{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
+                    <td className={`p-0 align-top ${!disabled ? cellDivider : ''}`}>
                       {wrapCell(item.result, v => updateItem(idx, 'result', v), '검수결과')}
                     </td>
                     {!disabled && (
