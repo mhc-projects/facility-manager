@@ -7,6 +7,7 @@ import ApprovalStatusBadge, { DOC_TYPE_LABEL } from '@/components/approvals/Appr
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { isApprovalCompletedTabAccessEmail } from '@/lib/approval-access'
 import { Plus, FileText, ChevronRight, CheckCircle, Clock, Search, X } from 'lucide-react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
@@ -207,7 +208,7 @@ function ApprovalsContent() {
   // 총무팀 여부
   const [isManagementSupport, setIsManagementSupport] = useState(false)
   const isSuperAdmin = (user?.role ?? 0) >= 4
-  const showCompletedTab = isSuperAdmin || isManagementSupport
+  const showCompletedTab = isSuperAdmin || isManagementSupport || isApprovalCompletedTabAccessEmail(user?.email)
 
   const [submitToast, setSubmitToast] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)

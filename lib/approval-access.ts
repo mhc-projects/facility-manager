@@ -7,3 +7,10 @@ export const APPROVAL_FULL_ACCESS_EMAILS = ['tubealba@naver.com']
 export function isApprovalFullAccessEmail(email?: string | null): boolean {
   return APPROVAL_FULL_ACCESS_EMAILS.includes(email || '')
 }
+
+// 총무팀/권한4가 아니어도 결재완료 탭을 열람할 수 있는 예외 허용 이메일
+export const APPROVAL_COMPLETED_TAB_ACCESS_EMAILS = ['dpf@kakao.com', 'tubealba@naver.com']
+
+export function isApprovalCompletedTabAccessEmail(email?: string | null): boolean {
+  return APPROVAL_COMPLETED_TAB_ACCESS_EMAILS.includes(email || '')
+}

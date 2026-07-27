@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query as pgQuery, queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
-import { isApprovalFullAccessEmail } from '@/lib/approval-access';
+import { isApprovalFullAccessEmail, isApprovalCompletedTabAccessEmail } from '@/lib/approval-access';
 import { normalizeApproverIds } from '@/lib/approval-line';
 
 export const dynamic = 'force-dynamic';
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (!isSuperAdmin && !isManagementSupport) {
+      if (!isSuperAdmin && !isManagementSupport && !isApprovalCompletedTabAccessEmail(decoded.email)) {
         return NextResponse.json({ success: false, error: '결재완료 탭 접근 권한이 없습니다' }, { status: 403 });
       }
 
