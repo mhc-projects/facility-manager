@@ -249,7 +249,7 @@ export default function DataTable<T extends { id: string }>({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {selectable && (
-                <th className="px-1 sm:px-2 py-1 sm:py-2 text-left">
+                <th className="px-1 sm:px-2 py-2 sm:py-2.5 text-left">
                   <input
                     type="checkbox"
                     checked={selectedIds.length === paginatedData.length && paginatedData.length > 0}
@@ -262,7 +262,7 @@ export default function DataTable<T extends { id: string }>({
               {columns.map((column) => (
                 <th
                   key={column.key.toString()}
-                  className={`px-1 sm:px-2 py-1 sm:py-2 text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider
+                  className={`px-1 sm:px-2 py-2 sm:py-2.5 text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider
                     ${column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'}
                     ${column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''}
                   `}
@@ -281,7 +281,7 @@ export default function DataTable<T extends { id: string }>({
               ))}
               
               {actions.length > 0 && (
-                <th className="px-1 sm:px-2 py-1 sm:py-2 text-center text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-1 sm:px-2 py-2 sm:py-2.5 text-center text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   작업
                 </th>
               )}
@@ -309,7 +309,7 @@ export default function DataTable<T extends { id: string }>({
                   onClick={() => onRowClick?.(item)}
                 >
                   {selectable && (
-                    <td className="px-1 sm:px-2 py-1 sm:py-1.5">
+                    <td className="px-1 sm:px-2 py-2 sm:py-2.5">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(item.id)}
@@ -323,7 +323,7 @@ export default function DataTable<T extends { id: string }>({
                   {columns.map((column) => (
                     <td
                       key={column.key.toString()}
-                      className={`px-1 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs text-gray-900 max-w-0 truncate overflow-hidden
+                      className={`px-1 sm:px-2 py-2 sm:py-2.5 text-[10px] sm:text-xs text-gray-900 max-w-0 truncate overflow-hidden
                         ${column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'}
                       `}
                       style={column.width ? { width: column.width } : undefined}
@@ -337,7 +337,7 @@ export default function DataTable<T extends { id: string }>({
                   ))}
                   
                   {actions.length > 0 && (
-                    <td className="py-1 sm:py-1.5 text-center">
+                    <td className="py-2 sm:py-2.5 text-center">
                       <div className="flex justify-center items-center gap-1">
                         {actions
                           .filter(action => action.show ? action.show(item) : true)
