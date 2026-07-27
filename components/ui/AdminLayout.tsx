@@ -624,21 +624,23 @@ export default function AdminLayout({ children, title, description, actions }: A
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+    <div className="min-h-screen print:!min-h-0 bg-gradient-to-br from-slate-50 to-gray-100">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden"
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden print:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Container with improved layout */}
-      <div className="md:flex md:gap-2 md:p-2 md:h-screen">
-        {/* Sidebar */}
+      <div className="md:flex md:gap-2 md:p-2 md:h-screen print:!h-auto">
+        {/* Sidebar - 인쇄 시 완전히 제거 (visibility:hidden만으로는 overflow-y-auto/sticky/h-screen 때문에
+            레이아웃 높이를 그대로 차지해서 Safari에서만 빈 페이지가 추가로 생기는 원인이 됨) */}
         <div className={`
           fixed inset-y-0 left-0 z-50 bg-white/95 md:bg-white backdrop-blur-md
           shadow-xl md:shadow-lg md:border md:border-gray-200 md:rounded-xl transform transition-all duration-300 ease-in-out
+          print:hidden
           ${sidebarOpen ? 'translate-x-0 w-80' : '-translate-x-full w-80'}
           md:translate-x-0 md:static md:z-0 md:flex md:flex-col md:h-full md:min-w-0 md:flex-shrink-0
           ${sidebarCollapsed ? 'md:w-14' : 'md:w-40 xl:w-44'}
@@ -724,10 +726,10 @@ export default function AdminLayout({ children, title, description, actions }: A
         </div>
 
         {/* Main content - Improved layout */}
-        <div className="flex-1 md:flex md:flex-col md:min-h-0 md:min-w-0">
-          <div className="md:bg-white md:shadow-lg md:border md:border-gray-200 md:rounded-xl md:flex md:flex-col md:h-full md:overflow-hidden">
-            {/* Top bar - Mobile optimized with fixed positioning */}
-            <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md lg:bg-transparent border-b border-gray-200 lg:border-gray-300 shadow-sm lg:shadow-none">
+        <div className="flex-1 md:flex md:flex-col md:min-h-0 md:min-w-0 print:!h-auto">
+          <div className="md:bg-white md:shadow-lg md:border md:border-gray-200 md:rounded-xl md:flex md:flex-col md:h-full md:overflow-hidden print:!h-auto print:!overflow-visible">
+            {/* Top bar - Mobile optimized with fixed positioning - 인쇄 시 완전히 제거 (sticky가 Safari 인쇄 페이지네이션에서 빈 페이지를 유발) */}
+            <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md lg:bg-transparent border-b border-gray-200 lg:border-gray-300 shadow-sm lg:shadow-none print:hidden">
               <div className="px-4 py-3 lg:px-5 lg:py-4">
                 {/* Mobile Layout (< 640px) - Minimal */}
                 <div className="sm:hidden">
@@ -834,8 +836,8 @@ export default function AdminLayout({ children, title, description, actions }: A
             </header>
 
             {/* Page content */}
-            <main className="p-1 sm:p-2 md:p-3 lg:p-4 md:flex-1 md:overflow-y-auto bg-gray-50 lg:bg-transparent">
-              <div className="lg:h-full">
+            <main className="p-1 sm:p-2 md:p-3 lg:p-4 md:flex-1 md:overflow-y-auto bg-gray-50 lg:bg-transparent print:!p-0 print:!overflow-visible">
+              <div className="lg:h-full print:!h-auto">
                 {children}
               </div>
             </main>
