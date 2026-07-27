@@ -80,13 +80,16 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
   }
 
   const numInput = (val: number, onChangeFn: (v: number) => void) => (
-    <input
-      type="text" inputMode="numeric"
-      className={`${cellInput} text-right`}
-      value={val ? val.toLocaleString() : ''}
-      onChange={e => { const raw = e.target.value.replace(/,/g, ''); onChangeFn(raw === '' ? 0 : parseInt(raw, 10) || 0) }}
-      disabled={disabled}
-    />
+    disabled ? (
+      <div className={`${cellInput} text-right`}>{val ? val.toLocaleString() : ''}</div>
+    ) : (
+      <input
+        type="text" inputMode="numeric"
+        className={`${cellInput} text-right`}
+        value={val ? val.toLocaleString() : ''}
+        onChange={e => { const raw = e.target.value.replace(/,/g, ''); onChangeFn(raw === '' ? 0 : parseInt(raw, 10) || 0) }}
+      />
+    )
   )
 
   const mobileNumInput = (val: number, onChangeFn: (v: number) => void) => (
@@ -256,7 +259,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
                       {wrapCell(item.spec, v => updateItem(idx, 'spec', v), '규격/형식')}
                     </td>
                     <td className={`${cellDivider} p-0 align-top`}>
-                      <input className={cellInput} value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} disabled={disabled} placeholder="개" />
+                      {wrapCell(item.unit, v => updateItem(idx, 'unit', v), '개')}
                     </td>
                     <td className={`${cellDivider} p-0 align-top`}>{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
                     <td className={`p-0 align-top ${!disabled ? cellDivider : ''}`}>
