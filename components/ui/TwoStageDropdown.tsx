@@ -109,7 +109,7 @@ export default function TwoStageDropdown({
       {/* Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded bg-white hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        className="w-full flex items-center justify-between px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded bg-white hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       >
         <span className="truncate">{summaryText}</span>
         <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
