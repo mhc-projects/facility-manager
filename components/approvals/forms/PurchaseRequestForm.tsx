@@ -168,7 +168,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
             <button
               type="button"
               onClick={() => handleFileDelete(att)}
-              className="text-gray-400 hover:text-red-500 shrink-0"
+              className="no-print text-gray-400 hover:text-red-500 shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -177,7 +177,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
       ))}
 
       {!disabled && onFileUpload && (
-        <FileUploadArea onFiles={handleFiles} />
+        <div className="no-print"><FileUploadArea onFiles={handleFiles} /></div>
       )}
 
       {disabled && attachments.length === 0 && (
@@ -298,7 +298,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
 
               {/* 견적서 '여' 선택 시 파일 업로드 영역 */}
               {data.attachment_included && (
-                <div className="no-print mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                <div className="mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
                   <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
                     <Paperclip className="w-3.5 h-3.5" />
                     첨부 파일 (PDF, 이미지, Excel, Word)

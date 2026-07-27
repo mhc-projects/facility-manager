@@ -227,7 +227,7 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
       </div>
 
       {/* 첨부서류 */}
-      <div className="no-print border border-black">
+      <div className="border border-black">
         <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
           <div className={`${cellClass} justify-center items-start pt-3`}>첨부서류</div>
           <div className="p-2 space-y-1.5">
@@ -252,7 +252,7 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
                 </button>
                 <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
                 {!disabled && onFileDelete && (
-                  <button type="button" onClick={() => handleFileDelete(att)} className="text-gray-400 hover:text-red-500 shrink-0">
+                  <button type="button" onClick={() => handleFileDelete(att)} className="no-print text-gray-400 hover:text-red-500 shrink-0">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -260,7 +260,7 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
             ))}
 
             {!disabled && onFileUpload && (
-              <FileUploadArea onFiles={handleFiles} />
+              <div className="no-print"><FileUploadArea onFiles={handleFiles} /></div>
             )}
 
             {disabled && attachments.length === 0 && (

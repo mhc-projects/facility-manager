@@ -252,7 +252,7 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
       </div>
 
       {/* ── 첨부 파일 ── */}
-      <div className="no-print">
+      <div>
         <div className="text-sm font-bold mb-1.5">첨부 파일</div>
         <div className="border border-black">
           <div className="p-3 space-y-2">
@@ -277,7 +277,7 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
                 </button>
                 <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
                 {!disabled && onFileDelete && (
-                  <button type="button" onClick={() => handleFileDelete(att)} className="text-gray-400 hover:text-red-500 shrink-0">
+                  <button type="button" onClick={() => handleFileDelete(att)} className="no-print text-gray-400 hover:text-red-500 shrink-0">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -285,7 +285,7 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
             ))}
 
             {!disabled && onFileUpload && (
-              <FileUploadArea onFiles={handleFiles} />
+              <div className="no-print"><FileUploadArea onFiles={handleFiles} /></div>
             )}
 
             {disabled && attachments.length === 0 && (

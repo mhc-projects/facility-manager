@@ -123,7 +123,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
           </button>
           <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
           {!disabled && onFileDelete && (
-            <button type="button" onClick={() => handleFileDelete(att)} className="text-gray-400 hover:text-red-500 shrink-0">
+            <button type="button" onClick={() => handleFileDelete(att)} className="no-print text-gray-400 hover:text-red-500 shrink-0">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -131,7 +131,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
       ))}
 
       {!disabled && onFileUpload && (
-        <FileUploadArea onFiles={handleFiles} />
+        <div className="no-print"><FileUploadArea onFiles={handleFiles} /></div>
       )}
 
       {disabled && attachments.length === 0 && (
@@ -238,7 +238,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
         <p className="text-center text-sm text-gray-600 pt-2">위 금액을 청구하오니 결재하여 주시기 바랍니다.</p>
 
         {/* 증빙서류 첨부 */}
-        <div className="no-print border border-black">
+        <div className="border border-black">
           <div className="grid grid-cols-[80px_1fr] divide-x divide-black">
             <div className="px-3 py-3 bg-gray-50 text-sm font-bold flex items-center justify-center whitespace-nowrap">증빙서류</div>
             <div className="p-3">

@@ -135,7 +135,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
                   <button
                     type="button"
                     onClick={() => handleFileDelete(att)}
-                    className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-600 text-white rounded-full p-1 transition-colors"
+                    className="no-print absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-600 text-white rounded-full p-1 transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -156,7 +156,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
                 </a>
                 <span className="text-xs text-gray-400 shrink-0">{formatFileSize(att.size)}</span>
                 {!disabled && onFileDelete && (
-                  <button type="button" onClick={() => handleFileDelete(att)} className="text-gray-400 hover:text-red-500 shrink-0">
+                  <button type="button" onClick={() => handleFileDelete(att)} className="no-print text-gray-400 hover:text-red-500 shrink-0">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -165,7 +165,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
           </div>
         )}
 
-        {!disabled && onFileUpload && <FileUploadArea onFiles={handleFiles} />}
+        {!disabled && onFileUpload && <div className="no-print"><FileUploadArea onFiles={handleFiles} /></div>}
 
         {disabled && attachments.length === 0 && (
           <p className="text-sm text-gray-400 italic">첨부된 검수사진이 없습니다</p>
@@ -268,7 +268,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
         </div>
 
         {/* 검수사진 */}
-        <div className="no-print">
+        <div>
           <div className="text-sm font-bold mb-1.5">2. 검수사진</div>
           <div className="border border-black p-3">
             <PhotoGrid />
