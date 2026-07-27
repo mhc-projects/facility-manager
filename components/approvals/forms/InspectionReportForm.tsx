@@ -96,6 +96,25 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
     />
   )
 
+  // 검수물품 테이블의 자동 줄바꿈 셀 — 읽기전용(disabled) 상태에서는 순수 div로 렌더링해
+  // textarea의 JS 기반 높이 재계산(autoResize)이 인쇄 시점의 폭 변화(용지 폭 ≠ 화면 폭)를
+  // 따라가지 못해 텍스트가 잘리던 문제를 원천적으로 없앤다 (div는 항상 콘텐츠에 맞춰 늘어남)
+  const wrapCell = (value: string, onChangeFn: (v: string) => void, placeholder: string) => (
+    disabled ? (
+      <div className={`${cellInput} whitespace-pre-wrap leading-snug`}>{value || ' '}</div>
+    ) : (
+      <textarea
+        className={`${cellInput} resize-none overflow-hidden leading-snug`}
+        rows={1}
+        value={value}
+        onChange={e => { onChangeFn(e.target.value); autoResize(e.target) }}
+        onFocus={e => autoResize(e.target)}
+        ref={el => { if (el) autoResize(el) }}
+        placeholder={placeholder}
+      />
+    )
+  )
+
   const handleFiles = async (files: File[]) => {
     if (!onFileUpload) return
     for (const file of files) {
@@ -227,44 +246,17 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
                   <tr key={idx} className="border-b border-black last:border-b-0">
                     <td className="border-r border-black text-center text-sm py-1.5 align-top">{item.seq}</td>
                     <td className="border-r border-black p-0 align-top">
-                      <textarea
-                        className={`${cellInput} resize-none overflow-hidden leading-snug`}
-                        rows={1}
-                        value={item.name}
-                        onChange={e => { updateItem(idx, 'name', e.target.value); autoResize(e.target) }}
-                        onFocus={e => autoResize(e.target)}
-                        ref={el => { if (el) autoResize(el) }}
-                        disabled={disabled}
-                        placeholder="품명"
-                      />
+                      {wrapCell(item.name, v => updateItem(idx, 'name', v), '품명')}
                     </td>
                     <td className="border-r border-black p-0 align-top">
-                      <textarea
-                        className={`${cellInput} resize-none overflow-hidden leading-snug`}
-                        rows={1}
-                        value={item.spec}
-                        onChange={e => { updateItem(idx, 'spec', e.target.value); autoResize(e.target) }}
-                        onFocus={e => autoResize(e.target)}
-                        ref={el => { if (el) autoResize(el) }}
-                        disabled={disabled}
-                        placeholder="규격/형식"
-                      />
+                      {wrapCell(item.spec, v => updateItem(idx, 'spec', v), '규격/형식')}
                     </td>
                     <td className="border-r border-black p-0 align-top">
                       <input className={cellInput} value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} disabled={disabled} placeholder="개" />
                     </td>
                     <td className="border-r border-black p-0 align-top">{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
                     <td className={`p-0 align-top ${!disabled ? 'border-r border-black' : ''}`}>
-                      <textarea
-                        className={`${cellInput} resize-none overflow-hidden leading-snug`}
-                        rows={1}
-                        value={item.result}
-                        onChange={e => { updateItem(idx, 'result', e.target.value); autoResize(e.target) }}
-                        onFocus={e => autoResize(e.target)}
-                        ref={el => { if (el) autoResize(el) }}
-                        disabled={disabled}
-                        placeholder="검수결과"
-                      />
+                      {wrapCell(item.result, v => updateItem(idx, 'result', v), '검수결과')}
                     </td>
                     {!disabled && (
                       <td className="text-center align-top">
