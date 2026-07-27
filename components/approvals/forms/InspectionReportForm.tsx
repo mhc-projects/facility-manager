@@ -250,7 +250,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
               </thead>
               <tbody>
                 {data.items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-black last:border-b-0">
+                  <tr key={idx} className="border-b border-black last:border-b-0 break-inside-avoid">
                     <td className={`${cellDivider} text-center text-sm py-1.5 align-top`}>{item.seq}</td>
                     <td className={`${cellDivider} p-0 align-top`}>
                       {wrapCell(item.name, v => updateItem(idx, 'name', v), '품명')}
