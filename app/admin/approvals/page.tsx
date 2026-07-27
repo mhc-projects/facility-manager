@@ -195,11 +195,24 @@ function ApprovalsContent() {
   const [generalSearchQuery, setGeneralSearchQuery] = useState(() => initialTab !== 'completed' ? (searchParams?.get('q') || '') : '')
   const [generalSearchInput, setGeneralSearchInput] = useState(() => initialTab !== 'completed' ? (searchParams?.get('q') || '') : '')
   const isGeneralComposingRef = useRef(false)
+  // 서버 재조회(전체 탭 search 파라미터)를 트리거하는 디바운스된 값 — 타이핑마다 즉시 반영되면
+  // fetchDocs가 매 키 입력마다 재실행되어 목록이 깜빡이고 그 사이 클릭이 씹히는 문제가 있었음
+  const [debouncedGeneralSearchQuery, setDebouncedGeneralSearchQuery] = useState(generalSearchQuery)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedGeneralSearchQuery(generalSearchQuery), 300)
+    return () => clearTimeout(t)
+  }, [generalSearchQuery])
 
   // 결재완료 탭 필터 (상세 화면 복귀 시 유지되도록 URL에서 초기화)
   const [searchQuery, setSearchQuery] = useState(() => initialTab === 'completed' ? (searchParams?.get('q') || '') : '')
   const [searchInput, setSearchInput] = useState(() => initialTab === 'completed' ? (searchParams?.get('q') || '') : '')  // IME 조합 중 표시용 (searchQuery와 분리)
   const isComposingRef = useRef(false)
+  // 결재완료 탭도 동일하게 디바운스 — search 파라미터가 서버 재조회를 트리거하므로 매 키 입력마다 재조회되면 안 됨
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
   const [completedTypeFilter, setCompletedTypeFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('type') || '') : '')
   const [processedFilter, setProcessedFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('processed') || '') : '')
   const [dateFrom, setDateFrom] = useState(() => initialTab === 'completed' ? (searchParams?.get('date_from') || '') : '')
@@ -268,7 +281,7 @@ function ApprovalsContent() {
 
       if (tab === 'completed') {
         params.set('completed_tab', 'true')
-        if (searchQuery) params.set('search', searchQuery)
+        if (debouncedSearchQuery) params.set('search', debouncedSearchQuery)
         if (completedTypeFilter) params.set('type', completedTypeFilter)
         if (processedFilter) params.set('processed', processedFilter)
         if (dateFrom) params.set('date_from', dateFrom)
@@ -290,7 +303,7 @@ function ApprovalsContent() {
         if (tab !== 'my' && statusFilter) params.set('status', statusFilter)
         if (tab === 'all' && allSortBy !== 'submitted_at') params.set('sort_by', allSortBy)
         if (tab === 'all') {
-          if (generalSearchQuery) params.set('search', generalSearchQuery)
+          if (debouncedGeneralSearchQuery) params.set('search', debouncedGeneralSearchQuery)
           params.set('limit', String(APPROVALS_PAGE_SIZE))
           params.set('offset', String((allPage - 1) * APPROVALS_PAGE_SIZE))
         } else {
@@ -317,17 +330,17 @@ function ApprovalsContent() {
     } finally {
       setLoading(false)
     }
-  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage, allPage, generalSearchQuery])
+  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, debouncedSearchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage, allPage, debouncedGeneralSearchQuery])
 
   // 결재완료 탭 필터 변경 시 1페이지로 복귀
   useEffect(() => {
     setCompletedPage(1)
-  }, [searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
+  }, [debouncedSearchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
 
   // 전체 탭 필터 변경 시 1페이지로 복귀
   useEffect(() => {
     setAllPage(1)
-  }, [typeFilter, statusFilter, allSortBy, generalSearchQuery])
+  }, [typeFilter, statusFilter, allSortBy, debouncedGeneralSearchQuery])
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
