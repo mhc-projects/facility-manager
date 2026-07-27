@@ -500,9 +500,10 @@ function ApprovalDetailContent() {
     <>
     <style>{`
       @media print {
+        @page { margin: 12mm; }
         body * { visibility: hidden; }
         #approval-print-area, #approval-print-area * { visibility: visible; }
-        #approval-print-area { position: absolute; top: 0; left: 0; right: 0; padding: 24px; background: white; }
+        #approval-print-area { position: absolute; top: 0; left: 0; right: 0; padding: 12px; background: white; }
         /* 인쇄 제외 섹션 */
         #approval-print-area .no-print { display: none !important; visibility: hidden !important; }
         /* 모바일 카드 레이아웃 숨기고 데스크탑 테이블 레이아웃 표시 */
