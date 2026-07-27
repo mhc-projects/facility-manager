@@ -268,11 +268,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (searchQuery) {
+      conditions.push(`(
+        d.document_number ILIKE $${idx} OR
+        d.title ILIKE $${idx} OR
+        e.name ILIKE $${idx}
+      )`);
+      values.push(`%${searchQuery}%`);
+      idx++;
+    }
+
     const whereClause = conditions.join(' AND ');
 
     // 총 건수
     const countResult = await queryOne(
-      `SELECT COUNT(*) AS total FROM approval_documents d WHERE ${whereClause}`,
+      `SELECT COUNT(*) AS total FROM approval_documents d
+       LEFT JOIN employees e ON e.id = d.requester_id
+       WHERE ${whereClause}`,
       values
     );
 

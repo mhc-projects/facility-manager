@@ -42,7 +42,7 @@ const TAB_LABELS: Record<TabType, string> = {
   completed: '결재완료',
 }
 
-const COMPLETED_PAGE_SIZE = 50
+const APPROVALS_PAGE_SIZE = 50
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-'
@@ -189,6 +189,7 @@ function ApprovalsContent() {
   const [allSortBy, setAllSortBy] = useState<'submitted_at' | 'completed_at'>(
     () => searchParams?.get('sort_by') === 'completed_at' ? 'completed_at' : 'submitted_at'
   )
+  const [allPage, setAllPage] = useState(() => initialTab === 'all' ? Math.max(1, parseInt(searchParams?.get('page') || '1', 10) || 1) : 1)
 
   // 일반 탭 검색 (클라이언트 사이드 필터링)
   const [generalSearchQuery, setGeneralSearchQuery] = useState(() => initialTab !== 'completed' ? (searchParams?.get('q') || '') : '')
@@ -236,6 +237,7 @@ function ApprovalsContent() {
       if (tab === 'all' && statusFilter) p.set('status', statusFilter)
       if (generalSearchQuery) p.set('q', generalSearchQuery)
       if (tab === 'all' && allSortBy !== 'submitted_at') p.set('sort_by', allSortBy)
+      if (tab === 'all' && allPage > 1) p.set('page', String(allPage))
       if (tab === 'my' && mySubTab === 'approved') p.set('my_sub', 'approved')
     }
     return p.toString()
@@ -272,8 +274,8 @@ function ApprovalsContent() {
         if (dateFrom) params.set('date_from', dateFrom)
         if (dateTo) params.set('date_to', dateTo)
         if (departmentFilter) params.set('department', departmentFilter)
-        params.set('limit', String(COMPLETED_PAGE_SIZE))
-        params.set('offset', String((completedPage - 1) * COMPLETED_PAGE_SIZE))
+        params.set('limit', String(APPROVALS_PAGE_SIZE))
+        params.set('offset', String((completedPage - 1) * APPROVALS_PAGE_SIZE))
       } else {
         if (tab === 'my') {
           params.set('mine', 'true')
@@ -287,7 +289,13 @@ function ApprovalsContent() {
         if (typeFilter) params.set('type', typeFilter)
         if (tab !== 'my' && statusFilter) params.set('status', statusFilter)
         if (tab === 'all' && allSortBy !== 'submitted_at') params.set('sort_by', allSortBy)
-        params.set('limit', '100')
+        if (tab === 'all') {
+          if (generalSearchQuery) params.set('search', generalSearchQuery)
+          params.set('limit', String(APPROVALS_PAGE_SIZE))
+          params.set('offset', String((allPage - 1) * APPROVALS_PAGE_SIZE))
+        } else {
+          params.set('limit', '100')
+        }
       }
 
       const res = await fetch(`/api/approvals?${params}`, {
@@ -309,12 +317,17 @@ function ApprovalsContent() {
     } finally {
       setLoading(false)
     }
-  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage])
+  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage, allPage, generalSearchQuery])
 
   // 결재완료 탭 필터 변경 시 1페이지로 복귀
   useEffect(() => {
     setCompletedPage(1)
   }, [searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
+
+  // 전체 탭 필터 변경 시 1페이지로 복귀
+  useEffect(() => {
+    setAllPage(1)
+  }, [typeFilter, statusFilter, allSortBy, generalSearchQuery])
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
@@ -713,10 +726,10 @@ function ApprovalsContent() {
         </div>
 
         {/* 페이지네이션 */}
-        {!loading && total > COMPLETED_PAGE_SIZE && (() => {
-          const totalPages = Math.max(1, Math.ceil(total / COMPLETED_PAGE_SIZE))
-          const rangeStart = (completedPage - 1) * COMPLETED_PAGE_SIZE + 1
-          const rangeEnd = Math.min(completedPage * COMPLETED_PAGE_SIZE, total)
+        {!loading && total > APPROVALS_PAGE_SIZE && (() => {
+          const totalPages = Math.max(1, Math.ceil(total / APPROVALS_PAGE_SIZE))
+          const rangeStart = (completedPage - 1) * APPROVALS_PAGE_SIZE + 1
+          const rangeEnd = Math.min(completedPage * APPROVALS_PAGE_SIZE, total)
           return (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <span className="text-xs text-gray-500">{rangeStart}-{rangeEnd} / {total}건</span>
@@ -998,6 +1011,50 @@ function ApprovalsContent() {
                 </div>
               )}
             </div>
+
+            {/* 전체 탭 페이지네이션 */}
+            {tab === 'all' && !loading && total > APPROVALS_PAGE_SIZE && (() => {
+              const totalPages = Math.max(1, Math.ceil(total / APPROVALS_PAGE_SIZE))
+              const rangeStart = (allPage - 1) * APPROVALS_PAGE_SIZE + 1
+              const rangeEnd = Math.min(allPage * APPROVALS_PAGE_SIZE, total)
+              return (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <span className="text-xs text-gray-500">{rangeStart}-{rangeEnd} / {total}건</span>
+                  <div className="flex items-center gap-1 overflow-x-auto">
+                    <button
+                      onClick={() => setAllPage(p => Math.max(1, p - 1))}
+                      disabled={allPage === 1}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                      이전
+                    </button>
+                    {[...Array(totalPages)].map((_, i) => {
+                      const page = i + 1
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setAllPage(page)}
+                          className={`px-3 py-1.5 text-xs rounded-md transition-colors flex-shrink-0 ${
+                            page === allPage
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    })}
+                    <button
+                      onClick={() => setAllPage(p => Math.min(totalPages, p + 1))}
+                      disabled={allPage === totalPages}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                      다음
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </>
         )}
       </div>
