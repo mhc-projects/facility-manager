@@ -42,6 +42,8 @@ const TAB_LABELS: Record<TabType, string> = {
   completed: '결재완료',
 }
 
+const COMPLETED_PAGE_SIZE = 50
+
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
@@ -171,6 +173,8 @@ function ApprovalsContent() {
   const [tab, setTab] = useState<TabType>(initialTab)
   const [docs, setDocs] = useState<ApprovalDoc[]>([])
   const [total, setTotal] = useState(0)
+  const [unprocessedTotal, setUnprocessedTotal] = useState(0)
+  const [processedTotal, setProcessedTotal] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
@@ -200,6 +204,7 @@ function ApprovalsContent() {
   const [dateFrom, setDateFrom] = useState(() => initialTab === 'completed' ? (searchParams?.get('date_from') || '') : '')
   const [dateTo, setDateTo] = useState(() => initialTab === 'completed' ? (searchParams?.get('date_to') || '') : '')
   const [departmentFilter, setDepartmentFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('department') || '') : '')
+  const [completedPage, setCompletedPage] = useState(() => initialTab === 'completed' ? Math.max(1, parseInt(searchParams?.get('page') || '1', 10) || 1) : 1)
 
   // 처리확인 모달
   const [processTarget, setProcessTarget] = useState<ApprovalDoc | null>(null)
@@ -225,6 +230,7 @@ function ApprovalsContent() {
       if (dateFrom) p.set('date_from', dateFrom)
       if (dateTo) p.set('date_to', dateTo)
       if (departmentFilter) p.set('department', departmentFilter)
+      if (completedPage > 1) p.set('page', String(completedPage))
     } else {
       if (typeFilter) p.set('type', typeFilter)
       if (tab === 'all' && statusFilter) p.set('status', statusFilter)
@@ -266,6 +272,8 @@ function ApprovalsContent() {
         if (dateFrom) params.set('date_from', dateFrom)
         if (dateTo) params.set('date_to', dateTo)
         if (departmentFilter) params.set('department', departmentFilter)
+        params.set('limit', String(COMPLETED_PAGE_SIZE))
+        params.set('offset', String((completedPage - 1) * COMPLETED_PAGE_SIZE))
       } else {
         if (tab === 'my') {
           params.set('mine', 'true')
@@ -279,8 +287,8 @@ function ApprovalsContent() {
         if (typeFilter) params.set('type', typeFilter)
         if (tab !== 'my' && statusFilter) params.set('status', statusFilter)
         if (tab === 'all' && allSortBy !== 'submitted_at') params.set('sort_by', allSortBy)
+        params.set('limit', '100')
       }
-      params.set('limit', '100')
 
       const res = await fetch(`/api/approvals?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -290,14 +298,23 @@ function ApprovalsContent() {
       if (data.success) {
         setDocs(data.data || [])
         setTotal(data.total || 0)
+        setUnprocessedTotal(data.unprocessedTotal ?? 0)
+        setProcessedTotal(data.processedTotal ?? 0)
       } else {
         setDocs([])
         setTotal(0)
+        setUnprocessedTotal(0)
+        setProcessedTotal(0)
       }
     } finally {
       setLoading(false)
     }
-  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
+  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage])
+
+  // 결재완료 탭 필터 변경 시 1페이지로 복귀
+  useEffect(() => {
+    setCompletedPage(1)
+  }, [searchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
@@ -452,8 +469,6 @@ function ApprovalsContent() {
 
   // 결재완료 탭 전용 컨텐츠 — 컴포넌트가 아닌 렌더 함수로 정의해야 매 렌더마다 새 타입이 생기지 않아 input 언마운트 문제를 방지할 수 있다
   const renderCompletedTab = () => {
-    const unprocessedCount = docs.filter(d => !d.is_processed).length
-    const processedCount = docs.filter(d => d.is_processed).length
 
     return (
       <>
@@ -540,7 +555,7 @@ function ApprovalsContent() {
                     : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
                 }`}
               >
-                미처리 {unprocessedCount}건
+                미처리 {unprocessedTotal}건
               </button>
               <button
                 onClick={() => setProcessedFilter(processedFilter === 'true' ? '' : 'true')}
@@ -550,7 +565,7 @@ function ApprovalsContent() {
                     : 'bg-green-50 text-green-600 hover:bg-green-100'
                 }`}
               >
-                처리완료 {processedCount}건
+                처리완료 {processedTotal}건
               </button>
             </div>
           )}
@@ -696,6 +711,50 @@ function ApprovalsContent() {
             </div>
           )}
         </div>
+
+        {/* 페이지네이션 */}
+        {!loading && total > COMPLETED_PAGE_SIZE && (() => {
+          const totalPages = Math.max(1, Math.ceil(total / COMPLETED_PAGE_SIZE))
+          const rangeStart = (completedPage - 1) * COMPLETED_PAGE_SIZE + 1
+          const rangeEnd = Math.min(completedPage * COMPLETED_PAGE_SIZE, total)
+          return (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <span className="text-xs text-gray-500">{rangeStart}-{rangeEnd} / {total}건</span>
+              <div className="flex items-center gap-1 overflow-x-auto">
+                <button
+                  onClick={() => setCompletedPage(p => Math.max(1, p - 1))}
+                  disabled={completedPage === 1}
+                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  이전
+                </button>
+                {[...Array(totalPages)].map((_, i) => {
+                  const page = i + 1
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCompletedPage(page)}
+                      className={`px-3 py-1.5 text-xs rounded-md transition-colors flex-shrink-0 ${
+                        page === completedPage
+                          ? 'bg-blue-600 text-white'
+                          : 'border border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setCompletedPage(p => Math.min(totalPages, p + 1))}
+                  disabled={completedPage === totalPages}
+                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </>
     )
   }

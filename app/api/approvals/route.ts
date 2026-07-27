@@ -109,15 +109,32 @@ export async function GET(request: NextRequest) {
         vals.push(dateTo);
       }
 
+      if (departmentFilter) {
+        conds.push(`d.department = $${ci++}`);
+        vals.push(departmentFilter);
+      }
+
+      // 미처리/처리완료 배지는 processedFilter와 무관하게 항상 전체 기준으로 집계
+      const baseWhereClause = conds.join(' AND ');
+      const [unprocessedResult, processedResult] = await Promise.all([
+        queryOne(
+          `SELECT COUNT(*) AS total FROM approval_documents d
+           LEFT JOIN employees e ON e.id = d.requester_id
+           WHERE ${baseWhereClause} AND (d.is_processed = FALSE OR d.is_processed IS NULL)`,
+          vals
+        ),
+        queryOne(
+          `SELECT COUNT(*) AS total FROM approval_documents d
+           LEFT JOIN employees e ON e.id = d.requester_id
+           WHERE ${baseWhereClause} AND d.is_processed = TRUE`,
+          vals
+        ),
+      ]);
+
       if (processedFilter === 'true') {
         conds.push('d.is_processed = TRUE');
       } else if (processedFilter === 'false') {
         conds.push('(d.is_processed = FALSE OR d.is_processed IS NULL)');
-      }
-
-      if (departmentFilter) {
-        conds.push(`d.department = $${ci++}`);
-        vals.push(departmentFilter);
       }
 
       const whereClause = conds.join(' AND ');
@@ -151,6 +168,8 @@ export async function GET(request: NextRequest) {
         success: true,
         data: rows || [],
         total: parseInt(countResult?.total || '0', 10),
+        unprocessedTotal: parseInt(unprocessedResult?.total || '0', 10),
+        processedTotal: parseInt(processedResult?.total || '0', 10),
       });
     }
 
