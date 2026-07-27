@@ -133,6 +133,20 @@ function getFilterPaymentDate(business: Record<string, any>): string | null {
   return null;
 }
 
+/**
+ * 설치 연도/월 필터용 날짜 반환
+ * 대리점: 발주일(order_date) 기준 — 대리점은 설치일이 비어있는 경우가 많아
+ *        발주일 기준으로 필터링해야 발주일 누락 건을 확인할 수 있음
+ * 그 외: 설치일(installation_date) 기준
+ */
+function getFilterInstallDate(business: Record<string, any>): string | null {
+  const status = (business.progress_status || '').trim();
+  if (status === '대리점') {
+    return business.order_date || null;
+  }
+  return business.installation_date || null;
+}
+
 // 업무단계 뱃지: 가상화된 리스트 내 hook 클로저 문제를 피하기 위해 독립 컴포넌트로 분리
 function TaskStageBadge({ status }: { status: string }) {
   const { getStageLabel } = useAdminData();
@@ -186,7 +200,7 @@ function RevenueDashboard() {
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // 카테고리(진행구분) 필터
   const [selectedProjectYears, setSelectedProjectYears] = useState<string[]>([]); // 설치 연도 필터
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([]); // 월별 필터 (1-12) - 설치일 기준
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]); // 월별 필터 (1-12) - 설치일 기준 (대리점은 발주일 기준)
   const [selectedSurveyMonths, setSelectedSurveyMonths] = useState<string[]>([]); // 실사 월 필터 ['견적|1', '착공|2', '준공|9']
   const [selectedInvoiceYears, setSelectedInvoiceYears] = useState<string[]>([]); // 세금계산서 발행 연도 필터
   const [selectedInvoiceMonths, setSelectedInvoiceMonths] = useState<string[]>([]); // 세금계산서 발행 월 필터
@@ -1638,19 +1652,19 @@ function RevenueDashboard() {
         business.address && business.address.toLowerCase().includes(region.toLowerCase())
       );
       const categoryMatch = selectedCategories.length === 0 || selectedCategories.includes(business.progress_status || '');
-      const installYear = business.installation_date ? String(new Date(business.installation_date).getFullYear()) : '';
+      const filterInstallDate = getFilterInstallDate(business);
+      const installYear = filterInstallDate ? String(new Date(filterInstallDate).getFullYear()) : '';
       const yearMatch = selectedProjectYears.length === 0 || (installYear && selectedProjectYears.includes(installYear));
 
-      // 월별 필터 (설치일 기준, 다중 선택)
+      // 월별 필터 (설치일 기준, 대리점은 발주일 기준, 다중 선택)
       let monthMatch = true;
       if (selectedMonths.length > 0) {
-        const installDate = business.installation_date;
-        if (installDate) {
-          const date = new Date(installDate);
+        if (filterInstallDate) {
+          const date = new Date(filterInstallDate);
           const month = String(date.getMonth() + 1);
           monthMatch = selectedMonths.includes(month);
         } else {
-          monthMatch = false;  // 설치일 없으면 제외
+          monthMatch = false;  // 기준일(설치일/발주일) 없으면 제외
         }
       }
 
@@ -1941,7 +1955,10 @@ function RevenueDashboard() {
   const salesOffices = [...new Set(businesses.map(b => b.sales_office).filter(Boolean))];
   const regions = [...new Set(businesses.map(b => b.address ? b.address.split(' ').slice(0, 2).join(' ') : '').filter(Boolean))];
   const projectYears = [...new Set(businesses
-    .map(b => b.installation_date ? new Date(b.installation_date).getFullYear() : null)
+    .map(b => {
+      const d = getFilterInstallDate(b);
+      return d ? new Date(d).getFullYear() : null;
+    })
     .filter(Boolean) as number[]
   )].sort((a, b) => b - a);
 
@@ -2450,9 +2467,14 @@ function RevenueDashboard() {
                 />
               </div>
 
-              {/* 설치: 연도 + 월 묶음 */}
+              {/* 설치/발주: 연도 + 월 묶음 (대리점은 발주일 기준) */}
               <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
-                <span className="text-xs font-medium whitespace-nowrap shrink-0">설치</span>
+                <span
+                  className="text-xs font-medium whitespace-nowrap shrink-0"
+                  title="설치일 기준 (대리점은 발주일 기준)"
+                >
+                  설치/발주
+                </span>
                 <div className="flex-1 min-w-0">
                   <MultiSelectDropdown
                     label=""
