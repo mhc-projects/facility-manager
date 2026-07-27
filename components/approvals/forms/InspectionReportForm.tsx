@@ -53,10 +53,10 @@ function FileIcon({ type }: { type?: string }) {
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 border-0 outline-none`
 const labelCell = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center justify-center whitespace-nowrap`
 const mobileInput = `w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50`
-// 검수물품 표의 칸 구분선: border-r 대신 box-shadow로 그린다 — 인쇄(PDF 변환) 시
-// border-collapse 표에서 행 높이가 옆 칸(검수결과 등)보다 짧은 칸의 세로 테두리가
-// 행 끝까지 이어지지 않고 중간에서 끊기는 크로미움 렌더링 문제를 피하기 위함
-const cellDivider = `shadow-[inset_-1px_0_0_#000]`
+// 검수물품 표의 칸 구분선. border-collapse 표에서 인쇄(PDF 변환) 시 셀 높이가
+// 다르면 구분선이 끝까지 안 이어지거나 삐뚤어져 보이는 문제가 있어, 표 자체를
+// border-separate + border-spacing:0 방식으로 바꾸고 각 셀에 실선 border를 그린다
+const cellDivider = `border-r border-black`
 
 const EMPTY_ITEM: InspectionItem = { seq: 1, name: '', spec: '', unit: '', quantity: 0, result: '' }
 
@@ -236,44 +236,47 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
         <div>
           <div className="text-sm font-bold mb-1.5">1. 검수물품</div>
           <div className="border border-black overflow-x-auto">
-            <table className="w-full border-collapse min-w-[640px]">
+            <table className="w-full border-separate min-w-[640px]" style={{ borderSpacing: 0 }}>
               <thead>
-                <tr className="bg-gray-50 border-b border-black">
-                  <th className="border-r border-black px-2 py-2 text-sm font-bold w-12">NO</th>
-                  <th className="border-r border-black px-2 py-2 text-sm font-bold">품명</th>
-                  <th className="border-r border-black px-2 py-2 text-sm font-bold w-32">규격/형식</th>
-                  <th className="border-r border-black px-2 py-2 text-sm font-bold w-16">단위</th>
-                  <th className="border-r border-black px-2 py-2 text-sm font-bold w-16">수량</th>
-                  <th className={`px-2 py-2 text-sm font-bold w-48 ${!disabled ? 'border-r border-black' : ''}`}>검수결과</th>
-                  {!disabled && <th className="w-8" />}
+                <tr className="bg-gray-50">
+                  <th className="border-b border-r border-black px-2 py-2 text-sm font-bold w-12">NO</th>
+                  <th className="border-b border-r border-black px-2 py-2 text-sm font-bold">품명</th>
+                  <th className="border-b border-r border-black px-2 py-2 text-sm font-bold w-32">규격/형식</th>
+                  <th className="border-b border-r border-black px-2 py-2 text-sm font-bold w-16">단위</th>
+                  <th className="border-b border-r border-black px-2 py-2 text-sm font-bold w-16">수량</th>
+                  <th className={`border-b border-black px-2 py-2 text-sm font-bold w-48 ${!disabled ? 'border-r' : ''}`}>검수결과</th>
+                  {!disabled && <th className="border-b border-black w-8" />}
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-black last:border-b-0 break-inside-avoid">
-                    <td className={`${cellDivider} text-center text-sm py-1.5 align-top`}>{item.seq}</td>
-                    <td className={`${cellDivider} p-0 align-top`}>
+                {data.items.map((item, idx) => {
+                  const rowBorder = idx === data.items.length - 1 ? '' : 'border-b border-black'
+                  return (
+                  <tr key={idx} className="break-inside-avoid">
+                    <td className={`${cellDivider} ${rowBorder} text-center text-sm py-1.5 align-top`}>{item.seq}</td>
+                    <td className={`${cellDivider} ${rowBorder} p-0 align-top`}>
                       {wrapCell(item.name, v => updateItem(idx, 'name', v), '품명')}
                     </td>
-                    <td className={`${cellDivider} p-0 align-top`}>
+                    <td className={`${cellDivider} ${rowBorder} p-0 align-top`}>
                       {wrapCell(item.spec, v => updateItem(idx, 'spec', v), '규격/형식')}
                     </td>
-                    <td className={`${cellDivider} p-0 align-top`}>
+                    <td className={`${cellDivider} ${rowBorder} p-0 align-top`}>
                       {wrapCell(item.unit, v => updateItem(idx, 'unit', v), '개')}
                     </td>
-                    <td className={`${cellDivider} p-0 align-top`}>{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
-                    <td className={`p-0 align-top ${!disabled ? cellDivider : ''}`}>
+                    <td className={`${cellDivider} ${rowBorder} p-0 align-top`}>{numInput(item.quantity, v => updateItem(idx, 'quantity', v))}</td>
+                    <td className={`${rowBorder} p-0 align-top ${!disabled ? cellDivider : ''}`}>
                       {wrapCell(item.result, v => updateItem(idx, 'result', v), '검수결과')}
                     </td>
                     {!disabled && (
-                      <td className="text-center align-top">
+                      <td className={`${rowBorder} text-center align-top`}>
                         <button type="button" onClick={() => removeItem(idx)} disabled={data.items.length <= 1} className="text-red-400 hover:text-red-600 p-1 disabled:opacity-30">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </td>
                     )}
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
