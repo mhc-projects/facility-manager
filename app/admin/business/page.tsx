@@ -6273,105 +6273,6 @@ function BusinessManagementPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">배출전류계</label>
-                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-[11px] text-gray-500 mb-0.5">총 수량</label>
-                            <input
-                              type="number"
-                              value={formData.discharge_current_meter ?? ''}
-                              onChange={(e) => setFormData({...formData, discharge_current_meter: e.target.value ? parseInt(e.target.value) : null})}
-                              className="w-full px-2 py-1 sm:py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-[11px] font-semibold text-blue-700 mb-0.5">400A 수량</label>
-                            <input
-                              type="number"
-                              value={formData.discharge_current_meter_400a ?? ''}
-                              onChange={(e) => setFormData({...formData, discharge_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
-                              className="w-full px-2 py-1 sm:py-1.5 border border-blue-200 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              max={formData.discharge_current_meter ?? undefined}
-                              placeholder="0"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-gray-400 leading-tight mt-1">
-                          100A {Math.max(0, (formData.discharge_current_meter ?? 0) - (formData.discharge_current_meter_400a ?? 0))}대는 자동 계산됩니다
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">송풍전류계</label>
-                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-[11px] text-gray-500 mb-0.5">총 수량</label>
-                            <input
-                              type="number"
-                              value={formData.fan_current_meter ?? ''}
-                              onChange={(e) => setFormData({...formData, fan_current_meter: e.target.value ? parseInt(e.target.value) : null})}
-                              className="w-full px-2 py-1 sm:py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-[11px] font-semibold text-blue-700 mb-0.5">400A 수량</label>
-                            <input
-                              type="number"
-                              value={formData.fan_current_meter_400a ?? ''}
-                              onChange={(e) => setFormData({...formData, fan_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
-                              className="w-full px-2 py-1 sm:py-1.5 border border-blue-200 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              max={formData.fan_current_meter ?? undefined}
-                              placeholder="0"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-gray-400 leading-tight mt-1">
-                          100A {Math.max(0, (formData.fan_current_meter ?? 0) - (formData.fan_current_meter_400a ?? 0))}대는 자동 계산됩니다
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">펌프전류계</label>
-                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-[11px] text-gray-500 mb-0.5">총 수량</label>
-                            <input
-                              type="number"
-                              value={formData.pump_current_meter ?? ''}
-                              onChange={(e) => setFormData({...formData, pump_current_meter: e.target.value ? parseInt(e.target.value) : null})}
-                              className="w-full px-2 py-1 sm:py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-[11px] font-semibold text-blue-700 mb-0.5">400A 수량</label>
-                            <input
-                              type="number"
-                              value={formData.pump_current_meter_400a ?? ''}
-                              onChange={(e) => setFormData({...formData, pump_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
-                              className="w-full px-2 py-1 sm:py-1.5 border border-blue-200 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              max={formData.pump_current_meter ?? undefined}
-                              placeholder="0"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-gray-400 leading-tight mt-1">
-                          100A {Math.max(0, (formData.pump_current_meter ?? 0) - (formData.pump_current_meter_400a ?? 0))}대는 자동 계산됩니다
-                        </p>
-                      </div>
-                    </div>
-                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">게이트웨이(1,2)</label>
                       <input
                         type="number"
@@ -6491,6 +6392,105 @@ function BusinessManagementPage() {
                         min="0"
                         placeholder="0"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">배출전류계</label>
+                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-[11px] text-gray-500 mb-0.5">총 수량</label>
+                            <input
+                              type="number"
+                              value={formData.discharge_current_meter ?? ''}
+                              onChange={(e) => setFormData({...formData, discharge_current_meter: e.target.value ? parseInt(e.target.value) : null})}
+                              className="w-full px-2 py-1 sm:py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-[11px] font-semibold text-blue-700 mb-0.5">400A 수량</label>
+                            <input
+                              type="number"
+                              value={formData.discharge_current_meter_400a ?? ''}
+                              onChange={(e) => setFormData({...formData, discharge_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
+                              className="w-full px-2 py-1 sm:py-1.5 border border-blue-200 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              max={formData.discharge_current_meter ?? undefined}
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight mt-1">
+                          100A {Math.max(0, (formData.discharge_current_meter ?? 0) - (formData.discharge_current_meter_400a ?? 0))}대는 자동 계산됩니다
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">송풍전류계</label>
+                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-[11px] text-gray-500 mb-0.5">총 수량</label>
+                            <input
+                              type="number"
+                              value={formData.fan_current_meter ?? ''}
+                              onChange={(e) => setFormData({...formData, fan_current_meter: e.target.value ? parseInt(e.target.value) : null})}
+                              className="w-full px-2 py-1 sm:py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-[11px] font-semibold text-blue-700 mb-0.5">400A 수량</label>
+                            <input
+                              type="number"
+                              value={formData.fan_current_meter_400a ?? ''}
+                              onChange={(e) => setFormData({...formData, fan_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
+                              className="w-full px-2 py-1 sm:py-1.5 border border-blue-200 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              max={formData.fan_current_meter ?? undefined}
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight mt-1">
+                          100A {Math.max(0, (formData.fan_current_meter ?? 0) - (formData.fan_current_meter_400a ?? 0))}대는 자동 계산됩니다
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">펌프전류계</label>
+                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-[11px] text-gray-500 mb-0.5">총 수량</label>
+                            <input
+                              type="number"
+                              value={formData.pump_current_meter ?? ''}
+                              onChange={(e) => setFormData({...formData, pump_current_meter: e.target.value ? parseInt(e.target.value) : null})}
+                              className="w-full px-2 py-1 sm:py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-[11px] font-semibold text-blue-700 mb-0.5">400A 수량</label>
+                            <input
+                              type="number"
+                              value={formData.pump_current_meter_400a ?? ''}
+                              onChange={(e) => setFormData({...formData, pump_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
+                              className="w-full px-2 py-1 sm:py-1.5 border border-blue-200 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              max={formData.pump_current_meter ?? undefined}
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight mt-1">
+                          100A {Math.max(0, (formData.pump_current_meter ?? 0) - (formData.pump_current_meter_400a ?? 0))}대는 자동 계산됩니다
+                        </p>
+                      </div>
                     </div>
                     </div>
                   </div>
