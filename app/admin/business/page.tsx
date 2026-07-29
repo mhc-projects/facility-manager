@@ -16,8 +16,8 @@ const BusinessExcelDownloadModal = lazy(() => import('@/components/business/moda
 import { useAuth } from '@/contexts/AuthContext'
 import { useAdminData } from '@/contexts/AdminDataContext'
 import { TokenManager } from '@/lib/api-client'
-import { getManufacturerName } from '@/constants/manufacturers'
-import { resolveEquipmentCost, chainCostLookups, costLookupFromNumbers } from '@/constants/equipment-specs'
+import { getManufacturerName, getManufacturerAliases } from '@/constants/manufacturers'
+import { resolveEquipmentCost, costLookupFromNumbers } from '@/constants/equipment-specs'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
 import DateInput from '@/components/ui/DateInput'
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown'
@@ -777,28 +777,6 @@ function BusinessManagementPage() {
     'multiple_stack': 480000
   }
 
-  // 제조사별 원가 (매입 단가) - 에코센스 기준
-  const MANUFACTURER_COSTS: Record<string, number> = {
-    'ph_meter': 250000,
-    'differential_pressure_meter': 100000,
-    'temperature_meter': 125000,
-    'discharge_current_meter': 80000,
-    'fan_current_meter': 80000,
-    'pump_current_meter': 80000,
-    'gateway': 1000000, // @deprecated
-    'gateway_1_2': 1000000, // 게이트웨이(1,2) - 에코센스 매입금액
-    'gateway_3_4': 1420000, // 게이트웨이(3,4) - 에코센스 매입금액 (다름!)
-    'vpn_wired': 100000,
-    'vpn_wireless': 120000,
-    'explosion_proof_differential_pressure_meter_domestic': 150000,
-    'explosion_proof_temperature_meter_domestic': 180000,
-    'expansion_device': 120000,
-    'relay_8ch': 80000,
-    'relay_16ch': 150000,
-    'main_board_replacement': 100000,
-    'multiple_stack': 120000
-  }
-
   // 기기별 기본 설치비
   const INSTALLATION_COSTS: Record<string, number> = {
     'ph_meter': 0,
@@ -839,13 +817,18 @@ function BusinessManagementPage() {
 
     // 각 기기별 매출/매입 계산
     console.log('🔍 [원가 계산] 제조사별 원가 상태:', manufacturerCosts)
-    console.log('🔍 [원가 계산] 하드코딩 상수:', MANUFACTURER_COSTS)
 
-    // 제조사별 원가: state에서 가져오고, 없으면 하드코딩 상수 사용 (전류계는 100A/400A 스펙별로 분기)
-    const manufacturerCostLookup = chainCostLookups(
-      costLookupFromNumbers(manufacturerCosts),
-      costLookupFromNumbers(MANUFACTURER_COSTS)
-    )
+    // 사업장의 실제 제조사에 해당하는 원가 맵 선택 (영문코드/한글명 별칭 매칭)
+    const rawManufacturer = (business as any).manufacturer || ''
+    let costsForManufacturer: Record<string, number> | undefined
+    for (const alias of [rawManufacturer, ...getManufacturerAliases(rawManufacturer), rawManufacturer.toLowerCase?.().trim?.()]) {
+      if (alias && manufacturerCosts[alias]) {
+        costsForManufacturer = manufacturerCosts[alias]
+        break
+      }
+    }
+    // 전류계는 100A/400A 스펙별로 분기
+    const manufacturerCostLookup = costLookupFromNumbers(costsForManufacturer || {})
 
     EQUIPMENT_FIELDS.forEach(field => {
       const quantity = (business as any)[field] || 0

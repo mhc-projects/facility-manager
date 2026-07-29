@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { TokenManager } from '@/lib/api-client';
-import { getManufacturerName } from '@/constants/manufacturers';
+import { getManufacturerAliases } from '@/constants/manufacturers';
 
 interface SurveyCosts {
   estimate: number;
@@ -17,7 +17,7 @@ interface SalesOfficeCommissions {
 }
 
 interface ManufacturerCosts {
-  [equipmentType: string]: number; // 장비타입 -> 원가
+  [manufacturer: string]: { [equipmentType: string]: number }; // 제조사 -> 장비타입 -> 원가
 }
 
 /**
@@ -127,7 +127,7 @@ export function useRevenueData() {
             }
           })(),
 
-          // 4. 제조사별 원가 정보 로드
+          // 4. 제조사별 원가 정보 로드 (전 제조사, 사업장별로 실제 제조사와 매칭해서 사용)
           (async () => {
             console.log('🔄 제조사별 원가 로드 시작...');
             const token = TokenManager.getToken();
@@ -136,8 +136,7 @@ export function useRevenueData() {
               return;
             }
 
-            const manufacturerName = getManufacturerName('cleanearth');
-            const response = await fetch(`/api/revenue/manufacturer-pricing?manufacturer=${encodeURIComponent(manufacturerName)}`, {
+            const response = await fetch('/api/revenue/manufacturer-pricing', {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -149,14 +148,19 @@ export function useRevenueData() {
 
             const result = await response.json();
             if (result.success && result.data?.pricing && result.data.pricing.length > 0) {
-              const costsMap: { [key: string]: number } = {};
+              const costsMap: ManufacturerCosts = {};
               result.data.pricing.forEach((item: any) => {
-                if (!costsMap[item.equipment_type]) {
-                  costsMap[item.equipment_type] = Number(item.cost_price) || 0;
+                const cost = Number(item.cost_price) || 0;
+                // 영문코드/한글명 양쪽 키로 등록 (어떤 형식으로 저장되어도 매칭되도록)
+                for (const alias of getManufacturerAliases(item.manufacturer)) {
+                  if (!costsMap[alias]) costsMap[alias] = {};
+                  if (costsMap[alias][item.equipment_type] === undefined) {
+                    costsMap[alias][item.equipment_type] = cost;
+                  }
                 }
               });
               setManufacturerCosts(costsMap);
-              console.log('✅ 제조사별 원가 로드 완료');
+              console.log('✅ 제조사별 원가 로드 완료:', Object.keys(costsMap));
             }
           })()
         ]);
