@@ -1817,7 +1817,9 @@ function RevenueDashboard() {
       };
     }).filter(business => {
       // 매출 금액 필터 적용
-      const minRevenue = revenueFilter.min ? parseFloat(revenueFilter.min) : 0;
+      // 최소값 미입력 시 0 이상으로 취급하면 대리점처럼 협의사항 할인으로 매출이 음수가 된
+      // 사업장이 필터를 건드리지 않았는데도 표에서 사라지므로, 미입력 상태는 하한 없음으로 처리한다
+      const minRevenue = revenueFilter.min ? parseFloat(revenueFilter.min) : -Infinity;
       const maxRevenue = revenueFilter.max ? parseFloat(revenueFilter.max) : Number.MAX_SAFE_INTEGER;
       return business.total_revenue >= minRevenue && business.total_revenue <= maxRevenue;
     }).filter(business => {
