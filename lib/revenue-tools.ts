@@ -8,6 +8,7 @@ import {
   buildRecordsMap,
   computeBusinessReceivableNow,
 } from '@/lib/receivables-engine';
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader';
 
 async function findBusinessesByName(nameQuery: string, limit = 5) {
   if (!nameQuery.trim()) return [];
@@ -31,9 +32,9 @@ export async function getBusinessReceivable(businessNameQuery: string) {
   const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
   const equipmentSelect = EQUIPMENT_FIELDS.map(f => `bi.${f}`).join(', ');
 
-  const [bizResult, pricingResult, recordsResult] = await Promise.all([
+  const [bizResult, pricingResult, recordsResult, dealerPricingByName] = await Promise.all([
     pgQuery(
-      `SELECT bi.id, bi.business_name, bi.progress_status, bi.installation_date,
+      `SELECT bi.id, bi.business_name, bi.progress_status, bi.installation_date, bi.manufacturer,
               bi.additional_cost, bi.negotiation, bi.revenue_adjustments,
               bi.invoice_additional_date,
               bi.invoice_1st_amount, bi.invoice_2nd_amount,
@@ -52,6 +53,7 @@ export async function getBusinessReceivable(businessNameQuery: string) {
        ORDER BY business_id, invoice_stage, record_type, created_at ASC`,
       ids
     ),
+    loadDealerPricingByName(),
   ]);
 
   const officialPrices: Record<string, number> = {};
@@ -62,7 +64,7 @@ export async function getBusinessReceivable(businessNameQuery: string) {
   const recordsMap = buildRecordsMap(ids, recordsResult.rows ?? []);
 
   const results = (bizResult.rows ?? []).map((biz: any) => {
-    const business = { ...biz, contract_amount: calculateContractAmount(biz, officialPrices) };
+    const business = { ...biz, contract_amount: calculateContractAmount(biz, officialPrices, dealerPricingByName) };
     const stages = recordsMap.get(biz.id) ?? {
       subsidy_1st: [], subsidy_2nd: [], subsidy_additional: [],
       self_advance: [], self_balance: [], extra: [],

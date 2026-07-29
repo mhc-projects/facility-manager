@@ -17,6 +17,8 @@
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { getManufacturerAliases } from '@/constants/manufacturers';
 import { resolveEquipmentCost, costLookupFromRows } from '@/constants/equipment-specs';
+import { isDealerBusiness, resolveDealerUnitPrice, type DealerPricingRow } from '@/lib/dealer-pricing';
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader';
 
 // ─── 타입 정의 ────────────────────────────────────────────────────────────────
 
@@ -86,6 +88,8 @@ export interface PreloadedMasterData {
   officialPriceMap: Record<string, any>;
   /** manufacturer_pricing — equipment_type → row, 제조사별 */
   manufacturerPricingByManufacturer: Record<string, Record<string, any>>;
+  /** dealer_pricing — equipment_name(한글명) → rows (대리점 사업장 매출단가 치환용) */
+  dealerPricingByName?: Record<string, DealerPricingRow[]>;
   /** equipment_installation_cost — equipment_type → base_installation_cost */
   installationCostMap: Record<string, number>;
   /** survey_cost_settings — survey_type → base_cost */
@@ -298,6 +302,13 @@ export async function calculateRevenue(
     console.warn(`제조사 '${manufacturer}'의 원가 데이터 없음:`, businessInfo.business_name);
   }
 
+  // 2-4. 대리점 판매가 조회 (진행구분이 '대리점'인 사업장만 — 매출단가를 dealer_pricing.dealer_selling_price로 치환)
+  const isDealer = isDealerBusiness(businessInfo.progress_status);
+  let dealerPricingByName: Record<string, DealerPricingRow[]> = {};
+  if (isDealer) {
+    dealerPricingByName = preloadedMasterData?.dealerPricingByName ?? (await loadDealerPricingByName());
+  }
+
   // 3. 영업비용 설정 조회
   const salesOffice = businessInfo.sales_office || '기본';
 
@@ -475,6 +486,15 @@ export async function calculateRevenue(
         unitRevenue = DEFAULT_OFFICIAL_PRICES[field] || 0;
       }
 
+      if (isDealer) {
+        const dealerPrice = resolveDealerUnitPrice(field, manufacturer, dealerPricingByName);
+        if (dealerPrice !== null) {
+          unitRevenue = dealerPrice;
+        } else {
+          console.warn(`⚠️ [SVC CALC] 대리점 판매가 없음 → 고시가로 폴백: ${field}`, businessInfo.business_name);
+        }
+      }
+
       const equipmentCost = resolveEquipmentCost(field, quantity, businessInfo, manufacturerCostLookup);
       const unitCost = equipmentCost.unitCost;
 
@@ -482,13 +502,17 @@ export async function calculateRevenue(
         console.warn(`⚠️ [SVC CALC] ${field}: 제조사별 원가 없음`);
       }
 
-      let baseInstallCost = installationCostMap[field] || 0;
-      if ((field === 'gateway_1_2' || field === 'gateway_3_4') && baseInstallCost === 0) {
-        baseInstallCost = installationCostMap['gateway'] || 0;
+      // 대리점 사업장은 설치를 대리점이 직접 진행하므로 설치비를 원가에 반영하지 않는다
+      let unitInstallation = 0;
+      if (!isDealer) {
+        let baseInstallCost = installationCostMap[field] || 0;
+        if ((field === 'gateway_1_2' || field === 'gateway_3_4') && baseInstallCost === 0) {
+          baseInstallCost = installationCostMap['gateway'] || 0;
+        }
+        const commonAdditionalCost = additionalCostMap['all'] || 0;
+        const equipmentAdditionalCost = additionalCostMap[field] || 0;
+        unitInstallation = baseInstallCost + commonAdditionalCost + equipmentAdditionalCost;
       }
-      const commonAdditionalCost = additionalCostMap['all'] || 0;
-      const equipmentAdditionalCost = additionalCostMap[field] || 0;
-      const unitInstallation = baseInstallCost + commonAdditionalCost + equipmentAdditionalCost;
 
       const itemRevenue = unitRevenue * quantity;
       const itemCost = equipmentCost.totalCost;
@@ -541,7 +565,7 @@ export async function calculateRevenue(
   // 6-1. 복수굴뚝 설치비 전용 추가 수량 반영
   const multipleStackInstallExtra = Number(businessInfo.multiple_stack_install_extra) || 0;
   if (multipleStackInstallExtra > 0) {
-    const unitInstallationExtra = installationCostMap['multiple_stack'] || 0;
+    const unitInstallationExtra = isDealer ? 0 : (installationCostMap['multiple_stack'] || 0);
     const extraInstallTotal = unitInstallationExtra * multipleStackInstallExtra;
     totalInstallationCosts += extraInstallTotal;
 
@@ -630,11 +654,14 @@ export async function calculateRevenue(
 
   const installationExtraCost = Number(businessInfo.installation_extra_cost) || 0;
 
+  // 대리점 사업장은 영업비를 지급하지 않으므로 영업비를 산정하지 않는다
   let salesCommission = 0;
-  if (commissionSettings.commission_type === 'percentage') {
-    salesCommission = commissionBaseRevenue * (commissionSettings.commission_percentage / 100);
-  } else {
-    salesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
+  if (!isDealer) {
+    if (commissionSettings.commission_type === 'percentage') {
+      salesCommission = commissionBaseRevenue * (commissionSettings.commission_percentage / 100);
+    } else {
+      salesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
+    }
   }
 
   // 9.1. 영업비용 조정 조회
@@ -770,6 +797,7 @@ export async function calculateRevenue(
         installation_costs: installationCostMap,
         additional_costs: additionalCostMap,
         calculation_date: calcDate,
+        ...(isDealer ? { is_dealer: true, dealer_prices: dealerPricingByName } : {}),
       };
 
       try {
@@ -867,11 +895,12 @@ export async function calculateRevenue(
  * survey_cost_settings 4개 테이블의 N+1 조회를 제거합니다.
  */
 export async function preloadMasterData(): Promise<PreloadedMasterData> {
-  const [pricingRows, manufacturerRows, installationRows, surveyCostRows] = await Promise.all([
+  const [pricingRows, manufacturerRows, installationRows, surveyCostRows, dealerPricingByName] = await Promise.all([
     queryAll('SELECT * FROM government_pricing WHERE is_active = $1', [true]),
     queryAll('SELECT * FROM manufacturer_pricing WHERE is_active = $1', [true]),
     queryAll('SELECT * FROM equipment_installation_cost WHERE is_active = $1', [true]),
     queryAll('SELECT * FROM survey_cost_settings WHERE is_active = $1', [true]),
+    loadDealerPricingByName(),
   ]);
 
   // government_pricing: equipment_type → row
@@ -918,5 +947,6 @@ export async function preloadMasterData(): Promise<PreloadedMasterData> {
     manufacturerPricingByManufacturer,
     installationCostMap,
     surveyCostMap,
+    dealerPricingByName,
   };
 }

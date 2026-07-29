@@ -16,6 +16,7 @@ import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import TwoStageDropdown from '@/components/ui/TwoStageDropdown';
 import { MANUFACTURER_NAMES } from '@/constants/manufacturers';
 import { calculateBusinessRevenue, type PricingData } from '@/lib/revenue-calculator';
+import { groupDealerPricingByName, type DealerPricingRow } from '@/lib/dealer-pricing';
 import { sumAllPayments } from '@/lib/receivables-calculator';
 import { allSteps } from '@/lib/task-steps';
 import { useAdminData } from '@/contexts/AdminDataContext';
@@ -183,6 +184,7 @@ function RevenueDashboard() {
   // 동적 가격 데이터
   const [officialPrices, setOfficialPrices] = useState<Record<string, number>>({});
   const [manufacturerPrices, setManufacturerPrices] = useState<Record<string, Record<string, number>>>({});
+  const [dealerPricingByName, setDealerPricingByName] = useState<Record<string, DealerPricingRow[]>>({});
   const [pricesLoaded, setPricesLoaded] = useState(false);
 
   // 영업비용 및 실사비용 데이터
@@ -585,7 +587,7 @@ function RevenueDashboard() {
 
   // 🚀 SessionStorage 캐싱 유틸리티
   // 캐시 버전: revenue_adjustments 포함된 데이터 구조 (변경 시 자동 무효화)
-  const CACHE_VERSION = 'v3_adj';
+  const CACHE_VERSION = 'v4_dealer';
   const CACHE_KEYS = {
     PRICING: `revenue_pricing_cache_${CACHE_VERSION}`,
     BUSINESSES: `revenue_businesses_cache_${CACHE_VERSION}`,
@@ -680,6 +682,7 @@ function RevenueDashboard() {
         });
         setOfficialPrices(normalizedOfficial);
         setManufacturerPrices(cachedPricing.manufacturer);
+        setDealerPricingByName(cachedPricing.dealer || {});
         setSalesOfficeSettings(cachedPricing.salesOffice);
         // 🔧 구버전 캐시 호환: 문자열로 저장된 숫자값을 변환
         const normalizedSurveyCost: Record<string, number> = {};
@@ -711,14 +714,16 @@ function RevenueDashboard() {
         salesOfficeResponse,
         surveyCostResponse,
         installCostResponse,
-        commissionResponse
+        commissionResponse,
+        dealerResponse
       ] = await Promise.all([
         fetch('/api/revenue/government-pricing', { headers: getAuthHeaders() }),
         fetch('/api/revenue/manufacturer-pricing', { headers: getAuthHeaders() }),
         fetch('/api/revenue/sales-office-settings', { headers: getAuthHeaders() }),
         fetch('/api/revenue/survey-costs', { headers: getAuthHeaders() }),
         fetch('/api/revenue/installation-cost', { headers: getAuthHeaders() }),
-        fetch('/api/revenue/commission-rates', { headers: getAuthHeaders() })
+        fetch('/api/revenue/commission-rates', { headers: getAuthHeaders() }),
+        fetch('/api/revenue/dealer-pricing', { headers: getAuthHeaders() })
       ]);
 
       // JSON 파싱도 병렬 처리
@@ -728,14 +733,16 @@ function RevenueDashboard() {
         salesOfficeData,
         surveyCostData,
         installCostData,
-        commissionData
+        commissionData,
+        dealerData
       ] = await Promise.all([
         govResponse.json(),
         manuResponse.json(),
         salesOfficeResponse.json(),
         surveyCostResponse.json(),
         installCostResponse.json(),
-        commissionResponse.json()
+        commissionResponse.json(),
+        dealerResponse.json()
       ]);
 
       // 환경부 고시가 처리
@@ -763,6 +770,11 @@ function RevenueDashboard() {
         setManufacturerPrices(manuPrices);
         console.log('✅ [PRICING] 제조사별 원가 로드 완료:', manuPrices);
         console.log('✅ [PRICING] 로드된 제조사 목록:', Object.keys(manuPrices));
+      }
+
+      // 대리점 판매가 처리 (진행구분이 '대리점'인 사업장의 매출단가 치환용)
+      if (dealerData.success) {
+        setDealerPricingByName(groupDealerPricingByName(dealerData.data || []));
       }
 
       // 영업점별 비용 설정 처리
@@ -827,6 +839,7 @@ function RevenueDashboard() {
           });
           return manuPrices;
         })() : {},
+        dealer: dealerData.success ? groupDealerPricingByName(dealerData.data || []) : {},
         salesOffice: salesOfficeData.success ? salesOfficeData.data.settings.reduce((acc: any, item: any) => {
           acc[item.sales_office] = { sales_cost_rate: item.sales_cost_rate };
           return acc;
@@ -1554,12 +1567,14 @@ function RevenueDashboard() {
   const pricingData = useMemo<PricingData>(() => ({
     officialPrices,
     manufacturerPrices,
+    dealerPricingByName,
     salesOfficeSettings,
     surveyCostSettings,
     baseInstallationCosts
   }), [
     officialPrices,
     manufacturerPrices,
+    dealerPricingByName,
     salesOfficeSettings,
     surveyCostSettings,
     baseInstallationCosts

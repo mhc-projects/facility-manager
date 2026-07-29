@@ -10,6 +10,7 @@ import {
   computeBusinessReceivableAsOf,
   type ReceivableBusiness,
 } from '@/lib/receivables-engine';
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader';
 import type { InvoiceRecordsByStage } from '@/types/invoice';
 
 export const dynamic = 'force-dynamic';
@@ -205,9 +206,9 @@ export async function GET(request: NextRequest) {
     //    동일하게 installation_date IS NOT NULL로 제한한다. 설치 전 사업장은 고시가 기반 계약금액이
     //    아직 실제 채권으로 간주되지 않아 제외해야 총액이 매출관리 화면과 맞는다.
     const equipmentSelect = EQUIPMENT_FIELDS.join(', ');
-    const [businesses, pricingRows]: [ReceivableRow[], any[]] = await Promise.all([
+    const [businesses, pricingRows, dealerPricingByName]: [ReceivableRow[], any[], any] = await Promise.all([
       queryAll(
-        `SELECT id, business_name, progress_status, installation_date,
+        `SELECT id, business_name, progress_status, installation_date, manufacturer,
           additional_cost, negotiation, revenue_adjustments,
           invoice_1st_amount, invoice_1st_date, payment_1st_amount, payment_1st_date,
           invoice_2nd_amount, invoice_2nd_date, payment_2nd_amount, payment_2nd_date,
@@ -221,6 +222,7 @@ export async function GET(request: NextRequest) {
       queryAll(
         `SELECT equipment_type, official_price FROM government_pricing WHERE is_active = true`
       ),
+      loadDealerPricingByName(),
     ]);
 
     const officialPrices: Record<string, number> = {};
@@ -263,7 +265,7 @@ export async function GET(request: NextRequest) {
       };
       const bizWithContract: ReceivableBusiness = {
         ...biz,
-        contract_amount: calculateContractAmount(biz, officialPrices),
+        contract_amount: calculateContractAmount(biz, officialPrices, dealerPricingByName),
       };
 
       const curResult = isLiveCurrentWeek

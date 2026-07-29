@@ -7,6 +7,7 @@
 import { calculateReceivables } from './receivables-calculator';
 import { mapProgressToCategory } from '@/types/invoice';
 import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
+import { resolveEquipmentUnitPrices, type DealerPricingRow } from '@/lib/dealer-pricing';
 
 export { mapProgressToCategory };
 
@@ -23,16 +24,22 @@ export const EQUIPMENT_FIELDS = [
 /**
  * 서버 사이드 contract_amount 계산
  * 환경부 고시가 × 수량 + 추가공사비 - 협의사항 + 매출비용조정 (부가세 포함)
+ * 진행구분이 '대리점'인 사업장은 dealerPricingByName이 주어지면 고시가 대신 대리점 판매가를 사용한다.
  */
 export function calculateContractAmount(
   business: Record<string, any>,
-  officialPrices: Record<string, number>
+  officialPrices: Record<string, number>,
+  dealerPricingByName?: Record<string, DealerPricingRow[]>
 ): number {
+  const prices = dealerPricingByName
+    ? resolveEquipmentUnitPrices(business.progress_status, business.manufacturer, officialPrices, dealerPricingByName)
+    : officialPrices;
+
   let revenue = 0;
   for (const field of EQUIPMENT_FIELDS) {
     const qty = Number(business[field]) || 0;
     if (qty > 0) {
-      revenue += (officialPrices[field] || 0) * qty;
+      revenue += (prices[field] || 0) * qty;
     }
   }
   revenue += Number(business.additional_cost) || 0;

@@ -16,6 +16,7 @@ import {
   computeBusinessReceivableNow,
   computeBusinessReceivableAsOf,
 } from '@/lib/receivables-engine'
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader'
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -147,7 +148,7 @@ export async function GET(request: NextRequest) {
     //    "미수금"이 시간이 지나며 오르내리는 진짜 총액 추이가 된다.
     const businessIds = filteredBusinesses.map((b: any) => b.id);
     const idPlaceholders = businessIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
-    const [pricingRows, recordsRows] = await Promise.all([
+    const [pricingRows, recordsRows, dealerPricingByName] = await Promise.all([
       queryAll(`SELECT equipment_type, official_price FROM government_pricing WHERE is_active = true`),
       businessIds.length
         ? queryAll(
@@ -159,6 +160,7 @@ export async function GET(request: NextRequest) {
             businessIds
           )
         : Promise.resolve([]),
+      loadDealerPricingByName(),
     ]);
 
     const officialPrices: Record<string, number> = {};
@@ -167,11 +169,11 @@ export async function GET(request: NextRequest) {
     }
     const recordsMap = buildRecordsMap(businessIds, recordsRows);
 
-    // contract_amount는 asOf와 무관하게 항상 현재 설비/고시가 기준 (과거 시점의 설비수량 변경까지는
-    // 추적하지 않는 근사치 — lib/receivables-engine의 기존 설계와 동일)
+    // contract_amount는 asOf와 무관하게 항상 현재 설비/고시가(또는 대리점 판매가) 기준 (과거 시점의
+    // 설비수량 변경까지는 추적하지 않는 근사치 — lib/receivables-engine의 기존 설계와 동일)
     const businessesWithContract = filteredBusinesses.map((b: any) => ({
       ...b,
-      contract_amount: calculateContractAmount(b, officialPrices),
+      contract_amount: calculateContractAmount(b, officialPrices, dealerPricingByName),
     }));
 
     const currentBucketKey = getCurrentTimeKey(aggregationLevel);

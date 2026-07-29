@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryAll, queryOne, query as pgQuery } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { resolveEquipmentUnitPrices, type DealerPricingRow } from '@/lib/dealer-pricing';
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,11 +18,17 @@ const EQUIPMENT_FIELDS = [
 ];
 
 // 매출관리 batch API의 calculateServerContractAmount와 동일한 로직
-function calculateContractAmount(row: any, officialPrices: Record<string, number>): number {
+// 진행구분이 '대리점'인 사업장은 고시가 대신 대리점 판매가(dealer_pricing.dealer_selling_price)를 사용한다.
+function calculateContractAmount(
+  row: any,
+  officialPrices: Record<string, number>,
+  dealerPricingByName: Record<string, DealerPricingRow[]>
+): number {
+  const prices = resolveEquipmentUnitPrices(row.progress_status, row.manufacturer, officialPrices, dealerPricingByName);
   let revenue = 0;
   for (const field of EQUIPMENT_FIELDS) {
     const qty = Number(row[field]) || 0;
-    if (qty > 0) revenue += (officialPrices[field] || 0) * qty;
+    if (qty > 0) revenue += (prices[field] || 0) * qty;
   }
   revenue += Number(row.additional_cost) || 0;
   revenue -= Number(row.negotiation) || 0;
@@ -37,7 +45,11 @@ function calculateContractAmount(row: any, officialPrices: Record<string, number
 }
 
 // 매출관리 receivables-calculator.ts의 calculateReceivables + sumAllPayments와 동일한 로직
-function computeReceivable(row: any, officialPrices: Record<string, number>): number {
+function computeReceivable(
+  row: any,
+  officialPrices: Record<string, number>,
+  dealerPricingByName: Record<string, DealerPricingRow[]>
+): number {
   const status = (row.progress_status || '').trim();
   const extraPayment = Number(row.extra_payment_total) || 0;
 
@@ -53,7 +65,7 @@ function computeReceivable(row: any, officialPrices: Record<string, number>): nu
       + extraPayment;
   }
 
-  const contractAmount = calculateContractAmount(row, officialPrices);
+  const contractAmount = calculateContractAmount(row, officialPrices, dealerPricingByName);
 
   // 설치일 없고 입금도 없고 계약금도 없으면 미수금 0
   if (!row.installation_date && totalPayments === 0 && contractAmount <= 0) return 0;
@@ -105,6 +117,9 @@ export async function GET(request: NextRequest) {
     );
     const officialPrices: Record<string, number> = {};
     pricingRows.forEach((r: any) => { officialPrices[r.equipment_type] = Number(r.official_price) || 0; });
+
+    // 대리점 판매가 조회 (진행구분이 '대리점'인 사업장의 계약금액/미수금 계산에 필요)
+    const dealerPricingByName = await loadDealerPricingByName();
 
     const equipmentSelect = EQUIPMENT_FIELDS.map(f => `bi.${f}`).join(', ');
 
@@ -193,7 +208,7 @@ export async function GET(request: NextRequest) {
       }
 
       // 미수금 계산 — 매출관리와 동일한 공식 (고시가 기반 계약금 - 실입금액)
-      const receivableAmount = computeReceivable(row, officialPrices);
+      const receivableAmount = computeReceivable(row, officialPrices, dealerPricingByName);
 
       // 영업비 산정: 매출관리 계산값 우선, 없으면 sales_office_cost_settings fallback
       let calculatedAmount = 0;

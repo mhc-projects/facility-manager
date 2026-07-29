@@ -9,6 +9,8 @@ import {
   generateAggregationKeys,
   type AggregationLevel
 } from '@/lib/dashboard-utils'
+import { isDealerBusiness, resolveDealerUnitPrice } from '@/lib/dealer-pricing'
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader'
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -106,6 +108,9 @@ export async function GET(request: NextRequest) {
       acc[item.equipment_type] = item;
       return acc;
     }, {} as Record<string, any>) || {};
+
+    // 2-0. 대리점 판매가 조회 (진행구분이 '대리점'인 사업장의 매출단가 치환용)
+    const dealerPricingByName = await loadDealerPricingByName();
 
     // 2-1. 제조사별 원가 정보 조회 - 직접 PostgreSQL 연결 사용
     const manufacturerPricingData = await queryAll(
@@ -291,6 +296,15 @@ export async function GET(request: NextRequest) {
       if (!manufacturerCosts) manufacturerCosts = {};
       const manufacturerCostLookup = costLookupFromNumbers(manufacturerCosts);
 
+      // 대리점 사업장 여부 (매출단가를 대리점 판매가로 치환)
+      // dealer_pricing.manufacturer는 한글명으로 저장되므로 rawManufacturer(영문 기본값)가 아닌
+      // 한글 기본값으로 매칭한다 (lib/services/revenue-calculator.ts와 동일한 기본값 규칙)
+      const isDealer = isDealerBusiness(business.progress_status);
+      const dealerManufacturer =
+        business.manufacturer && String(business.manufacturer).trim() !== ''
+          ? String(business.manufacturer).trim()
+          : '에코센스';
+
       // 매출/제조사 매입 계산
       let businessRevenue = 0;
       let manufacturerCost = 0;
@@ -317,8 +331,13 @@ export async function GET(request: NextRequest) {
         // ✅ 성능 최적화: 매출 단가 없으면 생략
         if (!priceInfo) return;
 
-        // 매출 = 환경부 고시가 × 수량
-        businessRevenue += priceInfo.official_price * quantity;
+        // 매출 = 환경부 고시가 × 수량 (대리점 사업장은 대리점 판매가로 치환)
+        let unitPrice = Number(priceInfo.official_price) || 0;
+        if (isDealer) {
+          const dealerPrice = resolveDealerUnitPrice(field, dealerManufacturer, dealerPricingByName);
+          if (dealerPrice !== null) unitPrice = dealerPrice;
+        }
+        businessRevenue += unitPrice * quantity;
 
         // 🔧 제조사별 원가 직접 사용 (DB에서 로드된 값만 사용, 전류계는 100A/400A 스펙별로 분기)
         // DEFAULT_COSTS 사용 안 함 - 사용자 명시적 요구사항
@@ -335,7 +354,8 @@ export async function GET(request: NextRequest) {
         manufacturerCost += equipmentCost.totalCost;
 
         // 기본 설치비 (equipment_installation_cost 테이블 - revenue-calculator.ts와 동일)
-        const installCost = installationCostMap[field] || 0;
+        // 대리점 사업장은 설치를 대리점이 직접 진행하므로 설치비를 반영하지 않는다
+        const installCost = isDealer ? 0 : (installationCostMap[field] || 0);
 
         totalInstallationCosts += installCost * quantity;
         totalEquipmentCount += quantity;
@@ -352,11 +372,14 @@ export async function GET(request: NextRequest) {
       const salesOffice = business.sales_office || '기본';
       const commissionSettings = salesSettingsMap.get(salesOffice) || defaultCommission;
 
+      // 대리점 사업장은 영업비를 지급하지 않으므로 영업비를 산정하지 않는다
       let adjustedSalesCommission = 0;
-      if (commissionSettings.commission_type === 'percentage') {
-        adjustedSalesCommission = adjustedRevenue * (commissionSettings.commission_percentage / 100);
-      } else {
-        adjustedSalesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
+      if (!isDealer) {
+        if (commissionSettings.commission_type === 'percentage') {
+          adjustedSalesCommission = adjustedRevenue * (commissionSettings.commission_percentage / 100);
+        } else {
+          adjustedSalesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
+        }
       }
 
       // 실사비용 계산 (매출관리와 동일: 실사일이 있는 경우에만 비용 추가, DB 조정값 미적용)

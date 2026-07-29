@@ -20,6 +20,7 @@ import {
   buildRecordsMap,
   computeBusinessReceivableNow,
 } from '@/lib/receivables-engine';
+import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader';
 import type { InvoiceRecordsByStage } from '@/types/invoice';
 import { requireAuth } from '@/lib/auth/require-auth';
 
@@ -62,9 +63,9 @@ async function handleIdsMode(ids: string[]) {
 
   // business_info + government_pricing 병렬 조회
   const equipmentSelect = EQUIPMENT_FIELDS.map(f => `bi.${f}`).join(', ');
-  const [bizResult, pricingResult, recordsResult] = await Promise.all([
+  const [bizResult, pricingResult, recordsResult, dealerPricingByName] = await Promise.all([
     pgQuery(
-      `SELECT bi.id, bi.progress_status, bi.installation_date,
+      `SELECT bi.id, bi.progress_status, bi.installation_date, bi.manufacturer,
               bi.additional_cost, bi.negotiation, bi.revenue_adjustments,
               bi.invoice_additional_date,
               bi.invoice_1st_amount, bi.invoice_2nd_amount,
@@ -87,6 +88,7 @@ async function handleIdsMode(ids: string[]) {
        ORDER BY business_id, invoice_stage, record_type, created_at ASC`,
       ids
     ),
+    loadDealerPricingByName(),
   ]);
 
   // 고시가 맵 구성
@@ -111,7 +113,7 @@ async function handleIdsMode(ids: string[]) {
     if (!biz) return null;
     return {
       ...biz,
-      contract_amount: calculateContractAmount(biz, officialPrices),
+      contract_amount: calculateContractAmount(biz, officialPrices, dealerPricingByName),
     };
   }).filter(Boolean);
 

@@ -11,12 +11,14 @@
  */
 
 import { resolveEquipmentCost, costLookupFromNumbers } from '@/constants/equipment-specs';
+import { resolveEquipmentUnitPrices, isDealerBusiness, type DealerPricingRow } from '@/lib/dealer-pricing';
 
 export interface BusinessInfo {
   id: string;
   business_name: string;
   sales_office?: string;
   manufacturer?: string;
+  progress_status?: string | null;
   additional_cost?: number;
   negotiation?: string | number;
   installation_extra_cost?: number;
@@ -44,6 +46,8 @@ export interface PricingData {
   salesOfficeSettings: Record<string, any>;
   surveyCostSettings: Record<string, number>;
   baseInstallationCosts: Record<string, number>;
+  /** dealer_pricing — equipment_name(한글명) → rows (대리점 사업장 매출단가 치환용) */
+  dealerPricingByName?: Record<string, DealerPricingRow[]>;
 }
 
 // 📍 Admin 대시보드와 동일한 측정기기 필드 정의
@@ -96,11 +100,27 @@ export function calculateBusinessRevenue(
     manufacturerPrices,
     salesOfficeSettings,
     surveyCostSettings,
-    baseInstallationCosts
+    baseInstallationCosts,
+    dealerPricingByName
   } = pricingData;
 
   // 사업장의 제조사 정보 (기본값: ecosense)
   const rawManufacturer = business.manufacturer || 'ecosense';
+
+  // 대리점 사업장이면 매출단가를 대리점 판매가로 치환 (없는 항목은 기존 고시가 폴백)
+  // dealer_pricing.manufacturer는 한글명으로 저장되므로 rawManufacturer(영문 기본값)가 아닌
+  // 한글 기본값으로 매칭한다 (lib/services/revenue-calculator.ts와 동일한 기본값 규칙)
+  const dealerManufacturer =
+    business.manufacturer && business.manufacturer.trim() !== '' ? business.manufacturer.trim() : '에코센스';
+  const effectiveOfficialPrices = resolveEquipmentUnitPrices(
+    business.progress_status,
+    dealerManufacturer,
+    officialPrices,
+    dealerPricingByName || {}
+  );
+  // 대리점 사업장은 설치를 대리점이 직접 진행하고 영업비도 지급하지 않으므로
+  // 설치비/영업비를 자동 계산하지 않는다
+  const isDealer = isDealerBusiness(business.progress_status);
 
   // 제조사 원가 맵 키 탐색 우선순위:
   // 1) 소문자 정규화 (영문 코드: ecosense)
@@ -138,7 +158,7 @@ export function calculateBusinessRevenue(
     // ✅ 성능 최적화: 수량이 0이면 계산 생략
     if (quantity <= 0) return;
 
-    const officialPrice = officialPrices[field];
+    const officialPrice = effectiveOfficialPrices[field];
 
     // ✅ 성능 최적화: 매출 단가 없으면 생략
     if (!officialPrice) return;
@@ -150,8 +170,8 @@ export function calculateBusinessRevenue(
     // DEFAULT_COSTS 사용 안 함 - 사용자 명시적 요구사항
     manufacturerCost += resolveEquipmentCost(field, quantity, business, manufacturerCostLookup).totalCost;
 
-    // 기본 설치비 (equipment_installation_cost 테이블)
-    const installCost = baseInstallationCosts[field] || 0;
+    // 기본 설치비 (equipment_installation_cost 테이블) — 대리점은 0
+    const installCost = isDealer ? 0 : (baseInstallationCosts[field] || 0);
     totalInstallationCosts += installCost * quantity;
     totalEquipmentCount += quantity;
   });
@@ -188,11 +208,14 @@ export function calculateBusinessRevenue(
     commission_per_unit: null
   };
 
+  // 대리점 사업장은 영업비를 지급하지 않으므로 영업비를 산정하지 않는다
   let salesCommission = 0;
-  if (commissionSettings.commission_type === 'percentage') {
-    salesCommission = commissionBaseRevenue * (commissionSettings.commission_percentage / 100);
-  } else {
-    salesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
+  if (!isDealer) {
+    if (commissionSettings.commission_type === 'percentage') {
+      salesCommission = commissionBaseRevenue * (commissionSettings.commission_percentage / 100);
+    } else {
+      salesCommission = totalEquipmentCount * (commissionSettings.commission_per_unit || 0);
+    }
   }
 
   // 실사비용 계산 (실사일이 있는 경우에만 비용 추가)
@@ -219,7 +242,7 @@ export function calculateBusinessRevenue(
   // 복수굴뚝 추가 수량 설치비 (기본설치비에 포함)
   const multipleStackInstallExtra = Number(business.multiple_stack_install_extra) || 0;
   if (multipleStackInstallExtra > 0) {
-    const unitInstallCost = baseInstallationCosts['multiple_stack'] || 0;
+    const unitInstallCost = isDealer ? 0 : (baseInstallationCosts['multiple_stack'] || 0);
     totalInstallationCosts += unitInstallCost * multipleStackInstallExtra;
   }
 
