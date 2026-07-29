@@ -10,6 +10,8 @@
  * - 순이익 = 총이익 - 영업비용 - 실사비용 - 기본설치비 - 추가설치비 - AS비용 - 커스텀비용
  */
 
+import { resolveEquipmentCost, costLookupFromNumbers } from '@/constants/equipment-specs';
+
 export interface BusinessInfo {
   id: string;
   business_name: string;
@@ -128,6 +130,8 @@ export function calculateBusinessRevenue(
   let totalInstallationCosts = 0;
   let totalEquipmentCount = 0;
 
+  const manufacturerCostLookup = costLookupFromNumbers(manufacturerCosts);
+
   EQUIPMENT_FIELDS.forEach(field => {
     const quantity = Number(business[field]) || 0;
 
@@ -142,11 +146,9 @@ export function calculateBusinessRevenue(
     // 매출 = 환경부 고시가 × 수량
     businessRevenue += officialPrice * quantity;
 
-    // 🔧 제조사별 원가 직접 사용 (DB에서 로드된 값만 사용)
+    // 🔧 제조사별 원가 직접 사용 (DB에서 로드된 값만 사용, 전류계는 100A/400A 스펙별로 분기)
     // DEFAULT_COSTS 사용 안 함 - 사용자 명시적 요구사항
-    let costPrice = manufacturerCosts[field] || 0;
-
-    manufacturerCost += costPrice * quantity;
+    manufacturerCost += resolveEquipmentCost(field, quantity, business, manufacturerCostLookup).totalCost;
 
     // 기본 설치비 (equipment_installation_cost 테이블)
     const installCost = baseInstallationCosts[field] || 0;

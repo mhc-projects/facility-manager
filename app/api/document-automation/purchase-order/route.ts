@@ -20,6 +20,7 @@ import type {
   PurchaseOrderDataEcosense,
   PurchaseOrderItem
 } from '@/types/document-automation'
+import { resolveEquipmentCost, costLookupFromNumbers } from '@/constants/equipment-specs'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -104,8 +105,11 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       differential_pressure_meter: business.differential_pressure_meter || 0,
       temperature_meter: business.temperature_meter || 0,
       discharge_ct: business.discharge_current_meter || 0,
+      discharge_ct_400a: Math.min(business.discharge_current_meter_400a || 0, business.discharge_current_meter || 0),
       fan_ct: business.fan_current_meter || 0,
+      fan_ct_400a: Math.min(business.fan_current_meter_400a || 0, business.fan_current_meter || 0),
       pump_ct: business.pump_current_meter || 0,
+      pump_ct_400a: Math.min(business.pump_current_meter_400a || 0, business.pump_current_meter || 0),
       gateway_1_2: business.gateway_1_2 || 0, // ✅ Gateway split fields
       gateway_3_4: business.gateway_3_4 || 0, // ✅ Gateway split fields
       vpn_router_wired: business.vpn_wired || 0,
@@ -168,6 +172,7 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       .from('manufacturer_pricing')
       .select('equipment_type, cost_price')
       .eq('manufacturer', business.manufacturer)
+      .eq('is_active', true)
       .is('effective_to', null) // 현재 적용중인 가격만
 
     if (pricingError) {
@@ -189,17 +194,44 @@ export const GET = withApiHandler(async (request: NextRequest) => {
     })
 
     // 발주서 품목 생성 (수량이 0보다 큰 것만)
+    // equipmentTypeMapping에 정의된 키만 순회 (discharge_ct_400a 등은 표시 전용 필드라 제외)
+    // 배출/송풍/펌프전류계는 100A/400A 스펙별로 단가가 다를 수 있어 2줄로 분리 생성
+    const unitPriceLookup = costLookupFromNumbers(unitPrices)
     const items: PurchaseOrderItem[] = []
-    Object.entries(equipment).forEach(([key, quantity]) => {
-      if (quantity > 0) {
-        const equipmentType = equipmentTypeMapping[key]
-        const unitPrice = unitPrices[equipmentType] || 0
+    Object.keys(equipmentTypeMapping).forEach((key) => {
+      const quantity = (equipment as Record<string, number>)[key] || 0
+      if (quantity <= 0) return
+      const equipmentType = equipmentTypeMapping[key]
+      const itemName = equipmentNames[key] || key
+      const cost = resolveEquipmentCost(equipmentType, quantity, business, unitPriceLookup)
+
+      if (cost.qty400 === undefined) {
         items.push({
-          item_name: equipmentNames[key] || key,
+          item_name: itemName,
           specification: '표준형',
           quantity,
-          unit_price: unitPrice,
-          total_price: quantity * unitPrice
+          unit_price: cost.unitCost,
+          total_price: cost.totalCost
+        })
+        return
+      }
+
+      if (cost.qty100! > 0) {
+        items.push({
+          item_name: itemName,
+          specification: '100A',
+          quantity: cost.qty100!,
+          unit_price: cost.unitCost100!,
+          total_price: cost.qty100! * cost.unitCost100!
+        })
+      }
+      if (cost.qty400 > 0) {
+        items.push({
+          item_name: itemName,
+          specification: '400A',
+          quantity: cost.qty400,
+          unit_price: cost.unitCost400!,
+          total_price: cost.qty400 * cost.unitCost400!
         })
       }
     })

@@ -18,6 +18,7 @@ const logError = (...args: any[]) => console.error(...args); // Always log error
 const REVENUE_AFFECTING_FIELDS = [
   'ph_meter', 'differential_pressure_meter', 'temperature_meter',
   'discharge_current_meter', 'fan_current_meter', 'pump_current_meter',
+  'discharge_current_meter_400a', 'fan_current_meter_400a', 'pump_current_meter_400a',
   'gateway', 'gateway_1_2', 'gateway_3_4', 'vpn_wired', 'vpn_wireless',
   'explosion_proof_differential_pressure_meter_domestic',
   'explosion_proof_temperature_meter_domestic', 'expansion_device',
@@ -43,6 +44,13 @@ function normalizeDateField(value: any): string | null {
   return value;
 }
 
+// 전류계 400A 부분수량이 총수량을 넘지 않도록 클램프 (0 <= 400a <= total)
+function clampSpec400(total: number, raw400: any): number {
+  const t = Math.max(0, Number(total) || 0);
+  const r = Math.max(0, parseInt(raw400 || '0') || 0);
+  return Math.min(r, t);
+}
+
 // Business data normalization - used by both batch upload and replaceAll
 function normalizeBusinessData(business: any, normalizedName: string) {
   return {
@@ -64,6 +72,9 @@ function normalizeBusinessData(business: any, normalizedName: string) {
     discharge_current_meter: parseInt(business.discharge_current_meter || '0') || 0,
     fan_current_meter: parseInt(business.fan_current_meter || '0') || 0,
     pump_current_meter: parseInt(business.pump_current_meter || '0') || 0,
+    discharge_current_meter_400a: clampSpec400(business.discharge_current_meter, business.discharge_current_meter_400a),
+    fan_current_meter_400a: clampSpec400(business.fan_current_meter, business.fan_current_meter_400a),
+    pump_current_meter_400a: clampSpec400(business.pump_current_meter, business.pump_current_meter_400a),
     gateway: parseInt(business.gateway || '0') || 0,
     gateway_1_2: parseInt(business.gateway_1_2 || '0') || 0,
     gateway_3_4: parseInt(business.gateway_3_4 || '0') || 0,
@@ -181,6 +192,7 @@ export async function GET(request: NextRequest) {
       updated_at, created_at, additional_info,
       ph_meter, differential_pressure_meter, temperature_meter,
       discharge_current_meter, fan_current_meter, pump_current_meter,
+      discharge_current_meter_400a, fan_current_meter_400a, pump_current_meter_400a,
       gateway, gateway_1_2, gateway_3_4,
       vpn_wired, vpn_wireless,
       explosion_proof_differential_pressure_meter_domestic,
@@ -309,6 +321,7 @@ export async function GET(request: NextRequest) {
         bi.updated_at, bi.created_at, bi.additional_info,
         bi.ph_meter, bi.differential_pressure_meter, bi.temperature_meter,
         bi.discharge_current_meter, bi.fan_current_meter, bi.pump_current_meter,
+        bi.discharge_current_meter_400a, bi.fan_current_meter_400a, bi.pump_current_meter_400a,
         bi.gateway, bi.gateway_1_2, bi.gateway_3_4,
         bi.vpn_wired, bi.vpn_wireless,
         bi.explosion_proof_differential_pressure_meter_domestic,
@@ -613,6 +626,16 @@ export async function PUT(request: NextRequest) {
     }
     if (updateData.pump_current_meter !== undefined) {
       updateObject.pump_current_meter = updateData.pump_current_meter === null ? null : parseInt(updateData.pump_current_meter) || 0;
+    }
+    // 전류계 400A 부분수량 (0 <= 값 <= 총수량 불변식은 읽기 시점 resolveEquipmentCost에서도 클램프됨)
+    if (updateData.discharge_current_meter_400a !== undefined) {
+      updateObject.discharge_current_meter_400a = updateData.discharge_current_meter_400a === null ? null : parseInt(updateData.discharge_current_meter_400a) || 0;
+    }
+    if (updateData.fan_current_meter_400a !== undefined) {
+      updateObject.fan_current_meter_400a = updateData.fan_current_meter_400a === null ? null : parseInt(updateData.fan_current_meter_400a) || 0;
+    }
+    if (updateData.pump_current_meter_400a !== undefined) {
+      updateObject.pump_current_meter_400a = updateData.pump_current_meter_400a === null ? null : parseInt(updateData.pump_current_meter_400a) || 0;
     }
     if (updateData.gateway !== undefined) {
       updateObject.gateway = updateData.gateway === null ? null : parseInt(updateData.gateway) || 0;
@@ -1190,6 +1213,9 @@ export async function POST(request: NextRequest) {
       discharge_current_meter: parseInt(businessData.discharge_current_meter || '0') || 0,
       fan_current_meter: parseInt(businessData.fan_current_meter || '0') || 0,
       pump_current_meter: parseInt(businessData.pump_current_meter || '0') || 0,
+      discharge_current_meter_400a: clampSpec400(businessData.discharge_current_meter, businessData.discharge_current_meter_400a),
+      fan_current_meter_400a: clampSpec400(businessData.fan_current_meter, businessData.fan_current_meter_400a),
+      pump_current_meter_400a: clampSpec400(businessData.pump_current_meter, businessData.pump_current_meter_400a),
       gateway: businessData.gateway,
       gateway_1_2: parseInt(businessData.gateway_1_2 || '0') || 0,
       gateway_3_4: parseInt(businessData.gateway_3_4 || '0') || 0,
@@ -1521,6 +1547,7 @@ async function executeSingleBatch(
     const integerFields = new Set([
       'ph_meter', 'differential_pressure_meter', 'temperature_meter',
       'discharge_current_meter', 'fan_current_meter', 'pump_current_meter',
+      'discharge_current_meter_400a', 'fan_current_meter_400a', 'pump_current_meter_400a',
       'gateway', 'gateway_1_2', 'gateway_3_4', 'vpn_wired', 'vpn_wireless',
       'multiple_stack', 'explosion_proof_differential_pressure_meter_domestic',
       'explosion_proof_temperature_meter_domestic', 'expansion_device',

@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAdminData } from '@/contexts/AdminDataContext'
 import { TokenManager } from '@/lib/api-client'
 import { getManufacturerName } from '@/constants/manufacturers'
+import { resolveEquipmentCost, chainCostLookups, costLookupFromNumbers } from '@/constants/equipment-specs'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
 import DateInput from '@/components/ui/DateInput'
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown'
@@ -212,8 +213,11 @@ interface UnifiedBusinessInfo {
   differential_pressure_meter?: number | null;
   temperature_meter?: number | null;
   discharge_current_meter?: number | null;
+  discharge_current_meter_400a?: number | null;
   fan_current_meter?: number | null;
+  fan_current_meter_400a?: number | null;
   pump_current_meter?: number | null;
+  pump_current_meter_400a?: number | null;
   gateway?: number | null; // @deprecated - Use gateway_1_2 and gateway_3_4 instead
   gateway_1_2?: number | null;
   gateway_3_4?: number | null;
@@ -270,8 +274,11 @@ interface UnifiedBusinessInfo {
   차압계?: number;
   온도계?: number;
   배출전류계?: number;
+  '배출전류계(400A)'?: number;
   송풍전류계?: number;
+  '송풍전류계(400A)'?: number;
   펌프전류계?: number;
+  '펌프전류계(400A)'?: number;
   게이트웨이?: number; // @deprecated
   '게이트웨이(1,2)'?: number;
   '게이트웨이(3,4)'?: number;
@@ -834,18 +841,23 @@ function BusinessManagementPage() {
     console.log('🔍 [원가 계산] 제조사별 원가 상태:', manufacturerCosts)
     console.log('🔍 [원가 계산] 하드코딩 상수:', MANUFACTURER_COSTS)
 
+    // 제조사별 원가: state에서 가져오고, 없으면 하드코딩 상수 사용 (전류계는 100A/400A 스펙별로 분기)
+    const manufacturerCostLookup = chainCostLookups(
+      costLookupFromNumbers(manufacturerCosts),
+      costLookupFromNumbers(MANUFACTURER_COSTS)
+    )
+
     EQUIPMENT_FIELDS.forEach(field => {
       const quantity = (business as any)[field] || 0
       if (quantity > 0) {
         const unitRevenue = OFFICIAL_PRICES[field] || 0
-        // 제조사별 원가: state에서 가져오고, 없으면 하드코딩 상수 사용
-        const unitCost = manufacturerCosts[field] || MANUFACTURER_COSTS[field] || 0
+        const equipmentCost = resolveEquipmentCost(field, quantity, business as any, manufacturerCostLookup)
         const unitInstallation = INSTALLATION_COSTS[field] || 0
 
-        console.log(`🔍 [원가 계산] ${field}: 수량=${quantity}, 매출=${unitRevenue}, 원가=${unitCost}, 설치비=${unitInstallation}`)
+        console.log(`🔍 [원가 계산] ${field}: 수량=${quantity}, 매출=${unitRevenue}, 원가=${equipmentCost.unitCost}, 설치비=${unitInstallation}`)
 
         totalRevenue += unitRevenue * quantity
-        totalCost += unitCost * quantity
+        totalCost += equipmentCost.totalCost
         totalInstallation += unitInstallation * quantity
       }
     })
@@ -2746,8 +2758,11 @@ function BusinessManagementPage() {
           differential_pressure_meter: business.differential_pressure_meter,
           temperature_meter: business.temperature_meter,
           discharge_current_meter: business.discharge_current_meter,
+          discharge_current_meter_400a: business.discharge_current_meter_400a || 0,
           fan_current_meter: business.fan_current_meter,
+          fan_current_meter_400a: business.fan_current_meter_400a || 0,
           pump_current_meter: business.pump_current_meter,
+          pump_current_meter_400a: business.pump_current_meter_400a || 0,
           gateway: business.gateway,
           gateway_1_2: business.gateway_1_2 || 0,
           gateway_3_4: business.gateway_3_4 || 0,
@@ -2804,8 +2819,11 @@ function BusinessManagementPage() {
           차압계: business.differential_pressure_meter || 0,
           온도계: business.temperature_meter || 0,
           배출전류계: business.discharge_current_meter || 0,
+          '배출전류계(400A)': business.discharge_current_meter_400a || 0,
           송풍전류계: business.fan_current_meter || 0,
+          '송풍전류계(400A)': business.fan_current_meter_400a || 0,
           펌프전류계: business.pump_current_meter || 0,
+          '펌프전류계(400A)': business.pump_current_meter_400a || 0,
           게이트웨이: business.gateway || 0, // @deprecated
           '게이트웨이(1,2)': business.gateway_1_2 || 0,
           '게이트웨이(3,4)': business.gateway_3_4 || 0,
@@ -3018,8 +3036,11 @@ function BusinessManagementPage() {
       differential_pressure_meter: null,
       temperature_meter: null,
       discharge_current_meter: null,
+      discharge_current_meter_400a: null,
       fan_current_meter: null,
+      fan_current_meter_400a: null,
       pump_current_meter: null,
+      pump_current_meter_400a: null,
       gateway: null,
       gateway_1_2: null,
       gateway_3_4: null,
@@ -3112,8 +3133,11 @@ function BusinessManagementPage() {
         differential_pressure_meter: freshData.differential_pressure_meter,
         temperature_meter: freshData.temperature_meter,
         discharge_current_meter: freshData.discharge_current_meter,
+        discharge_current_meter_400a: freshData.discharge_current_meter_400a,
         fan_current_meter: freshData.fan_current_meter,
+        fan_current_meter_400a: freshData.fan_current_meter_400a,
         pump_current_meter: freshData.pump_current_meter,
+        pump_current_meter_400a: freshData.pump_current_meter_400a,
         gateway: freshData.gateway,
         gateway_1_2: freshData.gateway_1_2,
         gateway_3_4: freshData.gateway_3_4,
@@ -3525,7 +3549,9 @@ function BusinessManagementPage() {
           'evs': '이브이에스',
           '이브이에스': '이브이에스',
           'weblesse': '위블레스',
-          '위블레스': '위블레스'
+          '위블레스': '위블레스',
+          'ecoon': '에코온',
+          '에코온': '에코온'
         }
 
         // 정확한 매칭
@@ -3548,6 +3574,9 @@ function BusinessManagementPage() {
         }
         if (normalized.includes('위블레스') || normalized.includes('weblesse')) {
           return '위블레스'
+        }
+        if (normalized.includes('에코온') || normalized.includes('ecoon')) {
+          return '에코온'
         }
 
         // 인식할 수 없는 값은 null 반환
@@ -3614,6 +3643,9 @@ function BusinessManagementPage() {
         discharge_current_meter: parseInt(row['배출전류계'] || '0') || 0,
         fan_current_meter: parseInt(row['송풍전류계'] || '0') || 0,
         pump_current_meter: parseInt(row['펌프전류계'] || '0') || 0,
+        discharge_current_meter_400a: Math.min(parseInt(row['배출전류계(400A)'] || '0') || 0, parseInt(row['배출전류계'] || '0') || 0),
+        fan_current_meter_400a: Math.min(parseInt(row['송풍전류계(400A)'] || '0') || 0, parseInt(row['송풍전류계'] || '0') || 0),
+        pump_current_meter_400a: Math.min(parseInt(row['펌프전류계(400A)'] || '0') || 0, parseInt(row['펌프전류계'] || '0') || 0),
 
         // 네트워크 장비
         gateway: parseInt(row['게이트웨이'] || '0') || 0, // @deprecated
@@ -3945,8 +3977,11 @@ function BusinessManagementPage() {
               'differential_pressure_meter': '차압계',
               'temperature_meter': '온도계',
               'discharge_current_meter': '배출전류계',
+              'discharge_current_meter_400a': '배출전류계(400A)',
               'fan_current_meter': '송풍전류계',
+              'fan_current_meter_400a': '송풍전류계(400A)',
               'pump_current_meter': '펌프전류계',
+              'pump_current_meter_400a': '펌프전류계(400A)',
               'gateway': '게이트웨이', // @deprecated
               'gateway_1_2': '게이트웨이(1,2)',
               'gateway_3_4': '게이트웨이(3,4)',
@@ -4169,10 +4204,16 @@ function BusinessManagementPage() {
               온도계: serverData.temperature_meter || null,
               discharge_current_meter: serverData.discharge_current_meter || null,
               배출전류계: serverData.discharge_current_meter || null,
+              discharge_current_meter_400a: serverData.discharge_current_meter_400a || null,
+              '배출전류계(400A)': serverData.discharge_current_meter_400a || null,
               fan_current_meter: serverData.fan_current_meter || null,
               송풍전류계: serverData.fan_current_meter || null,
+              fan_current_meter_400a: serverData.fan_current_meter_400a || null,
+              '송풍전류계(400A)': serverData.fan_current_meter_400a || null,
               pump_current_meter: serverData.pump_current_meter || null,
               펌프전류계: serverData.pump_current_meter || null,
+              pump_current_meter_400a: serverData.pump_current_meter_400a || null,
+              '펌프전류계(400A)': serverData.pump_current_meter_400a || null,
               gateway: serverData.gateway || null, // @deprecated
               게이트웨이: serverData.gateway || null, // @deprecated
               gateway_1_2: serverData.gateway_1_2 || null,
@@ -6250,36 +6291,87 @@ function BusinessManagementPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">배출전류계</label>
-                      <input
-                        type="number"
-                        value={formData.discharge_current_meter ?? ''}
-                        onChange={(e) => setFormData({...formData, discharge_current_meter: e.target.value ? parseInt(e.target.value) : null})}
-                        className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
-                        min="0"
-                        placeholder="0"
-                      />
+                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50 space-y-1.5">
+                        <input
+                          type="number"
+                          value={formData.discharge_current_meter ?? ''}
+                          onChange={(e) => setFormData({...formData, discharge_current_meter: e.target.value ? parseInt(e.target.value) : null})}
+                          className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                          min="0"
+                          placeholder="총 수량"
+                        />
+                        <div className="flex items-center gap-2">
+                          <label className="shrink-0 text-xs font-semibold text-blue-700">└ 400A</label>
+                          <input
+                            type="number"
+                            value={formData.discharge_current_meter_400a ?? ''}
+                            onChange={(e) => setFormData({...formData, discharge_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
+                            className="w-full px-2 py-1 border border-blue-200 rounded text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                            min="0"
+                            max={formData.discharge_current_meter ?? undefined}
+                            placeholder="0"
+                          />
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight">
+                          100A {Math.max(0, (formData.discharge_current_meter ?? 0) - (formData.discharge_current_meter_400a ?? 0))}대는 자동 계산됩니다
+                        </p>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">송풍전류계</label>
-                      <input
-                        type="number"
-                        value={formData.fan_current_meter ?? ''}
-                        onChange={(e) => setFormData({...formData, fan_current_meter: e.target.value ? parseInt(e.target.value) : null})}
-                        className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
-                        min="0"
-                        placeholder="0"
-                      />
+                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50 space-y-1.5">
+                        <input
+                          type="number"
+                          value={formData.fan_current_meter ?? ''}
+                          onChange={(e) => setFormData({...formData, fan_current_meter: e.target.value ? parseInt(e.target.value) : null})}
+                          className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                          min="0"
+                          placeholder="총 수량"
+                        />
+                        <div className="flex items-center gap-2">
+                          <label className="shrink-0 text-xs font-semibold text-blue-700">└ 400A</label>
+                          <input
+                            type="number"
+                            value={formData.fan_current_meter_400a ?? ''}
+                            onChange={(e) => setFormData({...formData, fan_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
+                            className="w-full px-2 py-1 border border-blue-200 rounded text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                            min="0"
+                            max={formData.fan_current_meter ?? undefined}
+                            placeholder="0"
+                          />
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight">
+                          100A {Math.max(0, (formData.fan_current_meter ?? 0) - (formData.fan_current_meter_400a ?? 0))}대는 자동 계산됩니다
+                        </p>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">펌프전류계</label>
-                      <input
-                        type="number"
-                        value={formData.pump_current_meter ?? ''}
-                        onChange={(e) => setFormData({...formData, pump_current_meter: e.target.value ? parseInt(e.target.value) : null})}
-                        className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
-                        min="0"
-                        placeholder="0"
-                      />
+                      <div className="border border-gray-200 rounded-lg p-2 bg-gray-50 space-y-1.5">
+                        <input
+                          type="number"
+                          value={formData.pump_current_meter ?? ''}
+                          onChange={(e) => setFormData({...formData, pump_current_meter: e.target.value ? parseInt(e.target.value) : null})}
+                          className="w-full px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-blue-500"
+                          min="0"
+                          placeholder="총 수량"
+                        />
+                        <div className="flex items-center gap-2">
+                          <label className="shrink-0 text-xs font-semibold text-blue-700">└ 400A</label>
+                          <input
+                            type="number"
+                            value={formData.pump_current_meter_400a ?? ''}
+                            onChange={(e) => setFormData({...formData, pump_current_meter_400a: e.target.value ? parseInt(e.target.value) : null})}
+                            className="w-full px-2 py-1 border border-blue-200 rounded text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                            min="0"
+                            max={formData.pump_current_meter ?? undefined}
+                            placeholder="0"
+                          />
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight">
+                          100A {Math.max(0, (formData.pump_current_meter ?? 0) - (formData.pump_current_meter_400a ?? 0))}대는 자동 계산됩니다
+                        </p>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">게이트웨이(1,2)</label>

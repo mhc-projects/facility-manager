@@ -328,7 +328,13 @@ export default function PurchaseOrderModal({
 
               {/* 전류계 타입 설정 */}
               <div className="bg-gray-50 rounded-lg p-2.5 sm:p-3">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">전류계 타입</h3>
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">전류계 구경(CT 사이즈)</h3>
+                <p className="text-[10px] sm:text-xs text-gray-500 mb-2 sm:mb-3">
+                  정격: 배출 100A {Math.max(0, (editedData.equipment?.discharge_ct || 0) - (editedData.equipment?.discharge_ct_400a || 0))}대 / 400A {editedData.equipment?.discharge_ct_400a || 0}대,
+                  {' '}송풍 100A {Math.max(0, (editedData.equipment?.fan_ct || 0) - (editedData.equipment?.fan_ct_400a || 0))}대 / 400A {editedData.equipment?.fan_ct_400a || 0}대,
+                  {' '}펌프 100A {Math.max(0, (editedData.equipment?.pump_ct || 0) - (editedData.equipment?.pump_ct_400a || 0))}대 / 400A {editedData.equipment?.pump_ct_400a || 0}대
+                  {' '}— 사업장정보에서 수정
+                </p>
                 <div className="space-y-1.5 sm:space-y-2">
                   <div>
                     <label className="block text-[11px] sm:text-xs md:text-sm font-medium text-gray-700 mb-1">

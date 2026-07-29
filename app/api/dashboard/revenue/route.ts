@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryAll } from '@/lib/supabase-direct'
 import { getManufacturerAliases } from '@/constants/manufacturers'
+import { resolveEquipmentCost, costLookupFromNumbers } from '@/constants/equipment-specs'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import {
   determineAggregationLevel,
@@ -288,6 +289,7 @@ export async function GET(request: NextRequest) {
         }
       }
       if (!manufacturerCosts) manufacturerCosts = {};
+      const manufacturerCostLookup = costLookupFromNumbers(manufacturerCosts);
 
       // 매출/제조사 매입 계산
       let businessRevenue = 0;
@@ -318,19 +320,19 @@ export async function GET(request: NextRequest) {
         // 매출 = 환경부 고시가 × 수량
         businessRevenue += priceInfo.official_price * quantity;
 
-        // 🔧 제조사별 원가 직접 사용 (DB에서 로드된 값만 사용)
+        // 🔧 제조사별 원가 직접 사용 (DB에서 로드된 값만 사용, 전류계는 100A/400A 스펙별로 분기)
         // DEFAULT_COSTS 사용 안 함 - 사용자 명시적 요구사항
-        let costPrice = manufacturerCosts[field] || 0;
+        const equipmentCost = resolveEquipmentCost(field, quantity, business, manufacturerCostLookup);
 
         // 🐛 디버깅: gateway_1_2 계산 추적
         if (aggregationKey === '2025-07' && field === 'gateway_1_2' && quantity > 0) {
           console.log(`[DEBUG] ✅ Gateway_1_2 계산 중: ${business.business_name}`);
           console.log(`[DEBUG]   - 수량: ${quantity}개`);
-          console.log(`[DEBUG]   - 원가: ${costPrice.toLocaleString()}원`);
-          console.log(`[DEBUG]   - 매입: ${(costPrice * quantity).toLocaleString()}원`);
+          console.log(`[DEBUG]   - 원가: ${equipmentCost.unitCost.toLocaleString()}원`);
+          console.log(`[DEBUG]   - 매입: ${equipmentCost.totalCost.toLocaleString()}원`);
         }
 
-        manufacturerCost += costPrice * quantity;
+        manufacturerCost += equipmentCost.totalCost;
 
         // 기본 설치비 (equipment_installation_cost 테이블 - revenue-calculator.ts와 동일)
         const installCost = installationCostMap[field] || 0;

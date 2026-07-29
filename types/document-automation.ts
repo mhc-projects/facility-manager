@@ -82,8 +82,11 @@ export interface PurchaseOrderData {
     differential_pressure_meter: number
     temperature_meter: number
     discharge_ct: number
+    discharge_ct_400a?: number // 배출전류계 중 400A 사양 수량 (나머지는 100A)
     fan_ct: number
+    fan_ct_400a?: number // 송풍전류계 중 400A 사양 수량 (나머지는 100A)
     pump_ct: number
+    pump_ct_400a?: number // 펌프전류계 중 400A 사양 수량 (나머지는 100A)
     gateway_1_2: number // ✅ Gateway split fields
     gateway_3_4: number // ✅ Gateway split fields
     vpn_router_wired: number

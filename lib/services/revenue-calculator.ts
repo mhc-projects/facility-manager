@@ -16,6 +16,7 @@
 
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { getManufacturerAliases } from '@/constants/manufacturers';
+import { resolveEquipmentCost, costLookupFromRows } from '@/constants/equipment-specs';
 
 // ─── 타입 정의 ────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export interface EquipmentBreakdown {
   total_cost: number;
   total_installation: number;
   profit: number;
+  /** 전류계 등 스펙 분기가 있는 항목의 100A/400A 수량·단가 요약 (표시 전용) */
+  spec_note?: string;
 }
 
 export interface CostBreakdown {
@@ -436,6 +439,8 @@ export async function calculateRevenue(
   let totalEquipmentCount = 0;
   const equipmentBreakdown: EquipmentBreakdown[] = [];
 
+  const manufacturerCostLookup = costLookupFromRows(manufacturerCostMap);
+
   for (const field of equipmentFields) {
     const quantity = businessInfo[field] || 0;
 
@@ -470,10 +475,10 @@ export async function calculateRevenue(
         unitRevenue = DEFAULT_OFFICIAL_PRICES[field] || 0;
       }
 
-      const manufacturerCost = manufacturerCostMap[field];
-      let unitCost = manufacturerCost ? Number(manufacturerCost.cost_price) || 0 : 0;
+      const equipmentCost = resolveEquipmentCost(field, quantity, businessInfo, manufacturerCostLookup);
+      const unitCost = equipmentCost.unitCost;
 
-      if (unitCost === 0 && quantity > 0) {
+      if (equipmentCost.totalCost === 0 && quantity > 0) {
         console.warn(`⚠️ [SVC CALC] ${field}: 제조사별 원가 없음`);
       }
 
@@ -486,7 +491,7 @@ export async function calculateRevenue(
       const unitInstallation = baseInstallCost + commonAdditionalCost + equipmentAdditionalCost;
 
       const itemRevenue = unitRevenue * quantity;
-      const itemCost = unitCost * quantity;
+      const itemCost = equipmentCost.totalCost;
       const itemInstallation = unitInstallation * quantity;
 
       totalRevenue += itemRevenue;
@@ -528,6 +533,7 @@ export async function calculateRevenue(
         total_cost: itemCost,
         total_installation: itemInstallation,
         profit: itemRevenue - itemCost - itemInstallation,
+        spec_note: equipmentCost.specNote,
       });
     }
   }

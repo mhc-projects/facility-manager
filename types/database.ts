@@ -38,8 +38,11 @@ export interface BusinessInfo {
   differential_pressure_meter: number
   temperature_meter: number
   discharge_current_meter: number
+  discharge_current_meter_400a: number
   fan_current_meter: number
+  fan_current_meter_400a: number
   pump_current_meter: number
+  pump_current_meter_400a: number
   gateway: number
   vpn_wired: number
   vpn_wireless: number
