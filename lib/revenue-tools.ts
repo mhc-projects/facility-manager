@@ -10,7 +10,7 @@ import {
 } from '@/lib/receivables-engine';
 import { loadDealerPricingByName } from '@/lib/services/dealer-pricing-loader';
 
-async function findBusinessesByName(nameQuery: string, limit = 5) {
+export async function findBusinessesByName(nameQuery: string, limit = 5) {
   if (!nameQuery.trim()) return [];
   const result = await pgQuery(
     `SELECT id, business_name FROM business_info

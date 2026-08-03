@@ -6,6 +6,7 @@ import { getEmbedding } from '@/lib/embedding';
 import { verifyToken } from '@/utils/auth';
 import { generateStream, decideToolCalls, type ToolDef } from '@/lib/gemini-chat';
 import { getBusinessReceivable, getInvoiceStatus, getRevenueSummary } from '@/lib/revenue-tools';
+import { getBusinessProfile, findBusinessesByStatus, findBusinessesByStage } from '@/lib/business-info-tools';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -63,6 +64,66 @@ async function executeRevenueTool(call: { name: string; arguments: Record<string
       return getInvoiceStatus(String(call.arguments.business_name ?? ''));
     case 'get_revenue_summary':
       return getRevenueSummary(String(call.arguments.start_date ?? ''), String(call.arguments.end_date ?? ''));
+    default:
+      return null;
+  }
+}
+
+const BUSINESS_INFO_TOOLS: ToolDef[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_business_profile',
+      description: '특정 사업장 "하나"의 등록정보(주소, 담당자, 진행상태, 현재 업무단계, 제출현황, 장비수량, 관련 업무 등)를 조회한다. 사업장명이 명확한 질문에 사용한다.',
+      parameters: {
+        type: 'object',
+        properties: { business_name: { type: 'string', description: '사업장명 (전체 또는 일부)' } },
+        required: ['business_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_businesses_by_status',
+      description: '진행 상태·제출 여부 조건에 맞는 사업장 "목록"을 검색한다 (예: 설치완료했지만 그린링크 전송확인서 미제출인 사업장, 착공신고서 제출 안 한 사업장 등). 특정 사업장 하나가 아니라 조건에 맞는 여러 사업장을 찾을 때 사용한다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          installation_completed: { type: 'boolean', description: '설치완료 여부' },
+          order_placed: { type: 'boolean', description: '발주 여부' },
+          construction_report_submitted: { type: 'boolean', description: '착공신고서 제출 여부' },
+          greenlink_confirmation_submitted: { type: 'boolean', description: '그린링크 전송확인서 제출 여부' },
+          attachment_completion_submitted: { type: 'boolean', description: '부착완료통보 제출 여부' },
+          progress_status: { type: 'string', description: '진행구분 (예: 자비, 보조금, 보조금(5년경과))' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_businesses_by_stage',
+      description: '현재 업무단계(사업장관리 목록의 "현재단계"와 동일)로 사업장 "목록"을 검색한다 (예: 실사예정 단계인 사업장, 발주필요 상태인 자비 사업장, 업무 미등록 사업장 등). 단계 키워드는 "현재단계" 표시 문구 일부(예: 실사예정, 발주필요, 업무 미등록, 업무 완료)로 지정한다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          stage_keyword: { type: 'string', description: '현재단계 문구에 포함될 키워드 (예: 실사예정, 발주필요, 업무 미등록, 업무 완료)' },
+          task_type: { type: 'string', description: '업무유형 (자비, 보조금, A/S, 대리점, 외주설치 중 하나)' },
+        },
+      },
+    },
+  },
+];
+
+async function executeBusinessInfoTool(call: { name: string; arguments: Record<string, unknown> }) {
+  switch (call.name) {
+    case 'get_business_profile':
+      return getBusinessProfile(String(call.arguments.business_name ?? ''));
+    case 'find_businesses_by_status':
+      return findBusinessesByStatus(call.arguments as Record<string, unknown>);
+    case 'find_businesses_by_stage':
+      return findBusinessesByStage(call.arguments as Record<string, unknown>);
     default:
       return null;
   }
@@ -212,6 +273,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 2.7 사업장 등록정보 조회 (실시간 도구 호출, 로그인 사용자 전체)
+    // 주소/담당자/진행상태/장비수량 등은 매출/미수금과 달리 민감도가 낮아 매출 조회처럼
+    // 관리자 권한으로 제한하지 않고 사업장 메모 검색과 동일하게 로그인 여부만 확인한다.
+    let businessInfoContext: string | null = null;
+    if (isAuthenticated) {
+      try {
+        const toolCalls = await decideToolCalls(
+          question,
+          BUSINESS_INFO_TOOLS,
+          `사업장관리에 등록된 정보(주소, 담당자, 진행상태, 현재 업무단계, 제출현황, 장비수량, 관련 업무 등) 조회가 필요할 때만 도구를 호출하세요.
+- 사업장명이 특정된 질문(예: "OO사업장 정보 알려줘")이면 get_business_profile을 호출하세요.
+- 제출 여부·설치완료 등 조건에 맞는 여러 사업장을 찾는 질문(예: "설치완료했지만 그린링크 미제출인 사업장", "착공신고서 제출 안 한 사업장 알려줘")이면 find_businesses_by_status를 호출하세요.
+- 업무단계(현재단계)로 여러 사업장을 찾는 질문(예: "실사예정 단계인 사업장 알려줘", "발주필요 상태인 자비 사업장 목록")이면 find_businesses_by_stage를 호출하세요.
+그 외 질문에는 도구를 호출하지 마세요.`
+        );
+        if (toolCalls.length > 0) {
+          const results = await Promise.all(toolCalls.map(executeBusinessInfoTool));
+          businessInfoContext = `[사업장 등록정보 조회 결과]\n${results
+            .filter(Boolean)
+            .map(r => JSON.stringify(r))
+            .join('\n\n')}`;
+          console.log(`[QA] business info tools → ${toolCalls.map(t => t.name).join(', ')}`);
+        }
+      } catch (bizErr) {
+        console.error('[QA] business info tool error:', bizErr);
+      }
+    }
+
     // 3. 공지사항 + 전달사항 최근 항목 조회
     const [announcementsRes, messagesRes] = await Promise.all([
       supabaseAdmin
@@ -253,7 +342,7 @@ export async function POST(request: NextRequest) {
         ).join('\n\n')}`
       : null;
 
-    if (!scored.length && !boardContext && !memoContext && !revenueContext) {
+    if (!scored.length && !boardContext && !memoContext && !revenueContext && !businessInfoContext) {
       return NextResponse.json(
         { answer: '해당 지침에서 관련 내용을 찾지 못했습니다. 다른 키워드로 질문해보세요.' },
         { status: 200 }
@@ -283,6 +372,8 @@ export async function POST(request: NextRequest) {
 5. 공지사항이나 전달사항에서 관련 내용을 찾았을 경우, 해당 공지의 작성자와 날짜를 언급하세요.
 6. 사업장 메모에서 관련 내용을 찾았을 경우, 반드시 해당 사업장명을 답변에 명시하세요.
 7. 매출/미수금 조회 결과가 있으면 그 안의 숫자만 그대로 인용하세요. 직접 계산하거나 추정하지 마세요. found:false인 항목은 "조회되지 않음"으로 안내하세요.
+8. 사업장 등록정보 조회 결과가 있으면 항목별로 정리해서 안내하고, 값이 없는 항목은 "등록되지 않음"으로 안내하세요. "현재단계"는 사업장관리 목록에 표시되는 현재 업무단계이니 질문에 단계/진행상황이 포함되면 반드시 언급하세요. 관련 업무가 있으면 상태와 기한도 함께 안내하세요.
+9. 사업장 목록 조회 결과(find_businesses_by_status, find_businesses_by_stage)가 있으면 사업장명을 목록으로 나열하세요. truncated:true일 때만 "결과가 더 있을 수 있다"고 안내하고, false이거나 없으면 이 문구를 언급하지 마세요.
 
 ${wikiContext ? `[업무처리지침]\n${wikiContext}` : ''}
 
@@ -291,6 +382,8 @@ ${boardContext ? `[회사 공지사항 및 전달사항]\n${boardContext}` : ''}
 ${memoContext ?? ''}
 
 ${revenueContext ?? ''}
+
+${businessInfoContext ?? ''}
 
 [질문]
 ${question}`;
