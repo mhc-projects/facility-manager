@@ -39,6 +39,13 @@ interface AuthContextType {
     canDeleteAutoMemos: boolean; // 시스템 관리자만 자동 메모 삭제 가능
     isSpecialAccount: boolean;   // 특별 접근 제어 계정 (permission_level 변경에 영향받지 않음)
   } | null;
+  // 관리자설정 "메뉴 노출 설정"/"메뉴별 필요 권한 레벨"에서 걸린 사이드바 규칙 { href: ... }.
+  // department/team처럼 인증 응답에 같이 실어 보내서, 사이드바가 별도로 fetch할 필요 없이
+  // user와 동시에 확보되게 한다 (그렇지 않으면 새로고침할 때마다 메뉴가 잠깐 없다가 나타나는 깜빡임이 생김).
+  // userMenuOverrides(개인 지정)는 requiredLevel까지 뚫을 수 있고, teamMenuOverrides(팀 지정)는 못 뚫는다.
+  userMenuOverrides: Record<string, boolean> | null;
+  teamMenuOverrides: Record<string, boolean> | null;
+  requiredLevelOverrides: Record<string, number> | null;
   loading: boolean;
   socialLogin: (token: string, userData: any, isNewUser: boolean) => Promise<{ success: boolean; error?: string }>;
   emailLogin: (token: string, userData: any) => Promise<{ success: boolean; error?: string }>;
@@ -52,6 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Employee | null>(null);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[] | null>(null);
   const [permissions, setPermissions] = useState<AuthContextType['permissions']>(null);
+  const [userMenuOverrides, setUserMenuOverrides] = useState<Record<string, boolean> | null>(null);
+  const [teamMenuOverrides, setTeamMenuOverrides] = useState<Record<string, boolean> | null>(null);
+  const [requiredLevelOverrides, setRequiredLevelOverrides] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
 
   // 일반 로그인 핸들러
@@ -66,6 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // AdminLayout의 (!authLoading && !user) 조건이 잘못 발동하지 않음
       setUser(userData.user);
       setPermissions(userData.permissions);
+      setUserMenuOverrides(userData.userMenuOverrides || {});
+      setTeamMenuOverrides(userData.teamMenuOverrides || {});
+      setRequiredLevelOverrides(userData.requiredLevelOverrides || {});
       setSocialAccounts([]); // 일반 로그인은 소셜 계정 없음
 
       console.log('✅ [AUTH-CONTEXT] 일반 로그인 성공:', {
@@ -80,6 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       TokenManager.removeToken();
       setUser(null);
       setPermissions(null);
+      setUserMenuOverrides(null);
+      setTeamMenuOverrides(null);
+      setRequiredLevelOverrides(null);
       setLoading(false);
       return {
         success: false,
@@ -101,6 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.success && response.data) {
         setUser(response.data.user);
         setPermissions(response.data.permissions);
+        setUserMenuOverrides(response.data.userMenuOverrides || {});
+        setTeamMenuOverrides(response.data.teamMenuOverrides || {});
+        setRequiredLevelOverrides(response.data.requiredLevelOverrides || {});
         setSocialAccounts(response.data.socialAccounts || []);
 
         console.log('✅ [AUTH-CONTEXT] 소셜 로그인 성공:', {
@@ -138,6 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setPermissions(null);
+      setUserMenuOverrides(null);
+      setTeamMenuOverrides(null);
+      setRequiredLevelOverrides(null);
       setSocialAccounts(null);
       TokenManager.removeToken();
     }
@@ -153,6 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🔒 [AUTH-CONTEXT] 토큰 없음 - 공개 페이지 접근');
         setUser(null);
         setPermissions(null);
+        setUserMenuOverrides(null);
+        setTeamMenuOverrides(null);
+        setRequiredLevelOverrides(null);
         setSocialAccounts(null);
         setLoading(false); // 즉시 로딩 완료
         return;
@@ -164,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.success && response.data) {
         setUser(response.data.user);
         setPermissions(response.data.permissions);
+        setUserMenuOverrides(response.data.userMenuOverrides || {});
+        setTeamMenuOverrides(response.data.teamMenuOverrides || {});
+        setRequiredLevelOverrides(response.data.requiredLevelOverrides || {});
         setSocialAccounts(response.data.socialAccounts || []);
         console.log('✅ [AUTH-CONTEXT] 인증 성공:', response.data.user?.name);
       } else {
@@ -172,6 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         TokenManager.removeToken();
         setUser(null);
         setPermissions(null);
+        setUserMenuOverrides(null);
+        setTeamMenuOverrides(null);
+        setRequiredLevelOverrides(null);
         setSocialAccounts(null);
       }
     } catch (error: any) {
@@ -191,6 +222,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         TokenManager.removeToken();
         setUser(null);
         setPermissions(null);
+        setUserMenuOverrides(null);
+        setTeamMenuOverrides(null);
+        setRequiredLevelOverrides(null);
         setSocialAccounts(null);
       } else {
         console.error('❌ [AUTH-CONTEXT] 인증 확인 오류:', error);
@@ -232,6 +266,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     socialAccounts,
     permissions,
+    userMenuOverrides,
+    teamMenuOverrides,
+    requiredLevelOverrides,
     loading,
     socialLogin,
     emailLogin,

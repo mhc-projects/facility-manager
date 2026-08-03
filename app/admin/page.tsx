@@ -81,8 +81,10 @@ export default function AdminDashboard() {
       // ✅ localStorage 토큰을 헤더로 전달 (모바일 호환성)
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 
-      // 사용자 정보 조회 (쿠키 + Authorization 헤더)
-      const response = await fetch('/api/auth/me', {
+      // 사용자 정보 조회 (쿠키 + Authorization 헤더) - /api/auth/me 대신 verify를 써서
+      // 관리자설정의 메뉴 노출 규칙 · 필요 권한 레벨 재정의도 사이드바와 동일한 소스로 같이 받아온다
+      const response = await fetch('/api/auth/verify', {
+        method: 'POST',
         credentials: 'include',
         headers: token ? {
           'Authorization': `Bearer ${token}`
@@ -97,16 +99,16 @@ export default function AdminDashboard() {
 
       const userData = await response.json()
 
-      if (!userData.success || !userData.user) {
+      if (!userData.success || !userData.data?.user) {
         router.push('/login?redirect=/admin')
         return
       }
 
       const user: AuthUser = {
-        id: userData.user.id,
-        name: userData.user.name,
-        email: userData.user.email,
-        permission_level: userData.user.permission_level || 1
+        id: userData.data.user.id,
+        name: userData.data.user.name,
+        email: userData.data.user.email,
+        permission_level: userData.data.user.permission_level || 1
       }
 
       // 특별 계정 접근 차단 (permission_level과 무관하게 적용)
@@ -115,10 +117,15 @@ export default function AdminDashboard() {
         return
       }
 
-      // 권한 확인 (ADMIN = 레벨 3 이상 필요)
-      const authResult = AuthGuard.checkComponentAccess(AuthLevel.ADMIN, user)
+      // 권한 확인 - 관리자설정에서 이 메뉴의 필요 권한 레벨을 재정의했으면 그 값을 우선 사용 (기본 ADMIN=3)
+      const requiredLevel = (userData.data.requiredLevelOverrides?.['/admin'] ?? AuthLevel.ADMIN) as AuthLevel
+      const authResult = AuthGuard.checkComponentAccess(requiredLevel, user)
 
-      if (!authResult.allowed) {
+      // 시스템관리자가 "사용자" 단위로 이 계정에 대시보드를 개별 허용해뒀으면 레벨 부족이어도 통과시킨다
+      // (사이드바의 userMenuOverrides와 동일한 규칙 - 팀 단위 규칙은 여기서 반영되지 않는다)
+      const hasUserOverride = userData.data.userMenuOverrides?.['/admin'] === true
+
+      if (!authResult.allowed && !hasUserOverride) {
         console.warn(`[ADMIN] Access denied - User level: ${authResult.userLevel}, Required: ${authResult.requiredLevel}`)
 
         // 권한 부족 - alert()는 페이지 전체를 멈추게 하므로 사용하지 않고 바로 리다이렉트

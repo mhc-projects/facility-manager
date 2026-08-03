@@ -26,6 +26,7 @@ import {
   ArrowRight,
   RefreshCw,
   ListOrdered,
+  Eye,
 } from 'lucide-react';
 import {
   DndContext,
@@ -45,10 +46,11 @@ import {
 import { SortableItem } from '@/components/admin/SortableItem';
 import TaskStagesTab from '@/components/admin/TaskStagesTab';
 import OrganizationManagement from '@/components/admin/OrganizationManagement';
+import MenuVisibilityTab from '@/components/admin/MenuVisibilityTab';
 import { TokenManager } from '@/lib/api-client';
 
 // 탭 타입 정의
-type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers' | 'progress-categories' | 'task-stages';
+type SettingsTab = 'delay-criteria' | 'organization' | 'manufacturers' | 'progress-categories' | 'task-stages' | 'menu-visibility';
 
 // 제조사 타입
 interface Manufacturer {
@@ -123,7 +125,7 @@ function AdminSettingsContent() {
 
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers', 'progress-categories', 'task-stages'].includes(tabFromUrl)
+    tabFromUrl && ['delay-criteria', 'organization', 'manufacturers', 'progress-categories', 'task-stages', 'menu-visibility'].includes(tabFromUrl)
       ? tabFromUrl
       : 'delay-criteria'
   );
@@ -665,6 +667,13 @@ function AdminSettingsContent() {
       icon: ListOrdered,
       description: '진행구분별 업무 단계 항목 관리 및 순서 설정'
     },
+    // 시스템관리자(권한4) 전용 — 탭 목록 자체에서 감춤 (레벨3 이하는 탭 존재를 알 수 없어야 함)
+    ...(isSystemAdmin ? [{
+      id: 'menu-visibility' as const,
+      name: '메뉴 노출 설정',
+      icon: Eye,
+      description: '팀별/사용자별 사이드바 메뉴 표시 여부 설정'
+    }] : []),
   ];
 
   // 탭별 액션 버튼 렌더링
@@ -1252,6 +1261,13 @@ function AdminSettingsContent() {
           {/* 업무단계 관리 탭 */}
           {activeTab === 'task-stages' && (
             <TaskStagesTab
+              onMessage={(type, text) => setMessage({ type, text })}
+            />
+          )}
+
+          {/* 메뉴 노출 설정 탭 - 시스템관리자(권한4) 전용. URL로 직접 접근해도 이 가드로 막는다 */}
+          {activeTab === 'menu-visibility' && isSystemAdmin && (
+            <MenuVisibilityTab
               onMessage={(type, text) => setMessage({ type, text })}
             />
           )}

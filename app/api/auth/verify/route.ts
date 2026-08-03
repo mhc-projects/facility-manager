@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryOne, queryAll } from '@/lib/supabase-direct';
 import { isSpecialAccount } from '@/lib/auth/special-accounts';
+import { loadMenuConfigForUser } from '@/lib/auth/menu-config-for-user';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -110,6 +111,11 @@ export async function POST(request: NextRequest) {
     // 특별 계정 여부 확인 (permission_level과 무관하게 고정)
     const specialAccount = isSpecialAccount(employee.email);
 
+    // 관리자설정 "메뉴 노출 설정"에서 이 사용자/팀에게 걸린 사이드바 규칙 - user/department처럼
+    // 인증 응답에 같이 실어 보내야 사이드바가 별도 fetch 없이 첫 렌더부터 반영해 깜빡임이 없다.
+    const { userMenuOverrides, teamMenuOverrides, requiredLevelOverrides } =
+      await loadMenuConfigForUser(employee.id, employee.team || null);
+
     const isProduction = process.env.NODE_ENV === 'production';
     const maxAge = 30 * 24 * 60 * 60; // 30일
 
@@ -138,6 +144,9 @@ export async function POST(request: NextRequest) {
           // 특별 계정 플래그 (permission_level 변경에 영향받지 않음)
           isSpecialAccount: specialAccount,
         },
+        userMenuOverrides,
+        teamMenuOverrides,
+        requiredLevelOverrides,
         socialAccounts: socialAccounts || []
       },
       timestamp: new Date().toISOString()

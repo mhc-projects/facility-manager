@@ -341,6 +341,22 @@ function getAllItems(config: NavigationEntry[]): NavigationItem[] {
   return items
 }
 
+// 팀별/사용자별 메뉴 노출 설정 · 필요 권한 레벨 설정(관리자설정) 화면에서 쓰는 메뉴 평탄화 목록
+export const ALL_MENU_ITEMS: { href: string; name: string; group?: string; requiredLevel: number }[] = (() => {
+  const result: { href: string; name: string; group?: string; requiredLevel: number }[] = []
+  for (const entry of navigationConfig) {
+    if (entry.type === 'item' && entry.item) {
+      result.push({ href: entry.item.href, name: entry.item.name, requiredLevel: entry.item.requiredLevel || 1 })
+    }
+    if (entry.type === 'group' && entry.group) {
+      for (const item of entry.group.items) {
+        result.push({ href: item.href, name: item.name, group: entry.group.label, requiredLevel: item.requiredLevel || 1 })
+      }
+    }
+  }
+  return result
+})()
+
 // 특정 부서는 지정된 메뉴만 이용 가능 (그 외 메뉴는 숨김 처리 및 접근 차단)
 const DEPARTMENT_MENU_RESTRICTIONS: Record<string, string[]> = {
   '기술개발부': ['/admin/e-pto', '/admin/approvals', '/admin/meeting-minutes', '/profile'],
@@ -378,7 +394,7 @@ function useUserDepartmentName(user: unknown): string | null {
 
 function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: string, onItemClick: () => void, collapsed: boolean }) {
   const router = useRouter()
-  const { user, permissions } = useAuth()
+  const { user, permissions, userMenuOverrides, teamMenuOverrides, requiredLevelOverrides } = useAuth()
   const userDeptName = useUserDepartmentName(user)
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['/admin/revenue']))
 
@@ -404,7 +420,24 @@ function NavigationItems({ pathname, onItemClick, collapsed }: { pathname: strin
     }
 
     const permLevel = (user as any).permission_level ?? (user as any).role ?? 1
-    if (permLevel < (item.requiredLevel || 1)) return false
+    // 메뉴별 필요 권한 레벨 전역 재정의(관리자설정)가 있으면 코드의 requiredLevel보다 우선한다
+    const effectiveRequiredLevel = (requiredLevelOverrides && item.href in requiredLevelOverrides)
+      ? requiredLevelOverrides[item.href]
+      : (item.requiredLevel || 1)
+
+    // 사용자 단위 노출 규칙(관리자가 특정 개인을 콕 집어 승인한 것)은 필요 권한 레벨 자체를 뚫을 수 있다.
+    // user/department와 함께 인증 응답에 실려 오므로(AuthContext) 별도 fetch 없이 첫 렌더부터 반영된다.
+    if (userMenuOverrides && item.href in userMenuOverrides) {
+      return userMenuOverrides[item.href] === true
+    }
+
+    if (permLevel < effectiveRequiredLevel) return false
+
+    // 팀 단위 노출 규칙은 필요 권한 레벨을 통과한 사람에게만 추가로 적용된다 (권한 상승 불가)
+    if (teamMenuOverrides && item.href in teamMenuOverrides) {
+      return teamMenuOverrides[item.href] === true
+    }
+
     if (item.departmentOnly) {
       if (userDeptName === null) return false
       if (permLevel >= 4) return true

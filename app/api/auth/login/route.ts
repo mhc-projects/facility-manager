@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
+import { loadMenuConfigForUser } from '@/lib/auth/menu-config-for-user';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -176,6 +177,11 @@ export async function POST(request: NextRequest) {
       role: rest.permission_level,
     };
 
+    // 관리자설정 "메뉴 노출 설정" 규칙 - verify API와 동일하게 로그인 응답에도 같이 실어서
+    // 로그인 직후 첫 렌더부터 반영되게 한다 (실패해도 로그인 자체는 막지 않는다)
+    const { userMenuOverrides, teamMenuOverrides, requiredLevelOverrides } =
+      await loadMenuConfigForUser(employee.id, employee.team || null);
+
     // 쿠키 기반 토큰 관리 - httpOnly 쿠키 설정
     const response = NextResponse.json({
       success: true,
@@ -191,7 +197,10 @@ export async function POST(request: NextRequest) {
           canApproveReports: employee.permission_level >= 1,
           canAccessAdminPages: employee.permission_level >= 3,
           canViewSensitiveData: employee.permission_level >= 3
-        }
+        },
+        userMenuOverrides,
+        teamMenuOverrides,
+        requiredLevelOverrides
       },
       timestamp: new Date().toISOString()
     });
