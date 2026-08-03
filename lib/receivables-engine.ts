@@ -158,12 +158,9 @@ export function computeBusinessReceivableNow(
     .filter(r => r.record_type !== 'cancelled')
     .reduce((sum, r) => sum + (r.total_amount || 0), 0);
 
-  const extraSupplyTotal = stages.extra
-    .filter(r => r.record_type !== 'cancelled')
-    .reduce((sum, r) => sum + (r.supply_amount || 0), 0);
-  const contractAmountWithExtra = Math.round((business.contract_amount || 0) + extraSupplyTotal * 1.1);
-
-  const baseFromInvoice = Math.max(contractAmountWithExtra, invoicedFallback);
+  // invoicedFallback에 이미 extra 계산서 발행액이 포함되어 있으므로 contract_amount에
+  // extra를 다시 더하면 이중 계산된다 (상세 모달의 /api/business-invoices GET과 동일한 공식으로 통일)
+  const baseFromInvoice = Math.max(business.contract_amount || 0, invoicedFallback);
   const baseAmount = baseFromInvoice > 0 ? baseFromInvoice : allPayments;
 
   const receivable = baseAmount === 0
@@ -247,12 +244,9 @@ export function computeBusinessReceivableAsOf(
     if (isRecognized(r.payment_date, asOfDate)) allPayments += r.payment_amount || 0;
   }
 
-  const extraSupplyRecognized = stages.extra
-    .filter(r => r.record_type !== 'cancelled' && isRecognized(r.issue_date, asOfDate))
-    .reduce((sum, r) => sum + (r.supply_amount || 0), 0);
-  const contractAmountWithExtra = Math.round((business.contract_amount || 0) + extraSupplyRecognized * 1.1);
-
-  const baseFromInvoice = Math.max(contractAmountWithExtra, invoicedFallback);
+  // invoicedFallback에 이미 extra 계산서 발행액이 포함되어 있으므로 contract_amount에
+  // extra를 다시 더하면 이중 계산된다 (computeBusinessReceivableNow와 동일한 공식으로 통일)
+  const baseFromInvoice = Math.max(business.contract_amount || 0, invoicedFallback);
   const baseAmount = baseFromInvoice > 0 ? baseFromInvoice : allPayments;
 
   const receivable = baseAmount === 0
