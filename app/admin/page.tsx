@@ -42,6 +42,8 @@ export default function AdminDashboard() {
   const [mounted, setMounted] = useState(false)
   const [filters, setFilters] = useState<DashboardFilters>({})
   const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT)
+  // 주간 브리핑 기준 설정을 저장하면 이 값을 올려 WeeklyScorecard를 remount시켜 재조회한다
+  const [weeklyScorecardRefreshKey, setWeeklyScorecardRefreshKey] = useState(0)
   const [isOrgExpanded, setIsOrgExpanded] = useState(false)
   const [authChecking, setAuthChecking] = useState(true)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
@@ -355,7 +357,7 @@ export default function AdminDashboard() {
         {/* 주간 브리핑 스코어카드 */}
         {showWeeklyScorecard && (
           <div className="mb-4">
-            <WeeklyScorecard />
+            <WeeklyScorecard key={weeklyScorecardRefreshKey} />
           </div>
         )}
 
@@ -427,6 +429,7 @@ export default function AdminDashboard() {
         layout={layout}
         onSave={handleSaveLayout}
         onReset={handleResetLayout}
+        onCriteriaSaved={() => setWeeklyScorecardRefreshKey(k => k + 1)}
       />
     </AdminLayout>
   )

@@ -20,15 +20,27 @@ interface CountPair {
   changeBusinesses?: BusinessRef[]
 }
 
+// 계약 3개 지표는 관리자가 대시보드 커스터마이징에서 이름을 바꿀 수 있어 서버가 label을 함께 내려준다
+interface LabeledCountPair extends CountPair {
+  label: string
+}
+
+// 자비/보조금/보조금(5년경과) 3분류 - 설치 수량, 견적실사에 사용
+interface FundingSplitCountPair {
+  self: CountPair
+  subsidy: CountPair
+  subsidy5y: CountPair
+}
+
 interface WeeklyScorecardData {
   contracts: {
-    selfContract: CountPair
-    subsidyReceived: CountPair
-    subsidyApproved: CountPair
+    selfContract: LabeledCountPair
+    subsidyReceived: LabeledCountPair
+    subsidyApproved: LabeledCountPair
   }
-  installations: CountPair
+  installations: FundingSplitCountPair
   surveys: {
-    estimate: CountPair
+    estimate: FundingSplitCountPair
     preConstruction: CountPair
     completion: CountPair
   }
@@ -292,11 +304,11 @@ export default function WeeklyScorecard() {
           <table className="w-full text-sm">
             <tbody>
               <tr className="border-t border-gray-100">
-                <td className="py-2 text-gray-700">자비 계약체결</td>
+                <td className="py-2 text-gray-700">{data.contracts.selfContract.label}</td>
                 <td className="py-2 text-right">
                   <ClickableCount
                     value={data.contracts.selfContract.current}
-                    onClick={() => openModal('자비 계약체결', data.contracts.selfContract)}
+                    onClick={() => openModal(data.contracts.selfContract.label, data.contracts.selfContract)}
                   />
                 </td>
                 <td className="py-2 text-right w-20">
@@ -304,11 +316,11 @@ export default function WeeklyScorecard() {
                 </td>
               </tr>
               <tr className="border-t border-gray-100">
-                <td className="py-2 text-gray-700">보조금 신청서접수</td>
+                <td className="py-2 text-gray-700">{data.contracts.subsidyReceived.label}</td>
                 <td className="py-2 text-right">
                   <ClickableCount
                     value={data.contracts.subsidyReceived.current}
-                    onClick={() => openModal('보조금 신청서접수', data.contracts.subsidyReceived)}
+                    onClick={() => openModal(data.contracts.subsidyReceived.label, data.contracts.subsidyReceived)}
                   />
                 </td>
                 <td className="py-2 text-right w-20">
@@ -316,11 +328,11 @@ export default function WeeklyScorecard() {
                 </td>
               </tr>
               <tr className="border-t border-gray-100">
-                <td className="py-2 text-gray-700">보조금 승인</td>
+                <td className="py-2 text-gray-700">{data.contracts.subsidyApproved.label}</td>
                 <td className="py-2 text-right">
                   <ClickableCount
                     value={data.contracts.subsidyApproved.current}
-                    onClick={() => openModal('보조금 승인', data.contracts.subsidyApproved)}
+                    onClick={() => openModal(data.contracts.subsidyApproved.label, data.contracts.subsidyApproved)}
                   />
                 </td>
                 <td className="py-2 text-right w-20">
@@ -328,15 +340,39 @@ export default function WeeklyScorecard() {
                 </td>
               </tr>
               <tr className="border-t border-gray-100">
-                <td className="py-2 text-gray-700">설치 수량</td>
+                <td className="py-2 text-gray-700">설치 수량(자비)</td>
                 <td className="py-2 text-right">
                   <ClickableCount
-                    value={data.installations.current}
-                    onClick={() => openModal('설치 수량', data.installations)}
+                    value={data.installations.self.current}
+                    onClick={() => openModal('설치 수량(자비)', data.installations.self)}
                   />
                 </td>
                 <td className="py-2 text-right w-20">
-                  <Delta current={data.installations.current} previous={data.installations.previous} />
+                  <Delta current={data.installations.self.current} previous={data.installations.self.previous} />
+                </td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-2 text-gray-700">설치 수량(보조금)</td>
+                <td className="py-2 text-right">
+                  <ClickableCount
+                    value={data.installations.subsidy.current}
+                    onClick={() => openModal('설치 수량(보조금)', data.installations.subsidy)}
+                  />
+                </td>
+                <td className="py-2 text-right w-20">
+                  <Delta current={data.installations.subsidy.current} previous={data.installations.subsidy.previous} />
+                </td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-2 text-gray-700">설치 수량(보조금 5년경과)</td>
+                <td className="py-2 text-right">
+                  <ClickableCount
+                    value={data.installations.subsidy5y.current}
+                    onClick={() => openModal('설치 수량(보조금 5년경과)', data.installations.subsidy5y)}
+                  />
+                </td>
+                <td className="py-2 text-right w-20">
+                  <Delta current={data.installations.subsidy5y.current} previous={data.installations.subsidy5y.previous} />
                 </td>
               </tr>
             </tbody>
@@ -349,15 +385,39 @@ export default function WeeklyScorecard() {
           <table className="w-full text-sm">
             <tbody>
               <tr className="border-t border-gray-100">
-                <td className="py-2 text-gray-700">견적실사</td>
+                <td className="py-2 text-gray-700">견적실사(자비)</td>
                 <td className="py-2 text-right">
                   <ClickableCount
-                    value={data.surveys.estimate.current}
-                    onClick={() => openModal('견적실사', data.surveys.estimate)}
+                    value={data.surveys.estimate.self.current}
+                    onClick={() => openModal('견적실사(자비)', data.surveys.estimate.self)}
                   />
                 </td>
                 <td className="py-2 text-right w-20">
-                  <Delta current={data.surveys.estimate.current} previous={data.surveys.estimate.previous} />
+                  <Delta current={data.surveys.estimate.self.current} previous={data.surveys.estimate.self.previous} />
+                </td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-2 text-gray-700">견적실사(보조금)</td>
+                <td className="py-2 text-right">
+                  <ClickableCount
+                    value={data.surveys.estimate.subsidy.current}
+                    onClick={() => openModal('견적실사(보조금)', data.surveys.estimate.subsidy)}
+                  />
+                </td>
+                <td className="py-2 text-right w-20">
+                  <Delta current={data.surveys.estimate.subsidy.current} previous={data.surveys.estimate.subsidy.previous} />
+                </td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-2 text-gray-700">견적실사(보조금 5년경과)</td>
+                <td className="py-2 text-right">
+                  <ClickableCount
+                    value={data.surveys.estimate.subsidy5y.current}
+                    onClick={() => openModal('견적실사(보조금 5년경과)', data.surveys.estimate.subsidy5y)}
+                  />
+                </td>
+                <td className="py-2 text-right w-20">
+                  <Delta current={data.surveys.estimate.subsidy5y.current} previous={data.surveys.estimate.subsidy5y.previous} />
                 </td>
               </tr>
               <tr className="border-t border-gray-100">

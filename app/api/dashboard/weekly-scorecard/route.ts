@@ -1,6 +1,6 @@
 // app/api/dashboard/weekly-scorecard/route.ts - 주간 회의용 스코어카드 (이번주/지난주 비교) API
 import { NextRequest, NextResponse } from 'next/server';
-import { queryAll } from '@/lib/supabase-direct';
+import { queryAll, queryOne } from '@/lib/supabase-direct';
 import { requireAdmin } from '@/lib/auth/require-admin';
 import {
   EQUIPMENT_FIELDS,
@@ -115,6 +115,58 @@ function toCountPair<T extends { entry_date: string }>(
   };
 }
 
+// ========================================
+// 계약 3개 지표의 업무단계 기준 - /admin 대시보드 커스터마이징 모달에서 관리자가 설정 가능
+// (settings 테이블, key='weekly_briefing_criteria'. app/api/settings/weekly-briefing-criteria/route.ts에서 저장)
+// ========================================
+
+interface ContractMetricCriteria {
+  label: string;
+  statusKeys: string[];
+}
+
+interface ContractCriteria {
+  selfContract: ContractMetricCriteria;
+  subsidyReceived: ContractMetricCriteria;
+  subsidyApproved: ContractMetricCriteria;
+}
+
+const DEFAULT_CONTRACT_CRITERIA: ContractCriteria = {
+  selfContract: { label: '자비 계약체결', statusKeys: ['self_contract'] },
+  subsidyReceived: { label: '보조금 신청서접수', statusKeys: ['subsidy_approval_pending'] },
+  subsidyApproved: { label: '보조금 승인', statusKeys: ['subsidy_approved', 'custom_1777968825327', 'custom_1778198486933'] },
+};
+
+async function loadContractCriteria(): Promise<ContractCriteria> {
+  try {
+    const row = await queryOne(`SELECT value FROM settings WHERE key = $1 LIMIT 1`, ['weekly_briefing_criteria']);
+    if (row?.value) {
+      const parsed = JSON.parse(row.value);
+      const keys = ['selfContract', 'subsidyReceived', 'subsidyApproved'] as const;
+      const isValid = keys.every(k => parsed?.[k]?.label && Array.isArray(parsed[k].statusKeys) && parsed[k].statusKeys.length > 0);
+      if (isValid) return parsed;
+    }
+  } catch (error) {
+    console.warn('⚠️ [Weekly Scorecard] 기준 설정 로드 실패, 기본값 사용:', error);
+  }
+  return DEFAULT_CONTRACT_CRITERIA;
+}
+
+// ========================================
+// 설치 수량 / 견적실사의 자비·보조금·보조금(5년경과) 분류
+// mapProgressToCategory(자비/보조금 2분류)와 달리 5년경과를 별도로 뽑아야 해서 progress_status 문자열을 직접 판정한다.
+// 대리점/외주설치/인허가 등은 자비에 포함(사용자 확인).
+// ========================================
+
+type FundingBucket = 'self' | 'subsidy' | 'subsidy5y';
+
+function classifyFundingBucket(progressStatus: string | null | undefined): FundingBucket {
+  const normalized = (progressStatus || '').trim();
+  if (normalized === '보조금(5년경과)') return 'subsidy5y';
+  if (normalized.includes('보조금')) return 'subsidy';
+  return 'self';
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
@@ -144,59 +196,75 @@ export async function GET(request: NextRequest) {
     //    같은 업무가 칸반에서 뒤로 갔다가 다시 그 단계로 돌아오는 재진입 사례가 실제로 있어서(task_status_history 확인),
     //    task_id별 "최초 진입 시점"만 세도록 DISTINCT ON + MIN(started_at)으로 중복을 제거한다.
     //    "탈락"은 실사용이 거의 없어(활성 업무 1건) 별도 지표로 추가하지 않기로 함.
+    // 삭제된 업무의 이력은 제외한다 (facility_tasks.is_deleted). weekly-reports/realtime와 동일한 필터.
     async function fetchFirstStatusEntries(statusValues: string[]): Promise<{ business_name: string; entry_date: string }[]> {
       const rows = await queryAll(
         `SELECT business_name, (started_at AT TIME ZONE 'Asia/Seoul')::date::text AS entry_date
          FROM (
-           SELECT DISTINCT ON (task_id) task_id, business_name, started_at
-           FROM task_status_history
-           WHERE status = ANY($1::text[])
-           ORDER BY task_id, started_at ASC
+           SELECT DISTINCT ON (h.task_id) h.task_id, h.business_name, h.started_at
+           FROM task_status_history h
+           JOIN facility_tasks ft ON ft.id = h.task_id AND ft.is_deleted = false
+           WHERE h.status = ANY($1::text[])
+           ORDER BY h.task_id, h.started_at ASC
          ) first_entry`,
         [statusValues]
       );
       return rows;
     }
 
+    const contractCriteria = await loadContractCriteria();
+
     const [selfContractRows, subsidyReceivedRows, subsidyApprovedTaskRows] = await Promise.all([
-      fetchFirstStatusEntries(['self_contract']),
-      fetchFirstStatusEntries(['subsidy_approval_pending']),
-      fetchFirstStatusEntries(['subsidy_approved', 'custom_1777968825327', 'custom_1778198486933'])
+      fetchFirstStatusEntries(contractCriteria.selfContract.statusKeys),
+      fetchFirstStatusEntries(contractCriteria.subsidyReceived.statusKeys),
+      fetchFirstStatusEntries(contractCriteria.subsidyApproved.statusKeys)
     ]);
 
     const contracts = {
-      selfContract: toCountPair(selfContractRows, period, r => ({ business_name: r.business_name })),
-      subsidyReceived: toCountPair(subsidyReceivedRows, period, r => ({ business_name: r.business_name })),
-      subsidyApproved: toCountPair(subsidyApprovedTaskRows, period, r => ({ business_name: r.business_name }))
+      selfContract: { label: contractCriteria.selfContract.label, ...toCountPair(selfContractRows, period, r => ({ business_name: r.business_name })) },
+      subsidyReceived: { label: contractCriteria.subsidyReceived.label, ...toCountPair(subsidyReceivedRows, period, r => ({ business_name: r.business_name })) },
+      subsidyApproved: { label: contractCriteria.subsidyApproved.label, ...toCountPair(subsidyApprovedTaskRows, period, r => ({ business_name: r.business_name })) }
     };
 
-    // 2. 설치 수량
+    // 2. 설치 수량 - 자비/보조금/보조금(5년경과) 3분류. 업무 흐름이 서로 달라 합산 숫자만으로는 해석이 안 된다.
     const installRows = await queryAll(
-      `SELECT id, business_name, installation_date AS entry_date
+      `SELECT id, business_name, installation_date AS entry_date, progress_status
        FROM business_info
        WHERE is_active = true AND is_deleted = false
          AND installation_date BETWEEN $1 AND $2`,
       [previousMonday, currentEnd]
     );
-    const installations = toCountPair(installRows, period, r => ({ id: r.id, business_name: r.business_name }));
+    const installMapFn = (r: any) => ({ id: r.id, business_name: r.business_name });
+    const installations = {
+      self: toCountPair(installRows.filter((r: any) => classifyFundingBucket(r.progress_status) === 'self'), period, installMapFn),
+      subsidy: toCountPair(installRows.filter((r: any) => classifyFundingBucket(r.progress_status) === 'subsidy'), period, installMapFn),
+      subsidy5y: toCountPair(installRows.filter((r: any) => classifyFundingBucket(r.progress_status) === 'subsidy5y'), period, installMapFn),
+    };
 
-    // 3. 견적실사 / 착공실사 / 준공실사 수량
-    // 기존 "보조금 승인일자"(business_info.subsidy_approval_date 기준) 지표는 영업·설치 섹션의
-    // 업무단계 기준 "보조금 승인"과 중복되어 제거하고, 그 자리에 견적실사를 추가했다.
+    // 3. 견적실사 / 착공실사 / 준공실사 수량 - 견적실사만 자비/보조금/보조금(5년경과)로 구분한다.
+    //    착공실사·준공실사는 보조금 전용 절차라 구분할 필요가 없다(사용자 확인).
+    //    기존 "보조금 승인일자"(business_info.subsidy_approval_date 기준) 지표는 영업·설치 섹션의
+    //    업무단계 기준 "보조금 승인"과 중복되어 제거하고, 그 자리에 견적실사를 추가했다.
     const surveyRows = await queryAll(
-      `SELECT survey_type, business_id AS id, business_name, event_date AS entry_date
-       FROM survey_events
-       WHERE survey_type IN ('estimate_survey', 'pre_construction_survey', 'completion_survey')
-         AND event_date BETWEEN $1 AND $2`,
+      `SELECT s.survey_type, s.business_id AS id, s.business_name, s.event_date AS entry_date, b.progress_status
+       FROM survey_events s
+       LEFT JOIN business_info b ON b.id = s.business_id
+       WHERE s.survey_type IN ('estimate_survey', 'pre_construction_survey', 'completion_survey')
+         AND s.event_date BETWEEN $1 AND $2`,
       [previousMonday, currentEnd]
     );
+    const surveyMapFn = (r: any) => ({ id: r.id, business_name: r.business_name });
     const estimateRows = surveyRows.filter((r: any) => r.survey_type === 'estimate_survey');
     const preConstructionRows = surveyRows.filter((r: any) => r.survey_type === 'pre_construction_survey');
     const completionRows = surveyRows.filter((r: any) => r.survey_type === 'completion_survey');
     const surveys = {
-      estimate: toCountPair(estimateRows, period, r => ({ id: r.id, business_name: r.business_name })),
-      preConstruction: toCountPair(preConstructionRows, period, r => ({ id: r.id, business_name: r.business_name })),
-      completion: toCountPair(completionRows, period, r => ({ id: r.id, business_name: r.business_name }))
+      estimate: {
+        self: toCountPair(estimateRows.filter((r: any) => classifyFundingBucket(r.progress_status) === 'self'), period, surveyMapFn),
+        subsidy: toCountPair(estimateRows.filter((r: any) => classifyFundingBucket(r.progress_status) === 'subsidy'), period, surveyMapFn),
+        subsidy5y: toCountPair(estimateRows.filter((r: any) => classifyFundingBucket(r.progress_status) === 'subsidy5y'), period, surveyMapFn),
+      },
+      preConstruction: toCountPair(preConstructionRows, period, surveyMapFn),
+      completion: toCountPair(completionRows, period, surveyMapFn)
     };
 
     // 4. 미수금 (자비/보조금) + 상중하 위험도
