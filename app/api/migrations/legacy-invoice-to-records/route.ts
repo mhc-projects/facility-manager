@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { queryAll, queryOne, query as pgQuery } from '@/lib/supabase-direct';
+import { mapProgressToCategory } from '@/types/invoice';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,8 +23,7 @@ export const runtime = 'nodejs';
 // 헬퍼: 진행구분 → 보조금 / 자비 분류
 // ──────────────────────────────────────────────────────────────
 function isSubsidy(progressStatus: string | null): boolean {
-  const s = progressStatus?.trim() || '';
-  return s === '보조금' || s === '보조금 동시진행' || s === '보조금 추가승인';
+  return mapProgressToCategory(progressStatus) === '보조금';
 }
 
 // ──────────────────────────────────────────────────────────────

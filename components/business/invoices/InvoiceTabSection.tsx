@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 import type { InvoiceCategory, InvoiceStage, InvoiceRecord, InvoiceRecordsByStage, BusinessInvoicesResponse, LegacyInvoiceStage } from '@/types/invoice';
-import { INVOICE_STAGE_LABELS, getStagesForCategory } from '@/types/invoice';
+import { INVOICE_STAGE_LABELS, getStagesForCategory, mapProgressToCategory } from '@/types/invoice';
 import { formatDate } from '@/utils/formatters';
 import { TokenManager } from '@/lib/api-client';
 import InvoiceRecordForm, { type InvoiceRecordFormHandle, type FormState, emptyForm } from './InvoiceRecordForm';
@@ -39,9 +39,7 @@ const InvoiceTabSection = forwardRef<InvoiceTabSectionHandle, InvoiceTabSectionP
   const [pendingForms, setPendingForms] = useState<Partial<Record<InvoiceStage, FormState>>>({});
 
   // 진행구분 → 카테고리 매핑
-  const category: InvoiceCategory = (['보조금', '보조금 동시진행', '보조금 추가승인'].includes(progressStatus?.trim()))
-    ? '보조금'
-    : '자비';
+  const category: InvoiceCategory = mapProgressToCategory(progressStatus);
 
   const stages = getStagesForCategory(category);
 

@@ -13,8 +13,7 @@ import { queryAll, query as pgQuery } from '@/lib/supabase-direct';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// 보조금 진행구분 목록
-const SUBSIDY_STATUSES = ['보조금', '보조금 동시진행', '보조금 추가승인'];
+// 자비/보조금 판정은 types/invoice.ts의 mapProgressToCategory(문자열 포함 판정)와 동일한 기준(LIKE '%보조금%')을 SQL로 재현한다
 
 // ──────────────────────────────────────────────────────────────
 // GET: 초기화 대상 미리보기
@@ -27,23 +26,17 @@ export async function GET(request: NextRequest) {
       FROM business_info
       WHERE is_active = true AND is_deleted = false
         AND multiple_stack > 0
-        AND (
-          progress_status IS NULL
-          OR progress_status NOT IN (${SUBSIDY_STATUSES.map((_, i) => `$${i + 1}`).join(', ')})
-        )
+        AND (progress_status IS NULL OR progress_status NOT LIKE '%보조금%')
       ORDER BY business_name
-    `, SUBSIDY_STATUSES);
+    `);
 
     // 전체 자비 사업장 수 (multiple_stack 상관없이)
     const allSelf = await queryAll(`
       SELECT COUNT(*) AS cnt
       FROM business_info
       WHERE is_active = true AND is_deleted = false
-        AND (
-          progress_status IS NULL
-          OR progress_status NOT IN (${SUBSIDY_STATUSES.map((_, i) => `$${i + 1}`).join(', ')})
-        )
-    `, SUBSIDY_STATUSES);
+        AND (progress_status IS NULL OR progress_status NOT LIKE '%보조금%')
+    `);
 
     return NextResponse.json({
       success: true,
@@ -84,11 +77,8 @@ export async function POST(request: NextRequest) {
       FROM business_info
       WHERE is_active = true AND is_deleted = false
         AND multiple_stack > 0
-        AND (
-          progress_status IS NULL
-          OR progress_status NOT IN (${SUBSIDY_STATUSES.map((_, i) => `$${i + 1}`).join(', ')})
-        )
-    `, SUBSIDY_STATUSES);
+        AND (progress_status IS NULL OR progress_status NOT LIKE '%보조금%')
+    `);
 
     console.log(`📊 [RESET-MULTIPLE-STACK] 초기화 대상: ${targets.length}개`);
 

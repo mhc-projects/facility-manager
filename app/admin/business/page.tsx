@@ -5,6 +5,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, laz
 import { useSearchParams, useRouter } from 'next/navigation'
 import { BusinessInfo } from '@/lib/database-service'
 import type { BusinessMemo, CreateBusinessMemoInput, UpdateBusinessMemoInput } from '@/types/database'
+import { mapProgressToCategory } from '@/types/invoice'
 import { getBusinessTaskStatus, getBatchBusinessTaskStatuses, getTaskSummary } from '@/lib/business-task-utils'
 import { TASK_TYPE_KR } from '@/lib/task-status-utils'
 import { supabase } from '@/lib/supabase'
@@ -361,22 +362,9 @@ import {
 } from 'lucide-react'
 
 
-// 진행구분을 보조금/자비로 매핑하는 헬퍼 함수
+// 진행구분을 보조금/자비로 매핑하는 헬퍼 함수 (정본: types/invoice.ts의 mapProgressToCategory)
 const mapCategoryToInvoiceType = (category: string | null | undefined): '보조금' | '자비' => {
-  const normalized = category?.trim() || '';
-
-  // 보조금 처리
-  if (normalized === '보조금' || normalized === '보조금 동시진행' || normalized === '보조금 추가승인') {
-    return '보조금';
-  }
-
-  // 자비 처리: 자비, 대리점, AS, 외주설치
-  if (normalized === '자비' || normalized === '대리점' || normalized === 'AS' || normalized === '외주설치') {
-    return '자비';
-  }
-
-  // 기본값: 자비
-  return '자비';
+  return mapProgressToCategory(category);
 };
 
 // 수정 모달용 미수금 현황 배너

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { InvoiceDisplayCard } from './InvoiceDisplayCard';
 import { formatDate } from '@/utils/formatters';
 import type { InvoiceRecord } from '@/types/invoice';
+import { mapProgressToCategory } from '@/types/invoice';
 
 interface InvoiceDisplayProps {
   businessId: string;
@@ -12,18 +13,6 @@ interface InvoiceDisplayProps {
   totalRevenueOverride?: number; // 모달 상위에서 계산된 최종 매출금액 (부가세 포함)
   onReceivablesLoaded?: (receivables: number) => void;
 }
-
-// 진행구분을 보조금/자비로 매핑하는 헬퍼 함수
-const mapCategoryToInvoiceType = (category: string): '보조금' | '자비' => {
-  const normalized = category?.trim() || '';
-  if (normalized === '보조금' || normalized === '보조금 동시진행' || normalized === '보조금 추가승인') {
-    return '보조금';
-  }
-  if (normalized === '자비' || normalized === '대리점' || normalized === 'AS' || normalized === '외주설치') {
-    return '자비';
-  }
-  return '자비';
-};
 
 export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   businessId,
@@ -104,7 +93,7 @@ export const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   const extraReceivables = invoiceData.extra_receivables || 0;
 
   // 진행구분을 보조금/자비로 매핑
-  const mappedCategory = mapCategoryToInvoiceType(businessCategory);
+  const mappedCategory = mapProgressToCategory(businessCategory);
 
   // 미수금 발생 내역 계산
   const receivableDetails: { title: string; amount: number }[] = [];

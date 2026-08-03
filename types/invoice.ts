@@ -158,9 +158,11 @@ export const INVOICE_RECORD_TYPE_LABELS: Record<InvoiceRecordType, string> = {
 };
 
 // 진행구분 → 보조금/자비 매핑 헬퍼
+// 완전일치 대신 '보조금' 포함 여부로 판정한다 - 보조금(5년경과) 등 관리자가 추가하는 '보조금*' 진행구분이
+// 모두 커버되도록 하기 위함 (완전일치 방식은 5년경과가 자비로 잘못 분류되는 버그가 있었다)
 export const mapProgressToCategory = (progressStatus: string | null | undefined): InvoiceCategory => {
   const normalized = progressStatus?.trim() || '';
-  if (normalized === '보조금' || normalized === '보조금 동시진행' || normalized === '보조금 추가승인') {
+  if (normalized.includes('보조금')) {
     return '보조금';
   }
   return '자비';

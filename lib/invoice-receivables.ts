@@ -13,7 +13,10 @@
 
 import { query as pgQuery } from '@/lib/supabase-direct';
 import { calculateReceivables } from '@/lib/receivables-calculator';
+import { mapProgressToCategory } from '@/types/invoice';
 import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
+
+export { mapProgressToCategory };
 
 /** business_info에서 필요한 최소 필드 */
 export interface BusinessForReceivables {
@@ -32,13 +35,6 @@ export interface BusinessForReceivables {
   invoice_balance_amount: number | null;
   payment_advance_amount: number | null;
   payment_balance_amount: number | null;
-}
-
-/** 진행구분 → 보조금/자비 매핑 */
-export function mapProgressToCategory(progressStatus: string | null | undefined): '보조금' | '자비' {
-  const s = (progressStatus || '').trim();
-  if (s === '보조금' || s === '보조금 동시진행' || s === '보조금 추가승인') return '보조금';
-  return '자비';
 }
 
 /**

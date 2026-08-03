@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { queryAll, queryOne, query as pgQuery, transaction } from '@/lib/supabase-direct';
 import { calculateRevenue, preloadMasterData } from '@/lib/services/revenue-calculator';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { mapProgressToCategory } from '@/types/invoice';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -402,7 +403,7 @@ export async function GET(request: NextRequest) {
         -- 설치일 없으면 NULL
         -- 총 청구금액이 0이면 NULL → 프론트엔드에서 고시가 기반 fallback 사용
         CASE WHEN bi.installation_date IS NULL THEN NULL
-        WHEN bi.progress_status IN ('보조금', '보조금 동시진행', '보조금 추가승인') THEN
+        WHEN bi.progress_status LIKE '%보조금%' THEN
           -- 총 청구금액 계산 (보조금)
           CASE WHEN (
             COALESCE(ir.ir_invoice_1st, COALESCE(bi.invoice_1st_amount, 0))
@@ -1965,8 +1966,7 @@ export async function DELETE(request: NextRequest) {
 // 계산서 필드가 있는 사업장의 business_id를 조회하여 upsert
 // ──────────────────────────────────────────────────────────────
 function isSubsidyCategory(progressStatus: string | null | undefined): boolean {
-  const s = progressStatus?.trim() || '';
-  return s === '보조금' || s === '보조금 동시진행' || s === '보조금 추가승인';
+  return mapProgressToCategory(progressStatus) === '보조금';
 }
 
 async function syncInvoiceRecordsFromBatch(
