@@ -271,7 +271,16 @@ export async function GET(request: NextRequest) {
     // total_amount: 계산서 발행금액, payment_amount: 입금금액
     // issue_date IS NOT NULL 조건으로 미발행(마이그레이션 오류 등) 레코드 제외
     const queryText = `
-      WITH latest_per_original AS (
+      WITH biz AS (
+        -- 목록 대상 사업장을 먼저 확정 (검색/id 필터 + LIMIT) — invoice_records CTE가
+        -- 이 사업장들로만 범위를 좁힐 수 있도록 선행 CTE로 둔다 (2026-08-06)
+        SELECT ${selectFields}
+        FROM business_info
+        WHERE ${whereClause}
+        ORDER BY updated_at DESC
+        LIMIT $${paramIndex}
+      ),
+      latest_per_original AS (
         -- 원본(record_type='original', parent_record_id IS NULL) 각 건에 대해, 수정발행
         -- (record_type='revised') 자식이 있으면 가장 최근(created_at) 것의 금액/발행일을
         -- "실효값"으로 계산한다. 입금(payment_amount/payment_date)은 수정발행 폼에 입금
@@ -298,6 +307,7 @@ export async function GET(request: NextRequest) {
         ) eff ON TRUE
         WHERE orig.parent_record_id IS NULL
           AND orig.is_active = TRUE
+          AND orig.business_id IN (SELECT id FROM biz)
       ),
       ir AS (
         SELECT
@@ -480,13 +490,7 @@ export async function GET(request: NextRequest) {
             - COALESCE(ir.ir_extra_payment_total, 0)
           END
         END AS ir_receivables
-      FROM (
-        SELECT ${selectFields}
-        FROM business_info
-        WHERE ${whereClause}
-        ORDER BY updated_at DESC
-        LIMIT $${paramIndex}
-      ) bi
+      FROM biz bi
       LEFT JOIN ir ON ir.business_id = bi.id
     `;
     params.push(limit);
