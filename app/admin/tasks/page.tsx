@@ -539,7 +539,7 @@ function TaskManagementPage() {
   // 사업장 목록 로딩
   const loadBusinesses = useCallback(async () => {
     try {
-      const response = await fetch('/api/business-info-direct?includeFileStats=true')
+      const response = await fetch('/api/business-info-direct')
       if (!response.ok) {
         throw new Error('사업장 데이터를 불러오는데 실패했습니다.')
       }

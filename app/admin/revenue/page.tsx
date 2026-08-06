@@ -1543,12 +1543,6 @@ function RevenueDashboard() {
     link.click();
   };
 
-  const filteredCalculations = calculations.filter(calc =>
-    !searchTerm ||
-    calc.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    calc.sales_office.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   // 진행구분 필터 옵션: settings API 활성 항목 전체 표시 (순서 유지)
   // 설정에 없는 레거시 값은 사업장에 있을 경우에만 뒤에 추가
   const categoryOptions = useMemo(() => {

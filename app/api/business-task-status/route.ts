@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tasks = await queryAll(
-      `SELECT business_name, business_id, task_type, status
+      `SELECT business_name, task_type, status
        FROM facility_tasks
        WHERE is_deleted = false
        ORDER BY business_name, updated_at DESC`,

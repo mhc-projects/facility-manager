@@ -233,9 +233,9 @@ export function useBusinessData() {
       setIsLoading(true);
       setError(null);
 
-      // 직접 business_info 테이블에서 사업장 정보 조회 (파일 통계 포함)
+      // 직접 business_info 테이블에서 사업장 정보 조회
       // 🔥 타임스탬프 포함으로 Vercel CDN/브라우저 캐시 우회 - 항상 최신 데이터 보장
-      const response = await fetch(`/api/business-info-direct?includeFileStats=true&_t=${Date.now()}`, {
+      const response = await fetch(`/api/business-info-direct?_t=${Date.now()}`, {
         cache: 'no-store'
       });
       if (!response.ok) {

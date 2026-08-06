@@ -159,7 +159,6 @@ export async function GET(request: NextRequest) {
     const searchQuery = searchParams.get('search') || '';
     const limit = parseInt(searchParams.get('limit') || '5000');
     const id = searchParams.get('id');
-    const includeFileStats = searchParams.get('includeFileStats') === 'true';
 
     log('📊 [BUSINESS-INFO-DIRECT] Direct PostgreSQL 조회 시작 - 검색:', `"${searchQuery}"`, '제한:', limit, 'ID:', id || 'N/A');
 
@@ -499,13 +498,6 @@ export async function GET(request: NextRequest) {
 
     if (!businesses || businesses.length === 0) {
       log('⚠️ [BUSINESS-INFO-DIRECT] 조회 결과 없음');
-    }
-
-    // Include file statistics if requested
-    if (includeFileStats && businesses?.length) {
-      log('📊 [BUSINESS-INFO-DIRECT] 파일 통계 추가 중...');
-      // Add file stats logic here if needed
-      log('✅ [BUSINESS-INFO-DIRECT] 파일 통계 추가 완료 - 0개 매칭');
     }
 
     return NextResponse.json({

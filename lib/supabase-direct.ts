@@ -34,6 +34,8 @@ export function getDirectConnection() {
       max: 30, // Transaction Mode는 더 많은 동시 연결 지원
       idleTimeoutMillis: 20000, // Transaction Mode는 짧은 idle timeout 권장
       connectionTimeoutMillis: 10000,
+      keepAlive: true, // 유휴 소켓 조기 종료 방지 (TCP+TLS 재핸드셰이크 비용 절감)
+      keepAliveInitialDelayMillis: 10000,
     });
 
     pool.on('error', (err) => {
@@ -61,7 +63,9 @@ export async function query(text: string, params?: any[]) {
   try {
     const res = await pool.query(text, params);
     const duration = Date.now() - start;
-    console.log('✅ [PG] Query executed:', { text: text.substring(0, 50), duration: `${duration}ms`, rows: res.rowCount });
+    if (duration > 150) {
+      console.warn('⚠️ [PG] Slow query:', { text: text.substring(0, 50), duration: `${duration}ms`, rows: res.rowCount });
+    }
     return res;
   } catch (error: any) {
     console.error('❌ [PG] Query failed:', { text: text.substring(0, 50), error: error.message });
