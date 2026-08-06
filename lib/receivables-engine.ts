@@ -65,7 +65,8 @@ const EMPTY_STAGES = (): InvoiceRecordsByStage => ({
 });
 
 /**
- * invoice_records 행 목록을 사업장별·단계별로 그룹핑 (최상위/원본 계보만, 수정이력 제외)
+ * invoice_records 행 목록을 사업장별·단계별로 그룹핑 (최상위/원본만 stage 배열에 담고,
+ * 수정발행(record_type='revised') 자식은 부모의 revisions[]에 매달아 둔다 - 삭제하지 않음)
  */
 export function buildRecordsMap(
   ids: string[],
@@ -75,14 +76,56 @@ export function buildRecordsMap(
   for (const id of ids) {
     recordsMap.set(id, EMPTY_STAGES());
   }
+
+  const byId = new Map<string, InvoiceRecord>();
+  for (const row of rows) byId.set(row.id, { ...row, revisions: [] });
+
+  for (const row of rows) {
+    if (row.parent_record_id && byId.has(row.parent_record_id)) {
+      const parent = byId.get(row.parent_record_id)!;
+      parent.revisions = parent.revisions || [];
+      parent.revisions.push(byId.get(row.id)!);
+    }
+  }
+
   for (const row of rows) {
     if (row.parent_record_id) continue;
     const stageMap = recordsMap.get(row.business_id);
     if (!stageMap) continue;
     const stage = row.invoice_stage as keyof InvoiceRecordsByStage;
-    if (stageMap[stage]) stageMap[stage].push(row);
+    if (stageMap[stage]) stageMap[stage].push(byId.get(row.id)!);
   }
   return recordsMap;
+}
+
+/**
+ * 원본 + 수정발행(record_type='revised') 이력에서 "실효" 계산서 레코드를 고른다.
+ * - 금액(total_amount)·발행일(issue_date)은 최신 수정발행이 있으면 그 값을, 없으면 원본 값을 쓴다.
+ *   ("수정발행 이력" UI 자체가 "원본 X원 → 수정 Y원"으로 표시하도록 설계되어 있어, 수정발행이
+ *   있으면 그게 그 stage의 현재 유효 금액이라는 게 원래 의도다.)
+ * - 입금액(payment_amount)/입금일(payment_date)은 항상 원본 레코드에서만 읽는다 - 수정발행
+ *   폼(InvoiceRevisionForm)에는 애초에 입금 입력란이 없고, 입금은 항상 원본 레코드에 PUT으로
+ *   기록되는 구조이기 때문이다. 최신 레코드를 통째로 쓰면 실제 입금액이 0으로 날아간다.
+ * - asOfDate가 주어지면(computeBusinessReceivableAsOf 용) 그 시점에 issue_date가 인식된
+ *   (<=asOfDate) 후보 중 가장 최근 것을 고른다 - 원본은 있지만 인식된 후보가 하나도 없으면
+ *   null을 반환해 "그 시점엔 아직 발행 안 됨"을 표현한다(레거시 컬럼 폴백으로 새지 않도록).
+ */
+export function resolveEffectiveRecord(
+  original: InvoiceRecord | null,
+  asOfDate?: string
+): InvoiceRecord | null {
+  if (!original) return null;
+  const revisions = (original.revisions || []).filter(r => r.record_type === 'revised');
+  const candidates = [original, ...revisions];
+
+  if (asOfDate) {
+    const recognized = candidates.filter(c => !!c.issue_date && c.issue_date <= asOfDate);
+    if (recognized.length === 0) return null;
+    return recognized.reduce((a, b) => ((a.issue_date || '') >= (b.issue_date || '') ? a : b));
+  }
+
+  if (revisions.length === 0) return original;
+  return revisions.reduce((a, b) => ((a.created_at || '') >= (b.created_at || '') ? a : b));
 }
 
 export interface ReceivableBusiness {
@@ -128,27 +171,32 @@ export function computeBusinessReceivableNow(
     const r1 = getOriginal('subsidy_1st');
     const r2 = getOriginal('subsidy_2nd');
     const rA = getOriginal('subsidy_additional');
+    const eff1 = resolveEffectiveRecord(r1);
+    const eff2 = resolveEffectiveRecord(r2);
+    const effA = resolveEffectiveRecord(rA);
     allPayments =
       (r1 !== null ? (r1.payment_amount || 0) : (Number(business.payment_1st_amount) || 0)) +
       (r2 !== null ? (r2.payment_amount || 0) : (Number(business.payment_2nd_amount) || 0)) +
       (rA !== null ? (rA.payment_amount || 0) : (Number(business.payment_additional_amount) || 0));
     invoicedFallback =
-      (r1 ? (r1.total_amount || 0) : (Number(business.invoice_1st_amount) || 0)) +
-      (r2 ? (r2.total_amount || 0) : (Number(business.invoice_2nd_amount) || 0)) +
-      (rA
-        ? (rA.issue_date ? (rA.total_amount || 0) : 0)
+      (eff1 ? (eff1.total_amount || 0) : (Number(business.invoice_1st_amount) || 0)) +
+      (eff2 ? (eff2.total_amount || 0) : (Number(business.invoice_2nd_amount) || 0)) +
+      (effA
+        ? (effA.issue_date ? (effA.total_amount || 0) : 0)
         : (business.invoice_additional_date
             ? Math.round((Number(business.additional_cost) || 0) * 1.1)
             : 0));
   } else {
     const rAdv = getOriginal('self_advance');
     const rBal = getOriginal('self_balance');
+    const effAdv = resolveEffectiveRecord(rAdv);
+    const effBal = resolveEffectiveRecord(rBal);
     allPayments =
       (rAdv !== null ? (rAdv.payment_amount || 0) : (Number(business.payment_advance_amount) || 0)) +
       (rBal !== null ? (rBal.payment_amount || 0) : (Number(business.payment_balance_amount) || 0));
     invoicedFallback =
-      (rAdv ? (rAdv.total_amount || 0) : (Number(business.invoice_advance_amount) || 0)) +
-      (rBal ? (rBal.total_amount || 0) : (Number(business.invoice_balance_amount) || 0));
+      (effAdv ? (effAdv.total_amount || 0) : (Number(business.invoice_advance_amount) || 0)) +
+      (effBal ? (effBal.total_amount || 0) : (Number(business.invoice_balance_amount) || 0));
   }
 
   allPayments += stages.extra
@@ -156,7 +204,7 @@ export function computeBusinessReceivableNow(
     .reduce((sum, r) => sum + (r.payment_amount || 0), 0);
   invoicedFallback += stages.extra
     .filter(r => r.record_type !== 'cancelled')
-    .reduce((sum, r) => sum + (r.total_amount || 0), 0);
+    .reduce((sum, r) => sum + (resolveEffectiveRecord(r)?.total_amount || 0), 0);
 
   // invoicedFallback에 이미 extra 계산서 발행액이 포함되어 있으므로 contract_amount에
   // extra를 다시 더하면 이중 계산된다 (상세 모달의 /api/business-invoices GET과 동일한 공식으로 통일)
@@ -201,7 +249,7 @@ export function computeBusinessReceivableAsOf(
     fallbackDate: string | null | undefined
   ): number => {
     const rec = getOriginal(stage);
-    if (rec) return isRecognized(rec.issue_date, asOfDate) ? (rec.total_amount || 0) : 0;
+    if (rec) return resolveEffectiveRecord(rec, asOfDate)?.total_amount || 0;
     return isRecognized(fallbackDate, asOfDate) ? fallbackAmount : 0;
   };
 
@@ -240,7 +288,8 @@ export function computeBusinessReceivableAsOf(
 
   for (const r of stages.extra) {
     if (r.record_type === 'cancelled') continue;
-    if (isRecognized(r.issue_date, asOfDate)) invoicedFallback += r.total_amount || 0;
+    const effR = resolveEffectiveRecord(r, asOfDate);
+    if (effR) invoicedFallback += effR.total_amount || 0;
     if (isRecognized(r.payment_date, asOfDate)) allPayments += r.payment_amount || 0;
   }
 

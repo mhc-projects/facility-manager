@@ -4,6 +4,7 @@ import { queryOne, query as pgQuery } from '@/lib/supabase-direct';
 import type { InvoiceRecord, InvoiceRecordsByStage } from '@/types/invoice';
 import { mapProgressToCategory } from '@/types/invoice';
 import { calculateReceivables, sumAllPayments } from '@/lib/receivables-calculator';
+import { resolveEffectiveRecord } from '@/lib/receivables-engine';
 import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
@@ -190,30 +191,35 @@ export async function GET(request: NextRequest) {
         const getStageRecord = (stage: keyof InvoiceRecordsByStage): InvoiceRecord | null =>
           invoiceRecordsByStage[stage].find(r => r.record_type === 'original') || null;
 
+        // 금액/발행일은 수정발행이 있으면 최신 수정발행 값을(resolveEffectiveRecord), 입금은
+        // 항상 원본 레코드에서 읽는다 - 수정발행 폼엔 입금 입력란이 없기 때문 (receivables 스킬 참고)
         if (category === '보조금') {
           const rec1st = getStageRecord('subsidy_1st');
           const rec2nd = getStageRecord('subsidy_2nd');
           const recAdditional = getStageRecord('subsidy_additional');
+          const eff1st = resolveEffectiveRecord(rec1st);
+          const eff2nd = resolveEffectiveRecord(rec2nd);
+          const effAdditional = resolveEffectiveRecord(recAdditional);
 
-          if (rec1st) {
-            invoicesData.first.invoice_date   = rec1st.issue_date;
-            invoicesData.first.invoice_amount = rec1st.total_amount;
+          if (rec1st && eff1st) {
+            invoicesData.first.invoice_date   = eff1st.issue_date;
+            invoicesData.first.invoice_amount = eff1st.total_amount;
             invoicesData.first.payment_date   = rec1st.payment_date;
             invoicesData.first.payment_amount = rec1st.payment_amount;
-            invoicesData.first.receivable     = rec1st.total_amount - rec1st.payment_amount;
+            invoicesData.first.receivable     = eff1st.total_amount - rec1st.payment_amount;
           }
-          if (rec2nd) {
-            invoicesData.second.invoice_date   = rec2nd.issue_date;
-            invoicesData.second.invoice_amount = rec2nd.total_amount;
+          if (rec2nd && eff2nd) {
+            invoicesData.second.invoice_date   = eff2nd.issue_date;
+            invoicesData.second.invoice_amount = eff2nd.total_amount;
             invoicesData.second.payment_date   = rec2nd.payment_date;
             invoicesData.second.payment_amount = rec2nd.payment_amount;
-            invoicesData.second.receivable     = rec2nd.total_amount - rec2nd.payment_amount;
+            invoicesData.second.receivable     = eff2nd.total_amount - rec2nd.payment_amount;
           }
-          if (recAdditional) {
+          if (recAdditional && effAdditional) {
             // issue_date가 null이면 business_info.invoice_additional_date fallback 사용
-            invoicesData.additional.invoice_date   = recAdditional.issue_date || business.invoice_additional_date;
+            invoicesData.additional.invoice_date   = effAdditional.issue_date || business.invoice_additional_date;
             // total_amount가 0이면 business_info 기반 금액 fallback 사용
-            const recAdditionalAmount = recAdditional.total_amount || Math.round((Number(business.additional_cost) || 0) * 1.1);
+            const recAdditionalAmount = effAdditional.total_amount || Math.round((Number(business.additional_cost) || 0) * 1.1);
             invoicesData.additional.invoice_amount = recAdditionalAmount;
             invoicesData.additional.payment_date   = recAdditional.payment_date || business.payment_additional_date;
             invoicesData.additional.payment_amount = recAdditional.payment_amount || Number(business.payment_additional_amount) || 0;
@@ -222,20 +228,22 @@ export async function GET(request: NextRequest) {
         } else if (category === '자비') {
           const recAdvance = getStageRecord('self_advance');
           const recBalance = getStageRecord('self_balance');
+          const effAdvance = resolveEffectiveRecord(recAdvance);
+          const effBalance = resolveEffectiveRecord(recBalance);
 
-          if (recAdvance) {
-            invoicesData.advance.invoice_date   = recAdvance.issue_date;
-            invoicesData.advance.invoice_amount = recAdvance.total_amount;
+          if (recAdvance && effAdvance) {
+            invoicesData.advance.invoice_date   = effAdvance.issue_date;
+            invoicesData.advance.invoice_amount = effAdvance.total_amount;
             invoicesData.advance.payment_date   = recAdvance.payment_date;
             invoicesData.advance.payment_amount = recAdvance.payment_amount;
-            invoicesData.advance.receivable     = recAdvance.total_amount - recAdvance.payment_amount;
+            invoicesData.advance.receivable     = effAdvance.total_amount - recAdvance.payment_amount;
           }
-          if (recBalance) {
-            invoicesData.balance.invoice_date   = recBalance.issue_date;
-            invoicesData.balance.invoice_amount = recBalance.total_amount;
+          if (recBalance && effBalance) {
+            invoicesData.balance.invoice_date   = effBalance.issue_date;
+            invoicesData.balance.invoice_amount = effBalance.total_amount;
             invoicesData.balance.payment_date   = recBalance.payment_date;
             invoicesData.balance.payment_amount = recBalance.payment_amount;
-            invoicesData.balance.receivable     = recBalance.total_amount - recBalance.payment_amount;
+            invoicesData.balance.receivable     = effBalance.total_amount - recBalance.payment_amount;
           }
         }
       }
@@ -256,8 +264,9 @@ export async function GET(request: NextRequest) {
 
     // invoice_records에 추가공사비가 있는데 business_info.additional_cost가 0/NULL인 경우 보완
     const recAdditionalCheck = getStageRecordFinal('subsidy_additional');
-    if (recAdditionalCheck && (!business.additional_cost || Number(business.additional_cost) === 0)) {
-      business.additional_cost = recAdditionalCheck.supply_amount || 0;
+    const effAdditionalCheck = resolveEffectiveRecord(recAdditionalCheck);
+    if (effAdditionalCheck && (!business.additional_cost || Number(business.additional_cost) === 0)) {
+      business.additional_cost = effAdditionalCheck.supply_amount || 0;
     }
 
     // 총 입금액 집계 — 계산서/입금일 무관, payment_amount가 있으면 합산
@@ -298,26 +307,31 @@ export async function GET(request: NextRequest) {
     const contractAmountParam = searchParams.get('contract_amount');
     const contractAmount = contractAmountParam ? Number(contractAmountParam) : 0;
 
-    // 실제 발행된 계산서 합계 (DB total_amount 기준) — 항상 계산
+    // 실제 발행된 계산서 합계 (DB total_amount 기준, 수정발행 있으면 최신값) — 항상 계산
     let invoicedFallback = 0;
     if (category === '보조금') {
       const r1 = getStageRecordFinal('subsidy_1st');
       const r2 = getStageRecordFinal('subsidy_2nd');
       const rA = getStageRecordFinal('subsidy_additional');
-      invoicedFallback += r1 ? (r1.total_amount || 0) : (Number(business.invoice_1st_amount) || 0);
-      invoicedFallback += r2 ? (r2.total_amount || 0) : (Number(business.invoice_2nd_amount) || 0);
-      invoicedFallback += rA
-        ? (rA.issue_date ? (rA.total_amount || 0) : 0)
+      const eff1 = resolveEffectiveRecord(r1);
+      const eff2 = resolveEffectiveRecord(r2);
+      const effA = resolveEffectiveRecord(rA);
+      invoicedFallback += eff1 ? (eff1.total_amount || 0) : (Number(business.invoice_1st_amount) || 0);
+      invoicedFallback += eff2 ? (eff2.total_amount || 0) : (Number(business.invoice_2nd_amount) || 0);
+      invoicedFallback += effA
+        ? (effA.issue_date ? (effA.total_amount || 0) : 0)
         : (business.invoice_additional_date ? Math.round((Number(business.additional_cost) || 0) * 1.1) : 0);
     } else {
       const rAdv = getStageRecordFinal('self_advance');
       const rBal = getStageRecordFinal('self_balance');
-      invoicedFallback += rAdv ? (rAdv.total_amount || 0) : (Number(business.invoice_advance_amount) || 0);
-      invoicedFallback += rBal ? (rBal.total_amount || 0) : (Number(business.invoice_balance_amount) || 0);
+      const effAdv = resolveEffectiveRecord(rAdv);
+      const effBal = resolveEffectiveRecord(rBal);
+      invoicedFallback += effAdv ? (effAdv.total_amount || 0) : (Number(business.invoice_advance_amount) || 0);
+      invoicedFallback += effBal ? (effBal.total_amount || 0) : (Number(business.invoice_balance_amount) || 0);
     }
     const extraInvoiced = invoiceRecordsByStage.extra
       .filter(r => r.record_type !== 'cancelled')
-      .reduce((sum, r) => sum + (r.total_amount || 0), 0);
+      .reduce((sum, r) => sum + (resolveEffectiveRecord(r)?.total_amount || 0), 0);
     invoicedFallback += extraInvoiced;
 
     // 미수금 기준금액: contract_amount와 실제 발행 계산서 중 큰 값 사용

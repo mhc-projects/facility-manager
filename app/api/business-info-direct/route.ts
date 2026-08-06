@@ -272,18 +272,46 @@ export async function GET(request: NextRequest) {
     // total_amount: 계산서 발행금액, payment_amount: 입금금액
     // issue_date IS NOT NULL 조건으로 미발행(마이그레이션 오류 등) 레코드 제외
     const queryText = `
-      WITH ir AS (
+      WITH latest_per_original AS (
+        -- 원본(record_type='original', parent_record_id IS NULL) 각 건에 대해, 수정발행
+        -- (record_type='revised') 자식이 있으면 가장 최근(created_at) 것의 금액/발행일을
+        -- "실효값"으로 계산한다. 입금(payment_amount/payment_date)은 수정발행 폼에 입금
+        -- 입력란이 없어 항상 원본에 기록되므로 원본 값을 그대로 쓴다.
+        -- (lib/receivables-engine.ts의 resolveEffectiveRecord()와 동일한 규칙 - 2026-08-06)
+        SELECT
+          orig.id,
+          orig.business_id,
+          orig.invoice_stage,
+          orig.record_type,
+          orig.payment_amount,
+          orig.payment_date,
+          COALESCE(eff.total_amount, orig.total_amount) AS eff_total_amount,
+          COALESCE(eff.issue_date, orig.issue_date) AS eff_issue_date
+        FROM invoice_records orig
+        LEFT JOIN LATERAL (
+          SELECT rev.total_amount, rev.issue_date
+          FROM invoice_records rev
+          WHERE rev.parent_record_id = orig.id
+            AND rev.record_type = 'revised'
+            AND rev.is_active = TRUE
+          ORDER BY rev.created_at DESC
+          LIMIT 1
+        ) eff ON TRUE
+        WHERE orig.parent_record_id IS NULL
+          AND orig.is_active = TRUE
+      ),
+      ir AS (
         SELECT
           business_id,
-          -- 계산서 발행금액: issue_date 있고 total_amount > 0인 경우만
-          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND issue_date IS NOT NULL AND total_amount > 0 THEN total_amount END) AS ir_invoice_1st,
-          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND issue_date IS NOT NULL AND total_amount > 0 THEN total_amount END) AS ir_invoice_2nd,
+          -- 계산서 발행금액: issue_date 있고 total_amount > 0인 경우만 (수정발행 있으면 최신값)
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND eff_issue_date IS NOT NULL AND eff_total_amount > 0 THEN eff_total_amount END) AS ir_invoice_1st,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND eff_issue_date IS NOT NULL AND eff_total_amount > 0 THEN eff_total_amount END) AS ir_invoice_2nd,
           -- 추가공사비: issue_date 있고 total_amount > 0인 경우만 (발행일 없으면 미발행으로 간주)
-          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND issue_date IS NOT NULL AND total_amount > 0 THEN total_amount END) AS ir_invoice_additional,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND eff_issue_date IS NOT NULL AND eff_total_amount > 0 THEN eff_total_amount END) AS ir_invoice_additional,
           -- 추가공사비 레코드 존재 여부 (total=0 포함) - bi fallback 차단용
           MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN 1 ELSE NULL END) AS ir_has_additional,
-          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND issue_date IS NOT NULL AND total_amount > 0 THEN total_amount END) AS ir_invoice_advance,
-          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND issue_date IS NOT NULL AND total_amount > 0 THEN total_amount END) AS ir_invoice_balance,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND eff_issue_date IS NOT NULL AND eff_total_amount > 0 THEN eff_total_amount END) AS ir_invoice_advance,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND eff_issue_date IS NOT NULL AND eff_total_amount > 0 THEN eff_total_amount END) AS ir_invoice_balance,
           -- 입금금액: 레코드 있으면 실입금액 그대로 사용 (total=0이어도 입금은 유효), 레코드 없음 → NULL (bi fallback)
           -- 단, subsidy_additional은 total=0이면 bi.additional_cost 기반으로 청구금액 계산되므로 입금도 bi 기반 사용 (ir_has_additional 플래그로 처리)
           MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_1st,
@@ -292,25 +320,25 @@ export async function GET(request: NextRequest) {
           MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_additional,
           MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_advance,
           MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' THEN COALESCE(payment_amount, 0) END) AS ir_payment_balance,
-          -- 발행일: invoice_records 우선 (business_info.invoice_*_date가 null인 케이스 대응)
-          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND issue_date IS NOT NULL THEN issue_date::text END) AS ir_issue_1st_date,
-          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND issue_date IS NOT NULL THEN issue_date::text END) AS ir_issue_2nd_date,
-          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND issue_date IS NOT NULL THEN issue_date::text END) AS ir_issue_additional_date,
-          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN issue_date::text END) AS ir_issue_advance_date,
-          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND issue_date IS NOT NULL THEN issue_date::text END) AS ir_issue_balance_date,
+          -- 발행일: invoice_records 우선 (business_info.invoice_*_date가 null인 케이스 대응, 수정발행 있으면 최신값)
+          MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND eff_issue_date IS NOT NULL THEN eff_issue_date::text END) AS ir_issue_1st_date,
+          MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND eff_issue_date IS NOT NULL THEN eff_issue_date::text END) AS ir_issue_2nd_date,
+          MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND eff_issue_date IS NOT NULL THEN eff_issue_date::text END) AS ir_issue_additional_date,
+          MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND eff_issue_date IS NOT NULL THEN eff_issue_date::text END) AS ir_issue_advance_date,
+          MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND eff_issue_date IS NOT NULL THEN eff_issue_date::text END) AS ir_issue_balance_date,
           -- 입금일: invoice_records 우선 (계산서 미발행 + 입금만 있는 케이스 대응)
           MAX(CASE WHEN invoice_stage = 'subsidy_1st'        AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_1st_date,
           MAX(CASE WHEN invoice_stage = 'subsidy_2nd'        AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_2nd_date,
           MAX(CASE WHEN invoice_stage = 'subsidy_additional' AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_additional_date,
           MAX(CASE WHEN invoice_stage = 'self_advance'       AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_advance_date,
           MAX(CASE WHEN invoice_stage = 'self_balance'       AND record_type = 'original' AND payment_date IS NOT NULL THEN payment_date::text END) AS ir_payment_balance_date,
-          -- 추가 계산서(extra) 입금 합계 (취소 제외)
+          -- 추가 계산서(extra) 발행금액/입금 합계 (취소 제외, 수정발행 있으면 최신값 - 원본+수정발행 중복합산 방지)
+          COALESCE(SUM(CASE WHEN invoice_stage = 'extra' AND record_type != 'cancelled' THEN eff_total_amount ELSE 0 END), 0) AS ir_extra_invoice_total,
           COALESCE(SUM(CASE WHEN invoice_stage = 'extra' AND record_type != 'cancelled' THEN payment_amount ELSE 0 END), 0) AS ir_extra_payment_total,
           -- invoice_records 레코드 존재 여부 (1 = 있음, NULL = 없음)
           -- LEFT JOIN 시 ir 전체가 NULL인 케이스(구형 데이터)와 구분하기 위해 사용
           1 AS ir_has_any_record
-        FROM invoice_records
-        WHERE is_active = TRUE
+        FROM latest_per_original
         GROUP BY business_id
       )
       SELECT
@@ -413,9 +441,7 @@ export async function GET(request: NextRequest) {
                   WHEN bi.invoice_additional_date IS NOT NULL THEN ROUND(COALESCE(bi.additional_cost, 0) * 1.1)
                   ELSE 0
                 END
-              + COALESCE((SELECT SUM(total_amount) FROM invoice_records
-                  WHERE business_id = bi.id AND invoice_stage = 'extra'
-                  AND record_type != 'cancelled' AND is_active = TRUE), 0)
+              + COALESCE(ir.ir_extra_invoice_total, 0)
           ) = 0 THEN NULL  -- 청구서 미발행 → 프론트엔드 fallback 유도
           ELSE
             COALESCE(ir.ir_invoice_1st, COALESCE(bi.invoice_1st_amount, 0))
@@ -425,9 +451,7 @@ export async function GET(request: NextRequest) {
                   WHEN bi.invoice_additional_date IS NOT NULL THEN ROUND(COALESCE(bi.additional_cost, 0) * 1.1)
                   ELSE 0
                 END
-              + COALESCE((SELECT SUM(total_amount) FROM invoice_records
-                  WHERE business_id = bi.id AND invoice_stage = 'extra'
-                  AND record_type != 'cancelled' AND is_active = TRUE), 0)
+              + COALESCE(ir.ir_extra_invoice_total, 0)
             -- 입금금액: business-invoices API와 동일한 로직
             -- ir레코드 있으면 ir입금 사용, 없으면(NULL) bi입금 무조건 포함
             -- (bi.invoice_XXX_amount 조건 제거 - payment_2nd가 있는데 invoice_2nd가 없는 분할입금 패턴 처리)
@@ -445,16 +469,12 @@ export async function GET(request: NextRequest) {
           CASE WHEN (
             COALESCE(ir.ir_invoice_advance, COALESCE(bi.invoice_advance_amount, 0))
               + COALESCE(ir.ir_invoice_balance, COALESCE(bi.invoice_balance_amount, 0))
-              + COALESCE((SELECT SUM(total_amount) FROM invoice_records
-                  WHERE business_id = bi.id AND invoice_stage = 'extra'
-                  AND record_type != 'cancelled' AND is_active = TRUE), 0)
+              + COALESCE(ir.ir_extra_invoice_total, 0)
           ) = 0 THEN NULL  -- 청구서 미발행 → 프론트엔드 fallback 유도
           ELSE
             COALESCE(ir.ir_invoice_advance, COALESCE(bi.invoice_advance_amount, 0))
               + COALESCE(ir.ir_invoice_balance, COALESCE(bi.invoice_balance_amount, 0))
-              + COALESCE((SELECT SUM(total_amount) FROM invoice_records
-                  WHERE business_id = bi.id AND invoice_stage = 'extra'
-                  AND record_type != 'cancelled' AND is_active = TRUE), 0)
+              + COALESCE(ir.ir_extra_invoice_total, 0)
             -- ir레코드 있으면 ir입금 사용, 없으면(NULL) bi입금 무조건 포함
             - COALESCE(ir.ir_payment_advance, COALESCE(bi.payment_advance_amount, 0))
             - COALESCE(ir.ir_payment_balance, COALESCE(bi.payment_balance_amount, 0))
