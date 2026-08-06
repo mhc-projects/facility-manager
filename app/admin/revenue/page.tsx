@@ -269,25 +269,22 @@ function RevenueDashboard() {
     };
   }, []);
 
-  // ✅ 2단계 + 3단계: 통합 데이터 초기화 함수 (레이스 컨디션 완전 제거)
+  // ✅ 통합 데이터 초기화 함수: 단가 웨이브와 사업장 웨이브를 동시에 발사
+  // (사업장/계산/업무상태/후보직원 로딩 함수 어느 것도 단가 데이터를 입력으로 쓰지 않아 직렬화할 이유가 없음)
   const initializeData = async () => {
     try {
-      console.log('🚀 [INIT] Step 1: 가격 데이터 로드 시작');
-      setDataLoadingState('loading-prices');
-
-      await loadPricingData();
-
-      console.log('🚀 [INIT] Step 2: 사업장 데이터 로드 시작');
+      console.log('🚀 [INIT] 가격 + 사업장 데이터 병렬 로드 시작');
       setDataLoadingState('loading-businesses');
 
       await Promise.all([
+        loadPricingData(),
         loadBusinesses(),
         loadCalculations(),
         loadTaskStatuses(),
         loadCandidateEmployees()
       ]);
 
-      console.log('✅ [INIT] Step 3: 모든 데이터 로드 완료');
+      console.log('✅ [INIT] 모든 데이터 로드 완료');
       setDataLoadingState('ready');
 
     } catch (error) {
