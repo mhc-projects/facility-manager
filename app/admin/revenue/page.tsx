@@ -161,7 +161,7 @@ function TaskStageBadge({ status }: { status: string }) {
 function RevenueDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { taskStages } = useAdminData();
+  const { taskStages, progressCategories: adminProgressCategories } = useAdminData();
   const isMobile = useIsMobile();
   const [businesses, setBusinesses] = useState<BusinessInfo[]>([]);
   const [riskMap, setRiskMap] = useState<Record<string, string | null>>({}); // 위험도 별도 상태 (businesses 재계산 방지)
@@ -223,7 +223,12 @@ function RevenueDashboard() {
   const [openCollectionDropdown, setOpenCollectionDropdown] = useState<string | null>(null); // 현재 열린 드롭다운의 businessId
   const [batchTrigger, setBatchTrigger] = useState(0); // batch 미수금 재계산 트리거
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null); // 드롭다운 위치
-  const [progressCategoryOrder, setProgressCategoryOrder] = useState<string[]>([]); // 진행구분 정렬 순서 (settings API)
+  // 진행구분 정렬 순서 — AdminDataContext(앱 전역 공유)에서 파생, is_active 필터링 없이 sort_order 순 전체 표시
+  // (settings/progress-categories 페이지별 중복 fetch 제거. 사업장관리와 달리 이 페이지는 원래도 비활성 항목까지 포함했음 — 그대로 유지)
+  const progressCategoryOrder = useMemo(
+    () => [...adminProgressCategories].sort((a, b) => a.sort_order - b.sort_order).map(c => c.name),
+    [adminProgressCategories]
+  );
   const [isFilterExpanded, setIsFilterExpanded] = useState(false); // 필터 섹션 접기/펼치기 상태 (기본값: 접힌 상태)
   const [sortField, setSortField] = useState<string>('business_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -249,20 +254,6 @@ function RevenueDashboard() {
     console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 마운트됨');
     // ✅ 통합 초기화 함수 실행
     initializeData();
-
-    // 진행구분 순서 로드 (설정 페이지와 동기화)
-    fetch('/api/settings/progress-categories', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          setProgressCategoryOrder(
-            (data.data as { name: string; is_active: boolean; sort_order: number }[])
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map(c => c.name)
-          );
-        }
-      })
-      .catch(() => {});
 
     return () => {
       console.log('🔄 [COMPONENT-LIFECYCLE] Revenue 페이지 언마운트됨');

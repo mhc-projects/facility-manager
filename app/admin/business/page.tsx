@@ -438,7 +438,12 @@ function BusinessManagementPage() {
   // 권한 확인 훅
   const { canDeleteAutoMemos } = usePermission()
   const { user } = useAuth()
-  const { getStageLabel, getStageColorClass } = useAdminData()
+  const {
+    getStageLabel, getStageColorClass,
+    manufacturers: adminManufacturers, progressCategories: adminProgressCategories,
+    isLoading: adminDataLoading,
+    refreshManufacturers, refreshProgressCategories
+  } = useAdminData()
   const userPermission = user?.permission_level || 0
   const toast = useToast()
 
@@ -532,48 +537,29 @@ function BusinessManagementPage() {
     manufacturerCostsLoading
   } = useRevenueData()
 
-  // 제조사 목록 (동적)
-  const [manufacturerList, setManufacturerList] = useState<{ id: number; name: string }[]>([])
-  const [progressCategoryList, setProgressCategoryList] = useState<{ id: number; name: string }[]>([])
+  // 제조사/진행구분 목록 — AdminDataContext(앱 전역 공유)에서 가져와 is_active만 필터링
+  // (settings/manufacturers, settings/progress-categories 페이지별 중복 fetch 제거)
+  // 폴백: 컨텍스트 로딩이 끝났는데도 빈 배열이면(fetch 실패) 하드코딩 기본값 사용
+  const manufacturerList = useMemo(() => {
+    if (!adminDataLoading && adminManufacturers.length === 0) {
+      return [
+        { id: 0, name: '에코센스' }, { id: 1, name: '크린어스' },
+        { id: 2, name: '가이아씨앤에스' }, { id: 3, name: '이브이에스' }, { id: 4, name: '위블레스' },
+      ]
+    }
+    return adminManufacturers.filter(m => m.is_active)
+  }, [adminManufacturers, adminDataLoading])
 
-  const fetchManufacturerList = useCallback(() => {
-    fetch('/api/settings/manufacturers', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          setManufacturerList((data.data as { id: number; name: string; is_active: boolean }[]).filter(m => m.is_active))
-        }
-      })
-      .catch(() => {
-        setManufacturerList([
-          { id: 0, name: '에코센스' }, { id: 1, name: '크린어스' },
-          { id: 2, name: '가이아씨앤에스' }, { id: 3, name: '이브이에스' }, { id: 4, name: '위블레스' },
-        ])
-      })
-  }, [])
-
-  const fetchProgressCategoryList = useCallback(() => {
-    fetch('/api/settings/progress-categories', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          setProgressCategoryList((data.data as { id: number; name: string; is_active: boolean }[]).filter(c => c.is_active))
-        }
-      })
-      .catch(() => {
-        setProgressCategoryList([
-          { id: 0, name: '자비' }, { id: 1, name: '보조금' }, { id: 2, name: '보조금 동시진행' },
-          { id: 3, name: '보조금 추가승인' }, { id: 4, name: '대리점' }, { id: 5, name: '외주설치' },
-          { id: 6, name: 'AS' }, { id: 7, name: '진행불가' }, { id: 8, name: '확인필요' },
-        ])
-      })
-  }, [])
-
-  // 페이지 마운트 시 최초 로드
-  useEffect(() => {
-    fetchManufacturerList()
-    fetchProgressCategoryList()
-  }, [fetchManufacturerList, fetchProgressCategoryList])
+  const progressCategoryList = useMemo(() => {
+    if (!adminDataLoading && adminProgressCategories.length === 0) {
+      return [
+        { id: 0, name: '자비' }, { id: 1, name: '보조금' }, { id: 2, name: '보조금 동시진행' },
+        { id: 3, name: '보조금 추가승인' }, { id: 4, name: '대리점' }, { id: 5, name: '외주설치' },
+        { id: 6, name: 'AS' }, { id: 7, name: '진행불가' }, { id: 8, name: '확인필요' },
+      ]
+    }
+    return adminProgressCategories.filter(c => c.is_active)
+  }, [adminProgressCategories, adminDataLoading])
 
   // 🗄️ 비즈니스 데이터 캐시 시스템
   const businessCacheRef = useRef<Map<string, {
@@ -3048,8 +3034,8 @@ function BusinessManagementPage() {
       completion_survey_manager: '',
       completion_survey_date: ''
     })
-    fetchManufacturerList()
-    fetchProgressCategoryList()
+    refreshManufacturers()
+    refreshProgressCategories()
     setIsModalOpen(true)
   }
 
@@ -3273,8 +3259,8 @@ function BusinessManagementPage() {
       // Use setTimeout to ensure state updates complete before opening edit modal
       setTimeout(() => {
         setInvoiceRefreshTrigger(prev => prev + 1)
-        fetchManufacturerList()
-        fetchProgressCategoryList()
+        refreshManufacturers()
+        refreshProgressCategories()
         setIsModalOpen(true)
       }, 0)
 
