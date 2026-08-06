@@ -211,14 +211,22 @@ export async function GET(request: NextRequest) {
 
     const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
-    const allCalculations = await queryAll(
-      `SELECT * FROM revenue_calculations
+    // 사업장별 최신 레코드만 DB에서 직접 선별 (JS 중복제거 대신 DISTINCT ON)
+    // 판단 기준은 기존 JS 로직과 동일: calculation_date DESC, created_at DESC
+    // equipment_breakdown/cost_breakdown/pricing_version_snapshot(JSONB)는 이 GET 응답에서 읽히지 않아 제외
+    const calculations: any[] = await queryAll(
+      `SELECT DISTINCT ON (business_id)
+         id, business_id, business_name, sales_office, business_category,
+         calculation_date, total_revenue, total_cost, gross_profit,
+         sales_commission, adjusted_sales_commission, survey_costs,
+         installation_costs, installation_extra_cost, net_profit
+       FROM revenue_calculations
        ${whereClause}
-       ORDER BY calculation_date DESC`,
+       ORDER BY business_id, calculation_date DESC, created_at DESC`,
       params
     );
 
-    if (!allCalculations) {
+    if (!calculations) {
       console.error('매출 계산 조회 오류');
       return NextResponse.json({
         success: false,
@@ -226,31 +234,8 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log('📊 [REVENUE-API] 조회 완료:', {
-      총_레코드: allCalculations.length
-    });
-
-    // 사업장별 최신 레코드만 필터링 (중복 제거)
-    const latestCalculationsMap = new Map();
-
-    allCalculations?.forEach(calc => {
-      const existing = latestCalculationsMap.get(calc.business_id);
-
-      // 최신 레코드 판단: calculation_date DESC, created_at DESC
-      if (!existing ||
-          calc.calculation_date > existing.calculation_date ||
-          (calc.calculation_date === existing.calculation_date && calc.created_at > existing.created_at)) {
-        latestCalculationsMap.set(calc.business_id, calc);
-      }
-    });
-
-    const calculations = Array.from(latestCalculationsMap.values());
-
-    // 디버깅 로그
-    console.log('📊 [REVENUE-API] 중복 제거 결과:', {
-      전체_레코드: allCalculations?.length || 0,
-      중복_제거_후: calculations.length,
-      제거된_레코드: (allCalculations?.length || 0) - calculations.length
+    console.log('📊 [REVENUE-API] 조회 완료 (사업장별 최신 레코드만):', {
+      레코드_수: calculations.length
     });
 
     const totalRevenue = calculations?.reduce((sum, calc) => sum + (calc.total_revenue || 0), 0) || 0;
