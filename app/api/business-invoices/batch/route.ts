@@ -34,6 +34,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    // all 모드: 클라이언트 목록 도착을 기다리지 않고 서버에서 직접 id를 도출
+    // (business-info-direct 목록 조회와 동일한 predicate — 사업장관리 페이지 병렬 로딩용)
+    if (body.all === true) {
+      const idsResult = await pgQuery(
+        `SELECT id FROM business_info WHERE is_deleted = false ORDER BY updated_at DESC LIMIT 5000`
+      );
+      const ids = (idsResult.rows || []).map((r: any) => r.id);
+      if (!ids.length) return NextResponse.json({ success: true, data: {} });
+      return handleIdsMode(ids);
+    }
+
     // ids 모드: 서버에서 business_info 조회 + contract_amount 직접 계산
     if (body.ids && Array.isArray(body.ids) && body.ids.length > 0) {
       return handleIdsMode(body.ids);

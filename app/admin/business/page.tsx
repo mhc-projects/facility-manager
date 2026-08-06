@@ -920,19 +920,17 @@ function BusinessManagementPage() {
     }
   }, [calculateBusinessRevenue, salesOfficeCommissions])
 
-  // 🎯 사업장 목록 로드 완료 후 batch API로 정확한 미수금 계산 (서버 사이드 contract_amount)
+  // 🎯 batch API로 정확한 미수금 계산 (서버 사이드 contract_amount)
+  // all:true로 서버가 직접 id를 도출 - 사업장 목록(business-info-direct) 응답을 기다리지 않고
+  // 병렬로 발사해 미수금 컬럼이 나중에 채워지는 지연을 없앤다 (전체 로드 시간 자체는 불변)
   const [batchReceivables, setBatchReceivables] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (isLoading || !allBusinesses.length) return;
-
     const fetchBatchReceivables = async () => {
       try {
-        const ids = allBusinesses.map(b => b.id);
-
         const response = await fetch('/api/business-invoices/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids }),
+          body: JSON.stringify({ all: true }),
         });
         const result = await response.json();
 
