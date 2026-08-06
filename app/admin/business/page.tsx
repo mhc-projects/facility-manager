@@ -2234,7 +2234,7 @@ function BusinessManagementPage() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const response = await fetch('/api/facility-tasks', {
+      const response = await fetch('/api/facility-tasks?fields=summary', {
         method: 'GET',
         headers
       })

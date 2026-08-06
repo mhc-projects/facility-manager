@@ -92,6 +92,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
     const taskType = searchParams.get('type');
     const status = searchParams.get('status');
     const assignee = searchParams.get('assignee');
+    // fields=summary: 사업장관리의 "현재 단계" 계산용 옵트인 축소 projection.
+    // 다른 호출처(업무관리 칸반보드 등)는 기본값(전체 컬럼)을 그대로 쓴다 - 제자리 축소 금지
+    const fieldsMode = searchParams.get('fields');
 
     // 사용자 인증 및 권한 확인 (보안 강화된 JWT 시스템)
     const { authorized, user } = await checkUserPermission(request);
@@ -146,8 +149,18 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
     // task_type은 facility_tasks_with_business View에서 business_info.progress_status 기반으로 파생됨
     // 별도 JOIN 불필요 - View에 construction_report_date 포함됨
-    const queryText = `
-      SELECT
+    const summaryFields = `
+        ftb.business_id,
+        ftb.business_name,
+        ftb.completed_at,
+        ftb.priority,
+        ftb.updated_at,
+        ftb.status,
+        ftb.task_type,
+        ftb.is_active,
+        ftb.is_deleted`;
+
+    const fullFields = `
         ftb.id,
         ftb.created_at,
         ftb.updated_at,
@@ -188,7 +201,10 @@ export const GET = withApiHandler(async (request: NextRequest) => {
         ftb.greenlink_confirmation_submitted_at,
         ftb.attachment_support_writing_date,
         ftb.attachment_support_application_date,
-        ftb.online_receipt_date
+        ftb.online_receipt_date`;
+
+    const queryText = `
+      SELECT${fieldsMode === 'summary' ? summaryFields : fullFields}
       FROM facility_tasks_with_business ftb
       ${whereClause}
       ORDER BY ftb.created_at DESC
