@@ -3,10 +3,8 @@ import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest } from 'next/server';
 
-// 환경 변수 (기본값은 개발용)
-const OLD_JWT_SECRET = 'your-secret-key-change-this-in-production';
+// 환경 변수
 const NEW_JWT_SECRET = process.env.JWT_SECRET || process.env.JWT_SECRET_V2 || generateSecureSecret();
-const MIGRATION_PERIOD_DAYS = 7; // 기존 토큰 지원 기간
 
 // Supabase 클라이언트
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -17,11 +15,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  * 보안 강화된 JWT 시크릿 생성
  */
 function generateSecureSecret(): string {
-  if (typeof window !== 'undefined') {
-    return OLD_JWT_SECRET; // 클라이언트에서는 기본값 사용
-  }
-
-  // 서버에서 64바이트 랜덤 시크릿 생성
+  // JWT_SECRET/JWT_SECRET_V2 미설정 시에만 도달 - 64바이트 랜덤 시크릿 생성
+  // (프로세스 재시작마다 값이 바뀌므로 기존 토큰이 전부 무효화됨 - 반드시 env var를 설정할 것)
+  console.warn('⚠️ [SECURE-JWT] JWT_SECRET 환경변수 미설정 - 임시 랜덤 시크릿 사용 중');
   const crypto = require('crypto');
   return crypto.randomBytes(64).toString('hex');
 }
@@ -66,30 +62,18 @@ interface TokenVerificationResult {
  */
 export async function verifyTokenHybrid(token: string): Promise<TokenVerificationResult> {
   let decoded: JWTPayload;
-  let isOldToken = false;
+  const isOldToken = false;
 
   try {
-    // 1. 새로운 시크릿으로 검증 시도
     decoded = jwt.verify(token, NEW_JWT_SECRET) as JWTPayload;
-    console.log('🔐 [JWT] 새 토큰으로 검증 성공');
-  } catch (newSecretError) {
-    try {
-      // 2. 기존 시크릿으로 검증 시도 (마이그레이션 기간 동안만)
-      decoded = jwt.verify(token, OLD_JWT_SECRET) as JWTPayload;
-      isOldToken = true;
-      console.log('🔄 [JWT] 기존 토큰으로 검증 성공 (업그레이드 필요)');
-    } catch (oldSecretError) {
-      console.error('❌ [JWT] 토큰 검증 실패:', {
-        newError: newSecretError.message,
-        oldError: oldSecretError.message
-      });
-      return {
-        user: null,
-        isOldToken: false,
-        shouldRefresh: false,
-        error: '유효하지 않은 토큰'
-      };
-    }
+  } catch (error: any) {
+    console.error('❌ [JWT] 토큰 검증 실패:', error.message);
+    return {
+      user: null,
+      isOldToken: false,
+      shouldRefresh: false,
+      error: '유효하지 않은 토큰'
+    };
   }
 
   // 3. 사용자 정보 조회
@@ -224,23 +208,13 @@ export function setRefreshTokenHeader(response: Response, newToken: string): Res
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    // 새로운 시크릿으로 검증 시도
-    const decoded = jwt.verify(token, NEW_JWT_SECRET) as JWTPayload;
-    return decoded;
-  } catch (newSecretError) {
-    try {
-      // 기존 시크릿으로 검증 시도
-      const decoded = jwt.verify(token, OLD_JWT_SECRET) as JWTPayload;
-      return decoded;
-    } catch (oldSecretError) {
-      console.error('❌ [JWT] verifyToken 실패');
-      return null;
-    }
+    return jwt.verify(token, NEW_JWT_SECRET) as JWTPayload;
+  } catch (error) {
+    console.error('❌ [JWT] verifyToken 실패');
+    return null;
   }
 }
 
 export {
-  NEW_JWT_SECRET,
-  OLD_JWT_SECRET,
-  MIGRATION_PERIOD_DAYS
+  NEW_JWT_SECRET
 };
