@@ -1,33 +1,53 @@
 // app/api/settings/task-stages/route.ts - 업무단계 관리 API
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
-import { queryAll, queryOne } from '@/lib/supabase-direct';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { queryOne } from '@/lib/supabase-direct';
+import { requireAuth, unauthorized, forbidden } from '@/lib/auth/require-auth';
+import { verifyTokenString } from '@/utils/auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// GET: 업무단계 목록 조회 (전체 or 카테고리 필터)
+// GET: 업무단계 목록 조회 (전체 or 카테고리 필터) — 권한조회와 목록조회를 SQL 한 번으로 병합
 export const GET = withApiHandler(async (request: NextRequest) => {
-  const auth = await requireAuth(request, 1);
-  if (!auth.ok) return auth.response;
+  const authHeader = request.headers.get('authorization');
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.substring(7)
+    : request.cookies.get('session_token')?.value;
+  if (!token) return unauthorized('UNAUTHORIZED', '인증이 필요합니다.');
+  const decoded = verifyTokenString(token);
+  if (!decoded) return unauthorized('INVALID_TOKEN', '유효하지 않은 토큰입니다.');
+  const userId = decoded.id || decoded.userId;
 
   const { searchParams } = new URL(request.url);
   const categoryId = searchParams.get('category_id');
 
-  let sql = `SELECT id, progress_category_id, stage_key, stage_label, sort_order, is_active, is_forecast_target
-             FROM task_stages`;
-  const params: any[] = [];
-
+  const params: any[] = [userId];
+  let stagesWhere = '';
   if (categoryId) {
-    sql += ` WHERE progress_category_id = $1`;
+    stagesWhere = 'WHERE progress_category_id = $2';
     params.push(Number(categoryId));
   }
 
-  sql += ` ORDER BY progress_category_id ASC, sort_order ASC, id ASC`;
+  const result = await queryOne(
+    `SELECT
+       (SELECT to_jsonb(e) FROM (
+          SELECT id, permission_level FROM employees WHERE id = $1 AND is_active = true
+        ) e) AS me,
+       (SELECT COALESCE(jsonb_agg(s ORDER BY s.progress_category_id, s.sort_order, s.id), '[]'::jsonb) FROM (
+          SELECT id, progress_category_id, stage_key, stage_label, sort_order, is_active, is_forecast_target
+          FROM task_stages
+          ${stagesWhere}
+        ) s) AS rows`,
+    params
+  );
 
-  const stages = await queryAll(sql, params);
-  return createSuccessResponse(stages ?? [], '업무단계 목록을 조회했습니다.', 200, { noCache: true });
+  if (!result?.me || (result.me.permission_level ?? 0) < 1) {
+    return forbidden('권한이 없습니다.');
+  }
+
+  const stages = result.rows ?? [];
+  return createSuccessResponse(stages, '업무단계 목록을 조회했습니다.', 200, { noCache: true });
 }, { logLevel: 'debug' });
 
 // POST: 업무단계 추가

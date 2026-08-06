@@ -13,14 +13,14 @@ export type RequireAuthResult =
   | { ok: true; user: AuthedUser }
   | { ok: false; response: NextResponse };
 
-function unauthorized(code: 'UNAUTHORIZED' | 'INVALID_TOKEN', message: string) {
+export function unauthorized(code: 'UNAUTHORIZED' | 'INVALID_TOKEN', message: string) {
   return NextResponse.json(
     { success: false, error: { code, message } },
     { status: 401 }
   );
 }
 
-function forbidden(message: string) {
+export function forbidden(message: string) {
   return NextResponse.json(
     { success: false, error: { code: 'FORBIDDEN', message } },
     { status: 403 }
