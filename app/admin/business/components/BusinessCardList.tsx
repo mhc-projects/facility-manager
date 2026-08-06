@@ -8,6 +8,7 @@ interface BusinessCardListProps {
   onBusinessDelete?: (business: any) => void
   taskStatuses?: Record<string, {
     statusText: string
+    rawStatus?: string
     colorClass: string
     taskCount: number
     hasActiveTasks: boolean

@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronRight
 } from 'lucide-react'
+import { useAdminData } from '@/contexts/AdminDataContext'
 
 interface BusinessCardProps {
   business: any
@@ -15,6 +16,7 @@ interface BusinessCardProps {
   onBusinessDelete?: (business: any) => void
   taskStatus?: {
     statusText: string
+    rawStatus?: string
     colorClass: string
     taskCount: number
     hasActiveTasks: boolean
@@ -32,6 +34,7 @@ export default function BusinessCard({
   searchQuery,
   highlightSearchTerm
 }: BusinessCardProps) {
+  const { getStageLabel, getStageColorClass } = useAdminData()
 
   // 진행구분별 색상 및 border 설정
   const getProgressStatusStyle = (status: string) => {
@@ -200,21 +203,36 @@ export default function BusinessCard({
       </div>
 
       {/* 현재단계 */}
-      {taskStatus && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <span className="text-xs sm:text-xs text-gray-500">현재 단계</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs sm:text-xs font-medium ${taskStatus.colorClass}`}>
-              {taskStatus.statusText}
-            </span>
-          </div>
-          {taskStatus.lastUpdated && (
-            <div className="text-xs sm:text-xs text-gray-400 mt-0.5">
-              {taskStatus.lastUpdated}
+      {taskStatus && (() => {
+        // 서버(배치 API)의 statusText/colorClass는 정적 매핑(TASK_STATUS_KR) 기반이라
+        // 관리자가 설정에서 새로 추가한 업무단계는 못 찾아 스키마 원본 값(rawStatus)을 그대로
+        // 반환한다. 데스크탑 테이블과 동일하게 AdminDataContext의 동적 단계 레이블로 재계산한다.
+        const displayText = taskStatus.rawStatus && taskStatus.hasActiveTasks
+          ? (() => {
+              const label = getStageLabel(taskStatus.rawStatus)
+              return taskStatus.taskCount > 1 ? `${label} 외 ${taskStatus.taskCount - 1}건` : label
+            })()
+          : taskStatus.statusText
+        const colorClass = taskStatus.rawStatus && taskStatus.hasActiveTasks
+          ? getStageColorClass(taskStatus.rawStatus)
+          : taskStatus.colorClass
+
+        return (
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <span className="text-xs sm:text-xs text-gray-500">현재 단계</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs sm:text-xs font-medium ${colorClass}`}>
+                {displayText}
+              </span>
             </div>
-          )}
-        </div>
-      )}
+            {taskStatus.lastUpdated && (
+              <div className="text-xs sm:text-xs text-gray-400 mt-0.5">
+                {taskStatus.lastUpdated}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* 액션 버튼 영역 */}
       <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
