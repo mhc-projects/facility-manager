@@ -950,3 +950,97 @@ export async function preloadMasterData(): Promise<PreloadedMasterData> {
     dealerPricingByName,
   };
 }
+
+/**
+ * 여러 사업장의 매출을 재계산 + 저장 (N+1 없이 배치 처리)
+ *
+ * preloadMasterData()로 전역 가격 테이블을 1회 로드하고, 사업장별 부가 데이터
+ * (추가설치비/실사조정/영업비용조정/수수료율/영업점설정)도 businessIds 범위로
+ * 한 번에 조회한 뒤, calculateRevenue를 청크 단위 동시 실행합니다.
+ * calculate-batch/route.ts, manufacturer-pricing 원가 변경 트리거 등에서 재사용합니다.
+ */
+export async function calculateRevenueForBusinesses(
+  businessIds: (string | number)[],
+  opts: { userId: string | number | null; permissionLevel: number; save_result?: boolean }
+): Promise<{ succeeded: string[]; failed: { business_id: string | number; error: string }[] }> {
+  const { userId, permissionLevel, save_result = true } = opts;
+  const succeeded: string[] = [];
+  const failed: { business_id: string | number; error: string }[] = [];
+
+  if (businessIds.length === 0) {
+    return { succeeded, failed };
+  }
+
+  const masterData = await preloadMasterData();
+
+  const [
+    businessInfoRows,
+    additionalInstallRows,
+    surveyAdjRows,
+    opCostRows,
+    allCommissionRates,
+    allSalesSettings,
+  ] = await Promise.all([
+    queryAll('SELECT * FROM business_info WHERE id = ANY($1::uuid[])', [businessIds]),
+    queryAll('SELECT * FROM business_additional_installation_cost WHERE business_id = ANY($1::uuid[]) AND is_active = $2', [businessIds, true]),
+    queryAll('SELECT * FROM survey_cost_adjustments WHERE business_id = ANY($1::uuid[])', [businessIds]),
+    queryAll('SELECT * FROM operating_cost_adjustments WHERE business_id = ANY($1::uuid[])', [businessIds]),
+    queryAll('SELECT DISTINCT ON (sales_office, manufacturer) * FROM sales_office_commission_rates ORDER BY sales_office, manufacturer, effective_from DESC', []),
+    queryAll('SELECT DISTINCT ON (sales_office) * FROM sales_office_cost_settings WHERE is_active = $1 ORDER BY sales_office, effective_from DESC', [true]),
+  ]);
+
+  masterData.businessInfoMap = (businessInfoRows || []).reduce((acc: Record<string, any>, row: any) => {
+    acc[String(row.id)] = row;
+    return acc;
+  }, {});
+  masterData.additionalInstallCostByBusiness = (additionalInstallRows || []).reduce((acc: Record<string, any[]>, row: any) => {
+    const key = String(row.business_id);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+  masterData.surveyAdjustmentsByBusiness = (surveyAdjRows || []).reduce((acc: Record<string, any[]>, row: any) => {
+    const key = String(row.business_id);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+  masterData.operatingCostAdjByBusiness = (opCostRows || []).reduce((acc: Record<string, any>, row: any) => {
+    acc[String(row.business_id)] = row;
+    return acc;
+  }, {});
+  masterData.commissionRatesByKey = (allCommissionRates || []).reduce((acc: Record<string, any>, row: any) => {
+    acc[`${row.sales_office}:${row.manufacturer}`] = row;
+    return acc;
+  }, {});
+  masterData.salesSettingsBySalesOffice = (allSalesSettings || []).reduce((acc: Record<string, any>, row: any) => {
+    acc[row.sales_office] = row;
+    return acc;
+  }, {});
+
+  const chunkSize = 10;
+  for (let i = 0; i < businessIds.length; i += chunkSize) {
+    const chunk = businessIds.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map(async (businessId) => {
+        try {
+          await calculateRevenue({
+            business_id: businessId,
+            save_result,
+            userId,
+            permissionLevel,
+            preloadedMasterData: masterData,
+          });
+          succeeded.push(String(businessId));
+        } catch (error) {
+          failed.push({
+            business_id: businessId,
+            error: error instanceof Error ? error.message : '알 수 없는 오류',
+          });
+        }
+      })
+    );
+  }
+
+  return { succeeded, failed };
+}

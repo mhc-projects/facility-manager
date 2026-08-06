@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
+import { getManufacturerAliases } from '@/constants/manufacturers';
+import { calculateRevenueForBusinesses } from '@/lib/services/revenue-calculator';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -14,6 +16,52 @@ interface ManufacturerPricingData {
   effective_from: string;
   effective_to?: string;
   notes?: string;
+}
+
+/**
+ * 제조사 원가 변경 후 영향받는 사업장의 revenue_calculations 캐시를 갱신한다.
+ * 단, 커미션이 이미 'paid'(지급완료)로 마감된 사업장은 정산 이력 보존을 위해 건너뛴다.
+ * 실패해도 원가 저장 자체는 이미 완료된 상태이므로 호출부에서 try/catch로 감싸 무시한다.
+ */
+async function recalculateBusinessesForManufacturer(
+  manufacturer: string,
+  userId: string | number,
+  permissionLevel: number
+): Promise<void> {
+  const aliases = getManufacturerAliases(manufacturer);
+  const businesses = await queryAll(
+    'SELECT id FROM business_info WHERE manufacturer = ANY($1::text[]) AND is_deleted = false',
+    [aliases]
+  );
+
+  if (!businesses || businesses.length === 0) {
+    console.log('ℹ️ [MANUFACTURER-PRICING] 재계산 대상 사업장 없음:', manufacturer);
+    return;
+  }
+
+  const businessIds = businesses.map((b: any) => b.id);
+
+  const paidRows = await queryAll(
+    `SELECT DISTINCT ON (business_id) business_id, status
+     FROM commission_payments
+     WHERE business_id = ANY($1::uuid[]) AND status <> 'cancelled'
+     ORDER BY business_id, updated_at DESC`,
+    [businessIds]
+  );
+  const paidIds = new Set((paidRows || []).filter((r: any) => r.status === 'paid').map((r: any) => r.business_id));
+
+  const targetIds = businessIds.filter((id: string) => !paidIds.has(id));
+
+  console.log(`🔄 [MANUFACTURER-PRICING] 원가 변경 → 재계산 대상 ${targetIds.length}개 (마감 제외 ${paidIds.size}개)`);
+
+  if (targetIds.length === 0) return;
+
+  const { succeeded, failed } = await calculateRevenueForBusinesses(targetIds, { userId, permissionLevel });
+
+  console.log(`✅ [MANUFACTURER-PRICING] 재계산 완료 - 성공: ${succeeded.length}, 실패: ${failed.length}`);
+  if (failed.length > 0) {
+    console.warn('⚠️ [MANUFACTURER-PRICING] 재계산 실패 사업장:', failed);
+  }
 }
 
 // 제조사별 원가 목록 조회
@@ -256,6 +304,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 원가 저장 후 영향받는 사업장 재계산 (실패해도 원가 저장 자체는 이미 완료된 상태)
+    try {
+      await recalculateBusinessesForManufacturer(manufacturer, userId, permissionLevel);
+    } catch (recalcError) {
+      console.error('⚠️ [MANUFACTURER-PRICING] 재계산 트리거 실패:', recalcError);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -409,6 +464,13 @@ export async function PATCH(request: NextRequest) {
           decoded.name || decoded.username || '알 수 없음'
         ]
       );
+
+      // 원가가 실제로 변경된 경우에만 영향받는 사업장 재계산
+      try {
+        await recalculateBusinessesForManufacturer(existingData.manufacturer, userId, permissionLevel);
+      } catch (recalcError) {
+        console.error('⚠️ [MANUFACTURER-PRICING] 재계산 트리거 실패:', recalcError);
+      }
     }
 
     return NextResponse.json({
