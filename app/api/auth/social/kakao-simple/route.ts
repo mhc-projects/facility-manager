@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 
+/* 2026-08-06: 소셜 로그인 미사용 확인 후 주석처리 (아래 GET 핸들러가 항상 비활성화 응답만 반환하므로 이 캐시/타이머는 사용되지 않음)
 // 처리 중인 코드 캐시 (중복 요청 방지)
 const processingCodes = new Map<string, Promise<NextResponse>>();
 const processedCodes = new Map<string, { response: any; timestamp: number }>();
@@ -22,6 +23,7 @@ setInterval(() => {
     }
   }
 }, 60 * 1000); // 1분마다 정리
+*/
 
 const KAKAO_CLIENT_ID = process.env.NEXT_PUBLIC_KAKAO_CLIENT_ID;
 const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET;
@@ -220,7 +222,10 @@ export async function GET(request: NextRequest) {
     { success: false, error: { code: 'FEATURE_DISABLED', message: '소셜 로그인 기능은 현재 비활성화되어 있습니다.' } },
     { status: 503 }
   );
+}
 
+/* 2026-08-06: 소셜 로그인 미사용 확인 후 원본 로직(도달 불가 코드, processKakaoLogin 헬퍼 포함) 주석처리 — 재사용 시 위 return을 지우고 아래를 함수 본문으로 복원
+async function _disabled_GET(request: NextRequest) {
   try {
     if (!KAKAO_CLIENT_ID || !KAKAO_CLIENT_SECRET) {
       return NextResponse.json({
@@ -367,3 +372,4 @@ async function processKakaoLogin(code: string, request: NextRequest): Promise<Ne
 
   return response;
 }
+*/

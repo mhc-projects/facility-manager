@@ -155,7 +155,10 @@ export async function GET(request: NextRequest) {
     { success: false, error: { code: 'FEATURE_DISABLED', message: '소셜 로그인 기능은 현재 비활성화되어 있습니다.' } },
     { status: 503 }
   );
+}
 
+/* 2026-08-06: 소셜 로그인 미사용 확인 후 원본 로직(도달 불가 코드) 주석처리 — 재사용 시 위 return을 지우고 아래를 함수 본문으로 복원
+async function _disabled_GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const redirectUri = searchParams.get('redirect_uri') ||
@@ -204,6 +207,7 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
+*/
 
 export async function POST(request: NextRequest) {
   // 2026-07-25: 소셜 로그인 기능 비활성화 (현재 프론트엔드 어디에서도 사용하지 않음 - 로그인/가입 페이지에 진입 버튼 없음). 아래 원래 로직은 재활성화 시 참고용으로 남겨둔다.
@@ -211,7 +215,10 @@ export async function POST(request: NextRequest) {
     { success: false, error: { code: 'FEATURE_DISABLED', message: '소셜 로그인 기능은 현재 비활성화되어 있습니다.' } },
     { status: 503 }
   );
+}
 
+/* 2026-08-06: 소셜 로그인 미사용 확인 후 원본 로직(도달 불가 코드) 주석처리 — 재사용 시 위 return을 지우고 아래를 함수 본문으로 복원
+async function _disabled_POST(request: NextRequest) {
   try {
     const body = await request.json();
     const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
@@ -652,3 +659,4 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
+*/

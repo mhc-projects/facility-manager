@@ -13,7 +13,10 @@ export async function DELETE(request: NextRequest) {
     { success: false, error: { code: 'FEATURE_DISABLED', message: '소셜 로그인 기능은 현재 비활성화되어 있습니다.' } },
     { status: 503 }
   );
+}
 
+/* 2026-08-06: 소셜 로그인 미사용 확인 후 원본 로직(도달 불가 코드) 주석처리 — 재사용 시 위 return을 지우고 아래를 함수 본문으로 복원
+async function _disabled_DELETE(request: NextRequest) {
   try {
     // JWT 토큰 검증
     const token = request.cookies.get('auth-token')?.value;
@@ -86,3 +89,4 @@ export async function DELETE(request: NextRequest) {
     }, { status: 500 });
   }
 }
+*/

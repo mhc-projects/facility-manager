@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
     { success: false, error: '현재 사용할 수 없는 로그인 방식입니다.' },
     { status: 503 }
   );
+}
 
-  // eslint-disable-next-line no-unreachable
+/* 2026-08-06: 소셜 로그인 미사용 확인 후 원본 로직(도달 불가 코드, sendAdminApprovalNotification 헬퍼 포함) 주석처리 — 재사용 시 위 return을 지우고 아래를 함수 본문으로 복원
+async function _disabled_POST(request: NextRequest) {
   try {
     const socialUser: SocialUserInfo = await request.json();
 
@@ -216,3 +218,4 @@ async function sendAdminApprovalNotification(newUser: any) {
     // 알림 실패가 로그인을 막지 않도록 에러를 던지지 않음
   }
 }
+*/
