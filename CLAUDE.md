@@ -4,8 +4,9 @@
 블루온(주식회사 블루온) 환경설비 설치 종합 관리 플랫폼.
 사업장 관리, 매출/비용 관리, 예측마감, 업무게시판, IoT 모니터링을 하나의 시스템으로 통합.
 
-## 핵심 DB 테이블
+## 핵심 DB 테이블 & 도메인 스킬
 DB 스키마 요약은 `.claude/skills/db-schema/SKILL.md` 참고 (DB 관련 작업 시 자동 로드).
+도메인별 핵심 비즈니스 로직(계산 공식, 상태 전이, 확정된 업무 규칙, 알려진 함정)은 `.claude/skills/<도메인>/SKILL.md`에 정리돼 있다 (예: `receivables`, `approval`). 관련 작업 시 자동 로드된다.
 
 ## 개발 규칙
 
@@ -14,6 +15,9 @@ DB 스키마 요약은 `.claude/skills/db-schema/SKILL.md` 참고 (DB 관련 작
 - 구현 후 반드시 브라우저에서 동작 확인한다
 - 기존 동작하는 기능을 깨뜨리지 않는다
 - 세션 종료 시 git commit + claude-progress.txt 업데이트
+
+### 도메인 스킬 갱신
+`.claude/skills/*/SKILL.md`로 문서화된 도메인의 핵심 로직 파일(예: receivables → `lib/receivables-engine.ts` 등, approval → `app/api/approvals/**`)을 수정하면, 관련 스킬 파일도 같이 검토·갱신한다. 계산 공식·상태값·확정된 업무 규칙이 바뀌었는데 스킬 파일이 예전 내용 그대로면 다음 세션이 틀린 정보를 근거로 작업하게 된다.
 
 ### 수정 시 오류 검증 (필수)
 코드를 수정할 때 반드시 아래 절차를 따른다:
