@@ -1655,11 +1655,16 @@ function RevenueDashboard() {
 
     return businesses.filter(business => {
       // 검색어 필터
+      const manufacturerKo = business.manufacturer
+        ? (MANUFACTURER_NAMES[business.manufacturer as keyof typeof MANUFACTURER_NAMES] || business.manufacturer)
+        : '';
       const searchMatch = !searchTerm ||
         business.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (business.sales_office && business.sales_office.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (business.manager_name && business.manager_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (business.address && business.address.toLowerCase().includes(searchTerm.toLowerCase()));
+        (business.address && business.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (business.manufacturer && business.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        manufacturerKo.toLowerCase().includes(searchTerm.toLowerCase());
 
       // 드롭다운 필터 (다중 선택)
       const officeMatch = selectedOffices.length === 0 || selectedOffices.includes(business.sales_office || '');
@@ -2568,7 +2573,7 @@ function RevenueDashboard() {
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="사업장명/영업점/주소"
+                    placeholder="사업장명/영업점/주소/제조사"
                     value={searchTerm}
                     onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                     className="w-full pl-7 pr-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
