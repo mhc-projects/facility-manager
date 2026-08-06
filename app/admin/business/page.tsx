@@ -4743,23 +4743,21 @@ function BusinessManagementPage() {
       width: '110px',
       render: (item: any) => {
         const businessName = item.사업장명 || item.business_name || ''
-        const taskStatus = businessTaskStatuses[businessName]
+        const rawTaskStatus = businessTaskStatuses[businessName]
+        // loadCurrentPageTaskStatuses가 batch 조회 시작 시 심어두는 임시 placeholder
+        // (statusText: '로딩 중...')는 실제 데이터가 아니므로 아래 분기에서 걸러낸다 -
+        // 이걸 그대로 "데이터 있음"으로 취급하면 뱃지가 "로딩 중..."(짧은 1줄)으로 잠깐 렌더된 뒤
+        // 실제 값(길어서 2줄로 줄바꿈)으로 바뀌며 행 높이가 늘어나는 원인이 됐다
+        const taskStatus = rawTaskStatus && rawTaskStatus.statusText !== '로딩 중...' ? rawTaskStatus : null
+        const precomputedStep = calculateBusinessCurrentSteps[businessName]
 
-        // 로딩 중일 때
-        if (isLoadingTasks && !taskStatus) {
-          return (
-            <div className="text-center">
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                조회 중...
-              </span>
-              <div className="text-xs text-gray-500 mt-1">
-                잠시만요
-              </div>
-            </div>
-          )
-        }
+        // 뱃지+부제 2줄 구조를 모든 분기에서 동일하게 유지 (아래 badgeClass 공통 사용).
+        // 부제가 없는 분기(precomputedStep)도 빈 줄을 예약해둬야, 이후 taskStatus가 도착해
+        // 부제가 채워질 때 행 높이가 안 늘어난다 (2026-08-06)
+        const badgeClass = 'px-1.5 py-0.5 rounded text-[10px] font-medium leading-snug inline-block whitespace-normal break-keep'
+        const subtitleClass = 'text-[10px] text-gray-500 mt-px leading-tight'
 
-        // 업무 상태 정보가 있을 때
+        // 업무 상태 정보(현재 페이지 batch 조회 결과)가 있을 때 - 가장 정확한 값
         if (taskStatus) {
           const displayText = taskStatus.rawStatus && taskStatus.hasActiveTasks
             ? (() => {
@@ -4773,24 +4771,40 @@ function BusinessManagementPage() {
             : taskStatus.colorClass
           return (
             <div className="text-center">
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium leading-snug inline-block whitespace-normal break-keep ${colorClass}`}>
+              <span className={`${badgeClass} ${colorClass}`}>
                 {displayText}
               </span>
-              <div className="text-[10px] text-gray-500 mt-0.5">
+              <div className={subtitleClass}>
                 {getTaskSummary(taskStatus.taskCount, taskStatus.hasActiveTasks, taskStatus.lastUpdated)}
               </div>
             </div>
           )
         }
 
-        // taskStatus 미로딩 시 calculateBusinessCurrentSteps 값을 fallback으로 표시
-        const precomputedStep = calculateBusinessCurrentSteps[businessName]
+        // batch 결과가 아직 없으면 전체 목록 기반 폴백을 먼저 시도한다("조회 중..."보다 우선) -
+        // 이 값이 대개 최종 뱃지 텍스트와 동일해서, 이후 batch 결과가 도착해도 뱃지는 안 바뀌고
+        // 부제(업데이트 일시)만 채워지는 정도로 전환 폭이 줄어든다
         if (precomputedStep) {
           return (
             <div className="text-center">
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium leading-snug inline-block whitespace-normal break-keep bg-gray-100 text-gray-600">
+              <span className={`${badgeClass} bg-gray-100 text-gray-600`}>
                 {precomputedStep}
               </span>
+              <div className={subtitleClass}>{'\u00A0'}</div>
+            </div>
+          )
+        }
+
+        // 로딩 중이고 폴백도 없을 때
+        if (isLoadingTasks) {
+          return (
+            <div className="text-center">
+              <span className={`${badgeClass} bg-gray-100 text-gray-600`}>
+                조회 중...
+              </span>
+              <div className={subtitleClass}>
+                잠시만요
+              </div>
             </div>
           )
         }
@@ -4798,10 +4812,10 @@ function BusinessManagementPage() {
         // 기본값 (업무 미등록)
         return (
           <div className="text-center">
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+            <span className={`${badgeClass} bg-gray-100 text-gray-600`}>
               업무 미등록
             </span>
-            <div className="text-xs text-gray-500 mt-1">
+            <div className={subtitleClass}>
               등록 필요
             </div>
           </div>
