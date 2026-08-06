@@ -2445,10 +2445,10 @@ function RevenueDashboard() {
             )}
           </button>
           <div className={`space-y-2 sm:space-y-3 ${isMobile && !isFilterExpanded ? 'hidden' : ''}`}>
-            {/* 첫 번째 행: 필터들 전체 너비로 한 줄 배치 */}
-            <div className="flex gap-2 items-center w-full">
+            {/* 첫 번째 행: 필터들 전체 너비로 한 줄 배치 (좁은 화면에서는 세로로 쌓아 겹침 방지) */}
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center w-full">
               {/* 진행구분 */}
-              <div className="flex-[1.5_1.5_0%] min-w-0">
+              <div className="min-w-0 sm:flex-[1.5_1.5_0%]">
                 <MultiSelectDropdown
                   label="진행구분"
                   options={categoryOptions}
@@ -2460,7 +2460,7 @@ function RevenueDashboard() {
               </div>
 
               {/* 실사월 */}
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 sm:flex-1">
                 <TwoStageDropdown
                   label="실사월"
                   stage1Options={['견적', '착공', '준공']}
@@ -2472,7 +2472,7 @@ function RevenueDashboard() {
               </div>
 
               {/* 설치/발주: 연도 + 월 묶음 (대리점만 선택 시 라벨을 발주로 표시, 필터 기준일도 발주일로 전환) */}
-              <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
+              <div className="flex items-center gap-1 min-w-0 sm:flex-[2_2_0%]">
                 <span
                   className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0"
                   title={selectedCategories.length === 1 && selectedCategories[0] === '대리점' ? '발주일 기준' : '설치일 기준 (대리점은 발주일 기준)'}
@@ -2500,7 +2500,7 @@ function RevenueDashboard() {
               </div>
 
               {/* 계산서: 연도 + 월 묶음 */}
-              <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
+              <div className="flex items-center gap-1 min-w-0 sm:flex-[2_2_0%]">
                 <span className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">계산서</span>
                 <div className="flex-1 min-w-0">
                   <MultiSelectDropdown
@@ -2523,7 +2523,7 @@ function RevenueDashboard() {
               </div>
 
               {/* 입금: 연도 + 월 묶음 */}
-              <div className="flex items-center gap-1 flex-[2_2_0%] min-w-0">
+              <div className="flex items-center gap-1 min-w-0 sm:flex-[2_2_0%]">
                 <span className="text-xs sm:text-sm font-medium whitespace-nowrap shrink-0">입금</span>
                 <div className="flex-1 min-w-0">
                   <MultiSelectDropdown
@@ -2629,8 +2629,8 @@ function RevenueDashboard() {
                 </div>
               )}
 
-              {/* 체크박스: 항상 우측 끝 고정 */}
-              <div className="flex items-center gap-3 ml-auto shrink-0">
+              {/* 체크박스: 데스크탑에서는 우측 끝 고정, 좁은 화면에서는 줄바꿈으로 겹침 방지 */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 w-full sm:w-auto sm:ml-auto sm:flex-nowrap sm:shrink-0">
                 {/* 초과입금 서브필터: 미수금 필터 활성화 시에만 표시 */}
                 {showReceivablesOnly && overpaymentCount > 0 && (
                   <>
