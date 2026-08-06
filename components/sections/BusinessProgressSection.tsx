@@ -122,7 +122,9 @@ export default function BusinessProgressSection({
       setLoading(true);
 
       // 진행 현황 메모 조회 (business_memos API 사용)
-      const notesResponse = await fetch(`/api/business-memos?businessName=${encodeURIComponent(businessName)}&limit=20`);
+      const notesResponse = await fetch(`/api/business-memos?businessName=${encodeURIComponent(businessName)}&limit=20`, {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      });
       if (notesResponse.ok) {
         const notesData = await notesResponse.json();
         if (notesData.success) {
@@ -170,7 +172,8 @@ export default function BusinessProgressSection({
       const response = await fetch('/api/business-memos', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TokenManager.getToken()}`
         },
         body: JSON.stringify({
           business_name: businessName,

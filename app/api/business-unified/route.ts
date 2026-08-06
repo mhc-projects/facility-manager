@@ -1,5 +1,6 @@
 // app/api/business-unified/route.ts - 통합된 사업장 정보 API
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,9 @@ interface UnifiedBusinessInfo extends BusinessInfo {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
@@ -220,6 +224,9 @@ export async function GET(request: NextRequest) {
 
 // POST 메서드도 지원 (향후 확장용)
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { businessName, action } = body;

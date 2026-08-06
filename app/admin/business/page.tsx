@@ -1252,7 +1252,9 @@ function BusinessManagementPage() {
       const url = `/api/business-memos?businessId=${businessId}`
       console.log('🔧 [FRONTEND] 메모 로드 요청 URL:', url)
 
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      })
       const result = await response.json()
 
       console.log('🔧 [FRONTEND] ===== API 응답 상세 디버깅 =====')
@@ -1464,7 +1466,10 @@ function BusinessManagementPage() {
 
       const response = await fetch('/api/business-memos', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TokenManager.getToken()}`
+        },
         body: JSON.stringify(memoData)
       })
 
@@ -1515,7 +1520,10 @@ function BusinessManagementPage() {
 
       const response = await fetch(`/api/business-memos?id=${editId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TokenManager.getToken()}`
+        },
         body: JSON.stringify(updateData)
       })
 
@@ -1561,7 +1569,8 @@ function BusinessManagementPage() {
       })
 
       const response = await fetch(`/api/business-memos?id=${memo.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
       })
 
       if (!response.ok) {

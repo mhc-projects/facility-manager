@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { queryAll } from '@/lib/supabase-direct';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,9 @@ const NO_CACHE_HEADERS = {
 
 
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     // URL 파라미터 확인 - includeAll=true면 모든 사업장 반환
     const { searchParams } = new URL(request.url);

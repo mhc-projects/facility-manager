@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/utils/formatters'
 import { useBusinessMemoRealtime, BusinessMemoRealtimePayload } from '@/hooks/useBusinessMemoRealtime'
+import { TokenManager } from '@/lib/api-client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -411,7 +412,11 @@ export default function BusinessInfoPanel({
       }
 
       const memRes = await fetch(`/api/business-memos?businessId=${businessId}`, {
-        headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache',
+          Authorization: `Bearer ${TokenManager.getToken()}`,
+        },
       })
       if (memRes.ok) {
         const memJson = await memRes.json()

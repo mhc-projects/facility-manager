@@ -143,7 +143,9 @@ export default function EditMeetingMinutePage({ params }: { params: { id: string
   const loadBusinessesAndEmployees = async () => {
     try {
       // 사업장 목록 로드
-      const businessRes = await fetch('/api/business-list?includeAll=true')
+      const businessRes = await fetch('/api/business-list?includeAll=true', {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      })
       const businessData = await businessRes.json()
       if (businessData.success && businessData.data) {
         const businessArray = Array.isArray(businessData.data.businesses) ? businessData.data.businesses : []

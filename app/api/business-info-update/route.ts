@@ -1,5 +1,6 @@
 // app/api/business-info-update/route.ts - business_info 테이블 업데이트 API
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -111,6 +112,9 @@ function findBestMatch(excelBusiness: ExcelBusinessData, dbBusinesses: any[]): {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { excelData, preview = false } = body;

@@ -9,6 +9,7 @@ import { AirPermitWithOutlets } from '@/types/database'
 import AdminLayout from '@/components/ui/AdminLayout'
 import { withAuth } from '@/contexts/AuthContext'
 import { ConfirmModal } from '@/components/ui/Modal'
+import { TokenManager } from '@/lib/api-client'
 import { generateFacilityNumbering, generateOutletFacilitySummary, type FacilityNumberingResult } from '@/utils/facility-numbering'
 import {
   FileText,
@@ -578,7 +579,8 @@ function AirPermitManagementPage() {
       // 🔥 배포 환경에서 캐싱 방지 (Router Cache 무효화)
       const timestamp = Date.now()
       const response = await fetch(`/api/business-list?includeAll=true&_t=${timestamp}`, {
-        cache: 'no-store'
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
       })
       const result = await response.json()
 

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Building2, Search, X } from 'lucide-react';
+import { TokenManager } from '@/lib/api-client';
 
 /**
  * 사업장 간단 정보 타입
@@ -106,7 +107,9 @@ export default function BusinessAutocomplete({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/business-list?includeAll=true');
+      const response = await fetch('/api/business-list?includeAll=true', {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      });
       if (!response.ok) {
         throw new Error('사업장 목록 조회 실패');
       }

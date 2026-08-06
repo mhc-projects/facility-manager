@@ -9,6 +9,7 @@ import AdminLayout from '@/components/ui/AdminLayout'
 import AutocompleteSelectInput from '@/components/ui/AutocompleteSelectInput'
 import RecurringIssuesPanel from '@/components/admin/meeting-minutes/RecurringIssuesPanel'
 import ResizableTiptapEditor from '@/components/ui/ResizableTiptapEditor'
+import { TokenManager } from '@/lib/api-client'
 import {
   ArrowLeft,
   Save,
@@ -90,7 +91,9 @@ export default function CreateMeetingMinutePage() {
   const loadBusinessesAndEmployees = async () => {
     try {
       // 사업장 목록 로드
-      const businessRes = await fetch('/api/business-list?includeAll=true')
+      const businessRes = await fetch('/api/business-list?includeAll=true', {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      })
       const businessData = await businessRes.json()
       if (businessData.success && businessData.data) {
         // API returns { success: true, data: { businesses: [...], count, metadata } }

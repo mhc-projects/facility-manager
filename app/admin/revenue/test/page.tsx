@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { TokenManager } from '@/lib/api-client';
 import {
   BarChart3,
   Calculator,
@@ -51,7 +52,9 @@ export default function RevenueTestPage() {
   const loadBusinesses = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/business-list');
+      const response = await fetch('/api/business-list', {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      });
       const data = await response.json();
 
       if (data.success) {

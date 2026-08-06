@@ -1,6 +1,7 @@
 // app/api/business-list-supabase/route.ts - Supabase 기반 사업장 목록 API
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,9 @@ export const runtime = 'nodejs';
 
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '100');
@@ -86,6 +90,9 @@ export async function GET(request: NextRequest) {
 
 // 새 사업장 생성 (POST)
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { name, facilityInfo } = await request.json();
 

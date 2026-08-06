@@ -4,6 +4,7 @@ import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/li
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct'
 import { upsertMemoEmbedding } from '@/lib/memo-embedding'
 import type { BusinessMemo, CreateBusinessMemoInput, UpdateBusinessMemoInput } from '@/types/database'
+import { requireAuth } from '@/lib/auth/require-auth'
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,9 @@ export const runtime = 'nodejs';
 
 // GET - 특정 사업장의 모든 메모 조회
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url)
     const businessId = searchParams.get('businessId')
@@ -110,6 +114,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
 // POST - 새 메모 추가
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json()
 
@@ -209,6 +216,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
 // PUT - 기존 메모 수정
 export const PUT = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url)
     const memoId = searchParams.get('id')
@@ -294,6 +304,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
 // DELETE - 메모 소프트 삭제
 export const DELETE = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url)
     const memoId = searchParams.get('id')

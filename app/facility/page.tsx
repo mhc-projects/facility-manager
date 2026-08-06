@@ -6,6 +6,7 @@ import AdminLayout from '@/components/ui/AdminLayout';
 import FilterPanel from '@/components/FilterPanel';
 import BusinessCard, { BusinessInfo } from '@/components/BusinessCard';
 import Pagination from '@/components/Pagination';
+import { TokenManager } from '@/lib/api-client';
 
 export default memo(function FacilityPage() {
   const [businessList, setBusinessList] = useState<BusinessInfo[]>([]);
@@ -162,7 +163,8 @@ export default memo(function FacilityPage() {
         signal: controller.signal,
         cache: 'no-store',  // ✅ 캐시 비활성화 - 항상 최신 데이터
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Authorization: `Bearer ${TokenManager.getToken()}`
         }
       });
 

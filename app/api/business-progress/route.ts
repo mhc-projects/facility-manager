@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,9 @@ export interface BusinessProgressNote {
 
 // GET: 특정 사업장의 진행 현황 조회
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const businessName = searchParams.get('businessName');
@@ -107,6 +111,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 
 // POST: 새 진행 현황 메모 추가
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const {
@@ -165,6 +172,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
 // PUT: 진행 현황 메모 수정 (수동 메모만)
 export const PUT = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { id, content, author_name } = body;
@@ -223,6 +233,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
 
 // DELETE: 진행 현황 메모 삭제 (소프트 삭제)
 export const DELETE = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

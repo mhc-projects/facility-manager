@@ -1,6 +1,7 @@
 // app/api/business-contacts/route.ts - 사업장 연락처 정보 API
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
 
 // 사업장 연락처 정보 조회 (GET)
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const businessName = searchParams.get('businessName');
 
@@ -134,10 +138,13 @@ export async function GET(request: NextRequest) {
 
 // 사업장 연락처 정보 생성/수정 (POST/PUT)
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
-    const { 
-      businessName, 
+    const {
+      businessName,
       주소, 
       담당자명, 
       담당자연락처, 

@@ -1,6 +1,7 @@
 // app/api/business-equipment-counts/route.ts - 사업장 측정기기 수량 관리 API
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
 
 // 측정기기 수량 업데이트 (PUT)
 export async function PUT(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { businessId, equipmentCounts } = await request.json();
 
@@ -75,6 +79,9 @@ export async function PUT(request: NextRequest) {
 
 // 측정기기 수량 조회 (GET)
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get('businessId');

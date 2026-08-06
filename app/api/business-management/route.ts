@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { DatabaseService, BusinessInfo } from '@/lib/database-service';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
 
 
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     console.log('🔍 [BUSINESS-MGMT] 어드민 사업장 목록 조회 (기존 데이터 활용)');
     
@@ -17,7 +21,12 @@ export const GET = withApiHandler(async (request: NextRequest) => {
       ? `https://${request.headers.get('host')}`
       : `http://localhost:${process.env.PORT || 3000}`;
       
-    const businessListResponse = await fetch(`${baseUrl}/api/business-list`);
+    const businessListResponse = await fetch(`${baseUrl}/api/business-list`, {
+      headers: {
+        authorization: request.headers.get('authorization') || '',
+        cookie: request.headers.get('cookie') || '',
+      },
+    });
     const businessListData = await businessListResponse.json();
     
     if (!businessListData.success || !businessListData.data?.businesses) {
@@ -177,6 +186,9 @@ export const GET = withApiHandler(async (request: NextRequest) => {
 }, { logLevel: 'debug' });
 
 export const POST = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     console.log('📝 [BUSINESS-MGMT] 사업장 추가/수정 요청:', body);
@@ -535,6 +547,9 @@ function convertExcelToBusinessData(excelRow: any): Partial<BusinessInfo> {
 }
 
 export const DELETE = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     console.log('🗑️ [BUSINESS-MGMT] 사업장 삭제 요청:', body);

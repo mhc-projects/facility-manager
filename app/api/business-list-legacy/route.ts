@@ -1,7 +1,8 @@
-// app/api/business-list-legacy/route.ts - 기존 시스템 백업 (인증 없음)
+// app/api/business-list-legacy/route.ts - 기존 시스템 백업 (2026-08-06 인증 추가)
 import { NextRequest } from 'next/server';
 import { sheets } from '@/lib/google-client';
 import { withApiHandler, createSuccessResponse, withTimeout } from '@/lib/api-utils';
+import { requireAuth } from '@/lib/auth/require-auth';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
 
 
 export const GET = withApiHandler(async (request: NextRequest) => {
+  const auth = await requireAuth(request, 1);
+  if (!auth.ok) return auth.response;
+
   // 대기필증 DB가 포함된 스프레드시트 사용 (UPLOAD_SPREADSHEET_ID 우선)
   const uploadSpreadsheetId = process.env.UPLOAD_SPREADSHEET_ID || process.env.DATA_COLLECTION_SPREADSHEET_ID || process.env.MAIN_SPREADSHEET_ID;
 

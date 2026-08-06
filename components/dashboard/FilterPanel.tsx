@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { DashboardFilters } from '@/types/dashboard'
 import { Filter, X } from 'lucide-react'
+import { TokenManager } from '@/lib/api-client'
 
 interface FilterPanelProps {
   onFilterChange: (filters: DashboardFilters) => void;
@@ -24,7 +25,9 @@ export default function FilterPanel({ onFilterChange }: FilterPanelProps) {
   const loadFilterOptions = async () => {
     try {
       // 사업장 목록에서 필터 옵션 추출
-      const response = await fetch('/api/business-list');
+      const response = await fetch('/api/business-list', {
+        headers: { Authorization: `Bearer ${TokenManager.getToken()}` }
+      });
       const result = await response.json();
 
       if (result.success && result.data?.businesses) {
