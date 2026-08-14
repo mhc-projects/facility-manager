@@ -12,6 +12,23 @@ import { formatDate, formatCurrency } from '@/utils/formatters'
 import { useBusinessMemoRealtime, BusinessMemoRealtimePayload } from '@/hooks/useBusinessMemoRealtime'
 import { TokenManager } from '@/lib/api-client'
 
+/**
+ * 메모 내용이 Tiptap HTML인지 plain text인지 판별하여 렌더링용 HTML 문자열 반환.
+ * - HTML 태그를 포함하면 그대로 사용
+ * - plain text(\n 포함)이면 <p> 단락으로 변환하여 줄바꿈 보존
+ */
+function renderMemoContent(content: string): string {
+  if (!content) return ''
+  const trimmed = content.trim()
+  if (/<[a-zA-Z][\s\S]*?>/.test(trimmed)) {
+    return trimmed
+  }
+  const paragraphs = trimmed.split(/\n\n+/)
+  return paragraphs
+    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UnifiedBusinessInfo {
@@ -966,9 +983,10 @@ export default function BusinessInfoPanel({
                           </div>
                           <span className="text-[10px] text-gray-400">{formatDate(m.created_at)}</span>
                         </div>
-                        <p className={`whitespace-pre-wrap leading-relaxed ${isSys ? 'text-gray-400 italic text-[11px]' : 'text-gray-600'}`}>
-                          {m.content}
-                        </p>
+                        <div
+                          className={`tiptap-memo-display leading-relaxed ${isSys ? 'text-gray-400 italic text-[11px]' : 'text-gray-600'}`}
+                          dangerouslySetInnerHTML={{ __html: renderMemoContent(m.content) }}
+                        />
                       </div>
                     )
                   })}
