@@ -64,3 +64,11 @@
 - push 완료(63e4585까지, 문서 커밋 1건 포함) → Vercel 프로덕션 배포 성공(dpl_7b6HgJR6MCSHoE6faVw4t8mj5iqT) → 8개 그룹 대표 엔드포인트 7곳 curl 401 정상 확인 + 홈페이지/로그인 정상 동작 스모크테스트까지 완료.
 - 부수 발견(미수정, 별도 항목화 필요): business-management/route.ts 자체가 완전히 죽은 코드이면서 인증도 없음 — checklist.md에 없는 신규 항목, 다음 전수 재검토 시 반영 필요.
 - 남은 작업: critical×고위험 9건(Group 2 금액계산/로직 3건: BUG-090/096/097, Group 3 개별 보안취약점 5건: BUG-105/202/211/214/240), high 84건, medium 125건, low 53건, 디자인/모듈 일관성 나머지.
+
+---
+
+## 2026-08-16 | Supabase 서울 리전 이전 런북 작성 (미실행)
+
+- 운영 DB는 싱가폴(`uvdvfsjekqshxtxthxeq` / ap-southeast-1), Vercel은 이미 서울. 리전 제자리 변경은 불가.
+- 예전 서울 프로젝트(`qdfqoykhmuiambtrrlnf`)는 INACTIVE라 재사용 금지.
+- 이전은 아직 진행하지 않음. 나중에 실행할 절차서는 `docs/supabase-seoul-region-migration.md`.
