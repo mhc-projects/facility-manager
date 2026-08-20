@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
+import { Plus, Trash2, Paperclip, X, FileText, Image, File, Link2 } from 'lucide-react'
 import FileUploadArea from '../FileUploadArea'
 
 function autoResize(el: HTMLTextAreaElement) {
@@ -16,6 +16,7 @@ export interface PurchaseItem {
   unit_price: number
   estimated_amount: number
   reason: string
+  purchase_url?: string
 }
 
 export interface AttachmentFile {
@@ -36,6 +37,7 @@ export interface PurchaseRequestData {
   special_notes: string
   attachment_included: boolean
   attachments?: AttachmentFile[]
+  purchase_url_included?: boolean
   items: PurchaseItem[]
 }
 
@@ -81,7 +83,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
 
   const addItem = () => {
     const seq = data.items.length + 1
-    onChange({ ...data, items: [...data.items, { seq, name: '', quantity: 0, unit_price: 0, estimated_amount: 0, reason: '' }] })
+    onChange({ ...data, items: [...data.items, { seq, name: '', quantity: 0, unit_price: 0, estimated_amount: 0, reason: '', purchase_url: '' }] })
   }
 
   const removeItem = (idx: number) => {
@@ -93,6 +95,11 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
   const handleAttachmentToggle = (value: boolean) => {
     if (disabled) return
     onChange({ ...data, attachment_included: value })
+  }
+
+  const handlePurchaseLinkToggle = (value: boolean) => {
+    if (disabled) return
+    onChange({ ...data, purchase_url_included: value })
   }
 
   const handleFiles = async (files: File[]) => {
@@ -185,6 +192,43 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
       )}
     </div>
   )
+
+  // 품목별 구매링크 목록 (데스크탑/모바일 공통)
+  const PurchaseLinkList = () => {
+    if (disabled) {
+      const linkedItems = data.items.filter(item => item.purchase_url)
+      return (
+        <div className="mt-3 space-y-2">
+          {linkedItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+              <Link2 className="w-4 h-4 text-blue-500 shrink-0" />
+              <span className="text-xs text-gray-400 shrink-0">{item.seq}.</span>
+              <a href={item.purchase_url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-blue-600 hover:underline truncate">{item.name || item.purchase_url}</a>
+            </div>
+          ))}
+          {linkedItems.length === 0 && (
+            <p className="text-sm text-gray-400 italic">등록된 구매링크가 없습니다</p>
+          )}
+        </div>
+      )
+    }
+    return (
+      <div className="mt-3 space-y-2">
+        {data.items.map((item, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 shrink-0 max-w-[40%] truncate" title={item.name}>{item.seq}. {item.name || '품명 미입력'}</span>
+            <input
+              type="url"
+              className="flex-1 min-w-0 text-xs px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={item.purchase_url || ''}
+              onChange={e => updateItem(idx, 'purchase_url', e.target.value)}
+              placeholder="https://..."
+            />
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -306,6 +350,27 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
                   <AttachmentList />
                 </div>
               )}
+
+              <div className="no-print flex items-center gap-3 mt-3">
+                <span className="text-sm text-gray-600">구매링크:</span>
+                <label className="flex items-center gap-1 text-sm cursor-pointer">
+                  <input type="radio" checked={!!data.purchase_url_included} onChange={() => handlePurchaseLinkToggle(true)} disabled={disabled} />여
+                </label>
+                <label className="flex items-center gap-1 text-sm cursor-pointer">
+                  <input type="radio" checked={!data.purchase_url_included} onChange={() => handlePurchaseLinkToggle(false)} disabled={disabled} />부
+                </label>
+              </div>
+
+              {/* 구매링크 '여' 선택 시 품목별 링크 입력 영역 */}
+              {data.purchase_url_included && (
+                <div className="mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                    <Link2 className="w-3.5 h-3.5" />
+                    품목별 구매링크
+                  </p>
+                  {PurchaseLinkList()}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -416,6 +481,27 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
                 첨부 파일 (PDF, 이미지, Excel, Word)
               </p>
               <AttachmentList />
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">구매링크</span>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="radio" checked={!!data.purchase_url_included} onChange={() => handlePurchaseLinkToggle(true)} disabled={disabled} />여
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="radio" checked={!data.purchase_url_included} onChange={() => handlePurchaseLinkToggle(false)} disabled={disabled} />부
+            </label>
+          </div>
+
+          {/* 구매링크 '여' 선택 시 품목별 링크 입력 영역 */}
+          {data.purchase_url_included && (
+            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+              <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                <Link2 className="w-3.5 h-3.5" />
+                품목별 구매링크
+              </p>
+              {PurchaseLinkList()}
             </div>
           )}
         </div>

@@ -39,7 +39,7 @@ function getDefaultFormData(type: DocType, writerName: string, dept: string, pos
     case 'expense_claim':
       return { writer: writerName, department: dept, written_date: TODAY, note: '', items: [{ date: TODAY, description: '', amount: 0, note: '' }] } as ExpenseClaimData
     case 'purchase_request':
-      return { writer: writerName, department: dept, written_date: TODAY, estimated_total: 0, special_notes: '상기와 같이 물품 구매를 요청합니다.\n(견적서 첨부 여 / 부)', attachment_included: false, items: Array.from({ length: 5 }, (_, i) => ({ seq: i+1, name: '', quantity: 0, unit_price: 0, estimated_amount: 0, reason: '' })) } as PurchaseRequestData
+      return { writer: writerName, department: dept, written_date: TODAY, estimated_total: 0, special_notes: '상기와 같이 물품 구매를 요청합니다.\n(견적서 첨부 여 / 부)', attachment_included: false, purchase_url_included: false, items: Array.from({ length: 5 }, (_, i) => ({ seq: i+1, name: '', quantity: 0, unit_price: 0, estimated_amount: 0, reason: '', purchase_url: '' })) } as PurchaseRequestData
     case 'leave_request':
       return { writer: writerName, department: dept, written_date: TODAY, items: [{ date: TODAY, leave_type: 'annual', days: 1 }], total_days: 1, reason: '', note: '' } as LeaveRequestData
     case 'business_proposal':
