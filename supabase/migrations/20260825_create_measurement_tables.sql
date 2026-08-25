@@ -69,6 +69,28 @@ CREATE TABLE IF NOT EXISTS measurement_devices (
     UNIQUE(business_id, device_type, serial_number)
 );
 
+-- date_bucket/hour_bucket를 위한 IMMUTABLE 헬퍼 함수
+-- DATE(timestamptz), EXTRACT(HOUR FROM timestamptz)는 세션 TimeZone 설정에 따라 결과가 달라질 수
+-- 있어 Postgres가 STABLE로 취급함 — GENERATED ALWAYS AS ... STORED는 IMMUTABLE 표현식만 허용하므로
+-- (원본 설계 파일 database/unified-extensible-schema.sql 그대로는 "generation expression is not
+-- immutable" 오류 발생, 2026-08-25 실제 적용 시도로 확인). 타임존을 'Asia/Seoul'로 고정해 결과가
+-- 항상 결정적이게 만든 뒤 IMMUTABLE로 선언(국내 사업장 데이터라 일/시간 버킷 기준도 KST).
+CREATE OR REPLACE FUNCTION public.immutable_date_kst(ts TIMESTAMP WITH TIME ZONE)
+RETURNS DATE
+LANGUAGE sql
+IMMUTABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$ SELECT (ts AT TIME ZONE 'Asia/Seoul')::date $$;
+
+CREATE OR REPLACE FUNCTION public.immutable_hour_kst(ts TIMESTAMP WITH TIME ZONE)
+RETURNS INTEGER
+LANGUAGE sql
+IMMUTABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$ SELECT EXTRACT(HOUR FROM (ts AT TIME ZONE 'Asia/Seoul'))::integer $$;
+
 -- 2. Measurement History
 CREATE TABLE IF NOT EXISTS measurement_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,9 +119,9 @@ CREATE TABLE IF NOT EXISTS measurement_history (
     trend_direction VARCHAR(10), -- 'increasing', 'decreasing', 'stable'
     alarm_status VARCHAR(20), -- 'normal', 'warning', 'alarm', 'critical'
 
-    -- Partitioning helper
-    date_bucket DATE GENERATED ALWAYS AS (DATE(measured_at)) STORED,
-    hour_bucket INTEGER GENERATED ALWAYS AS (EXTRACT(HOUR FROM measured_at)) STORED
+    -- Partitioning helper (KST 기준, 위 immutable_date_kst/immutable_hour_kst 참고)
+    date_bucket DATE GENERATED ALWAYS AS (immutable_date_kst(measured_at)) STORED,
+    hour_bucket INTEGER GENERATED ALWAYS AS (immutable_hour_kst(measured_at)) STORED
 );
 
 CREATE INDEX IF NOT EXISTS idx_measurement_history_device_time ON measurement_history(device_id, measured_at DESC);
