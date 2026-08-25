@@ -221,7 +221,7 @@ export interface MeasurementDevice {
   updated_at: string
   
   // Device Identity
-  device_type: 'ph_meter' | 'differential_pressure_meter' | 'temperature_meter' | 'ct_meter' | 'gateway' | 'flow_meter' | 'gas_analyzer'
+  device_type: 'ph_meter' | 'differential_pressure_meter' | 'temperature_meter' | 'ct_meter' | 'gateway' | 'flow_meter' | 'gas_analyzer' | 'power_meter' | 'edge_device'
   device_name: string
   model_number?: string | null
   serial_number?: string | null
@@ -309,6 +309,30 @@ export interface MeasurementReading {
   // Partitioning helpers
   date_bucket: string // DATE
   hour_bucket: number // 0-23
+}
+
+export interface RawFrame {
+  id: string
+  device_id: string
+  business_id: string
+  captured_at: string
+  payload: string // BYTEA, base64/hex 인코딩된 원본 프레임 바이트
+}
+
+export interface OperationStatusLabel {
+  id: string
+  created_at: string
+  updated_at: string
+
+  business_id: string
+  prevention_facility_id?: string | null
+
+  start_ts: string
+  end_ts: string
+  label: 'normal_operation' | 'bypass_operation' | 'stopped' | string
+  source: 'operator_manual' | 'estimated' | string
+  confidence: number // 0.00-1.00
+  notes?: string | null
 }
 
 // =====================================================
