@@ -10,7 +10,8 @@ export interface BusinessInfo {
   id: string
   created_at: string
   updated_at: string
-  
+  form_version?: number
+
   // Core Business Identity
   business_name: string
   business_registration_number?: string | null

@@ -97,6 +97,7 @@ interface UnifiedBusinessInfo {
   id: string;
   created_at: string;
   updated_at: string;
+  form_version?: number;
   business_name: string;
   local_government: string | null;
   address: string | null;
@@ -3229,7 +3230,10 @@ function BusinessManagementPage() {
         // 부착지원신청서
         attachment_support_application_date: freshData.attachment_support_application_date || '',
         attachment_support_writing_date: freshData.attachment_support_writing_date || '',
-        online_receipt_date: freshData.online_receipt_date || ''
+        online_receipt_date: freshData.online_receipt_date || '',
+
+        // 동시편집 충돌 감지용 - 이 값을 불러온 시점의 form_version (저장 시 그대로 서버로 전송)
+        form_version: freshData.form_version
       })
 
       // Initialize adjAmountInputs display strings from revenue_adjustments
@@ -3868,7 +3872,7 @@ function BusinessManagementPage() {
       });
 
       const body = editingBusiness
-        ? { id: editingBusiness.id, updateData: processedFormData }
+        ? { id: editingBusiness.id, updateData: processedFormData, expectedFormVersion: formData.form_version }
         : processedFormData
 
       console.log('📤 [FRONTEND] 전송할 데이터:', JSON.stringify(body, null, 2));

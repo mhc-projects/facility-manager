@@ -264,7 +264,8 @@ export async function GET(request: NextRequest) {
       greenlink_pw,
       business_management_code,
       vpn,
-      department
+      department,
+      form_version
     `;
 
     // invoice_records의 계산서·입금 데이터를 우선 사용 (legacy business_info 컬럼 override)
@@ -432,6 +433,7 @@ export async function GET(request: NextRequest) {
         bi.business_management_code,
         bi.vpn,
         bi.department,
+        bi.form_version,
         COALESCE(ir.ir_extra_payment_total, 0) AS ir_extra_payment_total,
         ir.ir_has_any_record,
         -- 미수금 = 청구금액 합계 - 입금액 합계
@@ -530,7 +532,7 @@ export async function PUT(request: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const body = await request.json();
-    const { id } = body;
+    const { id, expectedFormVersion } = body;
 
     // updateData가 있으면 사용, 없으면 body 자체를 updateData로 사용 (id 제외)
     let updateData = body.updateData;
@@ -1074,10 +1076,22 @@ export async function PUT(request: NextRequest) {
     const values = updateFields.map(field => updateObject[field]);
     values.push(id); // Add id as the last parameter
 
+    // 동시편집 충돌 감지: 모달을 연 시점의 form_version을 클라이언트가 함께 보내면,
+    // 그 사이 다른 전체스냅샷 저장(수정모달/엑셀업로드)이 먼저 반영된 경우 WHERE 조건에 걸려
+    // 0건 업데이트되도록 한다. updated_at은 메모·계산서 동기화 등 무관한 처리에서도 자주 갱신되어
+    // 충돌 판단 기준으로 쓰기엔 너무 민감하므로, 전체스냅샷 저장 두 곳(이 PUT, 엑셀 배치 업로드)만
+    // 증가시키는 전용 카운터를 별도로 둔다.
+    // (구버전 클라이언트 호환을 위해 expectedFormVersion이 없으면 기존 동작 유지)
+    let whereClause = `id = $${values.length}`;
+    if (expectedFormVersion !== undefined && expectedFormVersion !== null) {
+      values.push(expectedFormVersion);
+      whereClause += ` AND form_version = $${values.length}`;
+    }
+
     const updateQuery = `
       UPDATE business_info
-      SET ${setClause}
-      WHERE id = $${values.length}
+      SET ${setClause}, form_version = form_version + 1
+      WHERE ${whereClause}
       RETURNING *
     `;
 
@@ -1085,6 +1099,14 @@ export async function PUT(request: NextRequest) {
     const updatedBusiness = result.rows[0];
 
     if (!updatedBusiness) {
+      if (expectedFormVersion !== undefined && expectedFormVersion !== null) {
+        logError('❌ [BUSINESS-INFO-DIRECT] PUT 충돌: 다른 사용자가 먼저 저장함 -', id);
+        return NextResponse.json({
+          success: false,
+          error: '다른 사용자가 방금 이 정보를 수정했습니다. 최신 정보를 다시 불러온 후 다시 시도해주세요.',
+          conflict: true
+        }, { status: 409 });
+      }
       logError('❌ [BUSINESS-INFO-DIRECT] PUT 실패: 업데이트된 레코드 없음');
       return NextResponse.json({
         success: false,
@@ -1538,14 +1560,20 @@ async function executeSingleBatch(
 
   if (uploadMode === 'overwrite') {
     // 덮어쓰기: 모든 필드 업데이트
+    // 단, 그린링크ID/PW는 엑셀 일괄업로드에 거의 포함되지 않는 민감한 계정정보라
+    // 셀이 비어있으면(엑셀에 해당 컬럼이 없거나 값을 안 채운 경우) 기존 값을 보존한다.
+    // (2026-01-27 155개 사업장 그린링크 계정정보 대량 유실 사고 재발 방지)
+    const preserveIfBlank = new Set(['greenlink_id', 'greenlink_pw']);
     const updateFields = fields
       .filter(f => f !== 'business_name' && f !== 'created_at')
-      .map(field => `${field} = EXCLUDED.${field}`)
+      .map(field => preserveIfBlank.has(field)
+        ? `${field} = COALESCE(NULLIF(TRIM(EXCLUDED.${field}), ''), business_info.${field})`
+        : `${field} = EXCLUDED.${field}`)
       .join(', ');
 
     conflictClause = `
       ON CONFLICT (business_name)
-      DO UPDATE SET ${updateFields}
+      DO UPDATE SET ${updateFields}, form_version = business_info.form_version + 1
     `;
   } else if (uploadMode === 'merge') {
     // 병합: 빈 값이 아닌 필드만 업데이트
@@ -1608,7 +1636,7 @@ async function executeSingleBatch(
 
     conflictClause = `
       ON CONFLICT (business_name)
-      DO UPDATE SET ${updateFields}
+      DO UPDATE SET ${updateFields}, form_version = business_info.form_version + 1
     `;
   } else if (uploadMode === 'skip') {
     // 건너뛰기: 중복 시 아무것도 안 함
