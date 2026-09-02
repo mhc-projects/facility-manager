@@ -21,8 +21,13 @@ export async function register() {
   console.error = (...args: unknown[]) => {
     originalError(...args);
 
+    // Node.js 자체 경고(ExperimentalWarning/DeprecationWarning 등)는 Node의 기본 경고
+    // 출력기가 console.error를 우선 사용해서 여기로 들어온다 — "(node:<pid>) "로 시작하는
+    // 게 그 신호. 애플리케이션 에러가 아니므로 기록하지 않는다.
+    if (typeof args[0] === 'string' && /^\(node:\d+\)\s/.test(args[0])) return;
+
     try {
-      const tag = typeof args[0] === 'string' ? args[0] : undefined;
+      const tag = args.length > 1 && typeof args[0] === 'string' ? args[0] : undefined;
       const errArg = args.find((a) => a instanceof Error) as Error | undefined;
       const message = truncate(
         errArg?.message ?? args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')
