@@ -28,6 +28,8 @@ const nextConfig = {
     serverComponentsExternalPackages: ['googleapis', 'sharp', 'canvas', 'playwright-core', '@sparticuz/chromium'],
     // Google Fonts 타임아웃 증가 (개발 환경 안정화)
     fetchCacheKeyPrefix: 'v1',
+    // instrumentation.ts의 register() 훅 사용 (Next 14.x는 기본 비활성 — 15+에서만 기본 켜짐)
+    instrumentationHook: true,
   },
 
   // Webpack 설정 - Playwright + Chromium 모듈 해석 문제 해결

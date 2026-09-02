@@ -53,6 +53,7 @@
     "@types/react-window": "^1.8.5",
     "@types/sharp": "^0.31.1",
     "@types/web-push": "^3.6.4",
+    "@vercel/functions": "^3.9.5",
     "bcryptjs": "^3.0.2",
     "browser-image-compression": "^2.0.2",
     "docx": "^9.5.1",
