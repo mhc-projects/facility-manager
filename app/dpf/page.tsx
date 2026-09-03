@@ -7,7 +7,7 @@ import AdminLayout from '@/components/ui/AdminLayout';
 import DpfVehicleTable from '@/components/dpf/DpfVehicleTable';
 import VehicleFormModal from '@/components/dpf/VehicleFormModal';
 import { DpfVehicle } from '@/types/dpf';
-import { Truck, FileText, Upload, X, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Truck, FileText, Upload, X, Plus, Search, SlidersHorizontal, Download } from 'lucide-react';
 
 interface SearchResult {
   vehicles: DpfVehicle[];
@@ -28,6 +28,7 @@ export default function DpfPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -60,6 +61,31 @@ export default function DpfPage() {
   function handleLocalGovChange(v: string) { setLocalGov(v); setPage(1); }
   function clearAll() { setQuery(''); setLocalGov(''); setPage(1); }
 
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ q: query, local_government: localGov });
+      if (vendor !== 'all') params.set('vendor', vendor);
+      const res = await fetch(`/api/dpf/export?${params}`);
+      if (!res.ok) throw new Error('엑셀 다운로드 실패');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `DPF_차량목록_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(err);
+      alert('엑셀 다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setExporting(false);
+    }
+  }, [query, localGov, vendor]);
+
   const hasFilter = query || localGov;
   const activeFilterCount = (query ? 1 : 0) + (localGov ? 1 : 0);
 
@@ -76,6 +102,14 @@ export default function DpfPage() {
             <Upload className="w-4 h-4" />
             <span className="hidden sm:inline">데이터 임포트</span>
           </Link>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">{exporting ? '다운로드 중...' : '엑셀 다운로드'}</span>
+          </button>
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-150 shadow-sm"
