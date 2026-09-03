@@ -12,6 +12,7 @@ export async function register() {
 
   const { waitUntil } = await import('@vercel/functions');
   const { getSupabaseAdmin } = await import('./lib/supabase');
+  const { inspect } = await import('node:util');
 
   const originalError = console.error.bind(console);
   const recentHashes = new Map<string, { count: number; windowStart: number }>();
@@ -29,8 +30,11 @@ export async function register() {
     try {
       const tag = args.length > 1 && typeof args[0] === 'string' ? args[0] : undefined;
       const errArg = args.find((a) => a instanceof Error) as Error | undefined;
+      // Supabase 에러(PostgrestError 등)는 Error 인스턴스가 아닌 일반 객체라 String(a)가
+      // "[object Object]"로 뭉갠다 — inspect로 실제 필드(code/message/details/hint)를 남긴다.
       const message = truncate(
-        errArg?.message ?? args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')
+        errArg?.message ??
+          args.map((a) => (typeof a === 'string' ? a : inspect(a, { depth: 3 }))).join(' ')
       );
       const stack = errArg?.stack ? truncate(errArg.stack) : undefined;
 
