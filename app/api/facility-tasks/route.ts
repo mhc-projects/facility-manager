@@ -842,13 +842,16 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
             etc: '기타'
           };
 
+          // if-블록 밖(880행 근처)의 메모 타입 동기화에서도 참조하므로 블록 앞에서 선언한다.
+          let currentCategory: string | undefined;
+
           if (task_type && TASK_TYPE_TO_PROGRESS[task_type]) {
             const newProgressStatus = TASK_TYPE_TO_PROGRESS[task_type];
             const currentProgressStatus = businessInfo.progress_status || '';
 
             // 현재 progress_status의 카테고리와 다를 때만 업데이트
             // (예: "보조금 동시진행" → "자비"로 변경은 허용, "보조금" → "보조금"은 스킵)
-            const currentCategory = (() => {
+            currentCategory = (() => {
               if (currentProgressStatus.includes('보조금')) return 'subsidy';
               if (currentProgressStatus.includes('자비')) return 'self';
               if (currentProgressStatus === 'AS') return 'as';
@@ -878,7 +881,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
           console.log(`✅ [FACILITY-TASKS] 사업장 업데이트 완료 - businessName: ${updatedTask.business_name}`);
 
           // task_type 변경 시 기존 메모 제목에서 업무 타입도 업데이트
-          if (task_type && currentCategory !== task_type) {
+          // currentCategory는 TASK_TYPE_TO_PROGRESS[task_type]가 없으면(else 분기) undefined로
+          // 남는다 — 이 경우 "카테고리가 실제로 바뀌었는지" 판단 불가하므로 메모 동기화를 건너뛴다.
+          if (task_type && currentCategory && currentCategory !== task_type) {
             try {
               const { updateMemoTaskType } = await import('@/lib/task-memo-sync');
               const memoUpdateResult = await updateMemoTaskType(
