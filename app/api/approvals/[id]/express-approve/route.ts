@@ -243,7 +243,10 @@ async function notifyManagementSupportDept({
       title: mgmtTitle,
       message,
       category: 'report_approved',
-      priority: 'normal',
+      // 'normal'은 notifications 테이블에서 성공 사례가 0건(정황 기반 추정) — 'medium'은
+      // 실제 저장 확인된 값. 2026-09-03 총무팀 알림 DB 저장 실패 대응, 확정 아님(다음날 09:00
+      // 보고로 검증 예정).
+      priority: 'medium',
       notification_tier: 'personal',
       target_user_id: staff.id,
       related_resource_type: 'approval',
