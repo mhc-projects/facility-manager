@@ -4097,6 +4097,10 @@ function BusinessManagementPage() {
           if (editingBusiness) {
             // 편집의 경우: 서버에서 받은 정확한 데이터로 교체
             const serverData = result.data
+            // 동시편집 충돌 감지용 form_version을 서버가 올린 값으로 동기화 — 이 모달은 저장 후에도
+            // 열려 있으므로(아래 "모달은 닫지 않음" 참고) 갱신하지 않으면 두 번째 저장이 자기 자신의
+            // 직전 저장과 충돌(409)한다(2026-09-04, error_logs의 PUT 충돌 전건이 이 패턴이었음).
+            setFormData(prev => ({ ...prev, form_version: serverData.form_version }))
             const updatedBusiness = {
               id: serverData.id,
               // 기본 정보 (한글/영어 병행)
