@@ -82,3 +82,13 @@
 - 미수정 관찰: 옵션 라벨이 "[보조금] [보조금]…"처럼 진행구분 접두어가 중복돼 길이가 거의 2배. 표시 문자열을 바꾸면 현재단계 컬럼 값과의 필터 매칭이 깨질 수 있어 손대지 않음. 별도 항목으로 정리 필요.
 - 정렬 판정은 메뉴의 현재 위치가 아니라 앵커 left + 메뉴 폭으로 계산하고 `options.length`를 deps에 포함해, 옵션이 늦게 로드돼 메뉴가 커져도 재판정된다(카드 폭 900/600px 강제 축소로 검증).
 - 768px 미만 모바일 레이아웃은 이 세션의 브라우저 창 리사이즈가 적용되지 않아 미검증. 계산상 375px에서는 메뉴(328px)가 우측 정렬로 카드 안에 들어오나, 320px급 화면에서는 왼쪽이 20px 남짓 잘릴 수 있음.
+
+---
+
+## 2026-09-04 | 운영 에러 2건 근본 수정: 담당자 알림 RPC 22023, 사업장 저장 409 자기충돌 (theion 세션에서 진행)
+- 발견 경로: theion의 시설관리시스템 에러 일일보고(error_logs, 9/2 instrumentation 도입 후 처음 보이게 된 것).
+- **A. `[TASK-NOTIFICATION] 담당자 변경 알림 오류` (Postgres 22023 cannot extract elements from a scalar)**: `lib/task-notification-service.ts`가 `create/update_task_assignment_notifications` RPC의 JSONB 파라미터에 `JSON.stringify(...)` 문자열을 넘겨 jsonb 스칼라 문자열이 되고 `jsonb_array_elements`가 실패. 프로덕션 RPC에 문자열/배열로 직접 호출해 재현·대조. 서비스 파일 추가 시점(2025-09-25, 3ea1c3c)부터 한 번도 성공한 적 없음. 2차 잠복 원인: 2026-03-05 보안 마이그레이션(3774209)이 두 함수에 `SET search_path = ''`를 걸었는데 본문이 `task_notifications`를 스키마 없이 참조 → 문자열만 고치면 42P01. 영향: 업무 생성(POST) 시 담당자 알림 미발송(나중에 PUT 때 `createTaskNotifications` 직접 INSERT가 대신 생성 — 최근 8건 전부 이 패턴), 담당자 교체 시 이전 담당자 알림 미만료.
+  - 수정: RPC 래퍼 2개와 결과 인터페이스 2개 제거, `createTaskNotifications`(직접 INSERT)로 일원화. POST에서도 같은 함수를 호출(oldTask.assignees=[]), PUT의 담당자 변경 분기는 "제외된 담당자 알림 expires_at=NOW()" 직접 UPDATE로 대체(알림 조회 API가 expires_at을 필터하므로 즉시 목록에서 빠짐). DB의 두 함수는 남아 있으나 호출부 없음.
+- **B. `[BUSINESS-INFO-DIRECT] PUT 충돌: 다른 사용자가 먼저 저장함` (409)**: 9/1 도입(5a33059)된 form_version 낙관적 잠금은 정상. 편집 모달이 저장 후에도 열려 있는 설계(page.tsx "모달은 닫지 않음") + 저장 성공 시 `formData.form_version`을 서버 응답값으로 갱신하지 않음 → 같은 모달에서 두 번째 저장이 자기 자신의 직전 저장과 충돌. data_history로 사업장 5곳 전부 대조: 성공 저장(n→n+1) 직후 22초~3분 내 같은 사업장 409 반복, 409 직전 행은 계산서탭 저장(form_version 안 올림)뿐, 타인 동시편집 0건.
+  - 수정: 성공 분기에서 `setFormData(prev => ({ ...prev, form_version: serverData.form_version }))` 1줄. 409 분기는 진짜 충돌 감지를 위해 그대로 둠.
+- 검증: tsc --noEmit 469→468(신규 오류 0, 줄번호 이동만), `npm run build` 성공. 브라우저 검증은 미실시(알림/저장 흐름이 운영 DB에 실데이터를 남기는 동작이라) — 배포 후 error_logs에서 두 태그 재발 여부로 확인 예정(theion 일일보고).
