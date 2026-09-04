@@ -27,16 +27,14 @@ export default function MultiSelectDropdown({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 메뉴가 overflow 조상(카드 등)의 오른쪽 경계를 넘으면 오른쪽 기준으로 정렬
+  // 메뉴를 왼쪽 기준으로 펼쳤을 때 overflow 조상(카드 등)의 오른쪽 경계를 넘으면 오른쪽 기준으로 정렬
+  // (옵션이 늦게 로드되어 메뉴 폭이 바뀌어도 다시 판정)
   useLayoutEffect(() => {
-    if (!isOpen) {
-      setAlignRight(false);
-      return;
-    }
     const menu = menuRef.current;
-    if (!menu) return;
+    const anchor = dropdownRef.current;
+    if (!isOpen || !menu || !anchor) return;
     let boundary = window.innerWidth;
-    let el: HTMLElement | null = menu.parentElement;
+    let el: HTMLElement | null = anchor.parentElement;
     while (el && el !== document.body) {
       if (getComputedStyle(el).overflowX !== 'visible') {
         boundary = el.getBoundingClientRect().right;
@@ -44,8 +42,8 @@ export default function MultiSelectDropdown({
       }
       el = el.parentElement;
     }
-    setAlignRight(menu.getBoundingClientRect().right > boundary);
-  }, [isOpen]);
+    setAlignRight(anchor.getBoundingClientRect().left + menu.getBoundingClientRect().width > boundary);
+  }, [isOpen, options.length]);
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
