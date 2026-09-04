@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
 import { getTaskStatusKR, getTaskTypeKR, getTaskTypeFromStatus, createStatusChangeMessage } from '@/lib/task-status-utils';
-import { createTaskAssignmentNotifications, updateTaskAssignmentNotifications, type TaskAssignee } from '@/lib/task-notification-service';
+import { type TaskAssignee } from '@/lib/task-notification-service';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { logDebug, logError } from '@/lib/logger';
 import { startNewStatus, completeCurrentStatus, getTaskStatusHistory } from '@/lib/task-status-history';
@@ -541,28 +541,19 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     // 업무 생성 시 자동 메모 생성 (derivedTaskType을 명시적으로 주입)
     await createTaskCreationNote({ ...newTask, task_type: derivedTaskType });
 
-    // 다중 담당자 알림 생성 (PostgreSQL 함수 사용)
+    // 담당자 알림 생성 — 수정(PUT) 경로와 같은 직접 INSERT(createTaskNotifications)를 쓴다.
+    // 2026-09-04: 예전엔 create_task_assignment_notifications RPC를 호출했지만 JSONB 파라미터에
+    // JSON.stringify 문자열을 넘겨 22023(cannot extract elements from a scalar)으로 한 번도 성공한
+    // 적이 없었다 — 업무 생성 시 담당자에게 알림이 전혀 안 가고, 나중에 누군가 업무를 수정할 때에야
+    // PUT 경로가 만들어주고 있었다. 실패해도 업무 생성 자체엔 영향 없음(함수 내부 try/catch).
     if (finalAssignees.length > 0) {
-      try {
-        const notificationResult = await createTaskAssignmentNotifications(
-          newTask.id,
-          finalAssignees.map(a => ({
-            id: a.id,
-            name: a.name,
-            email: a.email,
-            position: a.position
-          })),
-          newTask.business_name,
-          newTask.title,
-          derivedTaskType,
-          newTask.priority,
-          user.name
-        );
-
-        console.log('✅ [NOTIFICATION] 업무 할당 알림 생성:', notificationResult);
-      } catch (notificationError) {
-        console.error('❌ [NOTIFICATION] 업무 할당 알림 생성 실패:', notificationError);
-      }
+      await createTaskNotifications({
+        task: { ...newTask, assignees: finalAssignees },
+        oldTask: { assignees: [] },
+        statusChanged: false,
+        assigneesChanged: true,
+        modifierName: user.name
+      });
     }
 
     return createSuccessResponse({
@@ -980,21 +971,31 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
     const assigneesChanged = JSON.stringify(oldAssigneesParsed) !== JSON.stringify(newAssigneesParsed);
 
     if (assigneesChanged) {
-      try {
-        const updateResult = await updateTaskAssignmentNotifications(
-          updatedTask.id,
-          oldAssigneesParsed,
-          newAssigneesParsed,
-          updatedTask.business_name,
-          updatedTask.title,
-          updatedTask.task_type,
-          updatedTask.priority,
-          user.name
-        );
-
-        console.log('✅ [NOTIFICATION] 담당자 변경 알림 업데이트:', updateResult);
-      } catch (notificationError) {
-        console.error('❌ [NOTIFICATION] 담당자 변경 알림 업데이트 실패:', notificationError);
+      // 제외된 담당자의 알림 만료 처리 — 직접 SQL.
+      // 2026-09-04: 예전엔 update_task_assignment_notifications RPC를 호출했지만 JSONB 파라미터에
+      // JSON.stringify 문자열을 넘겨 22023(cannot extract elements from a scalar)으로 한 번도 성공한
+      // 적이 없었다(게다가 2026-03 보안 마이그레이션의 search_path='' 때문에 함수가 테이블도 못 찾음).
+      // 새 담당자 알림은 위 createAutoProgressNoteAndNotification → createTaskNotifications가 이미
+      // 만들고 있으므로, RPC가 하려던 일 중 실제로 빠져 있던 "제외된 담당자 알림 만료"만 여기서 한다
+      // (알림 조회 API가 expires_at을 필터하므로 만료 즉시 목록에서 사라진다).
+      const removedUserIds = oldAssigneesParsed
+        .map(a => a?.id)
+        .filter((id): id is string => !!id)
+        .filter(id => !newAssigneesParsed.some(a => a?.id === id));
+      if (removedUserIds.length > 0) {
+        try {
+          const expireResult = await pgQuery(
+            `UPDATE task_notifications
+             SET expires_at = NOW(), updated_at = NOW()
+             WHERE task_id::text = $1
+               AND user_id::text = ANY($2::text[])
+               AND (expires_at IS NULL OR expires_at > NOW())`,
+            [String(updatedTask.id), removedUserIds]
+          );
+          console.log('✅ [NOTIFICATION] 제외된 담당자 알림 만료:', expireResult.rowCount ?? 0, '건');
+        } catch (notificationError) {
+          console.error('❌ [NOTIFICATION] 제외된 담당자 알림 만료 실패:', notificationError);
+        }
       }
     }
 
