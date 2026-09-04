@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChevronDown, X, Check } from 'lucide-react';
 
 interface MultiSelectDropdownProps {
@@ -23,7 +23,29 @@ export default function MultiSelectDropdown({
   inline = false
 }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 메뉴가 overflow 조상(카드 등)의 오른쪽 경계를 넘으면 오른쪽 기준으로 정렬
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setAlignRight(false);
+      return;
+    }
+    const menu = menuRef.current;
+    if (!menu) return;
+    let boundary = window.innerWidth;
+    let el: HTMLElement | null = menu.parentElement;
+    while (el && el !== document.body) {
+      if (getComputedStyle(el).overflowX !== 'visible') {
+        boundary = el.getBoundingClientRect().right;
+        break;
+      }
+      el = el.parentElement;
+    }
+    setAlignRight(menu.getBoundingClientRect().right > boundary);
+  }, [isOpen]);
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -95,7 +117,7 @@ export default function MultiSelectDropdown({
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto">
+          <div ref={menuRef} className={`absolute z-50 ${alignRight ? 'right-0' : 'left-0'} min-w-full w-max max-w-sm mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto`}>
             {options.length === 0 ? (
               <div className="px-3 py-2 text-xs text-gray-500">옵션 없음</div>
             ) : (
