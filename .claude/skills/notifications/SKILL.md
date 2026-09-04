@@ -7,12 +7,12 @@ description: Facility Manager 프로젝트의 알림 시스템(notifications/tas
 
 ## 테이블 구조 — notifications는 사실 3-tier, task_notifications는 별개
 - `notifications` — `notification_tier`: personal/team/company. team/company는 DB 트리거가 대상자별 `user_notifications`(join, `is_read`/`read_at`) 행을 자동 fan-out한다. personal은 `target_user_id`로 직접 꽂히는 경우가 많은데(결재 알림 등) 이때는 `user_notifications` row가 생기지 않으므로 읽음 처리는 `user_notification_reads`(notification_id+user_id upsert)로 별도 관리한다 — `app/api/notifications/[id]/read/route.ts`가 이 두 경로를 분기 처리.
-- `task_notifications` — 업무 담당자 배정 전용, `is_read` 컬럼 직접 보유. `app/api/facility-tasks/route.ts` → `lib/task-notification-service.ts` → Supabase RPC `create_task_assignment_notifications`(SQL 함수, `expires_at`=생성+30일 하드코딩)가 담당.
+- `task_notifications` — 업무 담당자 배정/상태변경 전용, `is_read` 컬럼 직접 보유. `app/api/facility-tasks/route.ts`의 `createTaskNotifications`(직접 INSERT, POST 생성과 PUT 상태/담당자 변경이 공용)가 담당하고, PUT에서 담당자가 제외되면 그 사용자의 해당 업무 알림을 `expires_at=NOW()`로 만료한다(조회 API가 `expires_at`을 필터). `expires_at` 기본값은 DB에서 생성+30일. 2026-09-04까지 있던 `lib/task-notification-service.ts` → Supabase RPC `create/update_task_assignment_notifications` 경로는 JSONB 파라미터에 `JSON.stringify` 문자열을 넘겨(22023) 한 번도 성공한 적이 없어 제거됨 — DB의 두 SQL 함수는 남아 있으나 호출부 없음(`search_path=''`라 호출해도 테이블을 못 찾음).
 - db-schema 스킬엔 `notifications` 컬럼이 축약 기재돼 있음 — 실제로는 `notification_tier`/`target_user_id`/`target_team_id`/`target_department_id`/`created_by`/`related_url`/`metadata`도 있다.
 
 ## 4채널 발송 패턴은 결재(approvals)에만 온전히 적용된다
 - `app/api/approvals/[id]/{submit,approve,reject,express-approve}/route.ts` 전부: `notifications` insert(`target_user_id`) → Broadcast(`approval-notify:{userId}` 채널, event `new_notification`) → `sendWebPushToUser`(`lib/send-push.ts`) → `sendTelegramToUser`(`lib/send-telegram.ts`). 라우트마다 `sendNotification` 헬퍼를 각자 재구현(approval 스킬에 기술된 중복과 동일 사실).
-- ⚠️ `task_notifications` 배정 알림은 위 RPC가 DB insert만 하고 broadcast/push/telegram 전부 없음. 벨은 이 알림을 실시간으로 못 받고 최초 로드 또는 60초 폴링에서만 반영된다.
+- ⚠️ `task_notifications` 배정 알림은 위 직접 INSERT가 DB insert(+서버 프로세스에 `global.io`가 있을 때만 WebSocket emit, Vercel 서버리스에선 사실상 없음)만 하고 broadcast/push/telegram 전부 없음. 벨은 이 알림을 실시간으로 못 받고 최초 로드 또는 60초 폴링에서만 반영된다.
 - `app/api/organization/task-assignments/route.ts`(담당자 변경)는 `notifications`에 `target_user_id`로 직접 insert하지만 broadcast 없이 push+telegram만 호출한다. `NotificationContext`의 `postgres_changes` 구독은 `target_user_id`가 있는 행을 명시적으로 무시(broadcast 채널의 몫으로 설계됨) → 이 경로는 broadcast가 없으므로 사실상 실시간 전달이 안 되고 폴링/새로고침에만 의존한다.
 - 일반 알림 생성 API(`app/api/notifications/route.ts` POST `createTierNotification`)도 push+telegram만 보내고 broadcast는 안 한다 — broadcast 채널 전송은 approvals 라우트들에만 인라인으로 존재.
 
