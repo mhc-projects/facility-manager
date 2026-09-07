@@ -41,9 +41,10 @@ interface AdminDataContextType {
   progressCategories: ProgressCategory[];
   taskStages: TaskStage[];
   isLoading: boolean;
-  getStageLabel: (statusOrStageKey: string) => string;
+  getStageLabel: (statusOrStageKey: string, progressStatus?: string) => string;
   getStageColorClass: (stageKey: string) => string;
   getStagesByCategory: (categoryId: number) => TaskStage[];
+  getStagesByProgressStatus: (progressStatus?: string | null) => TaskStepCompat[];
   getStagesByTaskType: (taskType: string) => TaskStepCompat[];
   refreshManufacturers: () => Promise<void>;
   refreshProgressCategories: () => Promise<void>;
@@ -114,12 +115,39 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchManufacturers, fetchProgressCategories, fetchTaskStages]);
 
-  // status 코드로 라벨 조회: DB 우선 → TASK_STATUS_KR 폴백
-  const getStageLabel = useCallback((statusOrStageKey: string): string => {
+  // 칸반/드롭다운용 색상 사이클
+  const STEP_COLORS = ['blue', 'yellow', 'orange', 'rose', 'purple', 'indigo', 'cyan', 'emerald', 'teal', 'green', 'amber', 'lime', 'red', 'pink', 'sky', 'violet'];
+
+  const toStepCompat = useCallback((stages: TaskStage[]): TaskStepCompat[] => {
+    const seen = new Map<string, TaskStepCompat>();
+    stages.forEach((s, idx) => {
+      if (!seen.has(s.stage_key)) {
+        seen.set(s.stage_key, {
+          status: s.stage_key,
+          label: s.stage_label,
+          color: STEP_COLORS[idx % STEP_COLORS.length],
+        });
+      }
+    });
+    return Array.from(seen.values());
+  }, []);
+
+  // status 코드로 라벨 조회: 진행구분 카테고리 우선 → 전역 stage_key → TASK_STATUS_KR 폴백
+  const getStageLabel = useCallback((statusOrStageKey: string, progressStatus?: string): string => {
+    const name = (progressStatus || '').trim();
+    if (name) {
+      const cat = progressCategories.find(c => c.is_active && c.name === name);
+      if (cat) {
+        const inCategory = taskStages.find(
+          s => s.progress_category_id === cat.id && s.stage_key === statusOrStageKey
+        );
+        if (inCategory) return inCategory.stage_label;
+      }
+    }
     const found = taskStages.find(s => s.stage_key === statusOrStageKey);
     if (found) return found.stage_label;
     return TASK_STATUS_KR[statusOrStageKey] || statusOrStageKey;
-  }, [taskStages]);
+  }, [taskStages, progressCategories]);
 
   const getStagesByCategory = useCallback((categoryId: number): TaskStage[] => {
     return taskStages
@@ -127,8 +155,14 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [taskStages]);
 
-  // 칸반/드롭다운용: taskType prefix로 필터 → sort_order 순 정렬 → 중복 제거 → TaskStepCompat 변환
-  const STEP_COLORS = ['blue', 'yellow', 'orange', 'rose', 'purple', 'indigo', 'cyan', 'emerald', 'teal', 'green', 'amber', 'lime', 'red', 'pink', 'sky', 'violet'];
+  // 진행구분(progress_categories.name = business_info.progress_status) 기준 단계 목록
+  const getStagesByProgressStatus = useCallback((progressStatus?: string | null): TaskStepCompat[] => {
+    const name = (progressStatus || '').trim();
+    if (!name) return [];
+    const cat = progressCategories.find(c => c.is_active && c.name === name);
+    if (!cat) return [];
+    return toStepCompat(getStagesByCategory(cat.id));
+  }, [progressCategories, getStagesByCategory, toStepCompat]);
 
   // 색상 이름 → Tailwind 뱃지 클래스
   const COLOR_TO_BADGE: Record<string, string> = {
@@ -172,31 +206,15 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     return 'etc';
   };
 
+  // 진행구분이 없을 때의 폴백. UI 단계 목록은 getStagesByProgressStatus를 쓴다
   const getStagesByTaskType = useCallback((taskType: string): TaskStepCompat[] => {
-    // sort_order 기준 최우선 카테고리만 사용 — 변형 카테고리(5년경과, 동시진행 등)의 오래된 단계가
-    // 메인 카테고리 설정과 혼재되는 문제를 방지한다
     const primaryCat = progressCategories
       .filter(c => c.is_active && (c.task_type ?? inferTaskTypeFromName(c.name)) === taskType)
       .sort((a, b) => a.sort_order - b.sort_order)[0];
 
     if (!primaryCat) return [];
-
-    const seen = new Map<string, TaskStepCompat>();
-    taskStages
-      .filter(s => s.progress_category_id === primaryCat.id && s.is_active)
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .forEach((s, idx) => {
-        if (!seen.has(s.stage_key)) {
-          seen.set(s.stage_key, {
-            status: s.stage_key,
-            label: s.stage_label,
-            color: STEP_COLORS[idx % STEP_COLORS.length],
-          });
-        }
-      });
-
-    return Array.from(seen.values());
-  }, [taskStages, progressCategories]);
+    return toStepCompat(getStagesByCategory(primaryCat.id));
+  }, [progressCategories, getStagesByCategory, toStepCompat]);
 
   return (
     <AdminDataContext.Provider value={{
@@ -207,6 +225,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       getStageLabel,
       getStageColorClass,
       getStagesByCategory,
+      getStagesByProgressStatus,
       getStagesByTaskType,
       refreshManufacturers: fetchManufacturers,
       refreshProgressCategories: fetchProgressCategories,

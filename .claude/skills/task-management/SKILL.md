@@ -14,6 +14,7 @@ description: Facility Manager 프로젝트의 업무관리(facility_tasks, task_
 - db-schema 스킬의 "67개 CHECK값"은 과거 스냅샷이다. CHECK 제약은 `supabase/migrations/20260430_relax_task_status_check.sql`에서 `TRIM(status) <> '' AND LENGTH(status) <= 100`으로 완화됐다 — DB는 더 이상 특정 값 목록을 강제하지 않는다.
 - 실제 유효 단계 목록은 `task_stages` 테이블이다(`progress_categories` 1:N `task_stages`, 관리자설정에서 자유 편집 가능, `app/api/settings/task-stages/route.ts`). 단계 key를 안 정하고 추가하면 `custom_${Date.now()}` 형태로 자동 생성된다(예: `custom_1777968825327`) — status 문자열을 하드코딩해 집계/필터링하는 코드(주간 브리핑 등)는 이런 custom key 누락 여부를 `task_stages` 실데이터로 매번 재확인해야 한다.
 - `lib/task-steps.ts`(selfSteps/subsidySteps/asSteps/dealerSteps/outsourcingSteps/etcSteps)는 초기 시드 + 폴백용 하드코딩 목록일 뿐, 현재 UI 소스는 아니다. 라벨 조회는 DB(`task_stages.stage_label`) 우선, 없으면 `TASK_STATUS_KR`(`lib/task-status-utils.ts`) 폴백 순서다(`contexts/AdminDataContext.tsx`의 `getStageLabel`).
+- 업무관리·미니칸반의 단계 목록은 `task_type`이 아니라 진행구분(`progress_categories.name` = 사업장 `progress_status`) 기준으로 조회한다(`getStagesByProgressStatus`). 같은 `task_type='etc'`인 인허가·모니터링시스템(PLC포함)도 각자 자기 단계를 쓴다. 보조금 동시진행도 메인 보조금이 아니라 자기 카테고리 단계를 쓴다. `getStagesByTaskType`은 진행구분이 없을 때의 폴백이며, 같은 task_type 중 `sort_order` 1등 카테고리만 본다.
 - 타입별 흐름 성격: `self`(자비)는 상담→실사→견적→계약→계약금확인→발주→출고→설치→준공서류→잔금의 단선 흐름. `subsidy`(보조금)는 self 흐름에 신청서 접수/승인·탈락/착공 전 실사/착공신고/준공 실사/보완(1~3차)/보조금지급신청서/입금대기가 추가된 훨씬 긴 흐름. `as`는 AS 접수→부품발주→완료의 단순 흐름. `dealer`/`outsourcing`은 설치를 대리점·외주업체가 수행하므로 발주-일정-완료 위주로 단계 수가 적다. 모든 타입 공통으로 `{type}_needs_check`(확인필요) 상태가 있다.
 
 ## assignees (JSONB) 구조

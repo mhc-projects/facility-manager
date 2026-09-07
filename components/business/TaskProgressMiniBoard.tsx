@@ -33,6 +33,7 @@ interface FacilityTask {
   business_name: string;
   description?: string;
   task_type: TaskType;
+  progress_status?: string;
   status: TaskStatus;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   assignee?: string;
@@ -83,7 +84,7 @@ export default function TaskProgressMiniBoard({
   onStatusChange
 }: TaskProgressMiniBoardProps) {
   const { user } = useAuth();
-  const { getStagesByTaskType } = useAdminData();
+  const { getStagesByProgressStatus } = useAdminData();
   const [tasks, setTasks] = useState<FacilityTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -151,7 +152,8 @@ export default function TaskProgressMiniBoard({
         // 데이터베이스 형식을 UI 형식으로 변환
         tasksArray = tasksArray.map((task: any) => ({
           ...task,
-          task_type: task.task_type || 'etc', // task_type 필드 확인
+          task_type: task.task_type || 'etc',
+          progress_status: task.progress_status || undefined,
           status: task.status || 'etc_status'
         }));
 
@@ -210,30 +212,31 @@ export default function TaskProgressMiniBoard({
     etc: etcSteps,
   };
 
-  // 업무 타입별로 그룹화된 단계별 업무 개수 계산
+  // 진행구분별로 그룹화된 단계별 업무 개수 계산
   const getTasksByTypeAndStatus = () => {
-    // AdminDataContext에서 동적 단계 조회, 없으면 하드코딩 폴백
-    const getSteps = (taskType: string) => {
-      const dynamic = getStagesByTaskType(taskType);
-      return dynamic.length > 0 ? dynamic : (FALLBACK_STEPS[taskType] || etcSteps);
+    const typeLabels: {[key: string]: string} = {
+      self: '자비',
+      subsidy: '보조금',
+      dealer: '대리점',
+      outsourcing: '외주설치',
+      as: 'AS',
+      etc: '기타',
     };
 
-    const tasksByType: {[key: string]: {tasks: FacilityTask[], steps: any[]}} = {
-      self: { tasks: [], steps: getSteps('self') },
-      subsidy: { tasks: [], steps: getSteps('subsidy') },
-      dealer: { tasks: [], steps: getSteps('dealer') },
-      outsourcing: { tasks: [], steps: getSteps('outsourcing') },
-      as: { tasks: [], steps: getSteps('as') },
-      etc: { tasks: [], steps: getSteps('etc') },
-    };
+    const tasksByType: {[key: string]: {tasks: FacilityTask[], steps: any[], label: string}} = {};
 
     tasks.forEach(task => {
-      const taskType = task.task_type || 'etc';
-      if (tasksByType[taskType]) {
-        tasksByType[taskType].tasks.push(task);
-      } else {
-        tasksByType.etc.tasks.push(task);
+      const key = task.progress_status || task.task_type || 'etc';
+      if (!tasksByType[key]) {
+        const dynamic = getStagesByProgressStatus(task.progress_status);
+        const fallback = FALLBACK_STEPS[task.task_type] || etcSteps;
+        tasksByType[key] = {
+          tasks: [],
+          steps: dynamic.length > 0 ? dynamic : fallback,
+          label: task.progress_status || typeLabels[task.task_type] || key,
+        };
       }
+      tasksByType[key].tasks.push(task);
     });
 
     return tasksByType;
@@ -374,19 +377,10 @@ export default function TaskProgressMiniBoard({
       {Object.entries(tasksByType).map(([taskType, typeData]) => {
         if (typeData.tasks.length === 0) return null;
 
-        const typeLabels: {[key: string]: string} = {
-          self: '자비',
-          subsidy: '보조금',
-          dealer: '대리점', // 🔄 추가
-          outsourcing: '외주설치', // 🔄 추가
-          as: 'AS',
-          etc: '기타'
-        };
-
         return (
           <div key={taskType} className="mb-4">
             <div className="text-xs font-medium text-gray-700 mb-2 px-1">
-              {typeLabels[taskType] || taskType} ({typeData.tasks.length}개)
+              {typeData.label} ({typeData.tasks.length}개)
             </div>
 
             {/* 해당 타입의 단계별 버튼 */}

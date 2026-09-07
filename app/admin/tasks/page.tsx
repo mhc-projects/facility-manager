@@ -130,6 +130,7 @@ interface BusinessOption {
   id: string
   name: string
   address: string
+  progress_status?: string
 }
 
 // 🔄 단계 정의 및 헬퍼 함수는 공유 모듈에서 import (lib/task-steps.ts)
@@ -153,7 +154,17 @@ function lookupTaskType(categoryName: string, categories: ProgressCategory[]): T
 
 function TaskManagementPage() {
   const { user } = useAuth()
-  const { getStagesByTaskType, getStageLabel, taskStages: dbTaskStages, progressCategories } = useAdminData()
+  const { getStagesByProgressStatus, getStageLabel, progressCategories } = useAdminData()
+
+  const getStepsForProgress = useCallback((progressStatus?: string, fallbackType?: TaskType) => {
+    const name = (progressStatus || '').trim()
+    if (name && name !== '기타') {
+      const cat = progressCategories.find(c => c.is_active && c.name === name)
+      if (cat) return getStagesByProgressStatus(name)
+    }
+    const type = fallbackType || (name ? lookupTaskType(name, progressCategories) : 'etc')
+    return getStepsForType(type as any)
+  }, [getStagesByProgressStatus, progressCategories])
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -857,35 +868,35 @@ function TaskManagementPage() {
     }
 
     const uiType = deriveTypeForUI(business.progress_status)
+    const ps = business.progress_status || ''
+    const firstStatus = (getStepsForProgress(ps, uiType)[0]?.status || 'etc_status') as TaskStatus
 
     if (isEdit && editingTask) {
       setEditingTask(prev => prev ? {
         ...prev,
         businessName: business.name,
         businessId: business.id,
-        type: uiType
+        type: uiType,
+        progressStatus: ps || prev.progressStatus,
+        status: ps ? firstStatus : prev.status,
       } : null)
       setEditBusinessSearchTerm(business.name)
       setShowEditBusinessDropdown(false)
       setEditSelectedBusinessIndex(-1)
     } else {
-      setCreateProgressStatus(business.progress_status || '') // 사업장 진행구분 자동 표시
+      setCreateProgressStatus(ps) // 사업장 진행구분 자동 표시
       setCreateTaskForm(prev => ({
         ...prev,
         businessName: business.name,
         businessId: business.id,
         type: uiType,
-        // 타입에 맞게 초기 단계도 재설정
-        status: uiType === 'self' ? 'customer_contact' :
-                uiType === 'subsidy' ? 'customer_contact' :
-                uiType === 'dealer' ? 'dealer_order_received' :
-                uiType === 'as' ? 'as_customer_contact' : 'etc_status'
+        status: firstStatus,
       }))
       setBusinessSearchTerm(business.name)
       setShowBusinessDropdown(false)
       setSelectedBusinessIndex(-1)
     }
-  }, [editingTask])
+  }, [editingTask, getStepsForProgress])
 
   // 컴팩트 모드에서 표시할 카드들 계산
   const getDisplayTasks = useCallback((tasks: Task[]) => {
@@ -984,21 +995,18 @@ function TaskManagementPage() {
   // 새 업무 등록 모달 진행구분 변경 핸들러
   const handleCreateProgressStatusChange = useCallback((value: string) => {
     const derivedType = lookupTaskType(value, progressCategories) // DB task_type 우선, 이름 기반 폴백
+    const firstStatus = (getStepsForProgress(value, derivedType)[0]?.status || 'etc_status') as TaskStatus
     setCreateProgressStatus(value)
     setCreateTaskForm(prev => ({
       ...prev,
       type: derivedType,
-      status: derivedType === 'self' ? 'customer_contact' :
-              derivedType === 'subsidy' ? 'customer_contact' :
-              derivedType === 'dealer' ? 'dealer_order_received' :
-              derivedType === 'as' ? 'as_customer_contact' :
-              'etc_status'
+      status: firstStatus,
     }))
     // 진행구분 변경 시 사업장 검색어 초기화 (기타 선택 시 사업장 불필요)
-    if (derivedType === 'etc') {
+    if (value === '기타') {
       setBusinessSearchTerm('')
     }
-  }, [progressCategories])
+  }, [progressCategories, getStepsForProgress])
 
   // 진행구분 토글 핸들러 (다중 선택)
   const toggleProgressStatus = useCallback((value: string) => {
@@ -1189,21 +1197,20 @@ function TaskManagementPage() {
 
     const activeTasks = kanbanTasks
 
-    // DB sort_order 기반 단계 목록 사용 (DB에 없으면 hardcoded fallback)
-    const getSteps = (type: string) => {
-      const dbSteps = getStagesByTaskType(type)
-      if (dbSteps.length > 0) return dbSteps
-      return getStepsForType(type as any)
-    }
+    const selectedNames = selectedProgressStatuses.filter(ps => ps !== '기타')
+    const isSingleCategory = selectedNames.length === 1 && !selectedProgressStatuses.includes('기타')
 
-    const allTypeSteps = selectedType === 'all'
-      ? ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].flatMap(t => getSteps(t))
-      : getSteps(selectedType)
+    const sourceNames = isSingleCategory
+      ? selectedNames
+      : selectedNames.length > 0
+        ? selectedNames
+        : progressCategories.filter(c => c.is_active).sort((a, b) => a.sort_order - b.sort_order).map(c => c.name)
 
+    const allTypeSteps = sourceNames.flatMap(name => getStepsForProgress(name))
     const steps = allTypeSteps
 
-    // 전체 보기일 때 중복 단계 제거
-    const uniqueSteps = selectedType === 'all' ? (() => {
+    // 여러 진행구분(또는 전체)일 때 라벨 기준 중복 제거. 단일 진행구분은 자기 단계 그대로.
+    const uniqueSteps = !isSingleCategory ? (() => {
       const stepMap = new Map<string, typeof steps[0]>()
       steps.forEach(step => {
         if (!stepMap.has(step.label)) {
@@ -1213,28 +1220,26 @@ function TaskManagementPage() {
       return Array.from(stepMap.values())
     })() : steps
 
-    const grouped = {} as Record<TaskStatus, Task[]>
+    const grouped = {} as Record<string, Task[]>
 
-    if (selectedType === 'all') {
-      // 전체 보기일 때: type+status를 모두 고려하여 올바른 단계에 배치
+    if (!isSingleCategory) {
+      // 전체/복수 진행구분: 업무의 진행구분 단계와 라벨이 같은 칸에 배치
       uniqueSteps.forEach(uniqueStep => {
         const tasksForThisStep: Task[] = []
 
         activeTasks.forEach(task => {
-          // 업무의 실제 타입에 맞는 단계 정보를 찾기
-          const dbSteps = getStagesByTaskType(task.type)
-          const correctSteps = dbSteps.length > 0 ? dbSteps : getStepsForType(task.type)
-
-          // 해당 타입의 단계 중에서 현재 상태와 일치하는 단계 찾기
+          const correctSteps = getStepsForProgress(task.progressStatus, task.type)
           const correctStep = correctSteps.find(s => s.status === task.status)
 
-          // 올바른 단계가 있고, 그 단계의 label이 현재 처리 중인 uniqueStep의 label과 같다면 포함
           if (correctStep && correctStep.label === uniqueStep.label) {
-            const taskWithCorrectStep = {
+            tasksForThisStep.push({
               ...task,
-              _stepInfo: correctStep
-            }
-            tasksForThisStep.push(taskWithCorrectStep)
+              _stepInfo: {
+                status: correctStep.status as TaskStatus,
+                label: correctStep.label,
+                color: correctStep.color,
+              },
+            })
           }
         })
 
@@ -1248,21 +1253,27 @@ function TaskManagementPage() {
 
         const uniqueTasksArray = Array.from(uniqueTasksMap.values())
         uniqueTasksArray.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-        grouped[uniqueStep.status] = uniqueTasksArray
+        grouped[uniqueStep.status as TaskStatus] = uniqueTasksArray
       })
 
       // 전체 보기: 어느 컬럼에도 매칭되지 않는 업무를 해당 타입 첫 번째 컬럼에 배치
       const assignedIds = new Set(Object.values(grouped).flat().map((t: Task) => t.id))
       activeTasks.forEach((task: Task) => {
         if (assignedIds.has(task.id)) return
-        const taskTypeSteps = (() => {
-          const db = getStagesByTaskType(task.type)
-          return db.length > 0 ? db : getStepsForType(task.type)
-        })()
+        const taskTypeSteps = getStepsForProgress(task.progressStatus, task.type)
         if (taskTypeSteps.length === 0) return
         const firstStep = taskTypeSteps[0]
-        if (!grouped[firstStep.status]) grouped[firstStep.status] = []
-        grouped[firstStep.status].push({ ...task, _stepInfo: firstStep })
+        const target = uniqueSteps.find(s => s.label === firstStep.label) || uniqueSteps[0] || firstStep
+        const targetStatus = target.status as TaskStatus
+        if (!grouped[targetStatus]) grouped[targetStatus] = []
+        grouped[targetStatus].push({
+          ...task,
+          _stepInfo: {
+            status: firstStep.status as TaskStatus,
+            label: firstStep.label,
+            color: firstStep.color,
+          },
+        })
       })
     } else {
       // 개별 카테고리 보기일 때: 기존 로직 유지
@@ -1306,7 +1317,7 @@ function TaskManagementPage() {
     }
 
     return { grouped, steps: uniqueSteps }
-  }, [kanbanTasks, selectedType])
+  }, [kanbanTasks, selectedProgressStatuses, getStepsForProgress, progressCategories])
 
   // 동적 통계 계산
   const dynamicStats = useMemo(() => {
@@ -1380,27 +1391,25 @@ function TaskManagementPage() {
     return Array.from(localGovSet).sort()
   }, [tasks, selectedSidos])
 
-  // 현재 선택된 타입의 업무단계 목록 (DB sort_order 반영)
+  // 현재 선택된 진행구분의 업무단계 목록 (DB sort_order 반영)
   const currentSteps = useMemo(() => {
-    const getStepsWithFallback = (type: string) => {
-      const dbSteps = getStagesByTaskType(type)
-      return dbSteps.length > 0 ? dbSteps : getStepsForType(type as any)
+    const selectedNames = selectedProgressStatuses.filter(ps => ps !== '기타')
+    if (selectedNames.length === 1 && !selectedProgressStatuses.includes('기타')) {
+      return getStepsForProgress(selectedNames[0])
     }
 
-    if (selectedType === 'all') {
-      const statusSet = new Set<TaskStatus>()
-      tasks.forEach(task => { statusSet.add(task.status) })
+    const sourceNames = selectedNames.length > 0
+      ? selectedNames
+      : progressCategories.filter(c => c.is_active).sort((a, b) => a.sort_order - b.sort_order).map(c => c.name)
 
-      const allSteps = ['self', 'subsidy', 'dealer', 'outsourcing', 'etc', 'as'].flatMap(t => getStepsWithFallback(t))
-      const uniqueSteps = Array.from(statusSet).map(status => {
-        const step = allSteps.find(s => s.status === status)
-        return step || { status, label: status, color: 'gray' }
-      }).sort((a, b) => a.label.localeCompare(b.label))
-
-      return uniqueSteps
-    }
-    return getStepsWithFallback(selectedType)
-  }, [selectedType, tasks, getStagesByTaskType, dbTaskStages])
+    const stepMap = new Map<string, ReturnType<typeof getStepsForProgress>[number]>()
+    sourceNames.forEach(name => {
+      getStepsForProgress(name).forEach(step => {
+        if (!stepMap.has(step.label)) stepMap.set(step.label, step)
+      })
+    })
+    return Array.from(stepMap.values())
+  }, [selectedProgressStatuses, getStepsForProgress, progressCategories])
 
   // 드래그 앤 드롭 핸들러
   const handleDragStart = useCallback((task: Task) => {
@@ -1466,10 +1475,8 @@ function TaskManagementPage() {
 
   const mobileTaskSteps = useMemo(() => {
     if (!mobileSelectedTask) return []
-    const dbSteps = getStagesByTaskType(mobileSelectedTask.type)
-    if (dbSteps.length > 0) return dbSteps
-    return getStepsForType(mobileSelectedTask.type as TaskType)
-  }, [mobileSelectedTask, getStagesByTaskType])
+    return getStepsForProgress(mobileSelectedTask.progressStatus, mobileSelectedTask.type)
+  }, [mobileSelectedTask, getStepsForProgress])
 
   // 헬퍼 함수들
   const getColorClasses = useCallback((color: string) => {
@@ -1563,8 +1570,8 @@ function TaskManagementPage() {
         alert('진행구분을 선택해주세요.')
         return
       }
-      // 기타 타입 외에는 사업장 선택 필요
-      if (createTaskForm.type !== 'etc' && !businessSearchTerm.trim()) {
+      // '기타' 진행구분만 사업장 없이 등록 가능
+      if (createProgressStatus !== '기타' && !businessSearchTerm.trim()) {
         alert('사업장을 선택해주세요.')
         return
       }
@@ -1581,7 +1588,7 @@ function TaskManagementPage() {
       );
 
       if (duplicateTask) {
-        const statusLabel = getStageLabel(createTaskForm.status);
+        const statusLabel = getStageLabel(createTaskForm.status, createProgressStatus);
 
         const confirmMessage =
           `⚠️ 중복 업무 경고\n\n` +
@@ -1597,7 +1604,7 @@ function TaskManagementPage() {
 
       // API 요청 데이터 준비
       // 현재 단계명을 title로 자동 설정
-      const autoTitle = getStageLabel(createTaskForm.status);
+      const autoTitle = getStageLabel(createTaskForm.status, createProgressStatus);
 
       const requestData = {
         title: autoTitle,
@@ -1701,7 +1708,7 @@ function TaskManagementPage() {
       console.error('Failed to create task:', error)
       alert(`업무 등록 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     }
-  }, [createTaskForm, businessSearchTerm])
+  }, [createTaskForm, businessSearchTerm, createProgressStatus, tasks, getStageLabel])
 
   // ESC 키 핸들러
   useEffect(() => {
@@ -1791,7 +1798,7 @@ function TaskManagementPage() {
       );
 
       if (duplicateTask) {
-        const statusLabel = getStageLabel(editingTask.status);
+        const statusLabel = getStageLabel(editingTask.status, editingTask.progressStatus);
 
         const confirmMessage =
           `⚠️ 중복 업무 경고\n\n` +
@@ -2530,8 +2537,8 @@ function TaskManagementPage() {
                 </thead>
                 <tbody>
                   {paginatedTasks.map((task, index) => {
-                    const dbStep = getStagesByTaskType(task.type).find(s => s.status === task.status)
-                    const statusLabel = getStageLabel(task.status)
+                    const dbStep = getStepsForProgress(task.progressStatus, task.type).find(s => s.status === task.status)
+                    const statusLabel = getStageLabel(task.status, task.progressStatus)
                     return (
                       <tr
                         key={task.id}
@@ -2595,11 +2602,13 @@ function TaskManagementPage() {
                               ? 'bg-gray-100 text-gray-800'
                               : 'bg-orange-100 text-orange-800'
                           }`}>
-                            {task.type === 'self' ? '자비' :
-                             task.type === 'subsidy' ? (task.progressStatus || '보조금') :
-                             task.type === 'dealer' ? '대리점' :
-                             task.type === 'outsourcing' ? '외주설치' :
-                             task.type === 'etc' ? '기타' : 'AS'}
+                            {task.progressStatus || (
+                              task.type === 'self' ? '자비' :
+                              task.type === 'subsidy' ? '보조금' :
+                              task.type === 'dealer' ? '대리점' :
+                              task.type === 'outsourcing' ? '외주설치' :
+                              task.type === 'etc' ? '기타' : 'AS'
+                            )}
                           </span>
                         </td>
                         {/* 영업점 */}
@@ -2893,13 +2902,13 @@ function TaskManagementPage() {
               </button>
             </div>
             <div className="relative">
-              <div key={`kanban-${selectedType}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-3 md:pb-4 scroll-smooth">
+              <div key={`kanban-${selectedProgressStatuses.join(',') || 'all'}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-3 md:pb-4 scroll-smooth">
               {tasksByStatus.steps.map((step) => (
                 <div
                   key={step.status}
                   className="flex-shrink-0 w-52 sm:w-60 md:w-64 bg-gray-50 rounded-lg p-2 sm:p-3"
                   onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => handleDrop(step.status)}
+                  onDrop={() => handleDrop(step.status as TaskStatus)}
                 >
                   {/* 칼럼 헤더 */}
                   <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -3057,7 +3066,7 @@ function TaskManagementPage() {
                 {/* 사업장 선택 (기타 타입일 때는 선택사항) */}
                 <div className="relative">
                   <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">
-                    사업장 {createTaskForm.type !== 'etc' && <span className="text-red-500">*</span>}
+                    사업장 {createProgressStatus !== '기타' && <span className="text-red-500">*</span>}
                   </label>
                   <input
                     type="text"
@@ -3144,11 +3153,8 @@ function TaskManagementPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
                     required
                   >
-                    {(() => {
-                       const dbSteps = getStagesByTaskType(createTaskForm.type)
-                       return (dbSteps.length > 0 ? dbSteps : getStepsForType(createTaskForm.type as any))
-                         .map(step => <option key={step.status} value={step.status}>{step.label}</option>)
-                    })()}
+                    {getStepsForProgress(createProgressStatus, createTaskForm.type)
+                      .map(step => <option key={step.status} value={step.status}>{step.label}</option>)}
                   </select>
                 </div>
 
@@ -3356,7 +3362,7 @@ function TaskManagementPage() {
                   </div>
                   <div>
                     <p className="text-xs sm:text-xs font-medium text-gray-900 truncate">
-                      {getStageLabel(editingTask.status)}
+                      {getStageLabel(editingTask.status, editingTask.progressStatus)}
                     </p>
                   </div>
                 </div>
@@ -3412,7 +3418,7 @@ function TaskManagementPage() {
                 {/* 사업장 선택 (기타 타입일 때는 선택사항) */}
                 <div className="relative">
                   <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">
-                    사업장 {editingTask?.type !== 'etc' && <span className="text-red-500">*</span>}
+                    사업장 {editingTask?.progressStatus !== '기타' && <span className="text-red-500">*</span>}
                   </label>
                   <input
                     type="text"
@@ -3461,10 +3467,9 @@ function TaskManagementPage() {
                       onChange={(e) => {
                         const catName = e.target.value
                         if (!catName) return
-                        const derivedType = deriveTypeFromPS(catName)
-                        const newStages = getStagesByTaskType(derivedType)
-                        const fallback = getStepsForType(derivedType as any)
-                        const firstStatus = (newStages.length > 0 ? newStages : fallback)[0]?.status || ''
+                        const derivedType = lookupTaskType(catName, progressCategories)
+                        const newStages = getStepsForProgress(catName, derivedType)
+                        const firstStatus = newStages[0]?.status || ''
                         setEditingTask(prev => prev ? {
                           ...prev,
                           type: derivedType as TaskType,
@@ -3516,11 +3521,8 @@ function TaskManagementPage() {
                     onChange={(e) => setEditingTask(prev => prev ? { ...prev, status: e.target.value as TaskStatus } : null)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    {(() => {
-                       const dbSteps = getStagesByTaskType(editingTask.type)
-                       return (dbSteps.length > 0 ? dbSteps : getStepsForType(editingTask.type as any))
-                         .map(step => <option key={step.status} value={step.status}>{step.label}</option>)
-                    })()}
+                    {getStepsForProgress(editingTask.progressStatus, editingTask.type)
+                      .map(step => <option key={step.status} value={step.status}>{step.label}</option>)}
                   </select>
                 </div>
 
