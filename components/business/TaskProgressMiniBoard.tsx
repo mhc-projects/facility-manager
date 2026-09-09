@@ -84,7 +84,7 @@ export default function TaskProgressMiniBoard({
   onStatusChange
 }: TaskProgressMiniBoardProps) {
   const { user } = useAuth();
-  const { getStagesByProgressStatus } = useAdminData();
+  const { getStagesByProgressStatus, resolveStageKey } = useAdminData();
   const [tasks, setTasks] = useState<FacilityTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -386,7 +386,7 @@ export default function TaskProgressMiniBoard({
             {/* 해당 타입의 단계별 버튼 */}
             <div className="flex gap-1 mb-2 overflow-x-auto">
               {typeData.steps.map((step) => {
-                const stepTasks = typeData.tasks.filter(task => task.status === step.status);
+                const stepTasks = typeData.tasks.filter(task => resolveStageKey(task.status, task.progress_status) === step.status);
                 const isExpanded = expandedStatus === `${taskType}-${step.status}`;
                 const colorClasses = getColorClasses(step.color);
 
@@ -423,7 +423,7 @@ export default function TaskProgressMiniBoard({
             {expandedStatus && expandedStatus.startsWith(`${taskType}-`) && (
               <div className={`mt-2 p-2 rounded-lg border ${getColorClasses(typeData.steps.find(s => expandedStatus === `${taskType}-${s.status}`)?.color || 'gray').bgColor}`}>
                 <div className="space-y-2">
-                  {typeData.tasks.filter(task => expandedStatus === `${taskType}-${task.status}`).map((task) => (
+                  {typeData.tasks.filter(task => expandedStatus === `${taskType}-${resolveStageKey(task.status, task.progress_status)}`).map((task) => (
                     <div key={task.id} className="bg-white p-2 rounded border text-xs">
                       <div className="flex items-center justify-between text-gray-600">
                         <div className="flex items-center gap-2">
@@ -443,7 +443,7 @@ export default function TaskProgressMiniBoard({
                       {/* 상태 변경 드롭다운 - 해당 타입의 단계만 표시 */}
                       <div className="mt-2">
                         <select
-                          value={task.status}
+                          value={resolveStageKey(task.status, task.progress_status)}
                           onChange={(e) => handleStatusChange(task.id, e.target.value)}
                           className="w-full text-xs border rounded px-2 py-1 bg-gray-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                         >

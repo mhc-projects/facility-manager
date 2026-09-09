@@ -45,6 +45,7 @@ interface AdminDataContextType {
   getStageColorClass: (stageKey: string) => string;
   getStagesByCategory: (categoryId: number) => TaskStage[];
   getStagesByProgressStatus: (progressStatus?: string | null) => TaskStepCompat[];
+  resolveStageKey: (status: string, progressStatus?: string | null) => string;
   getStagesByTaskType: (taskType: string) => TaskStepCompat[];
   refreshManufacturers: () => Promise<void>;
   refreshProgressCategories: () => Promise<void>;
@@ -115,6 +116,16 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchManufacturers, fetchProgressCategories, fetchTaskStages]);
 
+  // 이름 기반 task_type 추론 — DB의 task_type 컬럼이 없을 때 폴백용
+  const inferTaskTypeFromName = (name: string): string => {
+    if (name.includes('보조금')) return 'subsidy';
+    if (name.includes('자비'))   return 'self';
+    if (name === 'AS')           return 'as';
+    if (name.includes('외주'))   return 'outsourcing';
+    if (name.includes('대리점')) return 'dealer';
+    return 'etc';
+  };
+
   // 칸반/드롭다운용 색상 사이클
   const STEP_COLORS = ['blue', 'yellow', 'orange', 'rose', 'purple', 'indigo', 'cyan', 'emerald', 'teal', 'green', 'amber', 'lime', 'red', 'pink', 'sky', 'violet'];
 
@@ -164,6 +175,37 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     return toStepCompat(getStagesByCategory(cat.id));
   }, [progressCategories, getStagesByCategory, toStepCompat]);
 
+  // 업무 status 키를 진행구분 카테고리의 키로 맞춘다.
+  // 보조금 계열 카테고리는 같은 라벨에 다른 stage_key를 쓰는 경우가 있어(예: custom_1777968825327 ↔ custom_1778198486933),
+  // 키가 카테고리에 없으면 그 키가 다른 카테고리에서 갖는 라벨로 같은 라벨의 카테고리 키를 찾는다. 못 찾으면 원래 키 반환.
+  const resolveStageKey = useCallback((status: string, progressStatus?: string | null): string => {
+    const name = (progressStatus || '').trim();
+    if (!name || !status) return status;
+    const cat = progressCategories.find(c => c.is_active && c.name === name);
+    if (!cat) return status;
+
+    const catStages = taskStages.filter(s => s.progress_category_id === cat.id && s.is_active);
+    if (catStages.some(s => s.stage_key === status)) return status;
+
+    const catType = cat.task_type ?? inferTaskTypeFromName(cat.name);
+    const typeOf = (categoryId: number) => {
+      const c = progressCategories.find(pc => pc.id === categoryId);
+      return c ? (c.task_type ?? inferTaskTypeFromName(c.name)) : '';
+    };
+    // 같은 키가 카테고리마다 다른 라벨일 수 있으므로(예: subsidy_installation) 같은 task_type 카테고리 라벨을 우선 시도
+    const candidateLabels = taskStages
+      .filter(s => s.stage_key === status && s.is_active && s.progress_category_id !== cat.id)
+      .sort((a, b) => Number(typeOf(b.progress_category_id) === catType) - Number(typeOf(a.progress_category_id) === catType))
+      .map(s => s.stage_label);
+    if (TASK_STATUS_KR[status]) candidateLabels.push(TASK_STATUS_KR[status]);
+
+    for (const label of candidateLabels) {
+      const match = catStages.find(s => s.stage_label === label);
+      if (match) return match.stage_key;
+    }
+    return status;
+  }, [progressCategories, taskStages]);
+
   // 색상 이름 → Tailwind 뱃지 클래스
   const COLOR_TO_BADGE: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-800',
@@ -196,16 +238,6 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     return COLOR_TO_BADGE[colorName] || 'bg-gray-100 text-gray-600';
   }, [taskStages]);
 
-  // 이름 기반 task_type 추론 — DB의 task_type 컬럼이 없을 때 폴백용
-  const inferTaskTypeFromName = (name: string): string => {
-    if (name.includes('보조금')) return 'subsidy';
-    if (name.includes('자비'))   return 'self';
-    if (name === 'AS')           return 'as';
-    if (name.includes('외주'))   return 'outsourcing';
-    if (name.includes('대리점')) return 'dealer';
-    return 'etc';
-  };
-
   // 진행구분이 없을 때의 폴백. UI 단계 목록은 getStagesByProgressStatus를 쓴다
   const getStagesByTaskType = useCallback((taskType: string): TaskStepCompat[] => {
     const primaryCat = progressCategories
@@ -226,6 +258,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       getStageColorClass,
       getStagesByCategory,
       getStagesByProgressStatus,
+      resolveStageKey,
       getStagesByTaskType,
       refreshManufacturers: fetchManufacturers,
       refreshProgressCategories: fetchProgressCategories,

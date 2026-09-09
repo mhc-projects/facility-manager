@@ -154,7 +154,7 @@ function lookupTaskType(categoryName: string, categories: ProgressCategory[]): T
 
 function TaskManagementPage() {
   const { user } = useAuth()
-  const { getStagesByProgressStatus, getStageLabel, progressCategories } = useAdminData()
+  const { getStagesByProgressStatus, getStageLabel, resolveStageKey, progressCategories } = useAdminData()
 
   const getStepsForProgress = useCallback((progressStatus?: string, fallbackType?: TaskType) => {
     const name = (progressStatus || '').trim()
@@ -165,6 +165,14 @@ function TaskManagementPage() {
     const type = fallbackType || (name ? lookupTaskType(name, progressCategories) : 'etc')
     return getStepsForType(type as any)
   }, [getStagesByProgressStatus, progressCategories])
+
+  // 진행구분이 바뀔 때 현재 단계를 새 진행구분의 같은 라벨 단계로 이관한다. 못 찾으면 첫 단계.
+  const carryStatusTo = useCallback((status: string, newProgressStatus: string, fallbackType?: TaskType): TaskStatus => {
+    const steps = getStepsForProgress(newProgressStatus, fallbackType)
+    const resolved = resolveStageKey(status, newProgressStatus)
+    if (steps.some(s => s.status === resolved)) return resolved as TaskStatus
+    return (steps[0]?.status || 'etc_status') as TaskStatus
+  }, [getStepsForProgress, resolveStageKey])
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -878,7 +886,8 @@ function TaskManagementPage() {
         businessId: business.id,
         type: uiType,
         progressStatus: ps || prev.progressStatus,
-        status: ps ? firstStatus : prev.status,
+        // 진행구분이 실제로 바뀔 때만 단계를 이관한다. 같은 진행구분이면 현재 단계 유지.
+        status: ps && ps !== (prev.progressStatus || '') ? carryStatusTo(prev.status, ps, uiType) : prev.status,
       } : null)
       setEditBusinessSearchTerm(business.name)
       setShowEditBusinessDropdown(false)
@@ -896,7 +905,7 @@ function TaskManagementPage() {
       setShowBusinessDropdown(false)
       setSelectedBusinessIndex(-1)
     }
-  }, [editingTask, getStepsForProgress])
+  }, [editingTask, getStepsForProgress, carryStatusTo])
 
   // 컴팩트 모드에서 표시할 카드들 계산
   const getDisplayTasks = useCallback((tasks: Task[]) => {
@@ -1221,6 +1230,9 @@ function TaskManagementPage() {
     })() : steps
 
     const grouped = {} as Record<string, Task[]>
+    // 복수 진행구분 보기는 칸을 라벨로 합치므로 라벨을 키로 쓴다.
+    // status 키로 묶으면 같은 키가 다른 라벨을 갖는 카테고리끼리(예: subsidy_approval_pending) 서로 덮어쓴다.
+    const keyOf = (s: { status: string; label: string }) => isSingleCategory ? s.status : s.label
 
     if (!isSingleCategory) {
       // 전체/복수 진행구분: 업무의 진행구분 단계와 라벨이 같은 칸에 배치
@@ -1229,7 +1241,8 @@ function TaskManagementPage() {
 
         activeTasks.forEach(task => {
           const correctSteps = getStepsForProgress(task.progressStatus, task.type)
-          const correctStep = correctSteps.find(s => s.status === task.status)
+          const resolvedStatus = resolveStageKey(task.status, task.progressStatus)
+          const correctStep = correctSteps.find(s => s.status === resolvedStatus)
 
           if (correctStep && correctStep.label === uniqueStep.label) {
             tasksForThisStep.push({
@@ -1253,7 +1266,7 @@ function TaskManagementPage() {
 
         const uniqueTasksArray = Array.from(uniqueTasksMap.values())
         uniqueTasksArray.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-        grouped[uniqueStep.status as TaskStatus] = uniqueTasksArray
+        grouped[keyOf(uniqueStep)] = uniqueTasksArray
       })
 
       // 전체 보기: 어느 컬럼에도 매칭되지 않는 업무를 해당 타입 첫 번째 컬럼에 배치
@@ -1264,9 +1277,9 @@ function TaskManagementPage() {
         if (taskTypeSteps.length === 0) return
         const firstStep = taskTypeSteps[0]
         const target = uniqueSteps.find(s => s.label === firstStep.label) || uniqueSteps[0] || firstStep
-        const targetStatus = target.status as TaskStatus
-        if (!grouped[targetStatus]) grouped[targetStatus] = []
-        grouped[targetStatus].push({
+        const targetKey = keyOf(target)
+        if (!grouped[targetKey]) grouped[targetKey] = []
+        grouped[targetKey].push({
           ...task,
           _stepInfo: {
             status: firstStep.status as TaskStatus,
@@ -1278,7 +1291,7 @@ function TaskManagementPage() {
     } else {
       // 개별 카테고리 보기일 때: 기존 로직 유지
       uniqueSteps.forEach(step => {
-        grouped[step.status] = activeTasks.filter(task => task.status === step.status)
+        grouped[step.status] = activeTasks.filter(task => resolveStageKey(task.status, task.progressStatus) === step.status)
       })
 
       // 현재 타입 단계에 매칭되지 않는 업무(레거시 status 등)를 첫 번째 컬럼에 배치
@@ -1316,13 +1329,13 @@ function TaskManagementPage() {
       console.log('==================');
     }
 
-    return { grouped, steps: uniqueSteps }
-  }, [kanbanTasks, selectedProgressStatuses, getStepsForProgress, progressCategories])
+    return { grouped, steps: uniqueSteps.map(s => ({ ...s, key: keyOf(s) })) }
+  }, [kanbanTasks, selectedProgressStatuses, getStepsForProgress, resolveStageKey, progressCategories])
 
   // 동적 통계 계산
   const dynamicStats = useMemo(() => {
     const stepsWithTasks = tasksByStatus.steps.filter(step =>
-      tasksByStatus.grouped[step.status]?.length > 0
+      tasksByStatus.grouped[step.key]?.length > 0
     )
     const highPriorityCount = filteredTasks.filter(task => task.priority === 'high').length
     const delayedCount = filteredTasks.filter(task =>
@@ -1420,8 +1433,10 @@ function TaskManagementPage() {
     setDraggedTask(null)
   }, [])
 
-  const handleDrop = useCallback(async (status: TaskStatus) => {
+  const handleDrop = useCallback(async (columnStatus: TaskStatus) => {
     if (!draggedTask) return
+    // 복수 진행구분 보기의 칸은 다른 카테고리의 키일 수 있으므로 업무의 진행구분 키로 맞춘다
+    const status = resolveStageKey(columnStatus, draggedTask.progressStatus) as TaskStatus
 
     try {
       // API 호출로 실제 상태 업데이트
@@ -1454,7 +1469,7 @@ function TaskManagementPage() {
       console.error('Failed to update task status:', error)
       alert('업무 상태 업데이트에 실패했습니다. 다시 시도해주세요.')
     }
-  }, [draggedTask])
+  }, [draggedTask, resolveStageKey])
 
   const handleMoveStage = useCallback(async (taskId: string, newStatus: string) => {
     try {
@@ -2537,7 +2552,7 @@ function TaskManagementPage() {
                 </thead>
                 <tbody>
                   {paginatedTasks.map((task, index) => {
-                    const dbStep = getStepsForProgress(task.progressStatus, task.type).find(s => s.status === task.status)
+                    const dbStep = getStepsForProgress(task.progressStatus, task.type).find(s => s.status === resolveStageKey(task.status, task.progressStatus))
                     const statusLabel = getStageLabel(task.status, task.progressStatus)
                     return (
                       <tr
@@ -2905,7 +2920,7 @@ function TaskManagementPage() {
               <div key={`kanban-${selectedProgressStatuses.join(',') || 'all'}`} className="flex gap-2 sm:gap-3 md:gap-4 overflow-x-auto pb-3 md:pb-4 scroll-smooth">
               {tasksByStatus.steps.map((step) => (
                 <div
-                  key={step.status}
+                  key={step.key}
                   className="flex-shrink-0 w-52 sm:w-60 md:w-64 bg-gray-50 rounded-lg p-2 sm:p-3"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDrop(step.status as TaskStatus)}
@@ -2917,15 +2932,15 @@ function TaskManagementPage() {
                       <h3 className="font-medium text-gray-900 text-xs sm:text-sm">{step.label}</h3>
                     </div>
                     <span className="text-xs text-gray-500 bg-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded">
-                      총 {tasksByStatus.grouped[step.status]?.length || 0}개
+                      총 {tasksByStatus.grouped[step.key]?.length || 0}개
                     </span>
                   </div>
 
                   {/* 업무 카드들 */}
                   <div className={`space-y-1.5 sm:space-y-2 ${isCompactMode ? 'min-h-[80px] sm:min-h-[100px]' : 'max-h-[400px] sm:max-h-[500px] overflow-y-auto scrollbar-thin'}`}>
                     {(isCompactMode
-                      ? getDisplayTasks(tasksByStatus.grouped[step.status] || [])
-                      : (tasksByStatus.grouped[step.status] || [])
+                      ? getDisplayTasks(tasksByStatus.grouped[step.key] || [])
+                      : (tasksByStatus.grouped[step.key] || [])
                     ).map((task) => (
                       <div
                         key={task.id}
@@ -3468,13 +3483,12 @@ function TaskManagementPage() {
                         const catName = e.target.value
                         if (!catName) return
                         const derivedType = lookupTaskType(catName, progressCategories)
-                        const newStages = getStepsForProgress(catName, derivedType)
-                        const firstStatus = newStages[0]?.status || ''
                         setEditingTask(prev => prev ? {
                           ...prev,
                           type: derivedType as TaskType,
                           progressStatus: catName,
-                          status: firstStatus as TaskStatus,
+                          // 같은 라벨 단계가 있으면 유지(보조금→보조금(5년경과) 등), 없으면 첫 단계
+                          status: carryStatusTo(prev.status, catName, derivedType),
                         } : null)
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs sm:text-sm"
@@ -3515,15 +3529,25 @@ function TaskManagementPage() {
                   <label className="block text-xs sm:text-xs font-medium text-gray-700 mb-2">
                     현재 단계 <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={editingTask.status}
-                    required
-                    onChange={(e) => setEditingTask(prev => prev ? { ...prev, status: e.target.value as TaskStatus } : null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {getStepsForProgress(editingTask.progressStatus, editingTask.type)
-                      .map(step => <option key={step.status} value={step.status}>{step.label}</option>)}
-                  </select>
+                  {(() => {
+                    const steps = getStepsForProgress(editingTask.progressStatus, editingTask.type)
+                    const resolved = resolveStageKey(editingTask.status, editingTask.progressStatus)
+                    const inList = steps.some(s => s.status === resolved)
+                    return (
+                      <select
+                        value={inList ? resolved : editingTask.status}
+                        required
+                        onChange={(e) => setEditingTask(prev => prev ? { ...prev, status: e.target.value as TaskStatus } : null)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {/* 카테고리에 없는 키면 실제 저장될 값을 그대로 보여준다(첫 옵션으로 보이는 것 방지) */}
+                        {!inList && (
+                          <option value={editingTask.status}>{getStageLabel(editingTask.status, editingTask.progressStatus)}</option>
+                        )}
+                        {steps.map(step => <option key={step.status} value={step.status}>{step.label}</option>)}
+                      </select>
+                    )
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
