@@ -64,13 +64,32 @@ export const POST = withApiHandler(async (request: NextRequest) => {
   if (!label) return createErrorResponse('단계 이름을 입력해주세요.', 400);
   if (label.length > 100) return createErrorResponse('단계 이름은 100자 이하여야 합니다.', 400);
 
-  // stage_key: 지정하지 않으면 label 기반 자동 생성
-  const key = stage_key?.trim() || `custom_${Date.now()}`;
-
   const category = await queryOne(
-    `SELECT id FROM progress_categories WHERE id = $1 LIMIT 1`, [Number(progress_category_id)]
+    `SELECT id, task_type FROM progress_categories WHERE id = $1 LIMIT 1`, [Number(progress_category_id)]
   );
   if (!category) return createErrorResponse('존재하지 않는 진행구분입니다.', 404);
+
+  // stage_key: 지정하지 않으면 같은 task_type의 다른 진행구분에 같은 라벨 단계가 있을 때 그 키를 재사용한다.
+  // 카테고리마다 같은 라벨에 다른 키가 생기면 사업장 진행구분이 바뀐 업무의 status가 고아가 되기 때문.
+  // 대상 카테고리에 이미 그 키가 있으면(라벨이 다른 경우) 새 키로 폴백한다.
+  let key = stage_key?.trim() || '';
+  if (!key) {
+    const sameLabel = await queryOne(
+      `SELECT s.stage_key
+       FROM task_stages s
+       JOIN progress_categories c ON c.id = s.progress_category_id
+       WHERE s.stage_label = $1
+         AND s.progress_category_id <> $2
+         AND c.task_type IS NOT DISTINCT FROM $3
+         AND NOT EXISTS (
+           SELECT 1 FROM task_stages t WHERE t.progress_category_id = $2 AND t.stage_key = s.stage_key
+         )
+       ORDER BY s.id ASC
+       LIMIT 1`,
+      [label, Number(progress_category_id), category.task_type ?? null]
+    );
+    key = sameLabel?.stage_key || `custom_${Date.now()}`;
+  }
 
   const existing = await queryOne(
     `SELECT id FROM task_stages WHERE progress_category_id = $1 AND stage_key = $2 LIMIT 1`,
