@@ -1367,6 +1367,20 @@ export async function POST(request: NextRequest) {
       is_deleted: businessData.is_deleted ?? false
     };
 
+    // business_name 중복 체크(PUT 핸들러와 동일 패턴) — partial unique index와 일치하게 활성 행만 검사.
+    // 이 체크 없이는 DB 제약 위반이 그대로 catch로 떨어져 500 + 원시 postgres 에러 메시지가 나갔음(2026-09-07 실측).
+    const existingWithSameName = await queryOne(
+      'SELECT id FROM business_info WHERE business_name = $1 AND is_deleted = false',
+      [normalizedData.business_name]
+    );
+    if (existingWithSameName) {
+      logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명(활성):', normalizedData.business_name);
+      return NextResponse.json({
+        success: false,
+        error: '이미 동일한 사업장명이 존재합니다. 다른 이름을 사용해주세요.'
+      }, { status: 409 });
+    }
+
     const fields = Object.keys(normalizedData);
     const placeholders = fields.map((_, index) => `$${index + 1}`).join(', ');
     const values = fields.map(field => (normalizedData as any)[field]);

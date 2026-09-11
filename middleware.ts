@@ -3,16 +3,23 @@ import { RateLimiter } from '@/lib/security/rate-limiter';
 import { protectCSRF } from '@/lib/security/csrf-protection';
 import { validateRequestSize } from '@/lib/security/input-validation';
 
+// request.ip는 Vercel Edge 환경에서도 비어있을 때가 있어(2026-09-07 [SECURITY] 로그에 "from
+// undefined" 실측) 헤더로 폴백 — 접속 로깅과 보안 경고 로그가 같은 기준을 쓰도록 공용화.
+function getClientIp(request: NextRequest): string {
+  return (
+    request.ip ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
+    'unknown'
+  );
+}
+
 // 접속 IP 로깅 (비동기 - 응답 지연 없음, 내부 API 경유)
 function logUserAccess(request: NextRequest, payload: any): void {
   const secret = process.env.INTERNAL_LOG_SECRET;
   if (!secret) return;
 
-  const ip =
-    request.ip ||
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown';
+  const ip = getClientIp(request);
 
   fetch(`${request.nextUrl.origin}/api/internal/log-access`, {
     method: 'POST',
@@ -147,7 +154,7 @@ async function protectAPIRoute(request: NextRequest): Promise<NextResponse | nul
   const rateLimitResult = await RateLimiter.check(request);
 
   if (!rateLimitResult.success) {
-    console.warn(`[SECURITY] Rate limit exceeded for ${request.ip} on ${request.nextUrl.pathname}`);
+    console.warn(`[SECURITY] Rate limit exceeded for ${getClientIp(request)} on ${request.nextUrl.pathname}`);
 
     const response = new NextResponse(
       JSON.stringify({
@@ -183,7 +190,7 @@ async function protectAPIRoute(request: NextRequest): Promise<NextResponse | nul
   // 요청 크기 검증
   const contentLength = request.headers.get('content-length');
   if (!validateRequestSize(contentLength)) {
-    console.warn(`[SECURITY] Request size too large for ${request.ip} on ${request.nextUrl.pathname}`);
+    console.warn(`[SECURITY] Request size too large for ${getClientIp(request)} on ${request.nextUrl.pathname}`);
 
     return new NextResponse(
       JSON.stringify({
@@ -204,7 +211,7 @@ async function protectAPIRoute(request: NextRequest): Promise<NextResponse | nul
   if (!isCSRFExemptAPI(request.nextUrl.pathname)) {
     const csrfResult = protectCSRF(request);
     if (!csrfResult.valid) {
-      console.warn(`[SECURITY] CSRF validation failed for ${request.ip} on ${request.nextUrl.pathname}`);
+      console.warn(`[SECURITY] CSRF validation failed for ${getClientIp(request)} on ${request.nextUrl.pathname}`);
 
       return new NextResponse(
         JSON.stringify({
@@ -246,7 +253,7 @@ async function checkPageAuthentication(request: NextRequest): Promise<NextRespon
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
 
-    console.warn(`[SECURITY] Unauthenticated access attempt to ${request.nextUrl.pathname} from ${request.ip}`);
+    console.warn(`[SECURITY] Unauthenticated access attempt to ${request.nextUrl.pathname} from ${getClientIp(request)}`);
 
     return NextResponse.redirect(loginUrl);
   }
@@ -305,7 +312,7 @@ async function checkPageAuthentication(request: NextRequest): Promise<NextRespon
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
 
-    console.warn(`[SECURITY] Invalid token structure for ${request.nextUrl.pathname} from ${request.ip}`);
+    console.warn(`[SECURITY] Invalid token structure for ${request.nextUrl.pathname} from ${getClientIp(request)}`);
 
     // 유효하지 않은 쿠키 제거
     const response = NextResponse.redirect(loginUrl);
