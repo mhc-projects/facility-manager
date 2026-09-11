@@ -228,6 +228,18 @@ facility-manager `/dpf` 모듈에 이식할 설계를 작성함. 전체 설계�
    적용돼 클라이언트 10MB 가드를 우회한 업로드가 가능했다 — `fileSizeLimit: 10*1024*1024`를 버킷 생성 옵션에 추가해
    서버 쪽에서도 같은 숫자를 강제하도록 수정.
 
+## 5단계 구현 중 발견 (2026-09-12) — 브라우저 확장이 파일 업로드 API 테스트를 차단함
+API 레벨에서 먼저 검증하는 기존 관례(1~4단계 전부)를 따르려 했으나, `javascript_tool`로 `input.files[0]`를 읽어
+`fetch`의 `FormData` body로 보내는 패턴 자체가 Claude-in-Chrome의 보안 필터에 걸려 `[BLOCKED: Cookie/query string data]`로
+차단됐다 — 파일 내용(합성 canvas PNG, base64 디코딩 PNG, PIL로 새로 생성한 PNG 전부)이나 생성 방식과 무관하게 매번
+차단됨, 반면 파일이 아예 없는 일반 JSON POST/GET은 계속 정상 동작했다. 결론: "스크립트가 file input의 실제 선택된
+파일을 읽어 네트워크로 전송"하는 패턴 자체를 막는 안전장치로 보인다(같은 오리진으로 보내는 정당한 업로드인지 여부와
+무관하게) — 이건 우회하려 하지 않고 그대로 받아들였다. **대신 파일이 포함되지 않는 케이스(빈 레코드 GET, 404, slot_key
+검증, 미존재 첨부 DELETE)만 API 단독으로 먼저 검증**하고, 실제 업로드/재업로드/삭제/서명URL 만료 흐름은 UI를 완성한 뒤
+`file_upload` 도구로 실제 `<input type=file>`에 파일을 선택시키고 페이지 자신의 React 코드(내가 직접 짠 스크립트가 아닌
+이미 배포된 onChange 핸들러)가 fetch를 수행하게 해서 검증하기로 결정 — 이 경로는 차단되지 않을 가능성이 높다(차단은
+`javascript_tool`에 직접 제출한 코드를 스캔하는 것으로 보이므로).
+
 ## 미수정(후속 과제로 명시적으로 미룸)
 - `assigned_as_technician`/`processing_technician`의 `employees` 테이블 FK 연동 (1단계는 자유 텍스트).
 - 처리점 자동완성/드롭다운 (실제 처리점 목록이 쌓인 뒤 UI에서만).

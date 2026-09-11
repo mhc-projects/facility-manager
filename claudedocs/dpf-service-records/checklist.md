@@ -129,15 +129,18 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
 검증 추가, 재업로드는 타임스탬프 경로+이전 파일 베스트에포트 삭제, 첨부파일 삭제는 하드 삭제(레코드 자체의
 소프트삭제와 별개 축), UI는 수정 모드에만 노출·개별 업로드만(일괄 업로드/목록 서류 컬럼 없음, 미관찰 UI 추측 안 함).
 
-- [ ] 마이그레이션 SQL 작성(테이블만, 버킷은 코드가 런타임 자동생성) → 사용자에게 전달(비공개 버킷 이유 설명 포함) →
-      실행 확인 대기
-- [ ] `types/dpf.ts`에 `DpfAttachmentSlotKey`(12개 union) + `DpfServiceRecordAttachment`(`storage_path` 포함) 추가
-- [ ] `ServiceRecordFormModal.tsx`에 `ATTACHMENT_SLOTS`(key+한글 라벨 12개) export
-- [ ] `POST /api/dpf/service-records/[id]/attachments` 신설(requireAuth 먼저, slot_key+확장자 화이트리스트 검증,
+- [x] 마이그레이션 SQL 작성(테이블만, 버킷은 코드가 런타임 자동생성) → 사용자에게 전달(비공개 버킷 이유 설명 포함) →
+      사용자가 2026-09-12 Supabase SQL 에디터에서 직접 실행, 성공 확인
+- [x] `types/dpf.ts`에 `DpfAttachmentSlotKey`(12개 union) + `DpfServiceRecordAttachment`(`storage_path` 포함) 추가
+- [x] `ServiceRecordFormModal.tsx`에 `ATTACHMENT_SLOTS`(key+한글 라벨 12개) export
+- [x] `POST /api/dpf/service-records/[id]/attachments` 신설(requireAuth 먼저, slot_key+확장자 화이트리스트 검증,
       `dpf-attachments` 비공개 버킷 자동생성 시 `fileSizeLimit: 10MB` 지정, 버킷 동시생성 race는 "already exists"를
       성공으로 취급, upsert, 이전 파일 베스트에포트 삭제)
-- [ ] `GET /api/dpf/service-records/[id]/attachments` 신설(슬롯별 `createSignedUrl` 발급, 응답 필드명 `created_at`)
-- [ ] `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` 신설(storage+DB 하드 삭제)
+- [x] `GET /api/dpf/service-records/[id]/attachments` 신설(슬롯별 `createSignedUrl` 발급, 응답 필드명 `created_at`)
+- [x] `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` 신설(storage+DB 하드 삭제)
+- [x] non-file API 케이스 실제 요청으로 검증: 빈 레코드 GET({}), 존재하지 않는 레코드 GET(404), 잘못된 slot_key
+      DELETE(400), 미존재 첨부 DELETE(404) — 파일 포함 케이스(업로드/재업로드)는 브라우저 확장 보안 필터가
+      "input.files를 읽어 fetch로 전송" 패턴을 차단해 API 단독 테스트 불가, UI 완성 후 실제 파일 선택으로 검증 예정
 - [ ] `ServiceRecordFormModal.tsx`에 첨부파일 섹션 추가(`AttachmentSlot` 서브컴포넌트, 수정 모드 전용, 12슬롯
       업로드/미리보기/삭제, 10MB 클라이언트 가드)
 - [ ] `.claude/skills/db-schema/SKILL.md`에 `dpf_service_record_attachments` 추가
