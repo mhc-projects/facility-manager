@@ -28,7 +28,7 @@ interface VehicleDetail {
 
 const ALL_TABS = [
   { key: 'basic',        label: '기본정보',   vendors: ['fujino', 'mz'] },
-  { key: 'service',      label: 'AS/크리닝',  vendors: ['fujino', 'mz'] },
+  { key: 'service',      label: '접수이력',   vendors: ['fujino', 'mz'] },
   { key: 'installation', label: '설치이력',   vendors: ['fujino'] },
   { key: 'inspection',   label: '성능검사',   vendors: ['fujino'] },
   { key: 'subsidy',      label: '보조금',     vendors: ['fujino'] },
@@ -358,7 +358,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
         />
       )}
 
-      {/* AS/크리닝 접수 등록/수정 모달 */}
+      {/* 접수이력 등록/수정 모달 */}
       {serviceModal && (
         <ServiceRecordFormModal
           isOpen={true}
@@ -571,7 +571,7 @@ function ServiceTab({
 
   return (
     <div>
-      <TabHeader title="AS/크리닝 접수 이력" count={records.length} onAdd={onAdd} />
+      <TabHeader title="접수이력" count={records.length} onAdd={onAdd} />
       {records.length === 0 ? (
         <EmptyState message="접수 이력이 없습니다." />
       ) : (
