@@ -229,7 +229,7 @@ export default function DpfVehicleTable({
 
       {/* 테이블 */}
       <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-        <table className="text-sm border-collapse" style={{ minWidth: '1780px', width: '100%' }}>
+        <table className="text-sm border-collapse" style={{ minWidth: '2250px', width: '100%' }}>
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               {COLUMNS.map(col => (

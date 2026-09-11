@@ -520,6 +520,8 @@ create policy "dpf_service_records_write" on dpf_service_records
 
 ## 10. 스킬 문서 갱신
 
-1단계 구현 완료 시 `.claude/skills/as-management/SKILL.md`에 "`dpf_service_records`는 차량 귀속 별도 시스템,
-사업장 귀속 `as_records`와 무관"이라는 한 줄을 추가하거나, 신규 `dpf` 도메인 스킬(`​.claude/skills/dpf/SKILL.md`)을 만들어
-이 문서의 핵심 결정(§4)을 옮겨 적는다 — 현재 `dpf` 도메인은 전용 스킬 파일이 없다.
+**완료(2026-09-12, 3단계 사후검토에서 어드바이저 지적으로 뒤늦게 처리)**: 신규 `.claude/skills/dpf/SKILL.md`를 만들어
+round_no 트리거 채번, 전환 시 재채번, write-back "최신 레코드만" 규칙, 삭제≠취소(소프트 삭제 vs status=cancelled)와
+집계 시 어느 쪽을 포함/제외해야 하는지, 부착현황 파생 컬럼의 배치 조회 원칙, 엠즈 벤더의 설치이력 테이블 공백, 자유 텍스트
+필드 목록을 옮겨 적었다. 원래 1단계 완료 시점에 처리했어야 했는데 3단계까지 누락돼 있던 것 — `.claude/skills/db-schema/SKILL.md`는
+스키마 요약만 다루고 이런 "확정된 업무 규칙"은 다루지 않아서, CLAUDE.md의 도메인 스킬 갱신 규칙을 3개 단계 동안 어긴 상태였다.
