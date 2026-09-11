@@ -12,6 +12,7 @@ interface Props {
   pageSize: number;
   onPageChange: (page: number) => void;
   loading?: boolean;
+  variant?: 'reception' | 'logistics';
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -20,7 +21,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   cancelled:   { label: '취소',   color: 'bg-gray-100 text-gray-500' },
 };
 
-const COLUMNS = [
+const RECEPTION_COLUMNS = [
   { key: 'category',       label: '분류',       width: 90 },
   { key: 'status',         label: '상태',       width: 80 },
   { key: 'reception_date', label: '접수일',     width: 100 },
@@ -36,6 +37,21 @@ const COLUMNS = [
   { key: 'billing_status', label: '청구상태',   width: 110 },
 ] as const;
 
+// 물류(부품전달/요소수)는 처리점/담당AS기사/기사처리일자 개념이 없어 빼고, 택배사를 추가한다(설계 §8.2)
+const LOGISTICS_COLUMNS = [
+  { key: 'category',       label: '분류',       width: 90 },
+  { key: 'status',         label: '상태',       width: 80 },
+  { key: 'reception_date', label: '접수일',     width: 100 },
+  { key: 'plate_number',   label: '차량번호',   width: 100 },
+  { key: 'vin',            label: '차대번호',   width: 160 },
+  { key: 'owner_name',     label: '계약자',     width: 100 },
+  { key: 'vehicle_name',   label: '차명',       width: 130 },
+  { key: 'local_government', label: '지자체',   width: 100 },
+  { key: 'courier',        label: '택배사',     width: 110 },
+  { key: 'completed_at',   label: '완료일자',   width: 100 },
+  { key: 'billing_status', label: '청구상태',   width: 110 },
+] as const;
+
 const BILLING_LABELS: Record<string, string> = {
   none: '청구 전',
   billed: '청구완료',
@@ -44,10 +60,10 @@ const BILLING_LABELS: Record<string, string> = {
   held: '보류',
 };
 
-function SkeletonRow() {
+function SkeletonRow({ columns }: { columns: ReadonlyArray<{ key: string; width: number }> }) {
   return (
     <tr className="border-b border-gray-100">
-      {COLUMNS.map((col, i) => (
+      {columns.map((col, i) => (
         <td key={col.key} className="px-3 py-3">
           <div
             className="h-4 bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 rounded animate-pulse"
@@ -60,8 +76,10 @@ function SkeletonRow() {
 }
 
 export default function DpfServiceRecordTable({
-  records, total, page, pageSize, onPageChange, loading,
+  records, total, page, pageSize, onPageChange, loading, variant = 'reception',
 }: Props) {
+  const COLUMNS = variant === 'logistics' ? LOGISTICS_COLUMNS : RECEPTION_COLUMNS;
+  const tableMinWidth = COLUMNS.reduce((sum, col) => sum + col.width, 0) + 40;
   const totalPages = Math.ceil(total / pageSize);
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
@@ -106,6 +124,7 @@ export default function DpfServiceRecordTable({
       case 'vehicle_name':  return <span className="text-sm">{vehicle.vehicle_name || '-'}</span>;
       case 'local_government': return <span className="text-xs text-gray-500">{r.local_government || vehicle.local_government || '-'}</span>;
       case 'service_branch': return <span className="text-xs text-gray-600">{r.service_branch || '-'}</span>;
+      case 'courier':        return <span className="text-xs text-gray-600">{r.courier || '-'}</span>;
       case 'assigned_as_technician': return <span className="text-xs text-gray-600">{r.assigned_as_technician || '-'}</span>;
       case 'processed_at':
         return r.processed_at
@@ -153,7 +172,7 @@ export default function DpfServiceRecordTable({
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-        <table className="text-sm border-collapse" style={{ minWidth: '1380px', width: '100%' }}>
+        <table className="text-sm border-collapse" style={{ minWidth: `${tableMinWidth}px`, width: '100%' }}>
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               {COLUMNS.map(col => (
@@ -169,7 +188,7 @@ export default function DpfServiceRecordTable({
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {loading
-              ? Array.from({ length: 8 }, (_, i) => <SkeletonRow key={i} />)
+              ? Array.from({ length: 8 }, (_, i) => <SkeletonRow key={i} columns={COLUMNS} />)
               : records.length === 0
               ? (
                 <tr>
