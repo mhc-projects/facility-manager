@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { DpfVehicle } from '@/types/dpf';
+import { DpfVehicle, DpfVehicleDerivedStats, DpfServiceCategory } from '@/types/dpf';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   pageSize: number;
   onPageChange: (page: number) => void;
   loading?: boolean;
+  derivedStats?: Record<string, DpfVehicleDerivedStats>;
+  onCreateService?: (vehicle: DpfVehicle, initialCategory?: DpfServiceCategory) => void;
 }
 
 function raw(vehicle: DpfVehicle, key: string): string {
@@ -39,6 +41,11 @@ const COLUMNS = [
   { key: 'location',         label: '장소',        width: 90 },
   { key: 'serial_before',    label: '일련번호(전)', width: 130 },
   { key: 'device_serial',    label: '일련번호(후)', width: 130 },
+  { key: 'last_reception',   label: '최근접수일',  width: 95 },
+  { key: 'last_processed',   label: '마지막처리일', width: 95 },
+  { key: 'service_counts',   label: '처리횟수',    width: 110 },
+  { key: 'days_since_change',label: '구조변경경과일', width: 90 },
+  { key: 'service_actions',  label: '',            width: 130 },
 ] as const;
 
 function SkeletonRow() {
@@ -48,7 +55,7 @@ function SkeletonRow() {
         <td key={col.key} className="px-3 py-3">
           <div
             className="h-4 bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 rounded animate-pulse"
-            style={{ width: `${[40, 80, 130, 70, 90, 80, 90, 160, 50, 60, 80, 65, 75, 75, 65, 90, 60, 100, 100][i] ?? 80}px` }}
+            style={{ width: `${[40, 80, 130, 70, 90, 80, 90, 160, 50, 60, 80, 65, 75, 75, 65, 90, 60, 100, 100, 70, 70, 80, 60, 100][i] ?? 80}px` }}
           />
         </td>
       ))}
@@ -56,14 +63,67 @@ function SkeletonRow() {
   );
 }
 
+// 로컬/UTC 자정 경계 드리프트를 피하기 위해 날짜 부분만 UTC로 비교한다 (2026-09-11 어드바이저 4차 검토)
+function daysSince(dateStr: string): number {
+  const d = new Date(dateStr.split('T')[0]);
+  const dUtc = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const now = new Date();
+  const nowUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((nowUtc - dUtc) / 86400000);
+}
+
 export default function DpfVehicleTable({
-  vehicles, total, page, pageSize, onPageChange, loading,
+  vehicles, total, page, pageSize, onPageChange, loading, derivedStats, onCreateService,
 }: Props) {
   const totalPages = Math.ceil(total / pageSize);
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
 
   function cellValue(v: DpfVehicle, key: string): React.ReactNode {
+    if (key === 'last_reception' || key === 'last_processed' || key === 'service_counts' || key === 'days_since_change') {
+      if (key === 'days_since_change') {
+        if (!v.installation_date) return <span className="text-gray-300">—</span>;
+        return <span className="text-xs tabular-nums text-gray-600">{daysSince(v.installation_date)}일</span>;
+      }
+      const stat = derivedStats?.[v.id];
+      if (!stat) return <span className="text-gray-300 text-xs">…</span>;
+      if (key === 'last_reception') {
+        return stat.last_reception_date
+          ? <span className="text-xs tabular-nums text-gray-700">{stat.last_reception_date}</span>
+          : <span className="text-gray-300">—</span>;
+      }
+      if (key === 'last_processed') {
+        return stat.last_processed_date
+          ? <span className="text-xs tabular-nums text-gray-500">{stat.last_processed_date}</span>
+          : <span className="text-gray-300">—</span>;
+      }
+      // service_counts
+      const removalLabel = v.vendor === 'mz' ? '-' : String(stat.removal_count);
+      return (
+        <span className="text-xs text-gray-600 whitespace-nowrap">
+          크{stat.clean_count} · AS{stat.as_count} · 철{removalLabel}
+        </span>
+      );
+    }
+    if (key === 'service_actions') {
+      if (!onCreateService) return null;
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onCreateService(v)}
+            className="px-2 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
+          >
+            접수
+          </button>
+          <button
+            onClick={() => onCreateService(v, 'parts_delivery')}
+            className="px-2 py-1 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            물류
+          </button>
+        </div>
+      );
+    }
     switch (key) {
       case 'vendor':
         return (

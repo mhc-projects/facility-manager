@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import DpfVehicleTable from '@/components/dpf/DpfVehicleTable';
 import VehicleFormModal from '@/components/dpf/VehicleFormModal';
-import { DpfVehicle } from '@/types/dpf';
+import ServiceRecordFormModal from '@/components/dpf/ServiceRecordFormModal';
+import { DpfVehicle, DpfVehicleDerivedStats, DpfServiceCategory } from '@/types/dpf';
 import { Truck, FileText, Upload, X, Plus, Search, SlidersHorizontal, Download } from 'lucide-react';
 
 interface SearchResult {
@@ -29,6 +30,8 @@ export default function DpfPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [derivedStats, setDerivedStats] = useState<Record<string, DpfVehicleDerivedStats>>({});
+  const [serviceModal, setServiceModal] = useState<{ vehicle: DpfVehicle; initialCategory?: DpfServiceCategory } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -39,10 +42,21 @@ export default function DpfPage() {
       if (v !== 'all') params.set('vendor', v);
       const res = await fetch(`/api/dpf/search?${params}`);
       if (!res.ok) throw new Error('검색 실패');
-      setResult(await res.json());
+      const json: SearchResult = await res.json();
+      setResult(json);
+      setLoading(false);
+
+      const ids = json.vehicles.map(veh => veh.id);
+      if (ids.length > 0) {
+        fetch(`/api/dpf/service-records/derived-stats?vehicle_ids=${ids.join(',')}`)
+          .then(r => r.json())
+          .then((stats: Record<string, DpfVehicleDerivedStats>) => {
+            setDerivedStats(prev => ({ ...prev, ...stats }));
+          })
+          .catch(err => console.error('[DPF Derived Stats]', err));
+      }
     } catch (err) {
       console.error(err);
-    } finally {
       setLoading(false);
     }
   }, []);
@@ -257,6 +271,8 @@ export default function DpfPage() {
           pageSize={result.pageSize}
           onPageChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           loading={loading}
+          derivedStats={derivedStats}
+          onCreateService={(vehicle, initialCategory) => setServiceModal({ vehicle, initialCategory })}
         />
       </div>
 
@@ -268,6 +284,19 @@ export default function DpfPage() {
           router.push(`/dpf/${encodeURIComponent(vin)}`);
         }}
       />
+
+      {serviceModal && (
+        <ServiceRecordFormModal
+          isOpen={true}
+          onClose={() => setServiceModal(null)}
+          onSuccess={() => {
+            setServiceModal(null);
+            search(query, localGov, vendor, page);
+          }}
+          vin={serviceModal.vehicle.vin}
+          initialCategory={serviceModal.initialCategory}
+        />
+      )}
     </AdminLayout>
   );
 }
