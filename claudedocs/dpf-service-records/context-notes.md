@@ -296,6 +296,10 @@ raw ArrayBuffer로 시도했던 첫 실패("mime type application/json..., image
 ## 미수정(후속 과제로 명시적으로 미룸)
 - `assigned_as_technician`/`processing_technician`의 `employees` 테이블 FK 연동 (1단계는 자유 텍스트).
 - 처리점 자동완성/드롭다운 (실제 처리점 목록이 쌓인 뒤 UI에서만).
-- 첨부파일 슬롯 구조 (§4.7, 5단계 보류).
 - 크린어스 vendor 추가 여부 (필요시 후속).
-- `/dpf/service` 통계 재조회 `useEffect` 의존성(§2단계 사후 검토 2번) — 3단계에서 등록 버튼 추가 시 재검토.
+- (발견만, 수정 안 함) `announcements`/`approvals`/`facility-photos` 등 기존 업로드 라우트에 잠재된 동일한
+  `supabaseAdmin` 전역 Content-Type 헤더 충돌 — [[dpf]] 스킬 참고. **`announcements/[id]/attachments`는 실제로
+  확인됨**: storage list API(읽기 전용)로 조회한 결과 저장된 객체의 `mimetype`이
+  `"application/json; charset=utf-8, text/plain"`로 오염되어 있었다(버킷에 `allowedMimeTypes` 제한이 없어 415는
+  안 뜨지만 메타데이터가 실제로 깨진 상태). 서명/공개 URL이 이 mimetype을 그대로 Content-Type 헤더로 내보내므로
+  브라우저가 다운로드 대신 인라인 렌더링을 시도할 때 영향을 줄 수 있다 — 수정하지 않고 사용자에게 보고.

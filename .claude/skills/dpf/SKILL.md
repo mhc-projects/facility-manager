@@ -1,6 +1,6 @@
 ---
 name: dpf
-description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관리/사후관리(AS·크리닝·물류) 시스템 참조. dpf_service_records 등록/전환/집계, 부착현황 파생 컬럼 로직 수정 시 사용한다.
+description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관리/사후관리(AS·크리닝·물류) 시스템 참조. dpf_service_records 등록/전환/집계, 부착현황 파생 컬럼 로직, 첨부파일 업로드(dpf_service_record_attachments) 수정 시 사용한다.
 ---
 
 # DPF 매연저감장치 관리

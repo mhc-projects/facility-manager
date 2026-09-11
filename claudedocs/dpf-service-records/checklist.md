@@ -117,7 +117,7 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
 - [x] 검증 중 테스트 흔적 정리 SQL 사용자에게 전달(3단계와 동일 2줄, 4단계 검증분인 물류 2건+크리닝 1건 포함) — 사용자가 2026-09-12 실행 완료
 - [x] 커밋 4개: a02d7f0 API+타입, 660906a 테이블 variant+뷰 추출+reception 축소, 3f7e105 물류관리 라우트+사이드바,
       289b5ef 탭 라벨 변경
-- [ ] `claude-progress.txt` 갱신
+- [x] `claude-progress.txt` 갱신
 
 ## 5단계: 첨부파일(12슬롯) — `dpf_service_record_attachments`
 설계: `../dpf-as-logistics-design.md` §4.7·§5(5단계 스키마)·§7(5단계)·§8.4(첨부파일 UI)·§9(5단계 세부 순서).
@@ -166,9 +166,9 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       좁혀짐(이 기능 자체의 한계가 아님)
 - [x] 검증 중 생성한 첨부파일(이미지 2개+PDF 1개)은 모두 UI/API의 실제 삭제 흐름으로 정리 완료(storage list API로
       최종 확인, DB 행도 0건)
-- [x] 커밋 4개: 89039fc API 3개 라우트, 1b7916e API 검증결과 문서, 3cf4a79 storage 클라이언트 분리(버그 수정),
-      (다음) UI+스킬 문서 갱신
-- [ ] `claude-progress.txt` 갱신
+- [x] 커밋 6개: 89039fc API 3개 라우트, 1b7916e API 검증결과 문서, d7b0e97 GET 응답 ext 필드 추가,
+      3cf4a79 storage 클라이언트 분리(버그 수정), 07917ad UI+스킬 문서 갱신, d8d28ef 레코드 전환 레이스 컨디션 수정
+- [x] `claude-progress.txt` 갱신
 - [ ] 사용자에게 전달할 것: (1) `dpf_service_records` 테스트 레코드 2건(크리닝 1·2회차, 85가8787) 정리 SQL,
       (2) 동일 헤더 충돌 버그가 잠재된 다른 업로드 라우트 목록(수정하지 않음, 발견만) — `announcements/[id]/attachments`,
       `approvals/attachments`, `facility-photos`, `calendar/upload`, `upload-supabase`, `wiki/upload-guideline`,
