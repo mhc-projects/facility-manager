@@ -24,6 +24,17 @@ export interface DpfVehicle {
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
+  // 사후관리 접수 변경정보 오버레이 (2026-09-11)
+  // write-back 대상(접수 등록 폼에 실제로 있는 필드에서 자동 갱신): current_contact_wireless/wired, dispatch_area_primary/secondary
+  // 수동 전용(VehicleFormModal에서만 직접 수정): current_plate_number, current_vin_override, is_special_management, is_special_sale
+  current_contact_wireless?: string | null;
+  current_contact_wired?: string | null;
+  dispatch_area_primary?: string | null;
+  dispatch_area_secondary?: string | null;
+  current_plate_number?: string | null;
+  current_vin_override?: string | null;
+  is_special_management?: boolean | null;
+  is_special_sale?: boolean | null;
 }
 
 export interface DpfDeviceInstallation {
@@ -89,6 +100,63 @@ export interface DpfCallMonitoring {
   call_agent?: string | null;
   created_by?: string | null;
   created_at: string;
+}
+
+// 사후관리(AS/크리닝/물류) 접수·처리 원장 — 크린어스 부착현황/물류관리/접수현황 3화면의 통합 원천 (2026-09-11)
+export type DpfServiceCategory = 'as' | 'clean' | 'cs' | 'parts_delivery' | 'urea' | 'engine_replace';
+
+export interface DpfServiceRecord {
+  id: string;
+  vehicle_id: string;
+  category: DpfServiceCategory;
+  converted_from_category?: DpfServiceCategory | null;
+  round_no: number; // DB 트리거가 채번 — 클라이언트/API에서 세팅하지 않음
+  status: 'in_progress' | 'completed' | 'cancelled';
+  is_deleted: boolean;
+
+  reception_date?: string | null;
+  reception_content?: string | null;
+  detail_content?: string | null;
+  processing_content?: string | null;
+
+  local_government?: string | null;
+  service_branch?: string | null;
+
+  assigned_as_technician?: string | null;
+  processing_technician?: string | null;
+  technician_processed_at?: string | null;
+  processed_at?: string | null;
+  completed_at?: string | null;
+
+  is_urgent?: boolean | null;
+  needs_callback?: boolean | null;
+  is_dispatch?: boolean | null;
+  is_dropoff?: boolean | null;
+  filter_type?: string | null;
+  collected_filter?: string | null;
+  replaced_filter?: string | null;
+
+  cost_type?: 'paid' | 'free' | 'mixed' | null;
+  association_billing_date?: string | null;
+  billing_status?: 'none' | 'billed' | 'unbillable_reception' | 'unbillable_completion' | 'held' | null;
+
+  dispatch_area_primary?: string | null;
+  dispatch_area_secondary?: string | null;
+  contact_wireless?: string | null;
+  contact_wired?: string | null;
+
+  courier?: string | null;
+  delivery_request_type?: 'request' | 'fixed' | null;
+  delivery_address?: string | null;
+
+  extension_requested?: boolean | null;
+  extension_approved?: boolean | null;
+  extension_note?: string | null;
+
+  notes?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DpfImportStaging {
