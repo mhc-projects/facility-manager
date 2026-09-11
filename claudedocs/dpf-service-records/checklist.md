@@ -32,17 +32,17 @@
 AS대기/완료, 상담종료 전체 — `cancelled`는 집계 제외), `?tab=`은 `useSearchParams()` 1회 읽기로 `useState` 초기값만 설정(URL 동기화 안 함,
 Suspense 래핑 + 옵셔널 체이닝으로 기존 `meeting-minutes` TS18047 오류 반복 금지), 테스트 데이터 정리 SQL 전달은 매 검증마다 반복되는 절차로 취급.
 
-- [ ] `types/dpf.ts`에 `DpfServiceRecordWithVehicle` 조인 타입 추가 (인라인 금지)
-- [ ] `GET /api/dpf/service-records` — `/api/dpf/search/route.ts` 패턴 복제, `dpf_vehicles!inner` 조인(양쪽 is_deleted=false), 텍스트검색은 `dpf_vehicles.plate_number.ilike.%q%` 형태로 1건 테스트 후 필터 바 조립
-- [ ] `GET /api/dpf/service-records/stats` — count 쿼리 병렬 5개(크리닝대기/완료, AS대기/완료, 상담종료 전체)
-- [ ] `components/dpf/DpfServiceRecordTable.tsx` 신규 (`DpfVehicleTable.tsx`의 COLUMNS+cellValue 구조 복제, 차량번호/차대번호 셀만 링크 — 행 전체 클릭 아님, 행 액션 버튼과 클릭 영역 분리)
-- [ ] `app/dpf/service/page.tsx` 신규 (`/dpf/page.tsx:35-57`의 debounce 패턴 그대로, 검색행+필터패널+탭 재사용, 빠른 등록 버튼 없음)
-- [ ] `app/dpf/[vin]/page.tsx`에 `?tab=` 쿼리 파라미터로 초기 탭 지정 — Suspense 래핑(`meeting-minutes/page.tsx` 패턴), `searchParams?.get('tab')` 옵셔널 체이닝
-- [ ] `BasicInfoTab`에 변경정보(오버레이 필드) 읽기 전용 섹션 추가
-- [ ] `components/ui/AdminLayout.tsx` DPF업무 그룹에 "접수현황" 사이드바 항목 추가(ClipboardList 아이콘 재사용)
-- [ ] 신규 테이블/마이그레이션 필요성이 느껴지면 멈추고 확인 — 2단계는 조회 레이어만
-- [ ] `npx tsc --noEmit` 통과 (신규 오류 0건, meeting-minutes류 기존 오류 재확인으로 baseline 대조)
-- [ ] 브라우저 하드 리로드 후 확인: 필터 전 조합, 요약 바 숫자 = 테이블 실제 건수, 행 클릭→상세 탭 이동, `/dpf`·`/dpf/[vin]` 회귀 없음
-- [ ] 검증 중 실 데이터에 남긴 테스트 흔적 정리 SQL을 사용자에게 전달(직접 실행 안 함)
-- [ ] 커밋 3개: (a) API, (b) 테이블+페이지+사이드바, (c) 상세페이지 `?tab=`+`BasicInfoTab`(1단계 파일 건드리는 유일한 커밋, 분리 보존)
-- [ ] `claude-progress.txt` 갱신
+- [x] `types/dpf.ts`에 `DpfServiceRecordWithVehicle` 조인 타입 추가 (인라인 금지)
+- [x] `GET /api/dpf/service-records` — `/api/dpf/search/route.ts` 패턴 복제, `dpf_vehicles!inner` 조인(양쪽 is_deleted=false). 텍스트검색은 PostgREST or() 와일드카드가 `%`가 아니라 `*`임을 실제 요청으로 발견해 `.or(filter, {foreignTable})`로 수정
+- [x] `GET /api/dpf/service-records/stats` — count 쿼리 병렬 5개(크리닝대기/완료, AS대기/완료, 상담종료 전체)
+- [x] `components/dpf/DpfServiceRecordTable.tsx` 신규 (`DpfVehicleTable.tsx`의 COLUMNS+cellValue 구조 복제, 차량번호/차대번호 셀만 링크)
+- [x] `app/dpf/service/page.tsx` 신규 (`/dpf/page.tsx`의 debounce 패턴 그대로, 검색행+필터패널 재사용, 빠른 등록 버튼 없음)
+- [x] `app/dpf/[vin]/page.tsx`에 `?tab=` 쿼리 파라미터로 초기 탭 지정 — Suspense 래핑(`meeting-minutes/page.tsx` 패턴) + useEffect 보정(라우터 캐시로 컴포넌트 재사용되는 경우 대비)
+- [x] `BasicInfoTab`에 변경정보(오버레이 필드) 읽기 전용 섹션 추가
+- [x] `components/ui/AdminLayout.tsx` DPF업무 그룹에 "접수현황" 사이드바 항목 추가(ClipboardList 아이콘 재사용)
+- [x] 신규 테이블/마이그레이션 불필요 확인 — 2단계는 순수 조회 레이어로 완료
+- [x] `npx tsc --noEmit` 통과 (신규 오류 0건, baseline 대조 확인)
+- [x] 브라우저 하드 리로드 후 확인 완료: 필터(분류/상태/청구상태/지자체/처리점/기간/텍스트검색) 각각 동작, 요약 바 숫자(AS대기 1) = 테이블 실제 건수 일치, 행 클릭→`?tab=service`로 상세 이동+정확한 탭 활성화, 변경정보 섹션 정상 표시, `/dpf`·`/dpf/[vin]` 기존 탭 회귀 없음, 콘솔 에러 없음
+- [x] 검증 중 실 데이터에 남긴 테스트 흔적 정리 SQL을 사용자에게 전달(1단계에서 이미 전달, 아직 미실행 — 2단계 검증도 같은 레코드 재사용해서 추가 흔적 없음)
+- [x] 커밋 3개: (a) 2561bc0 API, (b) 58a9904 테이블+페이지+사이드바, (c) 상세페이지 `?tab=`+`BasicInfoTab`(1단계 파일 건드리는 유일한 커밋, 분리 보존)
+- [x] `claude-progress.txt` 갱신

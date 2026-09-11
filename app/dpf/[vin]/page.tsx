@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import VehicleFormModal from '@/components/dpf/VehicleFormModal';
 import SubRecordFormModal, { SubRecordType } from '@/components/dpf/SubRecordFormModal';
@@ -53,14 +53,27 @@ interface DeleteState {
   onConfirm: () => Promise<void>;
 }
 
-export default function DpfVehicleDetailPage({ params }: { params: { vin: string } }) {
+const TAB_KEYS = ALL_TABS.map(t => t.key) as readonly string[];
+
+function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
   const vin = decodeURIComponent(params.vin);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // URL은 진입 시점의 초기 탭 힌트로만 쓴다 — 이후 탭 전환은 로컬 state만 바꾸고 URL과 동기화하지 않는다(/dpf 필터와 동일한 방식)
+  const initialTabParam = searchParams?.get('tab');
+  const initialTab: TabKey = TAB_KEYS.includes(initialTabParam ?? '') ? (initialTabParam as TabKey) : 'basic';
 
   const [detail, setDetail] = useState<VehicleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<TabKey>('basic');
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+
+  // Next.js 라우터 캐시로 컴포넌트가 재마운트 없이 재사용되면 useState 초기값이 재평가되지 않는다 —
+  // 같은 세그먼트로 다른 vin에 클라이언트 네비게이션할 때도 ?tab=이 정확히 반영되도록 보강(하드 리로드에서만 되던 문제 수정)
+  useEffect(() => {
+    const tab = searchParams?.get('tab');
+    if (tab && TAB_KEYS.includes(tab)) setActiveTab(tab as TabKey);
+  }, [searchParams]);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
@@ -373,6 +386,24 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
   );
 }
 
+// useSearchParams()를 쓰는 컴포넌트는 Suspense로 감싸야 한다(Next.js App Router 요구사항) — app/admin/meeting-minutes/page.tsx와 동일 패턴
+export default function DpfVehicleDetailPage({ params }: { params: { vin: string } }) {
+  return (
+    <Suspense fallback={
+      <AdminLayout title="차량 상세" description="">
+        <div className="space-y-4 animate-pulse">
+          <div className="h-6 w-48 bg-gray-100 rounded-lg" />
+          <div className="h-40 bg-gray-100 rounded-xl" />
+          <div className="h-10 bg-gray-100 rounded-xl" />
+          <div className="h-64 bg-gray-100 rounded-xl" />
+        </div>
+      </AdminLayout>
+    }>
+      <DpfVehicleDetailContent params={params} />
+    </Suspense>
+  );
+}
+
 // ─── 공통 컴포넌트 ────────────────────────────────────────────
 
 function TabHeader({ title, count, onAdd }: { title: string; count?: number; onAdd: () => void }) {
@@ -457,6 +488,20 @@ function BasicInfoTab({ vehicle }: { vehicle: DpfVehicle }) {
         ['이전 업체명', r('이전 업체명')],
         ['연락처', vehicle.owner_contact],
         ['주소', vehicle.owner_address],
+      ],
+    },
+    {
+      // 접수 등록 시 write-back되는 현재값(연락처/출동지역)과 수동 전용 값(차량번호/차대번호/특별관리/특판)이 섞여 있음(설계 §4.6) — 전부 읽기 전용, 수정은 상단 "수정" 버튼(VehicleFormModal)에서
+      title: '변경정보',
+      rows: [
+        ['현재차량번호', vehicle.current_plate_number],
+        ['현재차대번호', vehicle.current_vin_override],
+        ['현재연락처(무선)', vehicle.current_contact_wireless],
+        ['현재연락처(유선)', vehicle.current_contact_wired],
+        ['출동지역 1', vehicle.dispatch_area_primary],
+        ['출동지역 2', vehicle.dispatch_area_secondary],
+        ['특별관리대상', vehicle.is_special_management ? '예' : null],
+        ['특판', vehicle.is_special_sale ? '예' : null],
       ],
     },
     {
