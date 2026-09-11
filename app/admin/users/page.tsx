@@ -19,7 +19,6 @@ import {
   Search,
   Filter,
   MoreVertical,
-  CheckCircle,
   XCircle,
   AlertTriangle,
   Building2,
@@ -53,21 +52,6 @@ interface Employee {
   created_at: string;
   last_login_at?: string;
   password_changed_at?: string;
-}
-
-interface SocialApproval {
-  id: string;
-  provider: 'kakao' | 'naver' | 'google';
-  requester_name: string;
-  requester_email: string;
-  email_domain: string;
-  requested_permission_level: number;
-  requested_department: string | null;
-  approval_status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-  processed_at: string | null;
-  approved_by: string | null;
-  approval_reason: string | null;
 }
 
 // 소셜 계정 정보 타입
@@ -394,7 +378,7 @@ function UsersManagementPage() {
     }
   }, [user, permissions, router]);
 
-  const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'settings'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
   const [selectedUser, setSelectedUser] = useState<Employee | null>(null);
   const [userDetailTab, setUserDetailTab] = useState<'info' | 'social' | 'history'>('info');
   const [userSocialAccounts, setUserSocialAccounts] = useState<UserSocialAccount[]>([]);
@@ -406,7 +390,6 @@ function UsersManagementPage() {
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [socialApprovals, setSocialApprovals] = useState<SocialApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [permissionFilter, setPermissionFilter] = useState<number | 'all'>('all');
@@ -436,7 +419,7 @@ function UsersManagementPage() {
 
     try {
       setLoading(true);
-      await Promise.all([loadEmployees(), loadSocialApprovals()]);
+      await loadEmployees();
     } catch (error) {
       console.error('데이터 로드 오류:', error);
     } finally {
@@ -466,30 +449,6 @@ function UsersManagementPage() {
     } catch (error) {
       console.error('직원 목록 로드 오류:', error);
       setEmployees([]);
-    }
-  };
-
-  const loadSocialApprovals = async () => {
-    try {
-      const token = TokenManager.getToken();
-      const response = await fetch('/api/admin/social-approvals?status=pending', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setSocialApprovals(data.data.approvals || []);
-        }
-      } else {
-        setSocialApprovals([]);
-      }
-    } catch (error) {
-      console.error('승인 요청 로드 오류:', error);
-      setSocialApprovals([]);
     }
   };
 
@@ -608,28 +567,6 @@ function UsersManagementPage() {
     } catch (error) {
       console.error('사용자 상태 변경 오류:', error);
       alert('사용자 상태 변경 중 오류가 발생했습니다.');
-    }
-  };
-
-  const handleApprovalAction = async (approvalId: string, action: 'approved' | 'rejected', reason?: string) => {
-    try {
-      const token = TokenManager.getToken();
-      const response = await fetch('/api/admin/social-approvals', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ approvalId, action, reason })
-      });
-
-      if (response.ok) {
-        // ✅ Realtime이 자동으로 승인 상태 업데이트 - loadSocialApprovals() 불필요
-        alert(`승인 요청이 ${action === 'approved' ? '승인' : '거부'}되었습니다.`);
-      }
-    } catch (error) {
-      console.error('승인 처리 오류:', error);
-      alert('승인 처리 중 오류가 발생했습니다.');
     }
   };
 
@@ -804,45 +741,6 @@ function UsersManagementPage() {
     }
   }, [selectedUser]);
 
-  // ⚠️ DEPRECATED: social_login_approvals 테이블이 DB에 존재하지 않아 비활성화
-  // 기능이 필요한 경우 테이블을 먼저 생성해야 함
-  // const handleApprovalUpdate = useCallback((payload: any) => {
-  //   const { eventType, new: newRecord, old: oldRecord } = payload;
-
-  //   console.log('📡 [REALTIME] social_login_approvals 이벤트:', {
-  //     eventType,
-  //     approvalId: newRecord?.id || oldRecord?.id,
-  //     status: newRecord?.approval_status
-  //   });
-
-  //   if (eventType === 'INSERT') {
-  //     // 새 승인 요청 추가
-  //     setSocialApprovals(prev => [newRecord, ...prev]);
-  //     console.log('✅ [REALTIME] 새 승인 요청 추가:', newRecord.requester_name);
-  //   }
-
-  //   if (eventType === 'UPDATE') {
-  //     // 승인 상태 업데이트
-  //     setSocialApprovals(prev =>
-  //       prev.map(approval =>
-  //         approval.id === newRecord.id ? { ...approval, ...newRecord } : approval
-  //       )
-  //     );
-
-  //     // 승인 완료 시 승인 대기 목록에서 제거
-  //     if (newRecord.approval_status !== 'pending') {
-  //       setSocialApprovals(prev => prev.filter(approval => approval.id !== newRecord.id));
-  //       console.log('✅ [REALTIME] 승인 처리 완료 - 목록에서 제거:', newRecord.requester_name);
-  //     }
-  //   }
-
-  //   if (eventType === 'DELETE') {
-  //     // 승인 요청 삭제
-  //     setSocialApprovals(prev => prev.filter(approval => approval.id !== oldRecord.id));
-  //     console.log('✅ [REALTIME] 승인 요청 삭제:', oldRecord.requester_name);
-  //   }
-  // }, []);
-
   // ⚠️ DEPRECATED: user_login_history 테이블이 DB에 존재하지 않아 비활성화
   // 기능이 필요한 경우 테이블을 먼저 생성해야 함
   // const handleLoginHistoryUpdate = useCallback((payload: any) => {
@@ -889,15 +787,6 @@ function UsersManagementPage() {
     onNotification: handleEmployeeUpdate,
     autoConnect: true
   });
-
-  // ⚠️ DEPRECATED: 존재하지 않는 테이블 구독 비활성화
-  // social_login_approvals 테이블이 DB에 존재하지 않음 (기능 불필요)
-  // useSupabaseRealtime({
-  //   tableName: 'social_login_approvals',
-  //   eventTypes: ['INSERT', 'UPDATE', 'DELETE'],
-  //   onNotification: handleApprovalUpdate,
-  //   autoConnect: true
-  // });
 
   // user_login_history 테이블이 DB에 존재하지 않음
   // useSupabaseRealtime({
@@ -1103,17 +992,6 @@ function UsersManagementPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 p-2 sm:p-3 md:p-4">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="p-1 sm:p-1.5 bg-orange-100 rounded">
-                <AlertTriangle className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-orange-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-600 truncate">승인 대기</p>
-                <p className="text-sm sm:text-base md:text-lg font-bold text-gray-900">{socialApprovals.length}</p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* 탭 메뉴 */}
@@ -1130,17 +1008,6 @@ function UsersManagementPage() {
               >
                 <span className="hidden sm:inline">등록된 사용자 ({employees.length})</span>
                 <span className="sm:hidden">사용자 ({employees.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('approvals')}
-                className={`px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${
-                  activeTab === 'approvals'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <span className="hidden sm:inline">승인 요청 ({socialApprovals.length})</span>
-                <span className="sm:hidden">승인 ({socialApprovals.length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('settings')}
@@ -1326,87 +1193,6 @@ function UsersManagementPage() {
           )}
 
           {/* 승인 요청 탭 */}
-          {activeTab === 'approvals' && (
-            <div className="p-2 sm:p-3 md:p-4 lg:p-6">
-              {socialApprovals.length === 0 ? (
-                <div className="text-center py-6 sm:py-8 md:py-12">
-                  <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 md:w-12 md:h-12 text-green-400 mx-auto mb-2 sm:mb-3 md:mb-4" />
-                  <h3 className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-900 mb-1">자동 승인 시스템 운영 중</h3>
-                  <p className="text-[9px] sm:text-[10px] md:text-sm text-gray-500 px-2 sm:px-4">현재 시설관리 시스템은 자동 승인으로 운영됩니다. 회원가입 시 즉시 계정이 생성되며, 별도 승인 과정이 없습니다.</p>
-                  <div className="mt-2 sm:mt-3 md:mt-4 p-2 sm:p-3 md:p-4 bg-blue-50 rounded-md sm:rounded-lg mx-2 sm:mx-4">
-                    <p className="text-[8px] sm:text-[9px] md:text-xs text-blue-700">
-                      💡 <strong>참고:</strong> 승인 설정 탭에서 자동 승인 규칙을 설정할 수 있습니다.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-1 sm:px-2 md:px-4 lg:px-6 py-1.5 sm:py-2 md:py-3 text-left text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider">요청자</th>
-                        <th className="px-1 sm:px-2 md:px-4 lg:px-6 py-1.5 sm:py-2 md:py-3 text-left text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">소셜 로그인</th>
-                        <th className="px-1 sm:px-2 md:px-4 lg:px-6 py-1.5 sm:py-2 md:py-3 text-left text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider">요청 권한</th>
-                        <th className="px-1 sm:px-2 md:px-4 lg:px-6 py-1.5 sm:py-2 md:py-3 text-left text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">요청일</th>
-                        <th className="px-1 sm:px-2 md:px-4 lg:px-6 py-1.5 sm:py-2 md:py-3 text-left text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider">액션</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {socialApprovals.map((approval) => (
-                        <tr key={approval.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{approval.requester_name}</div>
-                              <div className="text-sm text-gray-500">{approval.requester_email}</div>
-                              <div className="text-xs text-gray-400">{approval.email_domain}</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {getProviderLabel(approval.provider)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              레벨 {approval.requested_permission_level}
-                            </div>
-                            {approval.requested_department && (
-                              <div className="text-xs text-gray-500">{approval.requested_department}</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(approval.created_at).toLocaleDateString('ko-KR')}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handleApprovalAction(approval.id, 'approved')}
-                                className="bg-green-100 text-green-700 px-3 py-1 rounded-md hover:bg-green-200 transition-colors"
-                              >
-                                승인
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const reason = prompt('거부 사유를 입력해주세요:');
-                                  if (reason) {
-                                    handleApprovalAction(approval.id, 'rejected', reason);
-                                  }
-                                }}
-                                className="bg-red-100 text-red-700 px-3 py-1 rounded-md hover:bg-red-200 transition-colors"
-                              >
-                                거부
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* 승인 설정 탭 */}
           {activeTab === 'settings' && (
             <div className="p-2 sm:p-3 md:p-4 lg:p-6">
