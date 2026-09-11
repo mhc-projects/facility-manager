@@ -419,8 +419,10 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
   고아 파일 하나 남는 것이 업로드 실패보다 낫다). 클라이언트 측에서 파일 크기 10MB 제한(사진/PDF 기준 여유 있는 값,
   필드 업로드 실수 방지용 소프트 가드).
 - `GET /api/dpf/service-records/[id]/attachments` — 해당 레코드의 기존 첨부 현황을 슬롯별로 조회해, **각 슬롯의
-  `storage_path`로 `createSignedUrl`(300초 유효, `announcements/[id]/attachments/download/route.ts`와 동일 패턴)을
-  발급**하고 `{ [slot_key]: { url: signedUrl, created_at } }` 형태로 반환한다(응답 필드명은 DB 컬럼과 동일하게
+  `storage_path`로 `createSignedUrl`을 발급**하고 `{ [slot_key]: { url: signedUrl, created_at } }` 형태로 반환한다
+  (TTL은 300초가 아니라 **3600초** — `announcements/.../download`는 1회성 다운로드 링크지만 여기는 모달이 열려있는
+  동안 `<img src>`가 계속 참조하므로 `uploaded-files-supabase/route.ts`의 7200초 인라인 사례에 더 가깝게 맞춤).
+  응답 필드명은 DB 컬럼과 동일하게
   `created_at`으로 통일 — `uploaded_at`이라는 별도 이름을 쓰지 않는다). `ServiceRecordFormModal`이 수정 모드로 열릴
   때만 호출(신규 등록 모드는 record_id가 없어 호출 안 함).
 - `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` — storage 파일 삭제 + DB 행 삭제(하드 삭제). §4.10의
