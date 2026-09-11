@@ -115,3 +115,14 @@
 - 이후 사용자가 실제 의도를 명확히 함: 필요했던 건 특정 4건 문서(BLUEON-PRO-20260911-001~004, 업무품의서)의 **결재 승인 자체**를 완료 처리하고 승인일자를 2026-08-31로 백데이트하는 일회성 데이터 정정뿐이었음. 전자결재 시스템 전반에 한시적 수정 기능을 남겨둘 필요가 없다고 판단해 `git revert`로 두 커밋을 전부 되돌림(force 없이 새 revert 커밋으로 처리, 원격 히스토리 보존).
 - 교훈: "모든 양식에 ~하게 해줘" 같은 광범위한 요청도 실제로는 특정 소수 건에 대한 요청일 수 있음 — 처음부터 대상 범위(몇 건, 어떤 문서)를 구체적으로 확인했으면 범용 기능 구현 자체를 피할 수 있었음.
 - 4건의 결재 승인/날짜 백데이트는 별도로 SQL만 정리해 사용자에게 전달(직접 실행 예정, feedback_supabase_sql 메모리 준수) — 코드 변경 없음, DB 데이터만 수정.
+
+---
+
+## 2026-09-11 | DPF 사후관리(AS/크리닝/물류) 접수 시스템 1단계 구현
+- 배경: DPF 담당자들이 익숙해하는 제조사(크린어스) DEAR System의 부착현황/물류관리/접수현황 화면 구조를 로그인해서 조사, `/dpf` 모듈에 이식할 설계 작성 → 어드바이저 2회 검토 반영 → 구현. 설계 상세는 `claudedocs/dpf-as-logistics-design.md`, 구현 체크리스트/결정 이력은 `claudedocs/dpf-service-records/`.
+- 신규 테이블 `dpf_service_records`(category: as/clean/cs/parts_delivery/urea/engine_replace 단일 원장 — 접수현황/물류관리/부착현황 3화면은 이 표의 필터 뷰로 설계) + `dpf_vehicles` 변경정보 오버레이 컬럼 8개. 회차(round_no)는 DB 트리거로 자동 채번(API가 직접 계산하면 동시 접수 시 race — 전자결재 approve/submit 트랜잭션 누락 전례를 반면교사 삼음), 전환(크리닝↔AS) 시 새 category 기준 재채번 + `converted_from_category` 자동 기록.
+- API: `/api/dpf/vehicles/[vin]/service-records`(POST) + `[id]`(PUT/DELETE, 기존 sub-record 라우트처럼 PUT 사용) 신설, `[vin]` GET에 `serviceRecords` 추가. DELETE는 협회청구 이력 보존을 위해 하드 삭제 아닌 `is_deleted` 소프트 삭제. 변경정보(연락처/출동지역) write-back은 해당 레코드가 차량의 최신 접수 건일 때만 적용(오래된 티켓 수정이 최신 정보를 덮어쓰지 않도록).
+- UI: `/dpf/[vin]`에 "AS/크리닝" 탭 신설(기본정보 다음, 벤더 제한 없음), `ServiceRecordFormModal.tsx` 신규 컴포넌트. 행 액션 버튼은 호버 없이 항상 노출(`feedback_dashboard_ux_conventions` 준수).
+- 검증: tsc --noEmit(신규 오류 0, baseline과 stash 대조로 확인), 브라우저 하드 리로드로 전체 시나리오 실제 확인 — 접수 등록, 연락처 write-back, "최신 레코드만 write-back" 규칙(오래된 건 수정 시 오버레이 불변 확인), 크리닝→AS 전환 시 AS 1회차 재채번 + 전환 태그, 소프트 삭제, 기존 탭 회귀 없음, 콘솔 에러 없음.
+- 설계 단계에서 사용자 확인 거쳐 확정한 것: 본사/협력사 구분 없음(콜센터 직접 접수), 크린어스 vendor 미추가, 첨부파일(12슬롯) 구조 보류(5단계로 후순위), 연장은 전자결재 미연동 단순 처리, 변경정보 오버레이는 차량 마스터에 컬럼 추가 방식.
+- 후속(2단계 이후, 미착수): `/dpf/service` 접수현황 통합 리스트, `/dpf` 부착현황 파생 컬럼, `/dpf/service/logistics` 물류관리 필터 뷰.

@@ -32,6 +32,11 @@ description: Facility Manager 프로젝트의 핵심 Supabase DB 테이블 스�
 - `notifications` — 시스템 전역 알림 (title, message, category, priority, related_resource_type, expires_at)
 - `task_notifications` — 개인 업무 알림 (user_id, task_id, business_name, message, notification_type, is_read)
 
+### DPF (매연저감장치)
+- `dpf_vehicles` — DPF 차량 마스터 (vin, plate_number, owner_name/contact/address, local_government, device_serial, installation_date, vendor: fujino/mz, is_active/is_deleted). 2026-09-11 변경정보 오버레이 컬럼 추가: `current_contact_wireless`/`current_contact_wired`/`dispatch_area_primary`/`dispatch_area_secondary`(접수 시 자동 write-back), `current_plate_number`/`current_vin_override`/`is_special_management`/`is_special_sale`(수동 전용, VehicleFormModal에서만 수정)
+- `dpf_service_records` — AS/크리닝/물류(부품전달·요소수)·엔진교체 접수·처리 원장 (vehicle_id, category: as/clean/cs/parts_delivery/urea/engine_replace, round_no: (vehicle_id, category) 내 순번·DB 트리거가 채번, status: in_progress/completed/cancelled, is_deleted 소프트삭제, converted_from_category: 전환 시 트리거가 자동 기록). 사업장 귀속 `as_records`와는 대상 엔티티가 다른 별개 시스템 — 상세는 `claudedocs/dpf-as-logistics-design.md` 참고.
+- `dpf_device_installations` / `dpf_performance_inspections` / `dpf_subsidy_applications` / `dpf_call_monitoring` — 차량별 설치·검사·보조금·콜모니터링 이력 (각각 vehicle_id FK)
+
 ### 대기환경
 - `air_permit_info` — 대기필증 메인 테이블 (업종, 최초신고일, 가동개시일, 사업장 연결)
 - `discharge_outlets` — 배출구 (배출구 번호/이름, Gateway 정보, air_permit_id)

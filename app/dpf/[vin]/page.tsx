@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import VehicleFormModal from '@/components/dpf/VehicleFormModal';
 import SubRecordFormModal, { SubRecordType } from '@/components/dpf/SubRecordFormModal';
+import ServiceRecordFormModal, { CATEGORY_LABELS } from '@/components/dpf/ServiceRecordFormModal';
 import { ConfirmModal } from '@/components/ui/Modal';
 import {
   DpfVehicle, DpfDeviceInstallation, DpfPerformanceInspection,
-  DpfSubsidyApplication, DpfCallMonitoring, FormTemplate,
+  DpfSubsidyApplication, DpfCallMonitoring, DpfServiceRecord, DpfServiceCategory, FormTemplate,
 } from '@/types/dpf';
 import {
   ChevronRight, Pencil, Trash2, Plus, ArrowLeft,
@@ -22,10 +23,12 @@ interface VehicleDetail {
   inspections: DpfPerformanceInspection[];
   subsidies: DpfSubsidyApplication[];
   callMonitoring: DpfCallMonitoring[];
+  serviceRecords: DpfServiceRecord[];
 }
 
 const ALL_TABS = [
   { key: 'basic',        label: '기본정보',   vendors: ['fujino', 'mz'] },
+  { key: 'service',      label: 'AS/크리닝',  vendors: ['fujino', 'mz'] },
   { key: 'installation', label: '설치이력',   vendors: ['fujino'] },
   { key: 'inspection',   label: '성능검사',   vendors: ['fujino'] },
   { key: 'subsidy',      label: '보조금',     vendors: ['fujino'] },
@@ -38,6 +41,11 @@ type TabKey = typeof ALL_TABS[number]['key'];
 interface SubRecordModal {
   type: SubRecordType;
   record?: DpfDeviceInstallation | DpfPerformanceInspection | DpfSubsidyApplication | DpfCallMonitoring;
+}
+
+interface ServiceRecordModal {
+  record?: DpfServiceRecord;
+  category?: DpfServiceCategory;
 }
 
 interface DeleteState {
@@ -58,6 +66,7 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [subModal, setSubModal] = useState<SubRecordModal | null>(null);
+  const [serviceModal, setServiceModal] = useState<ServiceRecordModal | null>(null);
 
   const loadDetail = useCallback(() => {
     setLoading(true);
@@ -85,7 +94,7 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
   }
 
   function openDeleteRecord(
-    type: 'installations' | 'inspections' | 'subsidies' | 'calls',
+    type: 'installations' | 'inspections' | 'subsidies' | 'calls' | 'service-records',
     id: string,
     label: string
   ) {
@@ -138,10 +147,11 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
     );
   }
 
-  const { vehicle, installations, inspections, subsidies, callMonitoring } = detail;
+  const { vehicle, installations, inspections, subsidies, callMonitoring, serviceRecords } = detail;
   const tabs = ALL_TABS.filter(t => t.vendors.includes(vehicle.vendor ?? 'fujino'));
 
   const tabCounts: Partial<Record<TabKey, number>> = {
+    service: serviceRecords.length,
     installation: installations.length,
     inspection: inspections.length,
     subsidy: subsidies.length,
@@ -272,6 +282,14 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
       {/* 탭 콘텐츠 */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         {activeTab === 'basic' && <BasicInfoTab vehicle={vehicle} />}
+        {activeTab === 'service' && (
+          <ServiceTab
+            records={serviceRecords}
+            onAdd={() => setServiceModal({})}
+            onEdit={r => setServiceModal({ record: r })}
+            onDelete={r => openDeleteRecord('service-records', r.id, `${CATEGORY_LABELS[r.category]} ${r.round_no}회차`)}
+          />
+        )}
         {activeTab === 'installation' && (
           <InstallationTab
             installations={installations}
@@ -324,6 +342,18 @@ export default function DpfVehicleDetailPage({ params }: { params: { vin: string
           type={subModal.type}
           vin={vin}
           record={subModal.record}
+        />
+      )}
+
+      {/* AS/크리닝 접수 등록/수정 모달 */}
+      {serviceModal && (
+        <ServiceRecordFormModal
+          isOpen={true}
+          onClose={() => setServiceModal(null)}
+          onSuccess={() => { setServiceModal(null); loadDetail(); }}
+          vin={vin}
+          record={serviceModal.record}
+          initialCategory={serviceModal.category}
         />
       )}
 
@@ -476,6 +506,81 @@ function BasicInfoTab({ vehicle }: { vehicle: DpfVehicle }) {
           </dl>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ServiceTab({
+  records, onAdd, onEdit, onDelete,
+}: {
+  records: DpfServiceRecord[];
+  onAdd: () => void;
+  onEdit: (r: DpfServiceRecord) => void;
+  onDelete: (r: DpfServiceRecord) => void;
+}) {
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    in_progress: { label: '진행중', color: 'bg-amber-100 text-amber-700' },
+    completed:   { label: '완료',   color: 'bg-emerald-100 text-emerald-700' },
+    cancelled:   { label: '취소',   color: 'bg-gray-100 text-gray-500' },
+  };
+
+  return (
+    <div>
+      <TabHeader title="AS/크리닝 접수 이력" count={records.length} onAdd={onAdd} />
+      {records.length === 0 ? (
+        <EmptyState message="접수 이력이 없습니다." />
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {records.map(r => {
+            const st = statusConfig[r.status] ?? statusConfig.in_progress;
+            const dates = ([
+              ['기사처리', r.technician_processed_at],
+              ['처리', r.processed_at],
+              ['완료', r.completed_at],
+            ] as [string, string | null | undefined][]).filter(([, v]) => v);
+
+            return (
+              <div key={r.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700">
+                      {CATEGORY_LABELS[r.category]} {r.round_no}회차
+                    </span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${st.color}`}>
+                      {st.label}
+                    </span>
+                    {r.converted_from_category && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-600">
+                        {CATEGORY_LABELS[r.converted_from_category]}에서 전환
+                      </span>
+                    )}
+                    <span className="text-sm font-medium text-gray-700 tabular-nums">
+                      {r.reception_date || '접수일 미등록'}
+                    </span>
+                  </div>
+                  <RecordActions onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} />
+                </div>
+
+                <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
+                  {([
+                    ['처리점', r.service_branch],
+                    ['담당AS기사', r.assigned_as_technician],
+                    ...dates,
+                  ] as [string, string | null | undefined][]).filter(([, v]) => v).map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-[10px] text-gray-400 uppercase tracking-wide">{k}</dt>
+                      <dd className="text-xs text-gray-700 font-medium mt-0.5">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {r.reception_content && (
+                  <p className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">{r.reception_content}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

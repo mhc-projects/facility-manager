@@ -1,0 +1,364 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Modal, { ModalActions } from '@/components/ui/Modal';
+import { DpfServiceRecord, DpfServiceCategory } from '@/types/dpf';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  vin: string;
+  record?: DpfServiceRecord;
+  initialCategory?: DpfServiceCategory;
+}
+
+export const CATEGORY_OPTIONS: { value: DpfServiceCategory; label: string }[] = [
+  { value: 'as', label: 'AS' },
+  { value: 'clean', label: '크리닝' },
+  { value: 'cs', label: '상담종료' },
+  { value: 'parts_delivery', label: '부품전달' },
+  { value: 'urea', label: '요소수' },
+  { value: 'engine_replace', label: '엔진교체' },
+];
+
+export const CATEGORY_LABELS: Record<DpfServiceCategory, string> = Object.fromEntries(
+  CATEGORY_OPTIONS.map(o => [o.value, o.label])
+) as Record<DpfServiceCategory, string>;
+
+const LOGISTICS_CATEGORIES: DpfServiceCategory[] = ['parts_delivery', 'urea'];
+
+export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin, record, initialCategory }: Props) {
+  const isEdit = Boolean(record);
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setError('');
+      setValues(record ? { ...(record as unknown as Record<string, unknown>) } : defaultValues(initialCategory));
+    }
+  }, [isOpen, record, initialCategory]);
+
+  function set(key: string, val: unknown) {
+    setValues(prev => ({ ...prev, [key]: val }));
+  }
+
+  const category = values.category as DpfServiceCategory | undefined;
+  const isLogistics = category ? LOGISTICS_CATEGORIES.includes(category) : false;
+
+  async function handleSubmit() {
+    if (!values.category) { setError('분류를 선택해주세요'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const base = `/api/dpf/vehicles/${encodeURIComponent(vin)}/service-records`;
+      const url = isEdit ? `${base}/${(record as DpfServiceRecord).id}` : base;
+
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(values)),
+      });
+
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? '저장에 실패했습니다'); return; }
+
+      onSuccess();
+      onClose();
+    } catch {
+      setError('네트워크 오류가 발생했습니다');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`${isEdit ? '수정' : '접수 등록'} — ${category ? CATEGORY_LABELS[category] : 'AS/크리닝'}`}
+      size="xl"
+      actions={
+        <>
+          <ModalActions.Cancel onClick={onClose} />
+          <ModalActions.Confirm onClick={handleSubmit} loading={saving}>
+            {isEdit ? '수정 저장' : '접수 등록'}
+          </ModalActions.Confirm>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && (
+          <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {isEdit && record?.round_no != null && (
+          <div className="text-xs text-gray-500">
+            {CATEGORY_LABELS[record.category]} {record.round_no}회차
+            {record.converted_from_category && (
+              <span className="ml-1.5 text-amber-600">
+                ({CATEGORY_LABELS[record.converted_from_category]}에서 전환됨)
+              </span>
+            )}
+          </div>
+        )}
+
+        <Section title="분류 / 상태">
+          <div className="grid grid-cols-2 gap-4">
+            <SelectField label="분류" value={values.category} onChange={v => set('category', v)} options={CATEGORY_OPTIONS} required />
+            <SelectField
+              label="상태"
+              value={values.status}
+              onChange={v => set('status', v)}
+              options={[
+                { value: 'in_progress', label: '진행중' },
+                { value: 'completed', label: '완료' },
+                { value: 'cancelled', label: '취소' },
+              ]}
+            />
+            <Field label="접수일" name="reception_date" value={values.reception_date} onChange={v => set('reception_date', v)} type="date" />
+            <Field label="지자체" name="local_government" value={values.local_government} onChange={v => set('local_government', v)} />
+            <Field label="처리점" name="service_branch" value={values.service_branch} onChange={v => set('service_branch', v)} />
+          </div>
+        </Section>
+
+        <Section title="접수 / 처리 내용">
+          <div className="grid grid-cols-2 gap-4">
+            <TextArea label="접수내용" name="reception_content" value={values.reception_content} onChange={v => set('reception_content', v)} />
+            <TextArea label="세부내용" name="detail_content" value={values.detail_content} onChange={v => set('detail_content', v)} />
+            <div className="col-span-2">
+              <TextArea label="처리내용" name="processing_content" value={values.processing_content} onChange={v => set('processing_content', v)} />
+            </div>
+          </div>
+        </Section>
+
+        <Section title="담당자 / 처리일">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <Field label="담당AS기사" name="assigned_as_technician" value={values.assigned_as_technician} onChange={v => set('assigned_as_technician', v)} />
+            <Field label="처리기사" name="processing_technician" value={values.processing_technician} onChange={v => set('processing_technician', v)} />
+            <Field label="기사처리일자" name="technician_processed_at" value={values.technician_processed_at} onChange={v => set('technician_processed_at', v)} type="date" />
+            <Field label="처리일자" name="processed_at" value={values.processed_at} onChange={v => set('processed_at', v)} type="date" />
+            <Field label="완료일자" name="completed_at" value={values.completed_at} onChange={v => set('completed_at', v)} type="date" />
+          </div>
+        </Section>
+
+        <Section title="접수사항">
+          <div className="flex flex-wrap gap-4">
+            <CheckboxField label="긴급" checked={Boolean(values.is_urgent)} onChange={v => set('is_urgent', v)} />
+            <CheckboxField label="통화요청" checked={Boolean(values.needs_callback)} onChange={v => set('needs_callback', v)} />
+            <CheckboxField label="출동" checked={Boolean(values.is_dispatch)} onChange={v => set('is_dispatch', v)} />
+            <CheckboxField label="입고" checked={Boolean(values.is_dropoff)} onChange={v => set('is_dropoff', v)} />
+          </div>
+          <div className="grid grid-cols-3 gap-4 mt-4">
+            <Field label="필터" name="filter_type" value={values.filter_type} onChange={v => set('filter_type', v)} />
+            <Field label="회수필터" name="collected_filter" value={values.collected_filter} onChange={v => set('collected_filter', v)} />
+            <Field label="교체필터" name="replaced_filter" value={values.replaced_filter} onChange={v => set('replaced_filter', v)} />
+          </div>
+        </Section>
+
+        <Section title="연락처 / 출동지역">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="연락처(무선)" name="contact_wireless" value={values.contact_wireless} onChange={v => set('contact_wireless', v)} />
+            <Field label="연락처(유선)" name="contact_wired" value={values.contact_wired} onChange={v => set('contact_wired', v)} />
+            <Field label="출동지역 1" name="dispatch_area_primary" value={values.dispatch_area_primary} onChange={v => set('dispatch_area_primary', v)} />
+            <Field label="출동지역 2" name="dispatch_area_secondary" value={values.dispatch_area_secondary} onChange={v => set('dispatch_area_secondary', v)} />
+          </div>
+          <p className="mt-1.5 text-xs text-gray-400">
+            이 접수 건이 해당 차량의 최신 접수일 때만 차량 정보의 변경정보에 자동 반영됩니다.
+          </p>
+        </Section>
+
+        <Section title="비용 / 협회청구">
+          <div className="grid grid-cols-3 gap-4">
+            <SelectField
+              label="비용"
+              value={values.cost_type}
+              onChange={v => set('cost_type', v)}
+              options={[
+                { value: 'paid', label: '유상' },
+                { value: 'free', label: '무상' },
+                { value: 'mixed', label: '유/무상' },
+              ]}
+            />
+            <Field label="협회청구일자" name="association_billing_date" value={values.association_billing_date} onChange={v => set('association_billing_date', v)} type="date" />
+            <SelectField
+              label="청구상태"
+              value={values.billing_status}
+              onChange={v => set('billing_status', v)}
+              options={[
+                { value: 'none', label: '청구 전' },
+                { value: 'billed', label: '청구완료' },
+                { value: 'unbillable_reception', label: '지급불가(접수)' },
+                { value: 'unbillable_completion', label: '지급불가(완료)' },
+                { value: 'held', label: '보류' },
+              ]}
+            />
+          </div>
+        </Section>
+
+        {isLogistics && (
+          <Section title="물류 (부품전달 / 요소수)">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="택배사" name="courier" value={values.courier} onChange={v => set('courier', v)} />
+              <SelectField
+                label="접수 유형"
+                value={values.delivery_request_type}
+                onChange={v => set('delivery_request_type', v)}
+                options={[
+                  { value: 'request', label: '요청' },
+                  { value: 'fixed', label: '고정' },
+                ]}
+              />
+              <div className="col-span-2">
+                <TextArea label="배송주소" name="delivery_address" value={values.delivery_address} onChange={v => set('delivery_address', v)} />
+              </div>
+            </div>
+          </Section>
+        )}
+
+        <Section title="연장">
+          <div className="flex items-center gap-6">
+            <CheckboxField label="연장 요청" checked={Boolean(values.extension_requested)} onChange={v => set('extension_requested', v)} />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-gray-700">승인</span>
+              {[{ v: true, label: '승인' }, { v: false, label: '반려' }, { v: null, label: '미정' }].map(({ v, label }) => (
+                <label key={label} className="flex items-center gap-1 ml-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={(values.extension_approved ?? null) === v}
+                    onChange={() => set('extension_approved', v)}
+                    className="text-blue-600"
+                  />
+                  <span className="text-xs">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3">
+            <TextArea label="연장 사유" name="extension_note" value={values.extension_note} onChange={v => set('extension_note', v)} />
+          </div>
+        </Section>
+
+        <Section title="비고">
+          <TextArea label="비고" name="notes" value={values.notes} onChange={v => set('notes', v)} hideLabel />
+        </Section>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── 섹션/필드 컴포넌트 ────────────────────────────────────────
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
+      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label, name, value, onChange, type = 'text', required, placeholder,
+}: {
+  label: string; name: string; value: unknown; onChange: (v: unknown) => void;
+  type?: string; required?: boolean; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value != null ? String(value) : ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+  );
+}
+
+function TextArea({
+  label, name, value, onChange, hideLabel,
+}: {
+  label: string; name: string; value: unknown; onChange: (v: string) => void; hideLabel?: boolean;
+}) {
+  return (
+    <div>
+      {!hideLabel && <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>}
+      <textarea
+        value={value != null ? String(value) : ''}
+        onChange={e => onChange(e.target.value)}
+        rows={2}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label, value, onChange, options, required,
+}: {
+  label: string; value: unknown; onChange: (v: string) => void;
+  options: { value: string; label: string }[]; required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <select
+        value={value != null ? String(value) : ''}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+      >
+        <option value="">선택...</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-1.5 cursor-pointer">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="rounded text-blue-600" />
+      <span className="text-sm text-gray-700">{label}</span>
+    </label>
+  );
+}
+
+// ─── 유틸 ───────────────────────────────────────────────────
+
+function defaultValues(initialCategory?: DpfServiceCategory): Record<string, unknown> {
+  return {
+    category: initialCategory ?? '',
+    status: 'in_progress',
+    reception_date: new Date().toISOString().split('T')[0],
+    local_government: '', service_branch: '',
+    reception_content: '', detail_content: '', processing_content: '',
+    assigned_as_technician: '', processing_technician: '',
+    technician_processed_at: '', processed_at: '', completed_at: '',
+    is_urgent: false, needs_callback: false, is_dispatch: false, is_dropoff: false,
+    filter_type: '', collected_filter: '', replaced_filter: '',
+    contact_wireless: '', contact_wired: '', dispatch_area_primary: '', dispatch_area_secondary: '',
+    cost_type: '', association_billing_date: '', billing_status: 'none',
+    courier: '', delivery_request_type: '', delivery_address: '',
+    extension_requested: false, extension_approved: null, extension_note: '',
+    notes: '',
+  };
+}
+
+function buildBody(values: Record<string, unknown>): Record<string, unknown> {
+  const clean = { ...values };
+  // 서버가 받지 않는(트리거/시스템 관리 대상) 필드 — 있어도 API가 무시하지만 명시적으로 제거
+  delete clean.id; delete clean.vehicle_id; delete clean.round_no; delete clean.converted_from_category;
+  delete clean.is_deleted; delete clean.created_at; delete clean.updated_at; delete clean.created_by;
+  return clean;
+}
