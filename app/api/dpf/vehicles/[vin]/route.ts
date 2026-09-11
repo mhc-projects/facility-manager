@@ -107,7 +107,7 @@ export async function GET(
 
     const vehicleId = vehicle.id;
 
-    const [instData, inspData, subsidyData, callData] = await Promise.all([
+    const [instData, inspData, subsidyData, callData, serviceRecordData] = await Promise.all([
       supabaseAdmin
         .from('dpf_device_installations')
         .select('*')
@@ -131,6 +131,14 @@ export async function GET(
         .select('*')
         .eq('vehicle_id', vehicleId)
         .order('monitoring_date', { ascending: false }),
+
+      supabaseAdmin
+        .from('dpf_service_records')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .eq('is_deleted', false)
+        .order('reception_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false }),
     ]);
 
     return NextResponse.json({
@@ -139,6 +147,7 @@ export async function GET(
       inspections: inspData.data ?? [],
       subsidies: subsidyData.data ?? [],
       callMonitoring: callData.data ?? [],
+      serviceRecords: serviceRecordData.data ?? [],
     });
   } catch (err) {
     console.error('[DPF Vehicle Detail] error:', err);
