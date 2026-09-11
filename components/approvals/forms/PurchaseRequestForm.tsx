@@ -3,7 +3,6 @@
 import { useCallback } from 'react'
 import { Plus, Trash2, Paperclip, X, FileText, Image, File, Link2 } from 'lucide-react'
 import FileUploadArea from '../FileUploadArea'
-import WrittenDateEditField from '../WrittenDateEditField'
 
 function autoResize(el: HTMLTextAreaElement) {
   el.style.height = 'auto'
@@ -48,9 +47,6 @@ interface Props {
   disabled?: boolean
   onFileUpload?: (file: File) => Promise<AttachmentFile>
   onFileDelete?: (attachment: AttachmentFile) => Promise<void>
-  documentId?: string
-  writtenDateEditable?: boolean
-  onWrittenDateSaved?: () => void
 }
 
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg-transparent disabled:bg-gray-50 border-0 outline-none`
@@ -69,7 +65,7 @@ function FileIcon({ type }: { type?: string }) {
   return <File className="w-4 h-4 text-blue-500 shrink-0" />
 }
 
-export default function PurchaseRequestForm({ data, onChange, disabled = false, onFileUpload, onFileDelete, documentId, writtenDateEditable = false, onWrittenDateSaved }: Props) {
+export default function PurchaseRequestForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
   const estimatedTotal = data.items.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0)
   const totalQty = data.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
   const attachments = data.attachments || []
@@ -247,11 +243,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
             </div>
             <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
               <div className="px-3 py-2 bg-gray-50 text-sm font-bold flex items-center justify-center">작성일자</div>
-              {writtenDateEditable && documentId ? (
-                <WrittenDateEditField documentId={documentId} value={data.written_date} className={cellInput} onSaved={onWrittenDateSaved} />
-              ) : (
-                <input type="date" className={cellInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
-              )}
+              <input type="date" className={cellInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
             </div>
           </div>
           <div className="grid grid-cols-2 divide-x divide-black border-t border-black">
@@ -398,11 +390,7 @@ export default function PurchaseRequestForm({ data, onChange, disabled = false, 
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-semibold text-gray-500 mb-1">작성일자</label>
-            {writtenDateEditable && documentId ? (
-              <WrittenDateEditField documentId={documentId} value={data.written_date} className={mobileInput} onSaved={onWrittenDateSaved} />
-            ) : (
-              <input type="date" className={mobileInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
-            )}
+            <input type="date" className={mobileInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
           </div>
         </div>
 
