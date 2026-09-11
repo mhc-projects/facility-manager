@@ -220,6 +220,13 @@ const navigationConfig: NavigationEntry[] = [
           description: 'AS/크리닝/물류 접수 통합 조회',
           requiredLevel: 1
         },
+        {
+          name: '물류관리',
+          href: '/dpf/service/logistics',
+          icon: Package,
+          description: '부품전달/요소수 접수 조회',
+          requiredLevel: 1
+        },
       ]
     }
   },
