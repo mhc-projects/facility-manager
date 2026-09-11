@@ -179,6 +179,15 @@ export interface DpfServiceRecordStats {
   cs_total: number;
 }
 
+// 부착현황(/dpf) 파생 컬럼용 차량별 배치 집계 (3단계, 2026-09-11)
+export interface DpfVehicleDerivedStats {
+  last_reception_date: string | null;
+  last_processed_date: string | null;
+  clean_count: number;
+  as_count: number;
+  removal_count: number;
+}
+
 export interface DpfImportStaging {
   id: string;
   import_batch_id: string;
