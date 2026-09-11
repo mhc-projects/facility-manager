@@ -19,6 +19,7 @@ import BusinessTripReportForm from '@/components/approvals/forms/BusinessTripRep
 import InspectionReportForm from '@/components/approvals/forms/InspectionReportForm'
 import { TokenManager } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
+import { isWrittenDateEditWindowOpen } from '@/lib/approval-written-date-edit'
 import { ChevronLeft, CheckCircle, XCircle, Send, Edit, Trash2, Save, Zap, Clock, CheckSquare, Printer } from 'lucide-react'
 
 interface ApprovalDoc {
@@ -60,15 +61,24 @@ function formatDate(d?: string | null) {
 }
 
 function FormViewer({
-  doc, editing, onFormDataChange, onFileUpload, onFileDelete,
+  doc, editing, onFormDataChange, onFileUpload, onFileDelete, writtenDateEditable, onWrittenDateSaved,
 }: {
   doc: ApprovalDoc
   editing: boolean
   onFormDataChange?: (d: any) => void
   onFileUpload?: (file: File) => Promise<AttachmentFile>
   onFileDelete?: (att: AttachmentFile) => Promise<void>
+  writtenDateEditable?: boolean
+  onWrittenDateSaved?: () => void
 }) {
-  const props = { data: doc.form_data, onChange: onFormDataChange || (() => {}), disabled: !editing }
+  const props = {
+    data: doc.form_data,
+    onChange: onFormDataChange || (() => {}),
+    disabled: !editing,
+    documentId: doc.id,
+    writtenDateEditable: !!writtenDateEditable,
+    onWrittenDateSaved,
+  }
   switch (doc.document_type) {
     case 'expense_claim':     return (
       <ExpenseClaimForm
@@ -255,6 +265,10 @@ function ApprovalDetailContent() {
     (doc?.executive_id === user?.id || (doc as any)?.vice_president_id === user?.id) &&
     doc?.status === 'pending' &&
     !doc?.is_express_approved
+
+  // 작성일 한시적 수정 가능 여부: 작성자 본인/총무팀/관리자 + 기한 내 + 결재선 편집모드가 아닐 때(편집모드는 이미 전체 수정 가능)
+  const canEditWrittenDate =
+    !editing && isWrittenDateEditWindowOpen() && (isMyDoc || isSuperAdmin || isManagementSupport)
 
 
   const handleFileUpload = async (file: File): Promise<AttachmentFile> => {
@@ -656,6 +670,8 @@ function ApprovalDetailContent() {
           <FormViewer
             doc={{ ...doc, form_data: editing ? editFormData : doc.form_data }}
             editing={editing}
+            writtenDateEditable={canEditWrittenDate}
+            onWrittenDateSaved={fetchDoc}
             onFormDataChange={setEditFormData}
             onFileUpload={handleFileUpload}
             onFileDelete={handleFileDelete}

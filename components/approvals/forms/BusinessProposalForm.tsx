@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Paperclip, X, FileText, Image, File } from 'lucide-react'
 import FileUploadArea from '../FileUploadArea'
 import TiptapEditor from '@/components/ui/TiptapEditor'
+import WrittenDateEditField from '../WrittenDateEditField'
 
 export interface AttachmentFile {
   id: string
@@ -48,6 +49,9 @@ interface Props {
   disabled?: boolean
   onFileUpload?: (file: File) => Promise<AttachmentFile>
   onFileDelete?: (attachment: AttachmentFile) => Promise<void>
+  documentId?: string
+  writtenDateEditable?: boolean
+  onWrittenDateSaved?: () => void
 }
 
 function formatFileSize(bytes: number): string {
@@ -66,7 +70,7 @@ const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg
 const cellClass = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center whitespace-nowrap`
 const selectInput = `w-full px-2 py-1.5 text-sm focus:outline-none focus:ring-0 bg-transparent border-0 outline-none cursor-pointer`
 
-export default function BusinessProposalForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
+export default function BusinessProposalForm({ data, onChange, disabled = false, onFileUpload, onFileDelete, documentId, writtenDateEditable = false, onWrittenDateSaved }: Props) {
   const [departments, setDepartments] = useState<Department[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const attachments = data.attachments || []
@@ -127,7 +131,11 @@ export default function BusinessProposalForm({ data, onChange, disabled = false,
         <div className="grid grid-cols-2 divide-x divide-black">
           <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
             <div className={cellClass}>작성일</div>
-            <input type="date" className={cellInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
+            {writtenDateEditable && documentId ? (
+              <WrittenDateEditField documentId={documentId} value={data.written_date} className={cellInput} onSaved={onWrittenDateSaved} />
+            ) : (
+              <input type="date" className={cellInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
+            )}
           </div>
           <div className="grid grid-cols-[70px_1fr] divide-x divide-black">
             <div className={cellClass}>보존기간</div>

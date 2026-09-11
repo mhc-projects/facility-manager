@@ -4,6 +4,7 @@ import { useCallback } from 'react'
 import { Plus, Trash2, Paperclip, X, FileText, Image, File } from 'lucide-react'
 import FileUploadArea from '../FileUploadArea'
 import type { AttachmentFile } from './ExpenseClaimForm'
+import WrittenDateEditField from '../WrittenDateEditField'
 
 export interface TripScheduleItem {
   date: string
@@ -42,6 +43,9 @@ interface Props {
   disabled?: boolean
   onFileUpload?: (file: File) => Promise<AttachmentFile>
   onFileDelete?: (attachment: AttachmentFile) => Promise<void>
+  documentId?: string
+  writtenDateEditable?: boolean
+  onWrittenDateSaved?: () => void
 }
 
 function FileIcon({ type }: { type?: string }) {
@@ -63,7 +67,7 @@ const EMPTY_SCHEDULE: TripScheduleItem = {
 const cellInput = `w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent disabled:bg-gray-50 border-0 outline-none`
 const labelCell = `px-3 py-2 bg-gray-50 text-sm font-bold flex items-center whitespace-nowrap`
 
-export default function BusinessTripReportForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
+export default function BusinessTripReportForm({ data, onChange, disabled = false, onFileUpload, onFileDelete, documentId, writtenDateEditable = false, onWrittenDateSaved }: Props) {
   const attachments = data.attachments || []
 
   const update = useCallback((field: keyof BusinessTripReportData, value: string | TripScheduleItem[] | AttachmentFile[]) => {
@@ -111,8 +115,12 @@ export default function BusinessTripReportForm({ data, onChange, disabled = fals
       <div className="border border-black">
         <div className="grid grid-cols-[90px_1fr_90px_1fr] divide-x divide-black border-b border-black">
           <div className={labelCell}>작 성 일</div>
-          <input type="date" className={cellInput} value={data.written_date}
-            onChange={e => update('written_date', e.target.value)} disabled={disabled} />
+          {writtenDateEditable && documentId ? (
+            <WrittenDateEditField documentId={documentId} value={data.written_date} className={cellInput} onSaved={onWrittenDateSaved} />
+          ) : (
+            <input type="date" className={cellInput} value={data.written_date}
+              onChange={e => update('written_date', e.target.value)} disabled={disabled} />
+          )}
           <div className={labelCell}>부 서 명</div>
           <input className={cellInput} value={data.department}
             onChange={e => update('department', e.target.value)} disabled={disabled} placeholder="부서명" />

@@ -107,3 +107,15 @@
 - 코드: AdminDataContext.resolveStageKey(라벨 기준 카테고리 키 매핑) 추가, 칸반/목록/수정 모달/미니칸반에 적용. 복수 진행구분 칸반 grouped를 라벨 키로 변경(같은 키·다른 라벨 칸 덮어쓰기 버그). 드롭 시 업무 카테고리 키로 resolve. 수정 모달 사업장 재선택/진행구분 변경 시 첫 단계 초기화 → 라벨 기준 이관.
 - 재발 방지: POST /api/settings/task-stages가 키 미지정 시 같은 task_type 카테고리의 같은 라벨 키 재사용.
 - 후속: 사업장 progress_status 변경 시 업무 status 키 서버 이관은 미구현(라이브 영향 범위 커서 분리). 상세는 claudedocs/task-stage-key-mismatch/.
+
+---
+
+## 2026-09-11 | 전자결재 작성일 한시적 수정 허용 (2026-10-11까지)
+- 요청: 전자결재 문서가 잠긴 뒤(제출/승인 후)에는 작성일도 고칠 수 없는데, 과거 오기재 정정을 위해 약 한 달만 한시적으로 허용.
+- 범위 확정을 위해 사용자와 3가지 질문으로 조율: 승인완료 문서까지 포함 / 결재 진행상황(단계·상태)은 건드리지 않고 작성일만 조용히 변경 / 작성자 본인+총무팀+권한4만 가능.
+- `lib/approval-written-date-edit.ts`에 `WRITTEN_DATE_EDIT_DEADLINE`(2026-10-11) 단일 소스 도입, 프론트/백엔드 공유. 기한 지나면 자동 재잠금(코드 원복 불필요).
+- 전용 API `PATCH /api/approvals/[id]/written-date` 신설: `form_data.written_date`만 jsonb_set으로 갱신, status/current_step/approval_steps는 건드리지 않음. 기존 PUT은 pending 문서 수정 시 draft로 되돌리고 결재단계를 초기화하는 부수효과가 있어 이 용도에 부적합했음.
+- UI: `components/approvals/WrittenDateEditField.tsx`(자체완결 즉시저장 입력) 신설, 작성일 입력 UI가 실제로 있는 5개 양식(업무품의서/지출결의서/구매요청서/휴가원/출장보고서)에만 적용. 연장근무일지/설치비마감/영업비마감은 `written_date` 필드가 타입에는 있어도 화면에 입력 UI 자체가 없어 대상에서 제외(사용자 확인 후 제외 확정).
+- 버그 수정 1건(advisor 리뷰로 배포 전 발견): PATCH 저장 후 broadcast에만 의존하면, 같은 화면에서 바로 "수정"(전체편집)→저장 시 낡은 editFormData가 작성일을 되돌리는 lost-update 가능성 → `onWrittenDateSaved` 콜백으로 `fetchDoc()` 직접 호출하도록 연결.
+- 브라우저 검증: 사용자 본인 계정으로 승인완료 문서(구매요청서)에서 작성일 변경 → 즉시 저장 확인.
+- `.claude/skills/approval/SKILL.md`에 이 한시적 기능과 단일 소스 파일 위치 기록.

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import WrittenDateEditField from '../WrittenDateEditField'
 
 export type LeaveType = 'annual' | 'condolence' | 'special' | 'other' | 'half_am' | 'half_pm'
 
@@ -25,6 +26,9 @@ interface Props {
   data: LeaveRequestData
   onChange: (data: LeaveRequestData) => void
   disabled?: boolean
+  documentId?: string
+  writtenDateEditable?: boolean
+  onWrittenDateSaved?: () => void
 }
 
 const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
@@ -124,7 +128,7 @@ function labelFor(leave_type: LeaveType): string {
   return LEAVE_TYPES.find(lt => lt.value === leave_type)?.label ?? ''
 }
 
-export default function LeaveRequestForm({ data, onChange, disabled = false }: Props) {
+export default function LeaveRequestForm({ data, onChange, disabled = false, documentId, writtenDateEditable = false, onWrittenDateSaved }: Props) {
   // 공휴일 Set — 마운트 시 /api/holidays 에서 동적 로드, 실패 시 fallback 사용
   const [holidays, setHolidays] = useState<Set<string>>(KR_HOLIDAYS_FALLBACK)
 
@@ -272,7 +276,11 @@ export default function LeaveRequestForm({ data, onChange, disabled = false }: P
         </div>
         <div className="grid grid-cols-[100px_1fr_80px_1fr] divide-x divide-black border-t border-black">
           <div className="px-3 py-2 bg-gray-50 text-sm font-bold flex items-center justify-center">작성일자</div>
-          <input type="date" className="w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent border-0 outline-none disabled:bg-gray-50" value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
+          {writtenDateEditable && documentId ? (
+            <WrittenDateEditField documentId={documentId} value={data.written_date} className="w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent border-0 outline-none disabled:bg-gray-50" onSaved={onWrittenDateSaved} />
+          ) : (
+            <input type="date" className="w-full px-2 py-1.5 text-sm focus:outline-none bg-transparent border-0 outline-none disabled:bg-gray-50" value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
+          )}
           <div />
           <div />
         </div>

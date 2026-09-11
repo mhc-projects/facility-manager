@@ -36,3 +36,11 @@ description: Facility Manager 프로젝트의 전자결재 시스템(승인 라�
 
 ## 알림
 결재 액션마다 `notifications` DB insert + Supabase broadcast(`approval-notify:{userId}`) + Web Push + 텔레그램, 4개 채널을 각 라우트가 개별 구현한 헬퍼로 중복 발송한다(`sendApprovalNotification`/`sendNotification` — 파일마다 이름·구현이 조금씩 다르고 공통화돼 있지 않음).
+
+## 작성일(written_date) 한시적 수정 (2026-09-11 도입, ~2026-10-11)
+문서 본문 `form_data.written_date`는 원칙적으로 문서가 잠기면(제출 후 조회 모드) 폼 전체와 함께 수정 불가하다. 과거 문서의 작성일 오기재를 정정할 수 있도록, `written_date` 필드만 상태와 무관하게(승인 완료 문서 포함) 한시적으로 수정 가능하게 열어둔 예외 경로가 있다.
+- `lib/approval-written-date-edit.ts`의 `WRITTEN_DATE_EDIT_DEADLINE`(2026-10-11) 단일 소스 — 프론트(`app/admin/approvals/[id]/page.tsx`의 `canEditWrittenDate`)와 백엔드가 공유. 기한이 지나면 자동으로 다시 잠긴다(코드 원복 불필요).
+- 전용 엔드포인트 `PATCH /api/approvals/[id]/written-date` — `form_data.written_date`만 `jsonb_set`으로 갱신, **`status`/`current_step`/`approval_steps`는 건드리지 않는다**(기존 `PUT /api/approvals/[id]`는 `pending` 문서 수정 시 draft로 되돌리고 결재단계를 초기화하는 부수효과가 있어 이 용도에 맞지 않음).
+- 권한: 문서 작성자 본인 + 총무팀(`is_management_support`) + 권한4. 대상 문서 상태 제한 없음(approved 포함).
+- UI: `components/approvals/WrittenDateEditField.tsx` — 폼이 잠긴 상태에서도 이 입력만 즉시 저장(PATCH) 되는 자체완결 컴포넌트. `written_date` 입력 UI가 실제로 있는 5개 양식(`BusinessProposalForm`/`ExpenseClaimForm`/`PurchaseRequestForm`/`LeaveRequestForm`/`BusinessTripReportForm`)에만 적용했다 — `OvertimeLogForm`/`InstallationClosingForm`/`CommissionClosingForm`은 타입에 `written_date` 필드가 있어도 실제 렌더링하는 입력이 없어 대상에서 제외.
+- 기한을 연장하거나 영구화하려면 `WRITTEN_DATE_EDIT_DEADLINE` 값만 수정하면 된다.

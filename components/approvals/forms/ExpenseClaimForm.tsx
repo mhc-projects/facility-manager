@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronUp, Paperclip, X, FileText, Image, File } from 'lucide-react'
 import FileUploadArea from '../FileUploadArea'
+import WrittenDateEditField from '../WrittenDateEditField'
 
 export interface ExpenseItem {
   date: string
@@ -36,6 +37,9 @@ interface Props {
   disabled?: boolean
   onFileUpload?: (file: File) => Promise<AttachmentFile>
   onFileDelete?: (attachment: AttachmentFile) => Promise<void>
+  documentId?: string
+  writtenDateEditable?: boolean
+  onWrittenDateSaved?: () => void
 }
 
 const EMPTY_ITEM: ExpenseItem = { date: '', description: '', amount: 0, note: '' }
@@ -57,7 +61,7 @@ function FileIcon({ type }: { type?: string }) {
   return <File className="w-4 h-4 text-blue-500 shrink-0" />
 }
 
-export default function ExpenseClaimForm({ data, onChange, disabled = false, onFileUpload, onFileDelete }: Props) {
+export default function ExpenseClaimForm({ data, onChange, disabled = false, onFileUpload, onFileDelete, documentId, writtenDateEditable = false, onWrittenDateSaved }: Props) {
   const totalAmount = data.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const attachments = data.attachments || []
@@ -153,7 +157,11 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
             </div>
             <div className="grid grid-cols-[80px_1fr] divide-x divide-black">
               <div className="px-3 py-2 bg-gray-50 text-sm font-bold flex items-center justify-center whitespace-nowrap">작성일자</div>
-              <input type="date" className={cellInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
+              {writtenDateEditable && documentId ? (
+                <WrittenDateEditField documentId={documentId} value={data.written_date} className={cellInput} onSaved={onWrittenDateSaved} />
+              ) : (
+                <input type="date" className={cellInput} value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })} disabled={disabled} />
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 divide-x divide-black border-t border-black">
@@ -270,12 +278,16 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">작성일자</label>
-            <input
-              type="date"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
-              value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })}
-              disabled={disabled}
-            />
+            {writtenDateEditable && documentId ? (
+              <WrittenDateEditField documentId={documentId} value={data.written_date} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" onSaved={onWrittenDateSaved} />
+            ) : (
+              <input
+                type="date"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                value={data.written_date} onChange={e => onChange({ ...data, written_date: e.target.value })}
+                disabled={disabled}
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">비고</label>
