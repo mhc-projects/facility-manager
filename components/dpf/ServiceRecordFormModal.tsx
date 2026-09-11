@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal, { ModalActions } from '@/components/ui/Modal';
 import { DpfServiceRecord, DpfServiceCategory, DpfAttachmentSlotKey } from '@/types/dpf';
 
@@ -61,6 +61,8 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
   const [error, setError] = useState('');
 
   const recordId = record?.id;
+  const recordIdRef = useRef(recordId);
+  recordIdRef.current = recordId;
   const [attachments, setAttachments] = useState<Record<string, AttachmentData>>({});
   const [attachmentUploading, setAttachmentUploading] = useState<Record<string, boolean>>({});
   const [attachmentError, setAttachmentError] = useState('');
@@ -74,6 +76,7 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
 
   useEffect(() => {
     setAttachments({});
+    setAttachmentUploading({});
     setAttachmentError('');
     if (isOpen && recordId) {
       fetchAttachments(recordId);
@@ -85,7 +88,8 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
     try {
       const res = await fetch(`/api/dpf/service-records/${id}/attachments`);
       const data = await res.json();
-      if (res.ok) setAttachments(data);
+      // 조회 중 모달이 다른 레코드로 전환됐다면(업로드가 오래 걸려 응답이 늦게 온 경우) 반영하지 않는다
+      if (res.ok && id === recordIdRef.current) setAttachments(data);
     } catch {
       // 조회 실패는 조용히 무시 — 업로드/삭제는 그대로 시도 가능
     }
@@ -120,13 +124,16 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
   }
 
   async function handleAttachmentDelete(slotKey: DpfAttachmentSlotKey) {
-    if (!recordId) return;
+    const targetId = recordId;
+    if (!targetId) return;
     setAttachmentError('');
     setAttachmentUploading(prev => ({ ...prev, [slotKey]: true }));
     try {
-      const res = await fetch(`/api/dpf/service-records/${recordId}/attachments/${slotKey}`, { method: 'DELETE' });
+      const res = await fetch(`/api/dpf/service-records/${targetId}/attachments/${slotKey}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) { setAttachmentError(data.error ?? '삭제에 실패했습니다'); return; }
+      // 삭제 중 모달이 다른 레코드로 전환됐다면 그 레코드의 로컬 상태를 건드리지 않는다
+      if (targetId !== recordIdRef.current) return;
       setAttachments(prev => {
         const next = { ...prev };
         delete next[slotKey];
