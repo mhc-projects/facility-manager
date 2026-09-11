@@ -141,8 +141,9 @@ MAX를 계산하므로 재시도하면 해소된다. 회차 번호에 이빨(gap
 | `current_vin_override` | 없음 | 위와 동일 이유로 **수동 전용**, `VehicleFormModal`에서만 직접 수정 |
 | `is_special_management` | 없음(신규 필드) | **수동 전용**, `VehicleFormModal` 체크박스 |
 
-**write-back 타이밍**: 서비스 레코드 저장 API(§7의 `POST /api/dpf/vehicles/[vin]/service-records`, `PATCH .../service-records/[id]`)에서
-연락처·출동지역 값이 입력되면 차량 마스터에 반영하되, **PATCH는 그 레코드가 해당 차량의 최신 레코드(가장 최근 `reception_date`)일 때만
+**write-back 타이밍**: 서비스 레코드 저장 API(§7의 `POST /api/dpf/vehicles/[vin]/service-records`, `PUT .../service-records/[id]` —
+기존 sub-record 라우트 컨벤션대로 PATCH 대신 PUT 사용, 1단계 구현 시 확정)에서
+연락처·출동지역 값이 입력되면 차량 마스터에 반영하되, **PUT은 그 레코드가 해당 차량의 최신 레코드(가장 최근 `reception_date`)일 때만
 write-back한다** — 오래된 티켓을 수정한다고 더 최신 접수에서 확인된 연락처를 덮어쓰면 안 되기 때문이다. POST(신규 접수)는 항상 최신이므로
 조건 없이 write-back한다.
 
@@ -306,24 +307,38 @@ create policy "dpf_service_records_write" on dpf_service_records
   (`installations`/`inspections`/`subsidies`/`callMonitoring`과 나란히, `Promise.all`에 한 줄 추가) — 탭이 상세 페이지 로드와 동시에 뜬다.
 - `POST /api/dpf/vehicles/[vin]/service-records/route.ts` — `installations/route.ts`와 동일한 패턴(vin→vehicle_id 조회 후 insert).
   연락처/출동지역 값이 있으면 §4.6 표대로 `dpf_vehicles` write-back까지 같은 요청에서 처리.
-- `PATCH /api/dpf/vehicles/[vin]/service-records/[id]/route.ts` — 상태 전이(진행중→완료/취소), 처리 등록(처리기사/처리일자/처리내용 등) 수정.
+- `PUT /api/dpf/vehicles/[vin]/service-records/[id]/route.ts` — 상태 전이(진행중→완료/취소), 처리 등록(처리기사/처리일자/처리내용 등) 수정
+  (기존 installations/inspections 등 sub-record 라우트가 전부 PUT을 쓰고 있어 컨벤션 일치를 위해 PATCH 대신 PUT으로 구현함, 1단계에서 확정).
   연락처/출동지역이 바뀌고 이 레코드가 해당 차량의 최신 레코드일 때만 write-back(§4.6).
 - `DELETE /api/dpf/vehicles/[vin]/service-records/[id]/route.ts` — 하드 삭제 아님, `is_deleted = true` 갱신(§4.10).
 - INSERT가 `23505`(round_no 유니크 위반, §4.2)로 실패하면 API에서 **1회만 재시도**.
 - 인증: 기존 `/api/dpf/**`와 동일하게 `requireAuth(request, 1)` 사용, RLS는 서버 전용(§5).
 
-**2단계에서 추가** (1단계 체크리스트에서 제외):
-- `GET/POST /api/dpf/service-records` — 접수현황/물류관리 통합 목록(필터: category[], status, local_government, service_branch, billing_status, date range 등)
-- `GET /api/dpf/service-records/stats` — 요약 바용 집계(카테고리 × 상태 COUNT) — **저장된 카운터가 아니라 매 요청 시 계산**
+**2단계에서 추가** (구체화, 2026-09-11 어드바이저 검토):
+- `GET /api/dpf/service-records` — 접수현황/물류관리 통합 목록. **기존 `/api/dpf/search/route.ts`의 쿼리 파라미터명·페이지네이션 계약·응답
+  모양을 그대로 따른다**(`q`/`page`/`pageSize` → `{ vehicles, total, page, pageSize }` 패턴을 `{ records, total, page, pageSize }`로).
+  필터: `category`(복수 가능), `status`, `local_government`, `service_branch`, `billing_status`, 기간(접수일 기준), 차량번호/차대번호/계약자 텍스트 검색.
+  차량 정보(차량번호/차대번호/소유자/차명/지자체) 조인이 필요 — `dpf_service_records`에서 `.select('*, dpf_vehicles!inner(vin, plate_number, owner_name, vehicle_name, local_government)')`,
+  양쪽 다 `is_deleted = false` 조건. POST는 2단계에 없음 — 등록은 계속 차량 상세(1단계 라우트)에서만 한다(§8.1의 "빠른 등록 없음" 참고).
+- `GET /api/dpf/service-records/stats` — 요약 바용 집계(크리닝대기/완료, AS대기/완료, 상담종료). **행을 가져와서 세지 않는다, 카운터를 저장하지 않는다** —
+  category × status 조합별로 `.select('id', { count: 'exact', head: true })` 병렬 호출(6개 내외, 이 규모에서는 RPC/집계함수 불필요).
 - (보류) `POST .../attachments` — 첨부파일 구체화되면 추가(§4.7·§6-3)
 
 ## 8. UI 설계
 
-### 8.1 `/dpf/service` — 접수현황 (신규 페이지)
+### 8.1 `/dpf/service` — 접수현황 (신규 페이지, 2026-09-11 어드바이저 검토로 구체화)
 크린어스 접수현황과 동일한 목적. 상단 요약 바(크리닝대기/완료, AS대기/완료, 상담종료 — 전부 §7 stats 엔드포인트에서 실시간 계산),
-필터 바(기간 프리셋 + 커스텀, 분류, 상태, 지자체, 처리점, 차량번호/차대번호/계약자 검색), 목록 테이블.
+필터 바는 **새로 설계하지 않고 `/dpf`(부착현황) 페이지의 기존 패턴(검색행 + 확장 필터 패널 + 탭 행)을 그대로 재사용**한다 — 기간 프리셋(1/3/6/12개월),
+분류, 상태, 지자체, 처리점, 차량번호/차대번호/계약자 텍스트 검색.
+목록 테이블은 `DpfVehicleTable.tsx`와 같은 구조(고정 `COLUMNS` 배열 + `cellValue` switch + 페이지네이션)의 신규 `DpfServiceRecordTable.tsx`.
+행 클릭 시 `/dpf/[vin]?tab=service`로 이동 — 상세 페이지(`app/dpf/[vin]/page.tsx`)가 `?tab=` 쿼리 파라미터로 초기 `activeTab`을 정할 수 있도록
+작은 변경 추가(현재는 항상 `'basic'`으로 시작).
 행 액션 버튼(수정/처리)은 **항상 노출**한다 — hover로 감추지 않는다(`feedback_dashboard_ux_conventions`: 호버 금지 컨벤션,
 `/dpf/[vin]`의 기존 이력 탭들이 쓰는 `opacity-0 group-hover:opacity-100` 패턴을 새 테이블엔 적용하지 않음).
+**이 페이지에 "빠른 등록" 버튼을 넣지 않는다** — 크린어스 접수현황도 등록은 차량(부착현황) 쪽에서만 하고, 목록에서 바로 만들 수 없다.
+신규 접수 생성용 차량 선택 UI는 3단계(부착현황 행 액션 버튼) 몫으로 명시적으로 미룬다.
+사이드바에 `DPF업무` 그룹의 "차량 관리" 옆에 "접수현황" 항목을 새로 추가한다(`components/ui/AdminLayout.tsx`의 `navItems`,
+`ClipboardList` 아이콘 재사용 — 이미 import돼 있음).
 
 ### 8.2 `/dpf/service/logistics` — 물류관리 (신규 페이지, 8.1과 컴포넌트 공유)
 `category in ('parts_delivery','urea')`로 고정 필터링된 `/dpf/service`의 변형. 택배사 컬럼 추가, 크리닝/AS 전용 컬럼 제거.
@@ -344,6 +359,11 @@ create policy "dpf_service_records_write" on dpf_service_records
 데이터는 `/dpf/[vin]` 페이지의 기존 `loadDetail()`이 호출하는 `GET /api/dpf/vehicles/[vin]` 응답에 실린 `serviceRecords`를 그대로 쓴다(§7) —
 탭 전환 시 별도 API 호출이 없다, 기존 installations/inspections/subsidy/call 탭과 동일한 방식.
 
+**변경정보 오버레이 표시 (2단계 범위로 추가, 2026-09-11 어드바이저 지적)**: 1단계는 write-back만 구현했고 이 값을 보여주는 화면이 없다 —
+`VehicleFormModal`도 `BasicInfoTab`도 `current_*`/`is_special_*` 필드를 노출하지 않는다. 사용자가 변경정보를 찾다가 없는 걸 알게 되는 것보다,
+가장 저렴한 위치인 `BasicInfoTab`(§4의 "접수 / 행정" 섹션 아래)에 읽기 전용 "변경정보" 섹션을 2단계에서 추가한다 — 현재차량번호/현재연락처(무선·유선)/
+출동지역/특별관리대상/특판. 수정은 여전히 `VehicleFormModal`에서만(§4.6).
+
 ## 9. 구현 단계 제안 (CLAUDE.md: 한 번에 하나의 기능)
 
 ### 1단계 세부 순서 (핵심 — 지금 진행할 범위)
@@ -352,7 +372,7 @@ create policy "dpf_service_records_write" on dpf_service_records
    `project_hardcoded_db_password_incident`(로테이션 미완료) 때문에도 DB 접속 자격 증명을 직접 다루지 않는다.
 2. 사용자가 마이그레이션 적용을 확인해주면 → `types/dpf.ts`에 `DpfServiceRecord` 인터페이스 추가, `DpfVehicle`에 오버레이 필드(§4.6/§4.12) 추가.
 3. API 3개 라우트 작성(§7 1단계 목록) — `app/api/dpf/vehicles/[vin]/route.ts` GET에 `serviceRecords` 추가,
-   `.../service-records/route.ts`(POST), `.../service-records/[id]/route.ts`(PATCH/DELETE).
+   `.../service-records/route.ts`(POST), `.../service-records/[id]/route.ts`(PUT/DELETE).
 4. UI — `/dpf/[vin]`에 "AS/크리닝" 탭 추가(§8.4), `ServiceRecordFormModal.tsx` 신설.
 5. 검증: dev 서버가 떠 있는 동안은 **`npm run build` 대신 `npx tsc --noEmit`**(`feedback_no_build_during_dev_server` 메모리),
    브라우저 확인은 **하드 리로드(Cmd+Shift+R)**로(`feedback_local_test_hard_reload`), **localhost 개발 서버만** 상태 변경 테스트
@@ -361,8 +381,18 @@ create policy "dpf_service_records_write" on dpf_service_records
 7. `.claude/skills/db-schema/SKILL.md`에 `dpf_service_records` 테이블 추가, `claudedocs/dpf-service-records/context-notes.md`에
    실제 적용하며 발견한 것들 기록(§10).
 
+### 2단계 세부 순서 (2026-09-11 어드바이저 검토로 구체화, 마이그레이션 없음)
+1. `GET /api/dpf/service-records`(§7) — `/api/dpf/search/route.ts` 패턴 그대로, `dpf_vehicles` 조인 포함.
+2. `GET /api/dpf/service-records/stats`(§7) — count 쿼리 병렬 6개.
+3. `DpfServiceRecordTable.tsx` 신규 — `DpfVehicleTable.tsx` 구조 복제.
+4. `/dpf/service/page.tsx` 신규 — `/dpf`의 검색행+필터패널+탭 패턴 재사용, 행 클릭 시 `/dpf/[vin]?tab=service`.
+5. `app/dpf/[vin]/page.tsx`에 `?tab=` 쿼리 파라미터로 초기 탭 지정 기능 추가(작은 변경).
+6. `BasicInfoTab`에 변경정보 읽기 전용 섹션 추가(§8.4).
+7. `components/ui/AdminLayout.tsx`의 `DPF업무` 그룹에 "접수현황" 사이드바 항목 추가.
+8. 검증: `tsc --noEmit`, 하드 리로드, 모든 필터 조합 실사용, 요약 바 숫자와 테이블 실제 건수 일치 확인, `/dpf`·`/dpf/[vin]` 회귀 없음 확인.
+9. 새 테이블/마이그레이션이 필요하다고 느껴지면 멈추고 먼저 확인한다 — 2단계는 1단계 데이터의 조회 레이어일 뿐이어야 한다.
+
 ### 이후 단계
-2. **2단계**: `/dpf/service` 접수현황 통합 리스트(요약 바 + 필터 + 테이블) + `/api/dpf/service-records`, `/stats` 엔드포인트.
 3. **3단계**: `/dpf` 부착현황에 파생 컬럼 + 접수/물류 행 액션 버튼 추가.
 4. **4단계**: `/dpf/service/logistics` 물류관리 필터 뷰.
 5. **5단계 (보류, 필요시)**: 담당자 요구가 구체화되면 `dpf_service_record_attachments` 테이블 + 첨부파일 슬롯 UI 추가(§4.7).
