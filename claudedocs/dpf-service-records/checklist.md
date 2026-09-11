@@ -166,9 +166,13 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       좁혀짐(이 기능 자체의 한계가 아님)
 - [x] 검증 중 생성한 첨부파일(이미지 2개+PDF 1개)은 모두 UI/API의 실제 삭제 흐름으로 정리 완료(storage list API로
       최종 확인, DB 행도 0건)
-- [x] 커밋 6개: 89039fc API 3개 라우트, 1b7916e API 검증결과 문서, d7b0e97 GET 응답 ext 필드 추가,
-      3cf4a79 storage 클라이언트 분리(버그 수정), 07917ad UI+스킬 문서 갱신, d8d28ef 레코드 전환 레이스 컨디션 수정
+- [x] 커밋 7개: 4c48fee 마이그레이션+타입, 89039fc API 3개 라우트, 1b7916e API 검증결과 문서, d7b0e97 GET 응답
+      ext 필드 추가, 3cf4a79 storage 클라이언트 분리(버그 수정), 07917ad UI+스킬 문서 갱신, d8d28ef 레코드 전환
+      레이스 컨디션 수정
 - [x] `claude-progress.txt` 갱신
+- [x] (미검증 항목 명시) 클라이언트 측 확장자 거부 메시지 경로(`.txt` 업로드 → 빨간 에러 박스)는 구현만 되고 UI로
+      직접 확인하지 않음(서버 측 확장자 검증은 400 응답으로 검증 완료). 10MB 클라이언트 가드는 `file_upload` 도구
+      자체가 10MB를 넘는 파일을 못 보내 UI로 검증 불가능(서버 측 `fileSizeLimit`/크기 체크는 코드 리뷰로만 확인).
 - [ ] 사용자에게 전달할 것: (1) `dpf_service_records` 테스트 레코드 2건(크리닝 1·2회차, 85가8787) 정리 SQL,
       (2) 동일 헤더 충돌 버그가 잠재된 다른 업로드 라우트 목록(수정하지 않음, 발견만) — `announcements/[id]/attachments`,
       `approvals/attachments`, `facility-photos`, `calendar/upload`, `upload-supabase`, `wiki/upload-guideline`,
