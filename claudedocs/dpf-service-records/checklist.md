@@ -141,15 +141,37 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
 - [x] non-file API 케이스 실제 요청으로 검증: 빈 레코드 GET({}), 존재하지 않는 레코드 GET(404), 잘못된 slot_key
       DELETE(400), 미존재 첨부 DELETE(404) — 파일 포함 케이스(업로드/재업로드)는 브라우저 확장 보안 필터가
       "input.files를 읽어 fetch로 전송" 패턴을 차단해 API 단독 테스트 불가, UI 완성 후 실제 파일 선택으로 검증 예정
-- [ ] `ServiceRecordFormModal.tsx`에 첨부파일 섹션 추가(`AttachmentSlot` 서브컴포넌트, 수정 모드 전용, 12슬롯
-      업로드/미리보기/삭제, 10MB 클라이언트 가드)
-- [ ] `.claude/skills/db-schema/SKILL.md`에 `dpf_service_record_attachments` 추가
-- [ ] `.claude/skills/dpf/SKILL.md`에 첨부파일 하드삭제/재업로드/비공개 버킷 규칙 추가
-- [ ] `npx tsc --noEmit` 통과
-- [ ] 브라우저 하드 리로드 후 확인: 이미지 1개+PDF 1개 업로드, 서명 URL로 미리보기/링크 표시, 재업로드 시 이전 파일
-      정리, 앱의 DELETE 라우트로 직접 삭제해 storage 삭제 경로 실사용 검증, 신규 등록 모드엔 섹션 미노출, 기존 탭/모달
-      회귀 없음
-- [ ] 검증 중 테스트 흔적 정리 — storage는 8번에서 앱 DELETE 라우트로 이미 정리됨, DB 잔여분만 3단계와 동일한
-      블랭킷 SQL로 사용자에게 전달
-- [ ] 커밋 3개: (a) 마이그레이션+타입, (b) API 3개 라우트, (c) UI+스킬 문서 갱신
+- [x] (어드바이저 검토 지적) GET 응답에 `ext` 필드 추가 — 서명 URL은 토큰 쿼리스트링을 포함해 클라이언트가 직접
+      파싱해 이미지/PDF를 구분하는 게 부적절, `storage_path` 확장자를 그대로 내려줌
+- [x] `ServiceRecordFormModal.tsx`에 첨부파일 섹션 추가(`AttachmentSlotView` 서브컴포넌트, 수정 모드 전용, 12슬롯
+      업로드/미리보기/교체/삭제, 클라이언트 10MB+확장자 가드, `attachments` 상태는 `values`와 분리)
+- [x] **실사용 버그 발견 및 수정**: 실제 UI로 첫 업로드를 시도하자 415 "mime type application/json ... is not supported"
+      실패. 처음엔 "request.formData()의 File이 storage-js의 instanceof Blob 체크와 다른 realm" 가설을 세워 Blob으로
+      재포장했으나 동일 실패 → debug 로그로 `blobIsBlob: true` 확인되어 가설 반증 → 근본 원인은 `supabaseAdmin`의
+      `global.headers['Content-Type']` 고정값이 Fetch 스펙상 FormData/바이너리 body의 자동 Content-Type을 무시시켜
+      Storage가 415로 거부하는 것으로 확인. `lib/supabase.ts`에 `global.headers` 없는 `getSupabaseStorageAdmin()`
+      신설, 첨부파일 API 3개 라우트의 storage 호출만 교체(DB 호출은 `supabaseAdmin` 유지) → 정상 업로드 확인
+- [x] `.claude/skills/db-schema/SKILL.md`에 `dpf_service_record_attachments` 추가
+- [x] `.claude/skills/dpf/SKILL.md`에 첨부파일 하드삭제/재업로드/비공개 버킷/전용 storage 클라이언트 규칙 추가
+- [x] `npx tsc --noEmit` 통과(신규 오류 0)
+- [x] 브라우저 실제 UI로 검증(`file_upload` 도구로 실제 `<input>`에 파일 선택 → 페이지 자체 fetch 실행):
+      이미지 업로드(썸네일 렌더 확인, `img.complete && naturalWidth>0`) → 재업로드/교체(새 서명 URL로 변경, storage
+      list API로 이전 파일 실제 삭제 확인 — 단, 이전 서명 URL 자체는 CDN 캐시(`cacheControl: max-age=3600`)로 최대
+      1시간 200을 반환할 수 있어 신뢰 불가, storage list API가 최종 진실) → PDF 업로드("PDF 보기" 링크 렌더링,
+      GET 응답 `ext:"pdf"` 확인) → UI 삭제 버튼(storage+DB 모두 제거 확인) → 신규 등록 모드엔 섹션 미노출 확인 →
+      기존 필드/탭 회귀 없음
+- [x] 브라우저 확장 파일업로드 차단 가설 최종 결론: **차단 가설은 틀렸음(반증됨)** — `file_upload` 도구로 실제
+      `<input>`에 파일을 선택시키고 페이지 자체 onChange 핸들러가 fetch를 수행하는 흐름은 정상 동작한다. 이전에
+      관찰된 차단은 `javascript_tool` 스크립트가 파일을 직접 읽어 fetch로 전송하는 패턴에서만 발생하는 것으로 범위가
+      좁혀짐(이 기능 자체의 한계가 아님)
+- [x] 검증 중 생성한 첨부파일(이미지 2개+PDF 1개)은 모두 UI/API의 실제 삭제 흐름으로 정리 완료(storage list API로
+      최종 확인, DB 행도 0건)
+- [x] 커밋 4개: 89039fc API 3개 라우트, 1b7916e API 검증결과 문서, 3cf4a79 storage 클라이언트 분리(버그 수정),
+      (다음) UI+스킬 문서 갱신
 - [ ] `claude-progress.txt` 갱신
+- [ ] 사용자에게 전달할 것: (1) `dpf_service_records` 테스트 레코드 2건(크리닝 1·2회차, 85가8787) 정리 SQL,
+      (2) 동일 헤더 충돌 버그가 잠재된 다른 업로드 라우트 목록(수정하지 않음, 발견만) — `announcements/[id]/attachments`,
+      `approvals/attachments`, `facility-photos`, `calendar/upload`, `upload-supabase`, `wiki/upload-guideline`,
+      `document-automation/purchase-order` 전부 `supabaseAdmin` 또는 `getSupabaseAdmin()`으로 storage 업로드 —
+      특히 `announcements/[id]/attachments`는 버킷에 `allowedMimeTypes` 제한이 없어 415는 안 뜨지만 저장된 객체의
+      `mimetype` 메타데이터가 잘못됐을 가능성이 있음(서명 URL의 inline 렌더링에 영향 가능)

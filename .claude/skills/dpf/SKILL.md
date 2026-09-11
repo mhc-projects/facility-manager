@@ -39,5 +39,14 @@ logistics 화면은 앞 5개를 무시할 뿐이다). `category` 콤마 리스�
 ## 지자체/처리점/기사 — 자유 텍스트, 코드 테이블 없음
 `local_government`/`service_branch`/`assigned_as_technician`/`processing_technician` 전부 자유 텍스트다. 참조할 코드 테이블(크린어스의 지자체 168개 등)이 이 프로젝트에 없어서다 — 드롭다운/자동완성을 넣으려면 먼저 실제 값이 쌓인 뒤 UI에서만 구현해야지, 코드 테이블을 새로 설계하면 안 된다.
 
+## 첨부파일(`dpf_service_record_attachments`) — 레코드 소프트 삭제와 별개의 하드 삭제 축
+- 크린어스 관찰 12고정슬롯(`ATTACHMENT_SLOTS`, `components/dpf/ServiceRecordFormModal.tsx`): 차량사진/매연측정기/필터전단면 클리닝전·후/필터일련번호 클리닝전·후/자가진단장치배압 전·후/매연검사결과표 전·후/AS부품/AS처리. `slot_key`는 DB CHECK 제약과 `DpfAttachmentSlotKey` 유니온 타입 양쪽에 고정 — 슬롯 추가 시 둘 다 갱신.
+- **레코드의 `is_deleted` 소프트 삭제 원칙과 달리, 첨부파일은 하드 삭제**다(`DELETE /api/dpf/service-records/[id]/attachments/[slotKey]`가 DB 행 삭제 + storage 파일 삭제). 청구 이력이 걸린 건 레코드 자체지 첨부파일이 아니고, 첨부파일은 재업로드로 언제든 대체 가능해서다.
+- 재업로드(교체) 흐름: 기존 `storage_path` 먼저 읽기 → 새 파일 업로드 → `(record_id, slot_key)` unique 기준 upsert → 성공 후 이전 파일 베스트에포트 삭제(실패해도 로그만, 고아 파일 하나가 업로드 실패보다 낫다).
+- 저장은 **비공개 버킷(`dpf-attachments`) + `createSignedUrl`**(공개 URL 아님) — 차량 사진/검사결과가 차대번호·소유자명 등 차량별 PII를 담기 때문. GET 응답은 `{ [slot_key]: { url, created_at, ext } }` 형태이고 `ext`는 서명 URL(쿼리스트링에 토큰 포함)을 클라이언트가 직접 파싱하지 않고도 이미지/PDF 렌더링을 분기하기 위한 필드다.
+- ⚠️ **Storage 호출(listBuckets/createBucket/upload/createSignedUrl/remove)은 `supabaseAdmin`이 아니라 `getSupabaseStorageAdmin()`(`lib/supabase.ts`)을 써야 한다.** `supabaseAdmin`은 `global.headers`에 `Content-Type: application/json`이 고정돼 있어, Fetch 스펙상 이 헤더가 명시되면 FormData/바이너리 body의 자동 Content-Type(멀티파트 boundary 등)이 무시되어 Storage가 415로 업로드를 거부한다(2026-09-12 실제로 겪은 버그 — `instanceof Blob` realm 문제가 아니라 이 헤더 충돌이 원인이었다). DB 쿼리는 영향 없으므로 `supabaseAdmin` 그대로 쓴다.
+- 서명 URL은 Storage CDN이 `cacheControl: max-age=3600`으로 캐싱하므로, 파일 교체/삭제 직후에도 **이전 서명 URL이 최대 1시간 동안 계속 200을 반환할 수 있다**(엣지 캐시일 뿐 실제 삭제 여부와 무관 — 실제 상태 확인은 DB 행 존재 여부 또는 storage list API로 해야 한다).
+- 파일 업로드는 실제 브라우저 `<input type=file>` onChange → 페이지 자체 fetch로는 정상 동작한다. `javascript_tool` 스크립트가 파일을 직접 읽어 fetch로 보내는 방식만 브라우저 확장 보안필터에 차단된다(스크립트-드리븐 파일 업로드 전반의 한계이지 이 기능 자체의 문제는 아님).
+
 ## 설계/구현 이력
 전체 설계 배경과 단계별 결정 근거는 `claudedocs/dpf-as-logistics-design.md`(크린어스 DEAR System 화면 분석 포함), 단계별 체크리스트/발견사항은 `claudedocs/dpf-service-records/checklist.md`·`context-notes.md` 참고.

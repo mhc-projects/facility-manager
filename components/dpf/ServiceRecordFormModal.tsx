@@ -44,11 +44,26 @@ export const ATTACHMENT_SLOTS: { key: DpfAttachmentSlotKey; label: string }[] = 
   { key: 'as_processing', label: 'AS처리' },
 ];
 
+interface AttachmentData { url: string; created_at: string; ext: string }
+
+const ATTACHMENT_ACCEPT = '.jpg,.jpeg,.png,.webp,.pdf';
+const ATTACHMENT_ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+const ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+
+function isImageExt(ext: string) {
+  return ['jpg', 'jpeg', 'png', 'webp'].includes(ext.toLowerCase());
+}
+
 export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin, record, initialCategory }: Props) {
   const isEdit = Boolean(record);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const recordId = record?.id;
+  const [attachments, setAttachments] = useState<Record<string, AttachmentData>>({});
+  const [attachmentUploading, setAttachmentUploading] = useState<Record<string, boolean>>({});
+  const [attachmentError, setAttachmentError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -56,6 +71,73 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
       setValues(record ? { ...(record as unknown as Record<string, unknown>) } : defaultValues(initialCategory));
     }
   }, [isOpen, record, initialCategory]);
+
+  useEffect(() => {
+    setAttachments({});
+    setAttachmentError('');
+    if (isOpen && recordId) {
+      fetchAttachments(recordId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, recordId]);
+
+  async function fetchAttachments(id: string) {
+    try {
+      const res = await fetch(`/api/dpf/service-records/${id}/attachments`);
+      const data = await res.json();
+      if (res.ok) setAttachments(data);
+    } catch {
+      // 조회 실패는 조용히 무시 — 업로드/삭제는 그대로 시도 가능
+    }
+  }
+
+  async function handleAttachmentUpload(slotKey: DpfAttachmentSlotKey, file: File) {
+    if (!recordId) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (!ATTACHMENT_ALLOWED_EXT.includes(ext)) {
+      setAttachmentError('허용되지 않는 파일 형식입니다(jpg/png/webp/pdf만 가능)');
+      return;
+    }
+    if (file.size > ATTACHMENT_MAX_SIZE) {
+      setAttachmentError('파일 크기는 10MB를 초과할 수 없습니다');
+      return;
+    }
+    setAttachmentError('');
+    setAttachmentUploading(prev => ({ ...prev, [slotKey]: true }));
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('slot_key', slotKey);
+      const res = await fetch(`/api/dpf/service-records/${recordId}/attachments`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) { setAttachmentError(data.error ?? '업로드에 실패했습니다'); return; }
+      await fetchAttachments(recordId);
+    } catch {
+      setAttachmentError('네트워크 오류가 발생했습니다');
+    } finally {
+      setAttachmentUploading(prev => ({ ...prev, [slotKey]: false }));
+    }
+  }
+
+  async function handleAttachmentDelete(slotKey: DpfAttachmentSlotKey) {
+    if (!recordId) return;
+    setAttachmentError('');
+    setAttachmentUploading(prev => ({ ...prev, [slotKey]: true }));
+    try {
+      const res = await fetch(`/api/dpf/service-records/${recordId}/attachments/${slotKey}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { setAttachmentError(data.error ?? '삭제에 실패했습니다'); return; }
+      setAttachments(prev => {
+        const next = { ...prev };
+        delete next[slotKey];
+        return next;
+      });
+    } catch {
+      setAttachmentError('네트워크 오류가 발생했습니다');
+    } finally {
+      setAttachmentUploading(prev => ({ ...prev, [slotKey]: false }));
+    }
+  }
 
   function set(key: string, val: unknown) {
     setValues(prev => ({ ...prev, [key]: val }));
@@ -259,6 +341,28 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
           </div>
         </Section>
 
+        {isEdit && recordId && (
+          <Section title="첨부파일">
+            {attachmentError && (
+              <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {attachmentError}
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {ATTACHMENT_SLOTS.map(slot => (
+                <AttachmentSlotView
+                  key={slot.key}
+                  slot={slot}
+                  data={attachments[slot.key]}
+                  uploading={Boolean(attachmentUploading[slot.key])}
+                  onUpload={file => handleAttachmentUpload(slot.key, file)}
+                  onDelete={() => handleAttachmentDelete(slot.key)}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+
         <Section title="비고">
           <TextArea label="비고" name="notes" value={values.notes} onChange={v => set('notes', v)} hideLabel />
         </Section>
@@ -347,6 +451,81 @@ function CheckboxField({ label, checked, onChange }: { label: string; checked: b
       <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="rounded text-blue-600" />
       <span className="text-sm text-gray-700">{label}</span>
     </label>
+  );
+}
+
+function AttachmentSlotView({
+  slot, data, uploading, onUpload, onDelete,
+}: {
+  slot: { key: DpfAttachmentSlotKey; label: string };
+  data?: AttachmentData;
+  uploading: boolean;
+  onUpload: (file: File) => void;
+  onDelete: () => void;
+}) {
+  const inputId = `attachment-input-${slot.key}`;
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    onUpload(file);
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-2 flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-gray-600 truncate" title={slot.label}>{slot.label}</span>
+
+      {data ? (
+        isImageExt(data.ext) ? (
+          <a href={data.url} target="_blank" rel="noopener noreferrer">
+            <img src={data.url} alt={slot.label} className="w-full h-20 object-cover rounded border border-gray-100" />
+          </a>
+        ) : (
+          <a
+            href={data.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center h-20 text-xs text-blue-600 underline bg-gray-50 rounded"
+          >
+            PDF 보기
+          </a>
+        )
+      ) : (
+        <label
+          htmlFor={inputId}
+          className="flex items-center justify-center h-20 border border-dashed border-gray-300 rounded text-xs text-gray-400 cursor-pointer hover:bg-gray-50"
+        >
+          {uploading ? '업로드 중...' : '파일 선택'}
+        </label>
+      )}
+
+      <input
+        id={inputId}
+        type="file"
+        accept={ATTACHMENT_ACCEPT}
+        aria-label={`${slot.label} 파일 선택`}
+        onChange={handleChange}
+        disabled={uploading}
+        className="hidden"
+      />
+
+      {data && (
+        <div className="flex items-center justify-between">
+          <label htmlFor={inputId} className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
+            {uploading ? '업로드 중...' : '교체'}
+          </label>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={uploading}
+            className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
+          >
+            삭제
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

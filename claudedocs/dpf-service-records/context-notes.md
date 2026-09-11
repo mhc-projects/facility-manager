@@ -240,6 +240,59 @@ API 레벨에서 먼저 검증하는 기존 관례(1~4단계 전부)를 따르�
 이미 배포된 onChange 핸들러)가 fetch를 수행하게 해서 검증하기로 결정 — 이 경로는 차단되지 않을 가능성이 높다(차단은
 `javascript_tool`에 직접 제출한 코드를 스캔하는 것으로 보이므로).
 
+## 5단계 UI 구현 + 실사용 버그 발견 (2026-09-12)
+
+### 브라우저 확장 차단 가설 — 반증됨
+이전 섹션에서 "스크립트가 file input의 선택된 파일을 읽어 fetch로 전송하는 패턴 자체를 차단하는 것으로 보인다"고
+추정했으나, UI 완성 후 `file_upload` 도구로 실제 `<input type=file>`에 파일을 선택시키고 페이지 자신의 React
+onChange 핸들러가 fetch를 수행하게 하자 **정상적으로 서버까지 요청이 도달했다**(차단되지 않음). 즉 이전 관찰은
+"이 기능 자체가 파일 업로드를 못 한다"는 뜻이 아니라 "`javascript_tool`에 직접 제출한 스크립트가 파일을 읽어
+전송하는 패턴만 차단된다"는 좁은 범위의 현상이었다 — 실제 배포된 UI 흐름에는 해당하지 않는다. 이 구분을 명확히
+해둔다: **일반적인 파일 업로드 기능 자체는 이 프로젝트에서 정상 동작하며, 막힌 것은 어디까지나 에이전트가 직접
+작성한 스크립트의 fetch 호출뿐이었다.**
+
+### 진짜 원인 — `supabaseAdmin`의 전역 Content-Type 헤더
+실제 업로드가 415 "mime type application/json; charset=utf-8 ... is not supported"로 실패했다. 처음엔
+`request.formData()`가 반환하는 `File`이 storage-js의 `fileBody instanceof Blob` 체크와 다른 realm이라 인식되지
+않아 JSON으로 오인 직렬화된다는 가설을 세우고 `new Blob([...])`로 재포장했으나 **동일하게 실패**했다. 디버그
+로그(`file instanceof Blob`, `blob instanceof Blob`, `Object.prototype.toString.call(blob)`)를 임시로 추가해
+찍어보니 `blobIsBlob: true`로 정상 인식되고 있어 이 가설은 반증됐다.
+
+진짜 원인은 `lib/supabase.ts`의 `getSupabaseAdmin()`이 `global: { headers: { 'Content-Type': 'application/json; charset=utf-8' } }`를
+고정해두고 있다는 것이었다. storage-js는 Blob body를 FormData로 감싸 보내는데, 이때 자체적으로 Content-Type
+헤더를 설정하지 않고 fetch의 자동 멀티파트 boundary 부여에 맡긴다 — 그런데 Fetch 스펙상 `init.headers`에 이미
+`Content-Type`이 명시돼 있으면 이 자동 부여가 무시된다. 결과적으로 서버는 "Content-Type: application/json"이라고
+선언된 요청에 실제로는 멀티파트 바이트가 온 것을 받아 415로 거부한다(sniff 실패로 두 번째 mime 값도 못 붙임).
+raw ArrayBuffer로 시도했던 첫 실패("mime type application/json..., image/jpeg is not supported"라는 콤마 결합
+값)도 같은 뿌리 — else 분기가 `headers['content-type']`(소문자)를 명시적으로 덧붙이면서 대소문자가 다른 키가
+같은 객체에 공존하게 되고, Fetch의 `Headers` 생성자는 같은 이름(대소문자 무시)이 두 번 오면 값을 콤마로 합친다.
+
+**중요한 정정**: `announcements/[id]/attachments/route.ts` 등 "기존 선례"로 참고했던 라우트들도 전부 같은
+`getSupabaseAdmin()`을 통해 storage에 접근한다 — 즉 이 헤더 충돌 버그는 이번에 새로 만든 코드만의 문제가 아니라
+프로젝트 전반에 잠재된 문제였다(단, 그 라우트들이 버킷에 `allowedMimeTypes` 제한을 두지 않아 415가 발생하지 않았을
+뿐, 저장된 객체의 `mimetype` 메타데이터는 똑같이 오염됐을 가능성이 있다).
+
+**수정**: `lib/supabase.ts`에 `global.headers` 없는 `getSupabaseStorageAdmin()`을 신규(lazy, additive)로 추가하고,
+첨부파일 API 3개 라우트의 storage 호출(`listBuckets`/`createBucket`/`upload`/`createSignedUrl`/`remove`)만
+이걸로 교체했다. DB 쿼리는 `Prefer: return=representation`이 필요해 기존 `supabaseAdmin`을 그대로 쓴다. 기존
+`global.headers`나 다른 업로드 라우트는 건드리지 않았다([[feedback_phased_rollout_live_system]] — 광범위 수정은
+무위험분만 즉시 반영, 나머지는 목록으로 사용자에게 보고).
+
+### 서명 URL의 CDN 캐시 — old URL이 삭제 후에도 한동안 200을 반환함
+재업로드 검증 중 `new Image()`/`fetch(url, {cache:'no-store'})`로 이전 서명 URL을 확인했더니 storage에서 이미
+삭제된 뒤에도 200이 나왔다. storage list API로 실제 파일 개수를 직접 조회해보니 새 파일 1개만 존재해 실제 삭제는
+정상 수행된 것으로 확인 — storage-js 업로드 기본값 `cacheControl: max-age=3600`을 Supabase Storage 앞단 CDN이
+그대로 지켜 엣지에 캐시된 이전 응답을 계속 서빙한 것이었다. **교훈: 서명 URL의 HTTP 상태코드로 삭제 여부를
+검증하는 건 신뢰할 수 없다(최대 1시간 CDN 캐시) — DB 행 존재 여부 또는 storage list API가 유일하게 신뢰 가능한
+진실이다.** 부수 효과로, 교체/삭제된 PII 파일이 이전 서명 URL로 최대 1시간 더 열람 가능하다는 특성이 있다(TTL로
+자연히 소멸하므로 별도 수정 대상은 아니고, 알려진 특성으로만 기록).
+
+### 검증 완료 항목
+이미지 업로드(썸네일 렌더, `img.complete && naturalWidth>0`) → 재업로드/교체(새 서명 URL 확인, storage list API로
+이전 파일 삭제 확인) → PDF 업로드(`ext:"pdf"` 응답 확인, "PDF 보기" 링크 렌더링) → UI 삭제 버튼(storage+DB 모두
+제거를 storage list API/REST 조회로 직접 확인) → 신규 등록 모드에 섹션 미노출 → 기존 필드/탭 회귀 없음. 검증에
+쓴 첨부파일(이미지 2개+PDF 1개)은 전부 UI/API 삭제 흐름으로 정리됐다(잔여 0건, storage list API로 재확인).
+
 ## 미수정(후속 과제로 명시적으로 미룸)
 - `assigned_as_technician`/`processing_technician`의 `employees` 테이블 FK 연동 (1단계는 자유 텍스트).
 - 처리점 자동완성/드롭다운 (실제 처리점 목록이 쌓인 뒤 UI에서만).
