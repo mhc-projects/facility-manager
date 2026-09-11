@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Send, Clock, FileText, Wrench, MessageSquare, ChevronRight, DollarSign } from 'lucide-react';
-import { AsRecord, ProgressNote, PriceLists, MANUFACTURER_OPTIONS } from '../page';
+import { AsRecord, ProgressNote, PriceLists, MANUFACTURER_OPTIONS } from '../types';
 import { STATUS_CONFIG } from './AsStatusBadge';
 import { TokenManager } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
