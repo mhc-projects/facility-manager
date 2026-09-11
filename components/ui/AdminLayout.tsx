@@ -213,6 +213,13 @@ const navigationConfig: NavigationEntry[] = [
           description: '매연저감장치 부착 차량 조회 및 서식 출력',
           requiredLevel: 1
         },
+        {
+          name: '접수현황',
+          href: '/dpf/service',
+          icon: ClipboardList,
+          description: 'AS/크리닝/물류 접수 통합 조회',
+          requiredLevel: 1
+        },
       ]
     }
   },
