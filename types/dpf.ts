@@ -193,6 +193,24 @@ export interface DpfVehicleDerivedStats {
   removal_count: number;
 }
 
+// 접수이력 첨부파일 12슬롯 (5단계, 2026-09-12) — 크린어스 관찰(§2.2) 슬롯 이름 그대로
+export type DpfAttachmentSlotKey =
+  | 'vehicle_photo' | 'smoke_meter'
+  | 'filter_cross_section_before' | 'filter_cross_section_after'
+  | 'filter_serial_before' | 'filter_serial_after'
+  | 'self_diagnostic_pressure_before' | 'self_diagnostic_pressure_after'
+  | 'smoke_test_result_before' | 'smoke_test_result_after'
+  | 'as_parts' | 'as_processing';
+
+export interface DpfServiceRecordAttachment {
+  id: string;
+  record_id: string;
+  slot_key: DpfAttachmentSlotKey;
+  storage_path: string; // 비공개 버킷 경로 — createSignedUrl로만 접근, 공개 URL 아님
+  uploaded_by?: string | null;
+  created_at: string;
+}
+
 export interface DpfImportStaging {
   id: string;
   import_batch_id: string;

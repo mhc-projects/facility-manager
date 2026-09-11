@@ -147,12 +147,19 @@ MAX를 계산하므로 재시도하면 해소된다. 회차 번호에 이빨(gap
 write-back한다** — 오래된 티켓을 수정한다고 더 최신 접수에서 확인된 연락처를 덮어쓰면 안 되기 때문이다. POST(신규 접수)는 항상 최신이므로
 조건 없이 write-back한다.
 
-### 4.7 첨부파일 — 보류 (확정, 2026-09-11)
-크린어스의 "서류 보기" 상세를 관찰하지 못했고(§6-3), 담당자들이 실제로 어떤 서류를 첨부/조회하고 싶어하는지도 아직 모른다.
-**이름 있는 12슬롯 첨부파일 구조(§2.2)는 설계만 남겨두고 1단계 구현에서는 만들지 않는다.** 대신 `dpf_service_records`에
-범용 `notes`(비고) 필드만 두고, 담당자 요구가 구체화되면 그때 `dpf_service_record_attachments` 테이블과 슬롯 UI를 추가한다.
-저장 방식은 정해두면 기존 `app/api/wiki/upload-guideline/route.ts`가 쓰는 패턴(공개 Supabase Storage 버킷, `supabaseAdmin.storage`)을
-재사용하는 것으로 — 같은 `dpf-documents` 버킷 아래 `service-records/{record_id}/{slot_key}.{ext}` 경로.
+### 4.7 첨부파일 — 5단계로 착수 (2026-09-11 보류 확정 → 2026-09-12 사용자 확인 후 착수, 어드바이저 검토로 버킷 결정 수정)
+크린어스의 "서류 보기" 상세 자체는 관찰하지 못했지만(§6-3), 등록 폼의 12개 고정 슬롯 이름(§2.2)은 관찰돼 있었다.
+1단계에서는 "담당자 요구가 구체화되면"이라는 조건으로 보류했으나, 4단계 완료 후 사용자에게 "담당자 요구 구체화 vs
+크린어스 관찰 12슬롯 그대로 진행"을 확인한 결과 **후자로 진행 확정**(2026-09-12). `dpf_service_record_attachments`
+테이블 + 12슬롯 UI를 5단계로 구현한다(§7 5단계, §9 5단계 참고).
+
+**버킷 공개여부 — 비공개 버킷 + 서명 URL로 결정(2026-09-12, 최초 초안 수정)**: 최초 초안은 `app/api/wiki/upload-guideline/route.ts`의
+"공개 버킷" 패턴을 그대로 베꼈는데, 그 라우트는 지침서 PDF(민감정보 없음)를 다룬다 — 이번 첨부파일은 차량번호·소유자명이
+찍힌 차량사진/매연검사결과표 등 **차량 단위 개인정보**라 데이터 성격이 다르다. `grep -rn "createSignedUrl"`로 이 프로젝트에
+이미 비공개 버킷+서명 URL 패턴(`app/api/announcements/[id]/attachments/download/route.ts`, `app/api/uploaded-files-supabase/route.ts`)이
+있음을 확인했으므로, `dpf-documents`(공개, 지침서 전용)를 재사용하지 않고 **별도 비공개 버킷 `dpf-attachments`**를 신설해
+같은 패턴(`storage_path` 컬럼 + `createSignedUrl`, 300초 유효)을 따른다. 경로는 `service-records/{record_id}/{slot_key}-{timestamp}.{ext}`
+(타임스탬프를 넣어 재업로드 시 확장자가 바뀌어도 안전하게 새 경로에 저장하고, 성공 후 이전 파일을 베스트에포트로 삭제).
 
 ### 4.8 연장(마감 연장) — 전자결재 미연동, 단순 처리 (확정, 2026-09-11)
 크린어스의 연장내역/연장승인은 전자결재(`approval` 스킬)와 별개로 둔다. `dpf_service_records`에
@@ -286,6 +293,50 @@ create policy "dpf_service_records_write" on dpf_service_records
   );
 ```
 
+### 5단계 스키마 추가 — `dpf_service_record_attachments` (설계 draft, 2026-09-12, 어드바이저 검토로 `storage_path` 추가)
+
+```sql
+-- dpf_service_records 1건당 크린어스 관찰(§2.2) 12개 고정 슬롯 첨부파일. record_id+slot_key 유니크(슬롯당 최신 파일 1개).
+-- 비공개 버킷(dpf-attachments) + 서명 URL 패턴(§4.7) — storage_path는 재업로드 시 이전 파일 삭제·서명 URL 발급에 필요.
+create table dpf_service_record_attachments (
+  id uuid primary key default gen_random_uuid(),
+  -- on delete cascade는 dpf_service_records가 실제로 하드 삭제될 때만 발동한다(평소엔 is_deleted 소프트 삭제라 발동 안 함, §4.10)
+  record_id uuid not null references dpf_service_records(id) on delete cascade,
+  slot_key text not null check (slot_key in (
+    'vehicle_photo', 'smoke_meter',
+    'filter_cross_section_before', 'filter_cross_section_after',
+    'filter_serial_before', 'filter_serial_after',
+    'self_diagnostic_pressure_before', 'self_diagnostic_pressure_after',
+    'smoke_test_result_before', 'smoke_test_result_after',
+    'as_parts', 'as_processing'
+  )),
+  storage_path text not null,       -- dpf-attachments 버킷 내 경로(공개 URL 아님, createSignedUrl로만 접근)
+  uploaded_by uuid references employees(id),
+  created_at timestamptz not null default now()
+);
+create unique index on dpf_service_record_attachments(record_id, slot_key);
+
+alter table dpf_service_record_attachments enable row level security;
+drop policy if exists "dpf_service_record_attachments_read" on dpf_service_record_attachments;
+drop policy if exists "dpf_service_record_attachments_write" on dpf_service_record_attachments;
+create policy "dpf_service_record_attachments_read" on dpf_service_record_attachments
+  for select using (auth.role() = 'authenticated');
+create policy "dpf_service_record_attachments_write" on dpf_service_record_attachments
+  for all using (
+    exists (select 1 from employees where id = auth.uid() and permission_level >= 2)
+  );
+```
+
+**`uploaded_by → employees(id)` FK 유지 확인(어드바이저 2차 검토 지적)**: `dpf_service_records.created_by`도 같은 FK를
+쓰고 `auth.user.id`로 채우는데, `lib/auth/require-auth.ts`를 읽어 `requireAuth()`가 `employees` 테이블에서
+`id = $1 AND is_active = true`로 실제 존재를 확인한 뒤에만 `ok: true`를 반환함을 확인(존재하지 않으면 `forbidden`) —
+즉 `auth.user.id`는 항상 실존하는 `employees.id`다. FK 위반 위험이 없으므로 그대로 유지한다(드롭 불필요).
+
+12슬롯 한글 라벨(§2.2 그대로): 차량사진/매연측정기/필터전단면 클리닝전/필터전단면 클리닝후/필터일련번호 클리닝전/
+필터일련번호 클리닝후/자가진단장치배압 전/자가진단장치배압 후/매연검사결과표 전/매연검사결과표 후/AS부품/AS처리.
+`slot_key`↔라벨 매핑은 `CATEGORY_OPTIONS`/`CATEGORY_LABELS`와 같은 자리(`ServiceRecordFormModal.tsx`)에
+`ATTACHMENT_SLOTS`로 export해 단일 소스로 관리한다.
+
 ## 6. 열린 질문 — 전부 확정 (2026-09-11 사용자 확인)
 
 1. **본사/협력사(접수 경로)**: 구분하지 않음. 블루온은 현재 콜센터가 전화를 전부 직접 받고 있어 경로 구분이 불필요 →
@@ -353,6 +404,30 @@ create policy "dpf_service_records_write" on dpf_service_records
   한 응답에 다 담는다(reception 페이지는 기존 5필드만 쓰고 나머지는 무시, logistics 페이지는 새 4필드만 씀 — 두 화면이
   결국 같은 원장의 필터 뷰라는 §2.6 설계 원칙과 일치). count 쿼리 5개 → 9개로 늘어나지만 이 규모에서 문제 없음(2단계와 동일 근거).
   `types/dpf.ts`의 `DpfServiceRecordStats`에 4필드 추가.
+
+**5단계에서 추가** (구체화, 2026-09-12 사용자 확인 + 어드바이저 검토, §4.7·§5·§8.4 참고):
+- `POST /api/dpf/service-records/[id]/attachments` — 맨 먼저 `requireAuth(request, 1)`(참고 삼았던
+  `upload-guideline/route.ts`엔 인증 자체가 없는데, 그건 따라가지 않는다). `multipart/form-data`(`file`, `slot_key`)를
+  받는다. `slot_key`를 12개 enum과 대조해 검증(아니면 400), **파일 확장자도 서버에서 화이트리스트로 검증**
+  (`jpg|jpeg|png|webp|pdf`만 허용, 아니면 400 — `safeExt`로 위험 문자만 제거하는 것과 별개로 허용 확장자 자체를 제한).
+  `dpf-attachments`(비공개) 버킷 존재 확인 후 없으면 자동 생성(`createBucket(name, { public: false, fileSizeLimit: 10 * 1024 * 1024 })` —
+  클라이언트 10MB 가드와 같은 숫자를 버킷 자체에도 걸어 우회 업로드를 막는다. 동시에 두 요청이 버킷 없음을 보고 각각
+  생성을 시도하면 두 번째는 "already exists" 에러가 나는데, 이 경우는 실패로 취급하지 않고 업로드를 계속 진행한다),
+  `service-records/{record_id}/{slot_key}-${Date.now()}.{ext}`
+  경로에 업로드 → `dpf_service_record_attachments`에 upsert(같은 record_id+slot_key 행이 있으면 `storage_path` 갱신) →
+  성공 후 **이전 `storage_path`가 있었다면 베스트에포트로 storage에서 삭제**(실패해도 로그만 남기고 응답은 성공 처리 —
+  고아 파일 하나 남는 것이 업로드 실패보다 낫다). 클라이언트 측에서 파일 크기 10MB 제한(사진/PDF 기준 여유 있는 값,
+  필드 업로드 실수 방지용 소프트 가드).
+- `GET /api/dpf/service-records/[id]/attachments` — 해당 레코드의 기존 첨부 현황을 슬롯별로 조회해, **각 슬롯의
+  `storage_path`로 `createSignedUrl`(300초 유효, `announcements/[id]/attachments/download/route.ts`와 동일 패턴)을
+  발급**하고 `{ [slot_key]: { url: signedUrl, created_at } }` 형태로 반환한다(응답 필드명은 DB 컬럼과 동일하게
+  `created_at`으로 통일 — `uploaded_at`이라는 별도 이름을 쓰지 않는다). `ServiceRecordFormModal`이 수정 모드로 열릴
+  때만 호출(신규 등록 모드는 record_id가 없어 호출 안 함).
+- `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` — storage 파일 삭제 + DB 행 삭제(하드 삭제). §4.10의
+  `is_deleted` 소프트 삭제 원칙은 청구 이력이 걸린 `dpf_service_records` 자체에 적용되는 것이지, 단순 첨부파일에는
+  해당하지 않는다고 판단 — 첨부파일은 재업로드로 언제든 대체 가능하고 협회청구와 무관하다.
+- 인증은 POST/DELETE 모두 `requireAuth(request, 1)`(기존 서브레코드 라우트와 동일 — RLS의 permission_level>=2는
+  supabaseAdmin이 service_role로 우회하므로 실질적 게이트는 API의 requireAuth다).
 
 ## 8. UI 설계
 
@@ -447,7 +522,8 @@ create policy "dpf_service_records_write" on dpf_service_records
 ### 8.4 `/dpf/[vin]` 상세 — 새 탭 추가
 `ALL_TABS`에 `{ key: 'service', label: 'AS/크리닝', vendors: ['fujino','mz'] }` 추가 — **벤더 제한 없음**
 (기존 설치이력/성능검사/보조금 탭은 `vendors: ['fujino']`로 제한돼 있지만, AS/크리닝은 벤더 무관 운영 업무이므로 양쪽 다 노출).
-탭 내용: 등록 폼(§4의 필드) + 내역 리스트(회차/상태/처리점/3개 날짜). 첨부파일 슬롯은 1단계에서 제외(§4.7).
+탭 내용: 등록 폼(§4의 필드) + 내역 리스트(회차/상태/처리점/3개 날짜). 첨부파일 슬롯은 1단계에서 제외했다가
+5단계에서 추가(§4.7, §8.4 하단 참고).
 기존 `SubRecordFormModal.tsx` 패턴을 확장하거나 새 `ServiceRecordFormModal.tsx`로 분리 — 필드 수가 훨씬 많으므로(§5) 별도 컴포넌트 권장.
 데이터는 `/dpf/[vin]` 페이지의 기존 `loadDetail()`이 호출하는 `GET /api/dpf/vehicles/[vin]` 응답에 실린 `serviceRecords`를 그대로 쓴다(§7) —
 탭 전환 시 별도 API 호출이 없다, 기존 installations/inspections/subsidy/call 탭과 동일한 방식.
@@ -456,6 +532,13 @@ create policy "dpf_service_records_write" on dpf_service_records
 `VehicleFormModal`도 `BasicInfoTab`도 `current_*`/`is_special_*` 필드를 노출하지 않는다. 사용자가 변경정보를 찾다가 없는 걸 알게 되는 것보다,
 가장 저렴한 위치인 `BasicInfoTab`(§4의 "접수 / 행정" 섹션 아래)에 읽기 전용 "변경정보" 섹션을 2단계에서 추가한다 — 현재차량번호/현재연락처(무선·유선)/
 출동지역/특별관리대상/특판. 수정은 여전히 `VehicleFormModal`에서만(§4.6).
+
+**첨부파일 12슬롯 UI (5단계, 2026-09-12 구체화)**: `ServiceRecordFormModal`에 "첨부파일" 섹션을 추가하되 **수정 모드에서만
+렌더링**한다(신규 등록 시점엔 `record.id`가 없어 업로드 대상 경로를 만들 수 없음 — 접수 등록 후 현장에서 사진/측정값을
+첨부하는 실제 업무 순서와도 일치). 12슬롯 각각 파일 입력 + 업로드된 파일 미리보기(이미지) 또는 링크(PDF) + 삭제 버튼.
+개별 업로드만 구현하고 **일괄 업로드는 만들지 않는다** — 크린어스가 실제로 파일명↔슬롯을 어떻게 자동 매칭하는지
+관찰하지 못했으므로(§2.2, "서류 보기" 상세 미관찰) 그 부분까지 추측해서 만들지 않는다. 목록(부착현황/접수현황) 쪽에
+"서류" 컬럼/아이콘도 추가하지 않는다 — 마찬가지로 미관찰 UI(§6-3)를 추측하지 않기 위함, 필요해지면 그때 추가.
 
 ## 9. 구현 단계 제안 (CLAUDE.md: 한 번에 하나의 기능)
 
@@ -582,11 +665,49 @@ create policy "dpf_service_records_write" on dpf_service_records
 건드리는 유일한 커밋, 분리 보존), (c) 물류관리 라우트 신규 + 사이드바 항목, (d) `/dpf/[vin]` 탭 라벨 변경(1단계 파일 건드리는
 유일한 커밋, 분리 보존).
 
-### 5단계 (보류) — 착수 전 사용자 확인 필요
-담당자 요구가 구체화되면 `dpf_service_record_attachments` 테이블 + 첨부파일 슬롯 UI 추가(§4.7). **크린어스 관찰(§2.2)로
-12개 슬롯의 이름은 이미 알고 있지만("서류 보기" 상세 화면 자체는 미관찰), 1단계에서 "담당자 요구가 구체화되면"이라는
-조건으로 명시적으로 보류했던 항목**이다 — 4단계 완료 후 이 조건이 실제로 충족됐는지(담당자가 첨부 요구를 구체화했는지)
-아니면 크린어스가 관찰한 12슬롯 그대로 만들지를 사용자에게 먼저 확인하고 나서 5단계 계획을 세운다.
+### 5단계 세부 순서 (2026-09-12 사용자 확인 "크린어스 관찰 12슬롯 그대로 지금 구현" → 어드바이저 검토로 구체화)
+
+**세부 결정 요약 (§4.7·§5·§7·§8.4 참고, 어드바이저 2차 검토로 확정):**
+- 신규 마이그레이션 `dpf_service_record_attachments` — 1단계 이후 처음 있는 마이그레이션이므로 `feedback_supabase_sql`
+  원칙대로 SQL만 작성해 사용자에게 전달하고 직접 실행을 기다린다(에이전트가 직접 실행하지 않음).
+  `project_hardcoded_db_password_incident` 때문에도 DB 자격 증명을 직접 다루지 않는다.
+  `slot_key` 12개 enum + `(record_id, slot_key)` 유니크 인덱스 + `storage_path`(공개 URL 아님) 컬럼, RLS는
+  `dpf_service_records`와 동일 패턴.
+- 저장 버킷은 `dpf-documents`(공개, 지침서 전용) 재사용이 아니라 **신규 비공개 버킷 `dpf-attachments`** —
+  차량번호·소유자명이 담긴 개인정보라 공개 버킷+추측불가 URL보다 비공개 버킷+서명 URL(이미 이 프로젝트에 있는
+  `announcements`/`uploaded-files-supabase` 패턴)이 맞다고 판단(§4.7). 버킷 자동생성 흐름 자체는
+  `upload-guideline/route.ts`를 참고하되 `public: false`로만 다르게 — 사용자가 Supabase 대시보드에서 버킷을 미리
+  만들어둘 필요는 없다.
+- 재업로드 시 경로에 타임스탬프를 넣어 확장자가 바뀌어도 안전하게 새 파일로 저장하고, DB 행 upsert 성공 후 이전
+  `storage_path`를 베스트에포트로 삭제한다. 서버에서 확장자 화이트리스트(`jpg|jpeg|png|webp|pdf`)도 검증한다.
+- 첨부파일 삭제는 하드 삭제(§4.10의 `is_deleted` 소프트 삭제는 청구 이력이 걸린 `dpf_service_records` 자체에만 적용).
+- UI는 `ServiceRecordFormModal`의 수정 모드에만 12슬롯 섹션을 추가, 개별 업로드만(일괄 업로드/목록 서류 컬럼 없음).
+- `.claude/skills/db-schema/SKILL.md`(신규 테이블)와 `.claude/skills/dpf/SKILL.md`(하드삭제 축, slot enum, 재업로드
+  흐름)를 1단계와 동일하게 이번에도 갱신한다.
+
+**구현 순서:**
+1. 마이그레이션 SQL 작성(§5 5단계 스키마, `dpf-attachments` 버킷은 코드가 런타임에 자동 생성하므로 마이그레이션에는
+   테이블만 포함) → 사용자에게 전달(비공개 버킷+서명 URL로 정한 이유도 함께 설명) → 실행 확인 대기.
+2. (대기 중 먼저 작성 가능) `types/dpf.ts`에 `DpfAttachmentSlotKey`(12개 union) + `DpfServiceRecordAttachment`
+   인터페이스(`storage_path` 필드 포함) 추가, `ServiceRecordFormModal.tsx`에 `ATTACHMENT_SLOTS`(key+한글 라벨 12개) export.
+3. 사용자 실행 확인 후 → `POST /api/dpf/service-records/[id]/attachments` 신설(requireAuth 먼저, slot_key+확장자
+   화이트리스트 검증, 비공개 버킷 자동생성, upsert, 이전 파일 베스트에포트 삭제).
+4. `GET /api/dpf/service-records/[id]/attachments` 신설(슬롯별 `createSignedUrl` 발급 후 `{url, created_at}` 맵 반환).
+5. `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` 신설(storage+DB 하드 삭제).
+6. `ServiceRecordFormModal.tsx`에 "첨부파일" 섹션 추가(`AttachmentSlot` 서브컴포넌트로 12번 반복 렌더링) — 수정 모드
+   (`record` prop 있음)일 때만 렌더링, 모달 오픈 시 GET으로 현황 로드, 슬롯별 업로드/미리보기/삭제 UI, 클라이언트 측
+   10MB 크기 가드.
+7. `.claude/skills/db-schema/SKILL.md`에 `dpf_service_record_attachments` 추가, `.claude/skills/dpf/SKILL.md`에
+   첨부파일 하드삭제/재업로드 흐름/비공개 버킷 규칙 추가.
+8. 검증: `tsc --noEmit`, 하드 리로드로 실제 이미지 파일 1~2개 업로드(사진 슬롯 1개, PDF 슬롯 1개) → 서명 URL로
+   미리보기/링크 정상 표시 → 같은 슬롯에 재업로드해 이전 파일이 정리되는지 확인 → **앱의 DELETE 라우트로 직접
+   삭제**해 storage 삭제 경로까지 실사용으로 검증(이게 유일하게 storage 삭제를 실제로 확인하는 경로이기도 함) →
+   신규 등록 모드에는 첨부파일 섹션이 안 보이는지 확인 → 기존 탭/모달 회귀 없음.
+9. 검증 중 만든 테스트 흔적은 8번에서 이미 앱 DELETE 라우트로 storage까지 정리했으므로, DB 잔여분(있다면)만 3단계와
+   동일한 블랭킷 SQL로 사용자에게 전달(storage 파일은 앱 라우트로 이미 제거됐다는 점을 SQL 설명에 명시).
+
+**커밋 3개**: (a) 마이그레이션 SQL + 타입(1단계와 동일하게 사용자 실행 대기 포함), (b) API 3개 라우트, (c) UI(모달 섹션)
++ 스킬 문서 갱신(1단계 커밋 (c)와 동일하게 UI 커밋에 묶음).
 
 각 단계 종료 시 검증(위 5번) + 브라우저 확인 후 커밋(CLAUDE.md 세션 종료 체크리스트 준수). 진행 상황은
 `claudedocs/dpf-service-records/checklist.md`에서 관리한다.

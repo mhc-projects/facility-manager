@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Modal, { ModalActions } from '@/components/ui/Modal';
-import { DpfServiceRecord, DpfServiceCategory } from '@/types/dpf';
+import { DpfServiceRecord, DpfServiceCategory, DpfAttachmentSlotKey } from '@/types/dpf';
 
 interface Props {
   isOpen: boolean;
@@ -27,6 +27,22 @@ export const CATEGORY_LABELS: Record<DpfServiceCategory, string> = Object.fromEn
 ) as Record<DpfServiceCategory, string>;
 
 export const LOGISTICS_CATEGORIES: DpfServiceCategory[] = ['parts_delivery', 'urea'];
+
+// 첨부파일 12슬롯(§2.2 크린어스 관찰 그대로) — key↔한글 라벨 단일 소스
+export const ATTACHMENT_SLOTS: { key: DpfAttachmentSlotKey; label: string }[] = [
+  { key: 'vehicle_photo', label: '차량사진' },
+  { key: 'smoke_meter', label: '매연측정기' },
+  { key: 'filter_cross_section_before', label: '필터전단면 클리닝전' },
+  { key: 'filter_cross_section_after', label: '필터전단면 클리닝후' },
+  { key: 'filter_serial_before', label: '필터일련번호 클리닝전' },
+  { key: 'filter_serial_after', label: '필터일련번호 클리닝후' },
+  { key: 'self_diagnostic_pressure_before', label: '자가진단장치배압 전' },
+  { key: 'self_diagnostic_pressure_after', label: '자가진단장치배압 후' },
+  { key: 'smoke_test_result_before', label: '매연검사결과표 전' },
+  { key: 'smoke_test_result_after', label: '매연검사결과표 후' },
+  { key: 'as_parts', label: 'AS부품' },
+  { key: 'as_processing', label: 'AS처리' },
+];
 
 export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin, record, initialCategory }: Props) {
   const isEdit = Boolean(record);

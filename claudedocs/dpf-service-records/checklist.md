@@ -114,10 +114,39 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       "전체=parts_delivery,urea"가 결과가 같아 무의미했음. 크리닝 1건을 추가로 만들어 `/dpf/service`는 3건(회귀 없음),
       `/dpf/service/logistics`는 여전히 2건(크리닝 제외)으로 실제 구분됨을 확인. 비용 필터도 UI 셀렉트로 "무상" 선택 →
       1건(요소수)만 필터링되는 것을 직접 확인(이전엔 API 레벨에서만 검증했었음)
-- [x] 검증 중 테스트 흔적 정리 SQL 사용자에게 전달(3단계와 동일 2줄, 4단계 검증분인 물류 2건+크리닝 1건 포함)
+- [x] 검증 중 테스트 흔적 정리 SQL 사용자에게 전달(3단계와 동일 2줄, 4단계 검증분인 물류 2건+크리닝 1건 포함) — 사용자가 2026-09-12 실행 완료
 - [x] 커밋 4개: a02d7f0 API+타입, 660906a 테이블 variant+뷰 추출+reception 축소, 3f7e105 물류관리 라우트+사이드바,
       289b5ef 탭 라벨 변경
 - [ ] `claude-progress.txt` 갱신
 
-## 5단계 (보류) — 착수 전 사용자 확인 필요
-- [ ] 4단계 완료 후, 담당자 요구 구체화 여부 또는 크린어스 관찰 12슬롯 그대로 진행 여부를 사용자에게 확인(AskUserQuestion)
+## 5단계: 첨부파일(12슬롯) — `dpf_service_record_attachments`
+설계: `../dpf-as-logistics-design.md` §4.7·§5(5단계 스키마)·§7(5단계)·§8.4(첨부파일 UI)·§9(5단계 세부 순서).
+착수 조건 확인 완료(2026-09-12, AskUserQuestion): "크린어스 관찰 12슬롯 그대로 지금 구현" 선택.
+
+결정 확정(어드바이저 2차 검토로 수정): 신규 마이그레이션(1단계 이후 첫 마이그레이션, feedback_supabase_sql 절차 그대로
+적용), 저장 버킷은 `dpf-documents`(공개) 재사용이 **아니라** 신규 비공개 버킷 `dpf-attachments` + 서명 URL(차량 개인정보라
+이미 있는 announcements/uploaded-files-supabase 패턴 재사용, `storage_path` 컬럼 필요), 서버 확장자 화이트리스트
+검증 추가, 재업로드는 타임스탬프 경로+이전 파일 베스트에포트 삭제, 첨부파일 삭제는 하드 삭제(레코드 자체의
+소프트삭제와 별개 축), UI는 수정 모드에만 노출·개별 업로드만(일괄 업로드/목록 서류 컬럼 없음, 미관찰 UI 추측 안 함).
+
+- [ ] 마이그레이션 SQL 작성(테이블만, 버킷은 코드가 런타임 자동생성) → 사용자에게 전달(비공개 버킷 이유 설명 포함) →
+      실행 확인 대기
+- [ ] `types/dpf.ts`에 `DpfAttachmentSlotKey`(12개 union) + `DpfServiceRecordAttachment`(`storage_path` 포함) 추가
+- [ ] `ServiceRecordFormModal.tsx`에 `ATTACHMENT_SLOTS`(key+한글 라벨 12개) export
+- [ ] `POST /api/dpf/service-records/[id]/attachments` 신설(requireAuth 먼저, slot_key+확장자 화이트리스트 검증,
+      `dpf-attachments` 비공개 버킷 자동생성 시 `fileSizeLimit: 10MB` 지정, 버킷 동시생성 race는 "already exists"를
+      성공으로 취급, upsert, 이전 파일 베스트에포트 삭제)
+- [ ] `GET /api/dpf/service-records/[id]/attachments` 신설(슬롯별 `createSignedUrl` 발급, 응답 필드명 `created_at`)
+- [ ] `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` 신설(storage+DB 하드 삭제)
+- [ ] `ServiceRecordFormModal.tsx`에 첨부파일 섹션 추가(`AttachmentSlot` 서브컴포넌트, 수정 모드 전용, 12슬롯
+      업로드/미리보기/삭제, 10MB 클라이언트 가드)
+- [ ] `.claude/skills/db-schema/SKILL.md`에 `dpf_service_record_attachments` 추가
+- [ ] `.claude/skills/dpf/SKILL.md`에 첨부파일 하드삭제/재업로드/비공개 버킷 규칙 추가
+- [ ] `npx tsc --noEmit` 통과
+- [ ] 브라우저 하드 리로드 후 확인: 이미지 1개+PDF 1개 업로드, 서명 URL로 미리보기/링크 표시, 재업로드 시 이전 파일
+      정리, 앱의 DELETE 라우트로 직접 삭제해 storage 삭제 경로 실사용 검증, 신규 등록 모드엔 섹션 미노출, 기존 탭/모달
+      회귀 없음
+- [ ] 검증 중 테스트 흔적 정리 — storage는 8번에서 앱 DELETE 라우트로 이미 정리됨, DB 잔여분만 3단계와 동일한
+      블랭킷 SQL로 사용자에게 전달
+- [ ] 커밋 3개: (a) 마이그레이션+타입, (b) API 3개 라우트, (c) UI+스킬 문서 갱신
+- [ ] `claude-progress.txt` 갱신
