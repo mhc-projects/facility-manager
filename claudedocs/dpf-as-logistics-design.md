@@ -419,11 +419,13 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
   고아 파일 하나 남는 것이 업로드 실패보다 낫다). 클라이언트 측에서 파일 크기 10MB 제한(사진/PDF 기준 여유 있는 값,
   필드 업로드 실수 방지용 소프트 가드).
 - `GET /api/dpf/service-records/[id]/attachments` — 해당 레코드의 기존 첨부 현황을 슬롯별로 조회해, **각 슬롯의
-  `storage_path`로 `createSignedUrl`을 발급**하고 `{ [slot_key]: { url: signedUrl, created_at } }` 형태로 반환한다
+  `storage_path`로 `createSignedUrl`을 발급**하고 `{ [slot_key]: { url: signedUrl, created_at, ext } }` 형태로 반환한다
   (TTL은 300초가 아니라 **3600초** — `announcements/.../download`는 1회성 다운로드 링크지만 여기는 모달이 열려있는
   동안 `<img src>`가 계속 참조하므로 `uploaded-files-supabase/route.ts`의 7200초 인라인 사례에 더 가깝게 맞춤).
   응답 필드명은 DB 컬럼과 동일하게
-  `created_at`으로 통일 — `uploaded_at`이라는 별도 이름을 쓰지 않는다). `ServiceRecordFormModal`이 수정 모드로 열릴
+  `created_at`으로 통일 — `uploaded_at`이라는 별도 이름을 쓰지 않는다). `ext`는 `storage_path`의 확장자를 그대로
+  뽑아 넣은 값으로, 클라이언트가 서명 URL(쿼리스트링에 토큰 포함)을 직접 파싱하지 않고도 이미지/PDF를 구분해
+  렌더링(`<img>` vs 링크)할 수 있게 한다. `ServiceRecordFormModal`이 수정 모드로 열릴
   때만 호출(신규 등록 모드는 record_id가 없어 호출 안 함).
 - `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` — storage 파일 삭제 + DB 행 삭제(하드 삭제). §4.10의
   `is_deleted` 소프트 삭제 원칙은 청구 이력이 걸린 `dpf_service_records` 자체에 적용되는 것이지, 단순 첨부파일에는
@@ -694,7 +696,7 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
    인터페이스(`storage_path` 필드 포함) 추가, `ServiceRecordFormModal.tsx`에 `ATTACHMENT_SLOTS`(key+한글 라벨 12개) export.
 3. 사용자 실행 확인 후 → `POST /api/dpf/service-records/[id]/attachments` 신설(requireAuth 먼저, slot_key+확장자
    화이트리스트 검증, 비공개 버킷 자동생성, upsert, 이전 파일 베스트에포트 삭제).
-4. `GET /api/dpf/service-records/[id]/attachments` 신설(슬롯별 `createSignedUrl` 발급 후 `{url, created_at}` 맵 반환).
+4. `GET /api/dpf/service-records/[id]/attachments` 신설(슬롯별 `createSignedUrl` 발급 후 `{url, created_at, ext}` 맵 반환).
 5. `DELETE /api/dpf/service-records/[id]/attachments/[slotKey]` 신설(storage+DB 하드 삭제).
 6. `ServiceRecordFormModal.tsx`에 "첨부파일" 섹션 추가(`AttachmentSlot` 서브컴포넌트로 12번 반복 렌더링) — 수정 모드
    (`record` prop 있음)일 때만 렌더링, 모달 오픈 시 GET으로 현황 로드, 슬롯별 업로드/미리보기/삭제 UI, 클라이언트 측

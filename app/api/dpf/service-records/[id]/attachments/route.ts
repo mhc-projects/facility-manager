@@ -131,13 +131,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .eq('record_id', id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const result: Record<string, { url: string; created_at: string }> = {};
+    const result: Record<string, { url: string; created_at: string; ext: string }> = {};
     for (const a of attachments ?? []) {
       const { data: signed } = await supabaseAdmin.storage
         .from(BUCKET)
         .createSignedUrl(a.storage_path, SIGNED_URL_TTL);
       if (signed?.signedUrl) {
-        result[a.slot_key] = { url: signed.signedUrl, created_at: a.created_at };
+        const ext = a.storage_path.split('.').pop() ?? '';
+        result[a.slot_key] = { url: signed.signedUrl, created_at: a.created_at, ext };
       }
     }
     return NextResponse.json(result);
