@@ -26,7 +26,7 @@ export const CATEGORY_LABELS: Record<DpfServiceCategory, string> = Object.fromEn
   CATEGORY_OPTIONS.map(o => [o.value, o.label])
 ) as Record<DpfServiceCategory, string>;
 
-const LOGISTICS_CATEGORIES: DpfServiceCategory[] = ['parts_delivery', 'urea'];
+export const LOGISTICS_CATEGORIES: DpfServiceCategory[] = ['parts_delivery', 'urea'];
 
 export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin, record, initialCategory }: Props) {
   const isEdit = Boolean(record);

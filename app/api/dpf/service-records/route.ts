@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
     const localGov = searchParams.get('local_government')?.trim() ?? '';
     const serviceBranch = searchParams.get('service_branch')?.trim() ?? '';
     const billingStatus = searchParams.get('billing_status')?.trim() ?? '';
+    const costType = searchParams.get('cost_type')?.trim() ?? '';
+    const courier = searchParams.get('courier')?.trim() ?? '';
     const dateFrom = searchParams.get('date_from')?.trim() ?? '';
     const dateTo = searchParams.get('date_to')?.trim() ?? '';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
@@ -47,6 +49,8 @@ export async function GET(request: NextRequest) {
     if (localGov) dbQuery = dbQuery.ilike('local_government', `%${localGov}%`);
     if (serviceBranch) dbQuery = dbQuery.ilike('service_branch', `%${serviceBranch}%`);
     if (billingStatus) dbQuery = dbQuery.eq('billing_status', billingStatus);
+    if (costType) dbQuery = dbQuery.eq('cost_type', costType);
+    if (courier) dbQuery = dbQuery.ilike('courier', `%${courier}%`);
     if (dateFrom) dbQuery = dbQuery.gte('reception_date', dateFrom);
     if (dateTo) dbQuery = dbQuery.lte('reception_date', dateTo);
 

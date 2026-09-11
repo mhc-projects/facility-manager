@@ -25,12 +25,19 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(request, 1);
     if (!auth.ok) return auth.response;
 
-    const [cleanPending, cleanCompleted, asPending, asCompleted, csTotal] = await Promise.all([
+    const [
+      cleanPending, cleanCompleted, asPending, asCompleted, csTotal,
+      ureaPending, ureaCompleted, partsPending, partsCompleted,
+    ] = await Promise.all([
       countByCategoryStatus('clean', 'in_progress'),
       countByCategoryStatus('clean', 'completed'),
       countByCategoryStatus('as', 'in_progress'),
       countByCategoryStatus('as', 'completed'),
       countByCategoryStatus('cs'), // 상태 구분 없이 전체
+      countByCategoryStatus('urea', 'in_progress'),
+      countByCategoryStatus('urea', 'completed'),
+      countByCategoryStatus('parts_delivery', 'in_progress'),
+      countByCategoryStatus('parts_delivery', 'completed'),
     ]);
 
     return NextResponse.json({
@@ -39,6 +46,10 @@ export async function GET(request: NextRequest) {
       as_pending: asPending,
       as_completed: asCompleted,
       cs_total: csTotal,
+      urea_pending: ureaPending,
+      urea_completed: ureaCompleted,
+      parts_pending: partsPending,
+      parts_completed: partsCompleted,
     });
   } catch (err) {
     console.error('[DPF Service Records Stats] error:', err);

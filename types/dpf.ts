@@ -177,6 +177,11 @@ export interface DpfServiceRecordStats {
   as_pending: number;
   as_completed: number;
   cs_total: number;
+  // 4단계(물류관리) 요약 타일용 — reception 화면은 이 4필드를 쓰지 않는다
+  urea_pending: number;
+  urea_completed: number;
+  parts_pending: number;
+  parts_completed: number;
 }
 
 // 부착현황(/dpf) 파생 컬럼용 차량별 배치 집계 (3단계, 2026-09-11)
