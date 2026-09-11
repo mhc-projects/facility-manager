@@ -382,15 +382,41 @@ create policy "dpf_service_records_write" on dpf_service_records
    실제 적용하며 발견한 것들 기록(§10).
 
 ### 2단계 세부 순서 (2026-09-11 어드바이저 검토로 구체화, 마이그레이션 없음)
+
+**세부 결정 4가지 (2026-09-11, 코드 작성 전 확정):**
+- **날짜 필터 기준**: 2단계는 `reception_date` 고정, 크린어스처럼 접수일/처리일/기사처리일/완료일/등록일 드롭다운은 **의도적으로 미룬다**
+  (3단계 이후 재검토 대상으로 여기 명시해둠 — 나중에 "빠졌다"고 재논의하지 않도록).
+- **요약 바 집계 의미**: 크리닝대기=`category='clean' AND status='in_progress'`, 크리닝완료=`status='completed'`,
+  AS대기/완료도 동일 패턴. `cancelled`(취소)는 대기/완료 어느 쪽에도 넣지 않고 집계에서 제외한다. 상담종료(`cs`)는 상태 구분 없이 전체 건수 1개만 보여준다.
+  즉 쿼리는 **5개**(크리닝대기/완료, AS대기/완료, 상담종료 전체) — §7의 "6개 내외"는 이 표현으로 수정.
+- **`?tab=` 상태 관리**: URL을 진실의 원천으로 동기화하지 않는다 — `useSearchParams()`로 **한 번만 읽어 `useState` 초기값**으로 쓰고,
+  이후 탭 전환은 기존처럼 로컬 state만 바꾼다(`/dpf` 필터가 URL과 동기화하지 않는 것과 동일한 패턴). `useSearchParams()`를 쓰는 컴포넌트는
+  `<Suspense>`로 감싸야 하며(Next.js App Router 요구사항), `app/admin/meeting-minutes/page.tsx`가 쓰는 정확한 패턴(내부 컴포넌트 + 기본 export가
+  Suspense로 감싸는 래퍼)을 그대로 따른다. `searchParams?.get('tab')`처럼 옵셔널 체이닝으로 접근 — `meeting-minutes/page.tsx:40`이
+  `searchParams.get(...)`을 옵셔널 체이닝 없이 써서 겪고 있는 기존 TS18047(`possibly 'null'`) 오류를 반복하지 않는다.
+- **테스트 데이터 정리는 매번 반복되는 절차다**: 브라우저로 mutation을 검증하면 항상 실제 차량 1대에 흔적이 남는다 — 이번에도, 다음에도.
+  검증이 끝날 때마다 정리 SQL을 사용자에게 함께 전달한다(직접 실행 안 함, `feedback_supabase_sql`).
+
+**구현 순서:**
 1. `GET /api/dpf/service-records`(§7) — `/api/dpf/search/route.ts` 패턴 그대로, `dpf_vehicles` 조인 포함.
-2. `GET /api/dpf/service-records/stats`(§7) — count 쿼리 병렬 6개.
-3. `DpfServiceRecordTable.tsx` 신규 — `DpfVehicleTable.tsx` 구조 복제.
-4. `/dpf/service/page.tsx` 신규 — `/dpf`의 검색행+필터패널+탭 패턴 재사용, 행 클릭 시 `/dpf/[vin]?tab=service`.
-5. `app/dpf/[vin]/page.tsx`에 `?tab=` 쿼리 파라미터로 초기 탭 지정 기능 추가(작은 변경).
+   조인 타입은 `types/dpf.ts`에 `DpfServiceRecordWithVehicle = DpfServiceRecord & { dpf_vehicles: Pick<DpfVehicle, 'vin'|'plate_number'|'owner_name'|'vehicle_name'|'local_government'> }`로
+   한 번만 정의(인라인 금지). Supabase `!inner` 조인 + `.or()`로 차량번호/차대번호 텍스트 검색 시 `dpf_vehicles.plate_number.ilike.%q%` 형태 —
+   레코드 1건으로 먼저 테스트 후 전체 필터 바 조립.
+2. `GET /api/dpf/service-records/stats`(§7) — 위 집계 의미대로 count 쿼리 병렬 5개.
+3. `DpfServiceRecordTable.tsx` 신규 — `DpfVehicleTable.tsx`의 `COLUMNS`+`cellValue` 구조 복제, 조인 필드는 `record.dpf_vehicles.*`로 접근.
+   행 클릭은 `DpfVehicleTable`처럼 차량번호/차대번호 셀만 링크로 만들고(행 액션 버튼과 클릭 영역 겹치지 않게), `<tr>` 전체 클릭은 쓰지 않는다.
+4. `/dpf/service/page.tsx` 신규 — `/dpf/page.tsx:35-57`의 debounce(`search`+`triggerSearch`, 300ms) 패턴 그대로 복제, 필터 바도 `/dpf`의
+   검색행+확장 필터 패널+탭 행 재사용. 기간 프리셋(1/3/6/12개월)은 한 줄로 붙는 수준이면 포함, 아니면 `from`/`to`만으로 미룬다.
+   `service_branch`/`local_government`는 드롭다운 아닌 자유 텍스트 `ilike`(§4.11), `billing_status`는 select로 포함.
+   "빠른 등록" 버튼 없음(§8.1).
+5. `app/dpf/[vin]/page.tsx`에 `?tab=` 초기 탭 지정 — 위 결정대로 Suspense 래핑 + 옵셔널 체이닝.
 6. `BasicInfoTab`에 변경정보 읽기 전용 섹션 추가(§8.4).
-7. `components/ui/AdminLayout.tsx`의 `DPF업무` 그룹에 "접수현황" 사이드바 항목 추가.
+7. `components/ui/AdminLayout.tsx`의 `DPF업무` 그룹에 "접수현황" 사이드바 항목 추가(`ClipboardList` 아이콘 재사용).
 8. 검증: `tsc --noEmit`, 하드 리로드, 모든 필터 조합 실사용, 요약 바 숫자와 테이블 실제 건수 일치 확인, `/dpf`·`/dpf/[vin]` 회귀 없음 확인.
 9. 새 테이블/마이그레이션이 필요하다고 느껴지면 멈추고 먼저 확인한다 — 2단계는 1단계 데이터의 조회 레이어일 뿐이어야 한다.
+
+**커밋 3개** (2026-09-11 어드바이저 지침): (a) API(목록+통계), (b) 테이블 컴포넌트+페이지+사이드바, (c) 상세 페이지 `?tab=`+`BasicInfoTab` 오버레이 섹션.
+(c)만 1단계 파일을 건드리므로, 되돌릴 때 목록 페이지까지 같이 날아가지 않도록 따로 분리한다.
 
 ### 이후 단계
 3. **3단계**: `/dpf` 부착현황에 파생 컬럼 + 접수/물류 행 액션 버튼 추가.
