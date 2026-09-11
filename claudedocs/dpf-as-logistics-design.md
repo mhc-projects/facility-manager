@@ -410,7 +410,11 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
   `upload-guideline/route.ts`엔 인증 자체가 없는데, 그건 따라가지 않는다). `multipart/form-data`(`file`, `slot_key`)를
   받는다. `slot_key`를 12개 enum과 대조해 검증(아니면 400), **파일 확장자도 서버에서 화이트리스트로 검증**
   (`jpg|jpeg|png|webp|pdf`만 허용, 아니면 400 — `safeExt`로 위험 문자만 제거하는 것과 별개로 허용 확장자 자체를 제한).
-  `dpf-attachments`(비공개) 버킷 존재 확인 후 없으면 자동 생성(`createBucket(name, { public: false, fileSizeLimit: 10 * 1024 * 1024 })` —
+  **Storage 호출(`listBuckets`/`createBucket`/`upload`/`createSignedUrl`/`remove`)은 `supabaseAdmin`이 아니라
+  `getSupabaseStorageAdmin()`(신설, `lib/supabase.ts`)을 쓴다** — `supabaseAdmin`은 `global.headers`에
+  `Content-Type: application/json`이 고정돼 있는데, Fetch 스펙상 이 헤더가 명시돼 있으면 FormData/바이너리 body의
+  자동 Content-Type(멀티파트 boundary 등)이 무시돼 Storage가 415로 업로드를 거부한다(실제로 겪은 버그, DB 호출은
+  영향 없어 `supabaseAdmin` 그대로 유지). `dpf-attachments`(비공개) 버킷 존재 확인 후 없으면 자동 생성(`createBucket(name, { public: false, fileSizeLimit: 10 * 1024 * 1024 })` —
   클라이언트 10MB 가드와 같은 숫자를 버킷 자체에도 걸어 우회 업로드를 막는다. 동시에 두 요청이 버킷 없음을 보고 각각
   생성을 시도하면 두 번째는 "already exists" 에러가 나는데, 이 경우는 실패로 취급하지 않고 업로드를 계속 진행한다),
   `service-records/{record_id}/{slot_key}-${Date.now()}.{ext}`

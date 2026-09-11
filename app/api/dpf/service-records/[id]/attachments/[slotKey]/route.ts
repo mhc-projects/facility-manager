@@ -1,11 +1,13 @@
 // DPF 접수이력 첨부파일 삭제 — 하드 삭제(§4.10의 is_deleted 소프트 삭제는 레코드 자체에만 적용, 첨부파일은 별개 축)
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin, getSupabaseStorageAdmin } from '@/lib/supabase';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { DpfAttachmentSlotKey } from '@/types/dpf';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const storage = getSupabaseStorageAdmin().storage;
 
 const SLOT_KEYS: DpfAttachmentSlotKey[] = [
   'vehicle_photo', 'smoke_meter',
@@ -50,7 +52,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       .eq('slot_key', slotKey);
     if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
 
-    const { error: removeError } = await supabaseAdmin.storage.from(BUCKET).remove([attachment.storage_path]);
+    const { error: removeError } = await storage.from(BUCKET).remove([attachment.storage_path]);
     if (removeError) console.error('[DPF Attachment DELETE] storage 삭제 실패(무시):', removeError.message);
 
     return NextResponse.json({ success: true });

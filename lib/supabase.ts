@@ -56,6 +56,27 @@ export const getSupabaseAdmin = () => {
 // 하위 호환성을 위한 export (기존 코드 지원)
 export const supabaseAdmin = getSupabaseAdmin();
 
+// Storage 업로드 전용 클라이언트 — supabaseAdmin의 global.headers Content-Type이
+// Fetch 스펙상 FormData/바이너리 body의 자동 Content-Type(멀티파트 boundary 등)을 덮어써
+// 파일 업로드가 415로 실패하는 문제가 있어, Storage 호출에는 이 헤더 없는 클라이언트를 쓴다
+let supabaseStorageAdminInstance: any = null;
+
+export const getSupabaseStorageAdmin = () => {
+  if (!supabaseStorageAdminInstance) {
+    supabaseStorageAdminInstance = createClient(
+      supabaseUrl,
+      supabaseServiceKey || supabaseAnonKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
+    );
+  }
+  return supabaseStorageAdminInstance;
+};
+
 // Missing exports - API routes에서 사용하는 함수들 추가
 export { createClient };
 

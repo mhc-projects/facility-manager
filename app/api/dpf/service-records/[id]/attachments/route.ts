@@ -1,11 +1,13 @@
 // DPF 접수이력 첨부파일 12슬롯 — 업로드(POST)/조회(GET). 저장은 비공개 버킷(dpf-attachments) + 서명 URL
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin, getSupabaseStorageAdmin } from '@/lib/supabase';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { DpfAttachmentSlotKey } from '@/types/dpf';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const storage = getSupabaseStorageAdmin().storage;
 
 const SLOT_KEYS: DpfAttachmentSlotKey[] = [
   'vehicle_photo', 'smoke_meter',
@@ -22,9 +24,9 @@ const MAX_SIZE = 10 * 1024 * 1024;
 const SIGNED_URL_TTL = 3600; // 모달이 열려 있는 동안 <img>가 계속 이 URL을 참조하므로 1시간
 
 async function ensureBucket() {
-  const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+  const { data: buckets } = await storage.listBuckets();
   if (!buckets?.find((b: { name: string }) => b.name === BUCKET)) {
-    const { error } = await supabaseAdmin.storage.createBucket(BUCKET, {
+    const { error } = await storage.createBucket(BUCKET, {
       public: false,
       fileSizeLimit: MAX_SIZE,
       allowedMimeTypes: ALLOWED_MIME,
@@ -84,10 +86,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .maybeSingle();
 
     const path = `service-records/${id}/${slotKey}-${Date.now()}.${ext}`;
-    const buffer = await file.arrayBuffer();
-    const { error: uploadError } = await supabaseAdmin.storage
+    const { error: uploadError } = await storage
       .from(BUCKET)
-      .upload(path, buffer, { contentType: file.type, upsert: false });
+      .upload(path, file, { contentType: file.type, upsert: false });
     if (uploadError) {
       return NextResponse.json({ error: `파일 업로드 실패: ${uploadError.message}` }, { status: 500 });
     }
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     if (existing?.storage_path) {
-      const { error: removeError } = await supabaseAdmin.storage.from(BUCKET).remove([existing.storage_path]);
+      const { error: removeError } = await storage.from(BUCKET).remove([existing.storage_path]);
       if (removeError) console.error('[DPF Attachment] 이전 파일 삭제 실패(무시):', removeError.message);
     }
 
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const result: Record<string, { url: string; created_at: string; ext: string }> = {};
     for (const a of attachments ?? []) {
-      const { data: signed } = await supabaseAdmin.storage
+      const { data: signed } = await storage
         .from(BUCKET)
         .createSignedUrl(a.storage_path, SIGNED_URL_TTL);
       if (signed?.signedUrl) {
