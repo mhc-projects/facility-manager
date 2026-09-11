@@ -159,6 +159,26 @@ export interface DpfServiceRecord {
   updated_at: string;
 }
 
+// 접수현황 통합 목록용 — dpf_vehicles 조인 결과 (2단계, 2026-09-11)
+export type DpfServiceRecordWithVehicle = DpfServiceRecord & {
+  dpf_vehicles: Pick<DpfVehicle, 'vin' | 'plate_number' | 'owner_name' | 'vehicle_name' | 'local_government'>;
+};
+
+export interface DpfServiceRecordSearchResult {
+  records: DpfServiceRecordWithVehicle[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface DpfServiceRecordStats {
+  clean_pending: number;
+  clean_completed: number;
+  as_pending: number;
+  as_completed: number;
+  cs_total: number;
+}
+
 export interface DpfImportStaging {
   id: string;
   import_batch_id: string;
