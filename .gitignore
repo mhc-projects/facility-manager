@@ -82,3 +82,6 @@ test-*.js
 .serena/project.yml
 .aider*
 supabase/.temp/
+
+# theion 자동 생성 보고서 (매주 재생성, 버전관리 불필요)
+UX_AUDIT_REPORT.md
