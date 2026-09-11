@@ -83,3 +83,37 @@ Suspense 래핑 + 옵셔널 체이닝으로 기존 `meeting-minutes` TS18047 오
 - [x] 벤더 탭(엠즈) 재검증 — 최초 확인이 디바운스 전 캡처라 inconclusive였음, 재클릭+대기 후 17,762건 정상 필터링 확인, 페이지 2 이동 시 파생값도 정상 반영 확인
 - [x] `.claude/skills/dpf/SKILL.md` 신설(설계 §10이 1단계부터 미룬 도메인 스킬 갱신, 3단계까지 누락돼 있던 것)
 - [x] 테스트 흔적 정리 SQL 사용자 실행 완료(2026-09-12)
+
+## 4단계: 물류관리(`/dpf/service/logistics`) 필터 뷰
+설계: `../dpf-as-logistics-design.md` §7(4단계)·§8.2·§9(4단계 세부 순서) — 어드바이저 검토로 구체화(2026-09-12), 마이그레이션 없음.
+
+결정 확정: `/dpf/service/page.tsx` 본문을 `DpfServiceListView.tsx`(mode prop)로 추출해 reception/logistics 공유,
+logistics 분류 필터는 항상 parts_delivery/urea 우주 안에서만 동작, 처리점 필터→택배사 필터 교체 + 비용 필터는
+logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 additive 확장, 통계 useEffect를 마운트 1회로 수정(이 페이지엔
+등록 버튼이 없어 안전), `/dpf/[vin]` "AS/크리닝" 탭 라벨을 "접수이력"으로 변경.
+
+- [x] `types/dpf.ts`의 `DpfServiceRecordStats`에 urea/parts pending·completed 4필드 추가
+- [x] `GET /api/dpf/service-records`에 `cost_type`/`courier` 파라미터 추가
+- [x] `GET /api/dpf/service-records/stats`에 count 쿼리 4개 추가(urea/parts pending·completed)
+- [x] `DpfServiceRecordTable.tsx`에 `variant` prop + `LOGISTICS_COLUMNS`(처리점/담당AS기사/기사처리일자 제거, 택배사 추가),
+      `SkeletonRow`/`minWidth`를 컬럼 배열 기반 동적 계산으로 수정(3단계의 "문서-코드 불일치" 재발 방지)
+- [x] `components/dpf/DpfServiceListView.tsx` 신규(mode prop, 분류 옵션/필터 슬롯/요약 타일/테이블 variant 분기, 통계 useEffect
+      를 마운트 1회로 수정)
+- [x] `/dpf/service/page.tsx` AdminLayout+DpfServiceListView(mode="reception")로 축소
+- [x] `app/dpf/service/logistics/page.tsx` 신규
+- [x] `/dpf/[vin]` `ALL_TABS` 탭 라벨 + `TabHeader` 섹션 제목 "AS/크리닝"→"접수이력"(그렙으로 두 곳 모두 확인, 모달 타이틀
+      폴백은 "접수상담/엔진물류" 구분을 반영하는 것이라 그대로 유지)
+- [x] `AdminLayout.tsx`에 "물류관리" 사이드바 항목 추가(이미 import된 Package 아이콘, 활성 상태는 기존
+      `hasMoreSpecificMatch` 로직이 `/dpf/service` vs `/dpf/service/logistics`를 이미 올바르게 구분함을 그렙으로 확인)
+- [x] `npx tsc --noEmit` 통과(baseline 대조, 신규 오류 0)
+- [x] 브라우저 하드 리로드 후 확인: 테스트 데이터(부품전달 진행중+경동화물+유상, 요소수 완료+대신화물+무상) 2건 생성 →
+      `/dpf/service`(reception) 회귀 없음(요약 5타일/필터 패널/처리점 필드 그대로) → `/dpf/service/logistics` 요약 4타일=
+      실제 건수 일치, 분류 드롭다운 2개 옵션만, 택배사 필터로 "경동" 검색 시 1건만 필터링 확인 → `/dpf/[vin]?tab=service`
+      탭 라벨+섹션 헤더 "접수이력"으로 일관 확인 → 콘솔 에러 없음(매 단계 하드 리로드 후)
+- [x] 검증 중 테스트 흔적 정리 SQL 사용자에게 전달
+- [x] 커밋 4개: a02d7f0 API+타입, 660906a 테이블 variant+뷰 추출+reception 축소, 3f7e105 물류관리 라우트+사이드바,
+      289b5ef 탭 라벨 변경
+- [ ] `claude-progress.txt` 갱신
+
+## 5단계 (보류) — 착수 전 사용자 확인 필요
+- [ ] 4단계 완료 후, 담당자 요구 구체화 여부 또는 크린어스 관찰 12슬롯 그대로 진행 여부를 사용자에게 확인(AskUserQuestion)

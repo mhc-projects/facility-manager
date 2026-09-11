@@ -28,6 +28,14 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 ## 부착현황(`/dpf`) 파생 컬럼 — 배치 조회, 메인 목록에 조인 금지
 `GET /api/dpf/service-records/derived-stats?vehicle_ids=...`가 화면에 보이는 vehicle_id만 모아 `dpf_service_records`+`dpf_device_installations`를 별도로 조회하고 애플리케이션 코드에서 집계한다(PostgREST에 GROUP BY가 없다). `/api/dpf/search`(메인 목록)에는 손대지 않는다 — 새 파생 지표를 추가할 때도 이 배치 API에 필드를 얹지, 메인 쿼리에 조인하지 않는다.
 
+## 접수현황/물류관리 — 같은 원장의 필터 뷰, 별도 화면 아님
+`/dpf/service`(접수현황)와 `/dpf/service/logistics`(물류관리)는 둘 다 `components/dpf/DpfServiceListView.tsx`
+(`mode: 'reception' | 'logistics'`) 하나를 공유한다. 새 필터/집계를 추가할 땐 엔드포인트를 분리하지 않고 기존
+`GET /api/dpf/service-records`·`/stats`에 파라미터/필드를 additive로 얹는 것이 이 프로젝트의 확립된 패턴이다
+(예: `/stats`는 clean/as/cs 5필드에 urea/parts 4필드를 더해 9필드짜리 응답 하나를 쓴다 — reception 화면은 뒤 4개를,
+logistics 화면은 앞 5개를 무시할 뿐이다). `category` 콤마 리스트 필터가 이미 있어서 "물류만 보기"는 클라이언트가
+`category=parts_delivery,urea`를 보내는 것으로 충분 — 서버 쪽에 물류 전용 분기를 새로 만들지 않는다.
+
 ## 지자체/처리점/기사 — 자유 텍스트, 코드 테이블 없음
 `local_government`/`service_branch`/`assigned_as_technician`/`processing_technician` 전부 자유 텍스트다. 참조할 코드 테이블(크린어스의 지자체 168개 등)이 이 프로젝트에 없어서다 — 드롭다운/자동완성을 넣으려면 먼저 실제 값이 쌓인 뒤 UI에서만 구현해야지, 코드 테이블을 새로 설계하면 안 된다.
 

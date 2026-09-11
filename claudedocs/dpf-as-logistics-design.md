@@ -344,6 +344,16 @@ create policy "dpf_service_records_write" on dpf_service_records
   요청에 포함된 모든 id에 대해 항목을 채운다(기록이 없는 차량도 0/null로 포함, 프론트에서 매핑 실패 분기 안 만들게).
   인증은 기존과 동일 `requireAuth(request, 1)`.
 
+**4단계에서 추가** (구체화, 2026-09-12 어드바이저 검토, §8.2 참고):
+- `GET /api/dpf/service-records` — 기존 라우트에 `cost_type`(eq, paid/free/mixed)·`courier`(ilike) 파라미터 2개만 추가한다
+  (additive, 기존 파라미터/응답 모양 불변). `category` 콤마 리스트 필터는 이미 있으므로 `logistics` 모드는 클라이언트가
+  `category=parts_delivery,urea`를 보내는 것만으로 충분 — 서버 쪽 변경 불필요.
+- `GET /api/dpf/service-records/stats` — 기존 5필드(clean/as pending·completed, cs_total)에 **4필드를 추가**한다
+  (`urea_pending`/`urea_completed`/`parts_pending`/`parts_completed`) — 엔드포인트를 분리하거나 `?scope=`로 나누지 않고
+  한 응답에 다 담는다(reception 페이지는 기존 5필드만 쓰고 나머지는 무시, logistics 페이지는 새 4필드만 씀 — 두 화면이
+  결국 같은 원장의 필터 뷰라는 §2.6 설계 원칙과 일치). count 쿼리 5개 → 9개로 늘어나지만 이 규모에서 문제 없음(2단계와 동일 근거).
+  `types/dpf.ts`의 `DpfServiceRecordStats`에 4필드 추가.
+
 ## 8. UI 설계
 
 ### 8.1 `/dpf/service` — 접수현황 (신규 페이지, 2026-09-11 어드바이저 검토로 구체화)
@@ -360,9 +370,36 @@ create policy "dpf_service_records_write" on dpf_service_records
 사이드바에 `DPF업무` 그룹의 "차량 관리" 옆에 "접수현황" 항목을 새로 추가한다(`components/ui/AdminLayout.tsx`의 `navItems`,
 `ClipboardList` 아이콘 재사용 — 이미 import돼 있음).
 
-### 8.2 `/dpf/service/logistics` — 물류관리 (신규 페이지, 8.1과 컴포넌트 공유)
-`category in ('parts_delivery','urea')`로 고정 필터링된 `/dpf/service`의 변형. 택배사 컬럼 추가, 크리닝/AS 전용 컬럼 제거.
-목록 테이블 컴포넌트는 컬럼셋을 props로 받는 형태로 공유(`DpfServiceRecordTable` + `columns` variant).
+### 8.2 `/dpf/service/logistics` — 물류관리 (구체화, 2026-09-12 어드바이저 검토)
+
+`category in ('parts_delivery','urea')`로 고정 필터링된 `/dpf/service`의 변형. `/dpf/service/page.tsx`(2단계, ~250줄:
+요약 바+검색/필터 바+debounce+테이블)를 그대로 복제하지 않고, 본문을 `components/dpf/DpfServiceListView.tsx`(신규,
+`mode: 'reception' | 'logistics'` prop)로 추출해 두 페이지가 공유한다. 각 페이지(`/dpf/service/page.tsx`,
+`/dpf/service/logistics/page.tsx`)는 `<AdminLayout title=.. description=..><DpfServiceListView mode=".."/></AdminLayout>`
+로만 남는다 — 로직 이동일 뿐 사용자에게 보이는 접수현황 화면 동작은 바뀌지 않는다.
+
+**mode별 차이:**
+- **분류 필터**: `mode==='logistics'`일 때 드롭다운 옵션을 `전체/부품전달/요소수` 2+1개로 제한(`reception`의 6개 전체 옵션과
+  다름). "전체" 선택 시에도 서버에는 항상 `category=parts_delivery,urea`를 보낸다(빈 값으로 보내면 API가 6개 전 카테고리를
+  반환해버림 — `effectiveCategory = mode==='logistics' ? (category || 'parts_delivery,urea') : category` 규칙으로 강제).
+- **필터 슬롯 교체**: `reception`의 "처리점"(service_branch) 자유텍스트 자리에 `logistics`는 "택배사"(courier) 자유텍스트를
+  넣는다 — 물류 접수 등록 폼(§2.3, §4)에 처리점 필드가 애초에 없기 때문(§4.11과 같은 원칙). **"비용"(cost_type, 전체/유상/
+  무상/유무상) 필터를 `logistics` 모드에만 추가**(크린어스 §2.4 관찰, `reception`은 필터 세트를 그대로 유지해 2단계 결과물을
+  건드리지 않음).
+- **요약 바**: `reception`은 기존 5타일(크리닝대기/완료, AS대기/완료, 상담종료) 그대로. `logistics`는 4타일(요소수대기/완료,
+  부품전달대기/완료) — §7의 `/stats` 응답에 추가되는 4개 필드를 사용.
+- **테이블 컬럼**: `DpfServiceRecordTable`에 `variant?: 'reception' | 'logistics'`(기본 reception) prop 추가. `logistics`는
+  처리점/담당AS기사/기사처리일자 3개 컬럼을 빼고 택배사(courier) 1개를 더한다(§2.4 "부착현황과 거의 동일 + 택배사 추가,
+  크리닝/AS 관련 컬럼 제거" 그대로).
+- **부수 효과**: 이 추출 작업을 하는 김에 2단계 사후검토에서 지적된 `/dpf/service`의 통계 `useEffect([result.total])` 문제를
+  같이 고친다 — 이 페이지엔 등록 버튼이 없어 `result.total`이 바뀌는 건 필터 변경 때뿐이므로, 통계 fetch는 **마운트 시 1회만**
+  (`useEffect(() => { ... }, [])`)으로 충분하다.
+
+목록 테이블 컴포넌트는 컬럼셋을 variant로 받는 형태로 공유(`DpfServiceRecordTable` + `variant` prop, §7 참고).
+
+**`/dpf/[vin]` "AS/크리닝" 탭 라벨 재검토**: 이 탭은 1단계부터 벤더 제한 없이 해당 차량의 `serviceRecords` 전체(카테고리
+무관, parts_delivery/urea/cs/engine_replace 포함)를 보여주고 있었다 — "AS/크리닝"이라는 이름은 4단계로 물류가 별도
+화면을 갖는 시점부터는 더 부정확해진다. **"접수이력"으로 라벨만 변경**한다(`ALL_TABS` 1줄, 탭 내용/API는 변경 없음).
 
 ### 8.3 `/dpf` (부착현황) 확장 — 기존 페이지에 컬럼 추가 (구체화, 2026-09-11 어드바이저 3차 검토)
 
@@ -511,9 +548,45 @@ create policy "dpf_service_records_write" on dpf_service_records
 **커밋 2개**: (a) API(배치 조회)+타입, (b) 테이블 컬럼+페이지 wiring(fetch+버튼+모달). `ServiceRecordFormModal` 자체는
 수정하지 않으므로 별도 커밋 불필요.
 
-### 이후 단계
-4. **4단계**: `/dpf/service/logistics` 물류관리 필터 뷰.
-5. **5단계 (보류, 필요시)**: 담당자 요구가 구체화되면 `dpf_service_record_attachments` 테이블 + 첨부파일 슬롯 UI 추가(§4.7).
+### 4단계 세부 순서 (2026-09-12 어드바이저 검토로 구체화, 마이그레이션 없음)
+
+**세부 결정 요약 (§7·§8.2 참고, 코드 작성 전 확정):**
+- `/dpf/service/page.tsx`를 복제하지 않고 본문을 `DpfServiceListView.tsx`(mode prop)로 추출해 reception/logistics 양쪽이 공유.
+- 로직스틱스 모드의 분류 필터는 항상 `parts_delivery,urea` 우주 안에서만 동작(전체 선택도 이 둘로 한정, 서버에 빈 값 보내지 않음).
+- 처리점 필터를 택배사(courier) 필터로 교체, 비용(cost_type) 필터는 logistics 모드에만 추가.
+- `/stats`는 엔드포인트 분리 없이 응답에 4필드 additive 확장.
+- 이 작업 김에 `/dpf/service`의 통계 재조회 `useEffect([result.total])`를 마운트 1회(`[]`)로 수정 — 이 페이지엔 등록 버튼이
+  없어 로컬 변이로 total이 바뀔 일이 없으므로 안전.
+- `/dpf/[vin]` "AS/크리닝" 탭 라벨을 "접수이력"으로 변경(내용/API 불변).
+
+**구현 순서:**
+1. `types/dpf.ts`의 `DpfServiceRecordStats`에 `urea_pending`/`urea_completed`/`parts_pending`/`parts_completed` 추가.
+2. `GET /api/dpf/service-records`에 `cost_type`/`courier` 파라미터 추가, `GET /api/dpf/service-records/stats`에 count 쿼리 4개 추가.
+3. `DpfVehicleTable` 아님 — `DpfServiceRecordTable.tsx`에 `variant?: 'reception'|'logistics'` prop 추가, `LOGISTICS_COLUMNS`
+   정의(처리점/담당AS기사/기사처리일자 제거, 택배사 추가) + `courier` cellValue 케이스.
+4. `components/dpf/DpfServiceListView.tsx` 신규 — `/dpf/service/page.tsx`의 현재 본문(요약 바+검색/필터 바+debounce+테이블)을
+   그대로 옮기되 `mode` prop에 따라 분류 옵션/필터 슬롯/요약 타일/테이블 variant를 분기, 통계 useEffect 의존성 수정.
+5. `/dpf/service/page.tsx`를 `<AdminLayout><DpfServiceListView mode="reception"/></AdminLayout>`로 축소.
+6. `app/dpf/service/logistics/page.tsx` 신규 — `<AdminLayout title="물류관리" description="부품전달/요소수 접수 조회">
+   <DpfServiceListView mode="logistics"/></AdminLayout>`.
+7. `app/dpf/[vin]/page.tsx`의 `ALL_TABS`에서 `service` 탭 라벨 "AS/크리닝" → "접수이력" 1줄 변경.
+8. `components/ui/AdminLayout.tsx`의 `DPF업무` 그룹에 "물류관리" 사이드바 항목 추가(href `/dpf/service/logistics`,
+   이미 import된 `Package` 아이콘 재사용, 새 import 불필요).
+9. 검증: `tsc --noEmit`, 하드 리로드로 `/dpf/service`(reception) 기존 동작 회귀 없음 확인 먼저(추출 작업이라 가장 위험),
+   `/dpf/service/logistics` 신규 화면에서 분류 필터가 부품전달/요소수만 다루는지, 택배사/비용 필터 동작, 요약 4타일=테이블
+   실제 건수 일치, 기존 물류 레코드(1단계에서 만든 부품전달 테스트 데이터 있으면) 정상 표시, `/dpf/[vin]` 탭 라벨 변경 확인,
+   `/dpf` 회귀 없음.
+10. 검증 중 실 데이터에 남긴 테스트 흔적 정리 SQL 사용자에게 전달(1~3단계와 동일 절차).
+
+**커밋 4개**: (a) API(필터+통계 확장)+타입, (b) 테이블 variant + `DpfServiceListView` 추출 + reception 페이지 축소(2단계 파일을
+건드리는 유일한 커밋, 분리 보존), (c) 물류관리 라우트 신규 + 사이드바 항목, (d) `/dpf/[vin]` 탭 라벨 변경(1단계 파일 건드리는
+유일한 커밋, 분리 보존).
+
+### 5단계 (보류) — 착수 전 사용자 확인 필요
+담당자 요구가 구체화되면 `dpf_service_record_attachments` 테이블 + 첨부파일 슬롯 UI 추가(§4.7). **크린어스 관찰(§2.2)로
+12개 슬롯의 이름은 이미 알고 있지만("서류 보기" 상세 화면 자체는 미관찰), 1단계에서 "담당자 요구가 구체화되면"이라는
+조건으로 명시적으로 보류했던 항목**이다 — 4단계 완료 후 이 조건이 실제로 충족됐는지(담당자가 첨부 요구를 구체화했는지)
+아니면 크린어스가 관찰한 12슬롯 그대로 만들지를 사용자에게 먼저 확인하고 나서 5단계 계획을 세운다.
 
 각 단계 종료 시 검증(위 5번) + 브라우저 확인 후 커밋(CLAUDE.md 세션 종료 체크리스트 준수). 진행 상황은
 `claudedocs/dpf-service-records/checklist.md`에서 관리한다.

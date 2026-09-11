@@ -161,3 +161,21 @@
   차량에서 철부횟수 `-` 표시 확인 → 접수/물류 버튼 각각 다른 초기 분류로 모달이 열리고, 등록 후 목록+파생값이 함께 갱신되는 것
   확인(하드 리로드 후) → tsc --noEmit 신규 오류 0, 콘솔 에러 없음, `/dpf`·`/dpf/[vin]` 기존 기능 회귀 없음.
 - 후속(4단계 이후, 미착수): `/dpf/service/logistics` 물류관리 필터 뷰, 첨부파일 슬롯(5단계, 담당자 요구 구체화 시).
+
+## 2026-09-12 | DPF 물류관리(/dpf/service/logistics) 필터 뷰 4단계 구현
+- 3단계 마무리 검토(어드바이저)에서 커밋 트레일러 누락 수정(amend), `DpfVehicleTable` minWidth 문서-코드 불일치 수정,
+  벤더 탭 재검증(최초 확인이 디바운스 전 캡처라 inconclusive), `.claude/skills/dpf/SKILL.md` 신설(1단계부터 미뤄졌던
+  도메인 스킬 갱신) — 이 4가지를 먼저 처리한 뒤 4단계 진행.
+- `GET /api/dpf/service-records`에 `cost_type`/`courier` 파라미터 추가, `.../stats` 응답에 urea/parts pending·completed
+  4필드를 additive로 확장(엔드포인트 분리 없이, 접수현황/물류관리가 같은 원장의 필터 뷰라는 설계 원칙 유지).
+- `/dpf/service/page.tsx`(~250줄) 본문을 `DpfServiceListView.tsx`(mode: reception/logistics)로 추출해 물류관리와 공유 —
+  분류 필터 우주(로직스틱스는 항상 parts_delivery/urea 안에서만), 필터 슬롯 교체(처리점→택배사, 비용 필터는 로직스틱스
+  전용), 요약 타일(5개/4개), 테이블 컬럼(`DpfServiceRecordTable`에 `variant` prop 추가)을 mode로 분기. 추출하는 김에
+  2단계 사후검토에서 지적된 통계 `useEffect([result.total])`도 마운트 1회로 수정.
+- `/dpf/service/logistics` 신규 페이지 + 사이드바 "물류관리" 항목(Package 아이콘) 추가. `/dpf/[vin]`의 "AS/크리닝" 탭
+  라벨을 "접수이력"으로 변경(1단계부터 카테고리 무관하게 전체 이력을 보여주고 있었는데, 물류가 전용 화면을 가지면서
+  이름-내용 불일치가 두드러져 라벨만 수정, 내용/API 불변).
+- 검증: 부품전달/요소수 테스트 데이터 2건을 먼저 만들어 요약 타일·택배사 필터·분류 드롭다운을 실제 데이터로 확인,
+  추출 작업 직후 reception 페이지 회귀부터 우선 확인, tsc --noEmit 신규 오류 0, 콘솔 에러 없음.
+- 5단계(첨부파일)는 착수 전 사용자에게 "담당자 요구 구체화 여부 vs 크린어스 관찰 12슬롯 그대로 진행" 확인 필요 — 1단계에서
+  명시적으로 조건부 보류했던 항목이라 임의로 풀지 않음.
