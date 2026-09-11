@@ -589,7 +589,7 @@ function ApprovalDetailContent() {
             </div>
             <div>
               <div className="text-xs text-gray-400">작성일</div>
-              <div className="text-sm">{formatDate(doc.created_at)}</div>
+              <div className="text-sm">{formatDate(doc.form_data?.written_date || doc.created_at)}</div>
             </div>
             <div>
               <div className="text-xs text-gray-400">상신일</div>
