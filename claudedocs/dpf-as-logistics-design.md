@@ -324,6 +324,26 @@ create policy "dpf_service_records_write" on dpf_service_records
   category × status 조합별로 `.select('id', { count: 'exact', head: true })` 병렬 호출(6개 내외, 이 규모에서는 RPC/집계함수 불필요).
 - (보류) `POST .../attachments` — 첨부파일 구체화되면 추가(§4.7·§6-3)
 
+**3단계에서 추가** (구체화, 2026-09-11 어드바이저 3차 검토, §8.3 참고):
+- `GET /api/dpf/service-records/derived-stats?vehicle_ids=id1,id2,...` — `/dpf` 목록의 파생 컬럼(최근접수일/마지막처리일/
+  크리닝횟수/AS횟수/철부횟수)용 배치 조회. 쿼리 파라미터로 받은 `vehicle_id` 목록(최대 20~100개, `/dpf`의 `pageSize=20` 기준)에
+  대해서만 계산 — 페이지네이션도 없고, 목록 API처럼 서버가 스스로 대상 차량을 고르지 않는다(호출자가 "지금 화면에 보이는 차량"을 넘김).
+  서버에서 쿼리 2개를 순차/병렬로 날리고 **애플리케이션 코드에서 vehicle_id별로 집계**(PostgREST에 GROUP BY가 없으므로):
+  1. `dpf_service_records`에서 `vehicle_id, category, status, reception_date, processed_at, completed_at`을
+     `vehicle_id in (ids) and is_deleted = false`로 조회 → `last_reception_date = max(reception_date)`(취소 건 포함 — 접수
+     자체는 실제 발생했으므로), `last_processed_date = max(completed_at ?? processed_at)`(**이것도 취소 건 포함** — 처리일이
+     찍혀 있다는 건 실제 처리가 일어났다는 뜻이라 접수일과 같은 원칙으로 포함, 2026-09-11 4차 검토),
+     **`clean_count`/`as_count`는 `status != 'cancelled'`인 행만 category별로 센다**(2026-09-11 어드바이저 4차 검토 —
+     접수현황 요약 바가 `cancelled`를 대기/완료 집계에서 빼는 것(§9 2단계 결정)과 숫자가 어긋나면 담당자가 혼란스러워함).
+     회차(`round_no`)는 취소 건도 번호를 먹으므로 `count ≠ max(round_no)`가 될 수 있는데, 이는 §4.2에서 이미 받아들인
+     결번(gap) 허용 규칙과 같은 선상이라 문제 아님.
+  2. `dpf_device_installations`에서 `vehicle_id, action_type`을 `vehicle_id in (ids) and action_type = 'remove'`로 조회 →
+     vehicle_id별 개수 = `removal_count`(엠즈 차량은 항상 0으로 돌아옴, §8.3 벤더 항목 참고 — API는 벤더를 따지지 않는다).
+  두 쿼리는 `Promise.all`로 병렬 호출한다.
+  응답: `{ [vehicle_id]: { last_reception_date: string | null, last_processed_date: string | null, clean_count: number, as_count: number, removal_count: number } }` —
+  요청에 포함된 모든 id에 대해 항목을 채운다(기록이 없는 차량도 0/null로 포함, 프론트에서 매핑 실패 분기 안 만들게).
+  인증은 기존과 동일 `requireAuth(request, 1)`.
+
 ## 8. UI 설계
 
 ### 8.1 `/dpf/service` — 접수현황 (신규 페이지, 2026-09-11 어드바이저 검토로 구체화)
@@ -344,12 +364,48 @@ create policy "dpf_service_records_write" on dpf_service_records
 `category in ('parts_delivery','urea')`로 고정 필터링된 `/dpf/service`의 변형. 택배사 컬럼 추가, 크리닝/AS 전용 컬럼 제거.
 목록 테이블 컴포넌트는 컬럼셋을 props로 받는 형태로 공유(`DpfServiceRecordTable` + `columns` variant).
 
-### 8.3 `/dpf` (부착현황) 확장 — 기존 페이지에 컬럼 추가
-새 페이지를 만들지 않고 기존 `DpfVehicleTable.tsx`의 `COLUMNS`에 파생 컬럼을 추가한다:
-`최근접수일`/`마지막처리일`(해당 차량 최신 `dpf_service_records` 조회), `크리닝횟수`/`AS횟수`(category별 COUNT),
-`철부횟수`(기존 `dpf_device_installations`에서 `action_type='remove'` COUNT — 새 테이블 불필요),
-`부착경과일`(`today - installation_date`, 클라이언트 계산). 행마다 **"접수" / "물류" 버튼을 항상 노출**하여 클릭 시
-`dpf_service_records` 빠른 등록 모달(카테고리 사전 선택)을 연다.
+### 8.3 `/dpf` (부착현황) 확장 — 기존 페이지에 컬럼 추가 (구체화, 2026-09-11 어드바이저 3차 검토)
+
+**성능 결정 (핵심)**: `DpfVehicleTable`는 이미 19컬럼·`minWidth 1780px`이고 페이지당 20건(`pageSize` 고정)만 그린다.
+파생값(최근접수일/마지막처리일/크리닝횟수/AS횟수/철부횟수)을 행마다 서브쿼리로 조인하지 않는다 — **현재 페이지에 보이는
+최대 20개 `vehicle_id`만 모아 배치 조회 API를 별도로 1회 호출**하고, 집계는 클라이언트에서 한다(§7의 신규
+`GET /api/dpf/service-records/derived-stats` 참고). `dpf_service_records`/`dpf_device_installations` 어느 쪽도
+메인 목록 쿼리(`/api/dpf/search`)에 조인하지 않는다 — 그 라우트는 손대지 않는다.
+
+**컬럼 예산**: 19개에 6개를 그대로 더하지 않는다. 3개로 압축해서 추가한다(2줄 스택 대신 단일 라인 3컬럼으로 결정,
+2026-09-11 4차 검토 — 20행짜리 페이지에서 한 컬럼만 줄바꿈되면 그 행만 키가 달라져 다른 컬럼과 세로 정렬이 안 맞기 때문에,
+"접수현황"도 2줄 스택이 아니라 최근접수일/마지막처리일 각각 별도 컬럼으로 나눈다 → 접수현황 컬럼 자체는 없앰):
+- **최근접수일** — `dpf_service_records.reception_date` 최댓값(취소 포함).
+- **마지막처리일** — `completed_at ?? processed_at` 최댓값.
+- **처리횟수** — `크N · AS N · 철N` 한 줄 압축 표기 1컬럼(취소 건 제외 카운트, §7). **철부횟수는 `vehicle.vendor === 'mz'`일 때 `-`로 표시**(아래 벤더 항목 참고).
+- **구조변경경과일** — `today - installation_date` 일수, `installation_date`가 null이면 `—`(NaN일 금지). **"부착경과일"이 아니라
+  "구조변경경과일"로 명명한다** — `DpfVehicleTable`의 기존 `installation_date` 컬럼 라벨이 이미 "구조변경일"이고,
+  `lib/dpf-column-map.ts`에서 이 필드가 원본 "구변일자/구조변경일자"에 매핑됨을 확인(2026-09-11 4차 검토 그렙 확인) —
+  크린어스의 "부착경과일"은 별도의 물리적 부착일 개념(우리 스키마엔 없음)이라 같은 이름을 쓰면 오해를 유발한다.
+
+거기에 **행 액션 버튼 컬럼 1개**를 맨 끝에 추가한다 — "접수" / "물류" 버튼을 항상 노출(호버로 감추지 않음,
+`feedback_dashboard_ux_conventions`). 결과적으로 19 + 4 + 1 = **24컬럼**, `minWidth`는 1780px → 약 2250px로 늘어난다
+(기존 가로 스크롤 힌트 UI 그대로 유지, 별도 안내 불필요).
+
+**로딩 중간 상태 = 0이 아니다 (2026-09-11 4차 검토)**: 목록(`/api/dpf/search`)과 파생통계(`/api/dpf/service-records/derived-stats`)는
+순차 호출이라, 목록은 이미 갱신됐는데 파생통계는 아직 이전 페이지 값이거나 비어 있는 구간이 항상 존재한다. `derivedStats[v.id]`가
+`undefined`인 행은 **API가 채워준 "기록 없음=0/null"과 다른 제3의 상태**이므로, 신규 4개 컬럼은 `undefined`일 때 `0`이나 `—`가
+아니라 `…`(로딩 중)로 표시한다 — 잠깐이라도 "크0 · AS0"이 깜빡이면 실제 데이터로 오인될 수 있다. 전체 테이블 스켈레톤은
+목록 fetch(`loading` state)에만 걸고, 파생통계 fetch는 별도로 기다리지 않는다(테이블은 목록 도착 즉시 그리고, 신규 4개 컬럼만
+`…`에서 값으로 갈아끼워진다).
+
+**벤더 처리(철부횟수)**: `dpf_device_installations`는 후지노 임포트 경로에서만 채워진다(엠즈는 자체 DB 파일을 그대로
+가져와 차량 마스터 필드만 채우고, 설치이력/성능검사/보조금 서브테이블은 애초에 비어 있다 — `/dpf/[vin]`의
+`ALL_TABS`가 이 3개 탭을 `vendors: ['fujino']`로만 노출하는 것과 같은 이유, 103ec33 커밋에서 확인). 그래서 API가
+엠즈 차량의 `removal_count`를 굳이 0으로 걸러줄 필요는 없다 — 실제로 항상 0이 돌아온다. 하지만 "0(실제로 철거 0회)"과
+"애초에 추적 대상이 아님"을 화면에서 구분하기 위해, **클라이언트에서만** `vendor === 'mz'`이면 철부횟수 칸을 `-`로 덮어쓴다.
+
+**행 액션 버튼 → 모달 연동**: 기존 `ServiceRecordFormModal`(1단계에서 이미 `initialCategory?: DpfServiceCategory` prop을
+갖고 있음, 수정 불필요)을 그대로 재사용한다. "접수" 버튼은 `initialCategory` 없이 열어 폼 안의 분류 드롭다운에서
+직접 고르게 하고(크린어스도 "접수상담" 진입 시 분류를 폼에서 선택), "물류" 버튼은 `initialCategory: 'parts_delivery'`로
+연다(폼 안에서 `urea`로 바꿀 수 있음). `onSuccess` 시 모달을 닫고 **목록·파생통계 양쪽을 함께 재조회**한다(§9 구현 순서 참고,
+2단계 사후검토에서 지적된 "필터/목록과 무관한 재조회 의존성" 패턴을 반복하지 않도록 `result` state를 구독하는 `useEffect`가
+아니라 `search()` 콜백 안에서 두 fetch를 나란히 호출한다).
 
 ### 8.4 `/dpf/[vin]` 상세 — 새 탭 추가
 `ALL_TABS`에 `{ key: 'service', label: 'AS/크리닝', vendors: ['fujino','mz'] }` 추가 — **벤더 제한 없음**
@@ -418,8 +474,44 @@ create policy "dpf_service_records_write" on dpf_service_records
 **커밋 3개** (2026-09-11 어드바이저 지침): (a) API(목록+통계), (b) 테이블 컴포넌트+페이지+사이드바, (c) 상세 페이지 `?tab=`+`BasicInfoTab` 오버레이 섹션.
 (c)만 1단계 파일을 건드리므로, 되돌릴 때 목록 페이지까지 같이 날아가지 않도록 따로 분리한다.
 
+### 3단계 세부 순서 (2026-09-11 어드바이저 3차 검토로 구체화, 마이그레이션 없음)
+
+**세부 결정 요약 (§7·§8.3 참고, 어드바이저 3차+4차 검토로 코드 작성 전 확정):**
+- 파생값은 메인 목록 쿼리에 조인하지 않고 **배치 조회 API 1개**(`GET /api/dpf/service-records/derived-stats`)로 분리,
+  집계는 서버 응용 코드에서(PostgREST GROUP BY 없음), 내부 두 쿼리는 `Promise.all`.
+- 19컬럼에 6개를 더하지 않고 **4개(최근접수일/마지막처리일/처리횟수/구조변경경과일, 단일 라인) + 액션버튼 1개 = 24컬럼**으로
+  압축 — "접수현황" 2줄 스택은 포기(행 높이가 컬럼마다 달라짐), "부착경과일"이 아니라 "구조변경경과일"로 명명(§8.3, `installation_date`가
+  실제로는 구변일이라 `lib/dpf-column-map.ts`로 확인함).
+- `clean_count`/`as_count`는 `status != 'cancelled'`만 센다(§7) — 접수현황 요약 바의 대기/완료 집계와 숫자가 맞아야 하기 때문.
+- 철부횟수는 API에서 벤더를 안 따지고(엠즈는 원래 0), **클라이언트에서만** `vendor==='mz'`일 때 `-`로 덮어쓴다.
+- **파생통계가 아직 안 왔거나 목록이 막 갱신된 직후인 `derivedStats[v.id] === undefined` 구간은 `0`이 아니라 `…`로 표시**한다
+  (§8.3) — 테이블 전체 스켈레톤은 목록 fetch에만 걸고 파생통계 fetch를 기다리지 않는다.
+- 파생통계 재조회는 `result` state를 구독하는 `useEffect`가 아니라 **`search()` 콜백 안에서 목록 fetch와 나란히** 호출한다
+  (2단계 사후검토에서 지적된 "필터 변경마다 전역 통계를 다시 도는" 패턴을 반복하지 않기 위함, `/dpf/service/page.tsx`의
+  `[result.total]` 의존성 useEffect는 그대로 남겨두되 3단계 신규 코드에서는 이 패턴을 쓰지 않는다).
+- "접수"/"물류" 버튼은 `ServiceRecordFormModal`을 `initialCategory` 없이/`'parts_delivery'`로 열 뿐, 폼 자체는 수정하지 않는다.
+- `DpfVehicleTable`는 `app/dpf/page.tsx` 한 곳에서만 쓰인다(2026-09-11 그렙 확인) — 액션 버튼 콜백을 prop으로 게이팅할 필요 없음.
+
+**구현 순서:**
+1. `types/dpf.ts`에 `DpfVehicleDerivedStats` 인터페이스 추가(인라인 금지, §7 응답 모양과 동일).
+2. `GET /api/dpf/service-records/derived-stats`(§7) 신설 — `dpf_service_records`/`dpf_device_installations` 배치 조회(`Promise.all`) +
+   집계(`clean_count`/`as_count`는 `cancelled` 제외). `vehicle_ids` 쿼리 파라미터 없거나 빈 배열이면 빈 객체 반환(400 아님, 방어적으로).
+3. `DpfVehicleTable.tsx`에 `derivedStats?: Record<string, DpfVehicleDerivedStats>` prop 추가, `COLUMNS`에 4개 컬럼(최근접수일/
+   마지막처리일/처리횟수/구조변경경과일) + 액션버튼 컬럼 1개 추가(`derivedStats[v.id]`가 없으면 `…`), `minWidth` 1780→~2250 조정,
+   스켈레톤 행 너비 배열도 5개 늘림.
+4. `app/dpf/page.tsx` — `derivedStats`/`serviceModal` state 추가, `search()` 콜백 안에서 목록 조회 직후 `json.vehicles`의
+   id 목록으로 파생통계 fetch(별도 useEffect 아님), "접수"/"물류" 버튼 클릭 시 `serviceModal` 설정 → `ServiceRecordFormModal`
+   렌더 → `onSuccess`에서 모달 닫고 `search(query, localGov, vendor, page)` 재호출(목록+파생통계 동시 갱신).
+5. 검증: `tsc --noEmit`, 하드 리로드(시작 페이지부터, `feedback_local_test_hard_reload` 다섯 번째 사례 재발 방지), 파생 컬럼
+   숫자가 해당 차량 상세 탭(§8.4 "AS/크리닝")의 실제 건수와 일치하는지 최소 2대(후지노 1대·엠즈 1대) 확인, 취소 처리한 건이
+   처리횟수에서 빠지는지, 엠즈 차량 철부횟수가 `-`로 뜨는지, 접수/물류 버튼으로 만든 레코드가 상세 탭과 목록 파생값 양쪽에
+   반영되는지, `/dpf`·`/dpf/[vin]`·`/dpf/service` 기존 기능 회귀 없음.
+6. 검증 중 실 데이터에 남긴 테스트 흔적 정리 SQL을 사용자에게 전달(2단계와 동일 절차).
+
+**커밋 2개**: (a) API(배치 조회)+타입, (b) 테이블 컬럼+페이지 wiring(fetch+버튼+모달). `ServiceRecordFormModal` 자체는
+수정하지 않으므로 별도 커밋 불필요.
+
 ### 이후 단계
-3. **3단계**: `/dpf` 부착현황에 파생 컬럼 + 접수/물류 행 액션 버튼 추가.
 4. **4단계**: `/dpf/service/logistics` 물류관리 필터 뷰.
 5. **5단계 (보류, 필요시)**: 담당자 요구가 구체화되면 `dpf_service_record_attachments` 테이블 + 첨부파일 슬롯 UI 추가(§4.7).
 
