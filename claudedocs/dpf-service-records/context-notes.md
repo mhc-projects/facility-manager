@@ -440,3 +440,33 @@ UTC 경계 이슈로 한 번 겪었던 것과 같은 클래스의 실수를 반�
 더 이상 새로운 발견이 나오지 않는다. §2가 애초에 기록하지 못한 크린어스 기능(예: 서류 보기 상세, 접수종류
 하위옵션 등 기존에 미관찰로 분류된 것들)은 이 방법으로는 원천적으로 찾을 수 없다 — 필요하다면 크린어스를
 다시 관찰하는 것이 유일한 다음 단계이고, 이는 코드 점검이 아니라 사용자의 판단 영역이다.
+
+### 정렬 토글 이후 — 첨부 유무 카드 표시 (2026-09-13)
+"첨부유무는 어떤걸 얘기하는건지" 질문에 답하며 checklist.md 5단계 잔여 항목(카드/목록 첨부 유무 표시 미구현)을
+다시 꺼냄. 사용자 결정: "카드만 먼저 해보고 불편하면 목록까지, 나중에 관련 항목 수정 때 목록 진행을 제안해줘."
+- `app/api/dpf/vehicles/[vin]/route.ts` GET에 배치 쿼리 1개(`record_id in (...)`) 추가해 `attachmentCounts`
+  반환(N+1 없음, 서명 URL 발급 없이 개수만) — 이 엔드포인트는 차량 1건 상세 전용이라 목록(reception/logistics,
+  `/api/dpf/service-records`)과 비용 구조가 다르다는 어드바이저 판단이 맞았음(목록은 수백 건이 될 수 있어
+  배치 집계 API 신설이 필요, 카드는 차량당 레코드 몇 건뿐이라 기존 엔드포인트 확장으로 충분).
+- `app/dpf/[vin]/page.tsx` `ServiceTab`에 📎 배지(`Paperclip` 아이콘 + 개수) 추가, 긴급/통화요청 등 슬레이트
+  배지 뒤에 배치.
+
+**어드바이저가 잡은 실사용 버그**: 최초 구현은 `attachmentCounts`를 페이지 최초 로드 시점(`GET /vehicles/[vin]`)
+에만 채웠다. 그런데 `ServiceRecordFormModal`의 첨부파일 업로드/삭제는 그 자체 API를 즉시 호출하는 독립 축이라
+(§2.2/§5단계 결정: "수정 저장"과 별개), 사용자가 업로드 후 "수정 저장" 대신 X나 취소로 닫으면 `onSuccess`가
+안 불려 상위 refetch가 없다 — 카드 배지가 실제로는 첨부파일이 있는데도 계속 0(배지 없음)으로 보이는 실사용
+버그. 최초 검증 스크립트가 매번 하드 리로드 후 스크린샷을 찍어서 이 케이스를 놓쳤었다(하드 리로드=강제
+refetch라 우연히 항상 최신 상태만 봤음). **수정**: `ServiceRecordFormModal`에 `onAttachmentsChange?(recordId,
+count)` prop 추가, 내부 `attachments` state가 바뀔 때마다(업로드·삭제 둘 다 같은 state를 거침) 호출하는
+`useEffect` 하나로 통일. 부모(`page.tsx`)는 이걸 받아 `setDetail`로 `attachmentCounts`만 직접 패치 —
+`loadDetail()`을 다시 부르지 않는다(이 함수가 `setLoading(true)`를 동기로 호출해서, 매번 X/취소마다 전체
+탭이 스켈레톤으로 깜빡였을 것 — 어드바이저가 재발 전 미리 지적). 재검증(하드 리로드 없이): 업로드 → X →
+배지 즉시 뜸, 수정 → 삭제 → X → 배지 즉시 사라짐, 둘 다 확인.
+
+**검증 방법론 결함 하나 더**: 정렬 토글 완료 보고 때 "두 테스트 레코드 모두 완전히 삭제된 거 확인했어"라고
+했는데, 그 확인에 쓴 `curl`이 `NEXT_PUBLIC_SUPABASE_ANON_KEY`였다 — 이 프로젝트 RLS는 `dpf_service_records`에
+대한 익명 SELECT를 전부 막아서, 실제로는 어떤 row를 넣어도 `[]`+HTTP 200이 나온다(즉 "삭제 확인됨"이 아니라
+"애초에 아무것도 못 읽음"). 어드바이저 지적으로 `SUPABASE_SERVICE_ROLE_KEY`로 재확인해서야 실제로 삭제됐음을
+제대로 검증함. **교훈**: Supabase 읽기전용 검증 curl은 앞으로 항상 `SUPABASE_SERVICE_ROLE_KEY`를 쓴다 —
+anon key는 RLS를 그대로 타서 "결과 없음"이 "삭제됨"인지 "애초에 못 읽음"인지 구분이 안 된다
+([[project_supabase_db_access]]와 같은 계열의 주의사항으로 별도 기록).

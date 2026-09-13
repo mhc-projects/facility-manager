@@ -75,6 +75,7 @@ completed_at/created_at 화이트리스트, 기본 reception_date)로 어떤 날
 - ⚠️ **Storage 호출(listBuckets/createBucket/upload/createSignedUrl/remove)은 `supabaseAdmin`이 아니라 `getSupabaseStorageAdmin()`(`lib/supabase.ts`)을 써야 한다.** `supabaseAdmin`은 `global.headers`에 `Content-Type: application/json`이 고정돼 있어, Fetch 스펙상 이 헤더가 명시되면 FormData/바이너리 body의 자동 Content-Type(멀티파트 boundary 등)이 무시되어 Storage가 415로 업로드를 거부한다(2026-09-12 실제로 겪은 버그 — `instanceof Blob` realm 문제가 아니라 이 헤더 충돌이 원인이었다). DB 쿼리는 영향 없으므로 `supabaseAdmin` 그대로 쓴다.
 - 서명 URL은 Storage CDN이 `cacheControl: max-age=3600`으로 캐싱하므로, 파일 교체/삭제 직후에도 **이전 서명 URL이 최대 1시간 동안 계속 200을 반환할 수 있다**(엣지 캐시일 뿐 실제 삭제 여부와 무관 — 실제 상태 확인은 DB 행 존재 여부 또는 storage list API로 해야 한다).
 - 파일 업로드는 실제 브라우저 `<input type=file>` onChange → 페이지 자체 fetch로는 정상 동작한다. `javascript_tool` 스크립트가 파일을 직접 읽어 fetch로 보내는 방식만 브라우저 확장 보안필터에 차단된다(스크립트-드리븐 파일 업로드 전반의 한계이지 이 기능 자체의 문제는 아님).
+- **첨부 유무 표시(2026-09-13)**: `/dpf/[vin]` 접수이력 카드엔 📎배지 있음(`GET /api/dpf/vehicles/[vin]`가 배치 쿼리로 `attachmentCounts` 반환). **접수현황/물류관리 목록(`DpfServiceRecordTable`)엔 아직 없음** — 사용자 결정으로 카드만 먼저 하고 목록은 보류 중. 이 근처(첨부파일, 목록 컬럼, `DpfServiceRecordTable`) 관련 작업을 하게 되면 목록에도 붙일지 사용자에게 먼저 제안할 것 (`checklist.md` 참고). 업로드/삭제는 폼 저장과 별개 축이라 카드 배지 갱신은 `ServiceRecordFormModal`의 `onAttachmentsChange` 콜백으로 직접 패치한다 — 모달 X/취소로 닫아도 반영되게 하려면 `onSuccess`(폼 저장 시에만 호출)에 의존하면 안 된다.
 
 ## 설계/구현 이력
 전체 설계 배경과 단계별 결정 근거는 `claudedocs/dpf-as-logistics-design.md`(크린어스 DEAR System 화면 분석 포함), 단계별 체크리스트/발견사항은 `claudedocs/dpf-service-records/checklist.md`·`context-notes.md` 참고.

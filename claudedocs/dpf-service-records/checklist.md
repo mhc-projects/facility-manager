@@ -263,8 +263,13 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       (테스트 중 자체 스크립트 버그 발견: 체크박스 4개가 같은 부모를 공유해 `label.parentElement.querySelector`가
       전부 첫 번째 체크박스로 앨리어싱됨 — `label.querySelector`로 수정. 제출 전 스크린샷 검증에서 잡아내
       실제 데이터 오염 없이 넘어감.)
-- [ ] 첨부파일 유무 표시(목록/카드)는 이번 A/B/C 범위에서 제외 — 별도 항목으로 대기(카드는 기존 GET으로 가능,
-      목록은 API 집계 추가 필요해 비용이 다름)
+- [x] 첨부파일 유무 표시 — 카드(2026-09-13, 사용자 결정: "카드만 먼저, 불편하면 목록까지"): `GET /api/dpf/vehicles/[vin]`에
+      배치 쿼리로 `attachmentCounts` 추가, `ServiceTab` 카드에 📎 배지. 업로드/삭제가 폼 저장과 별개 축이라
+      `ServiceRecordFormModal`에 `onAttachmentsChange` 콜백을 추가해 X/취소로 닫아도 배지가 즉시 갱신되도록 수정
+      (최초 구현은 페이지 최초 로드 시점 값만 썼다가 어드바이저가 실사용 버그로 지적 — 상세는 context-notes.md).
+- [ ] 첨부파일 유무 표시 — 목록(접수현황/물류관리, `DpfServiceRecordTable`)은 보류. 배치 집계 API 신설이 필요해
+      카드보다 비용이 큼 — **다음에 이 근처(첨부파일/목록 컬럼/DpfServiceRecordTable) 관련 항목을 수정할 때
+      목록 표시도 같이 진행할지 사용자에게 제안할 것.**
 
 ## 재확인 라운드 2 — 카드 잔여 누락 2건 수정 (2026-09-13, 계속)
 "진짜 더 빠진 부분이 없는지" 재요청 → 필드별로 `ServiceTab` 함수 범위(라인 단위)만 스코프해 `r.<field>` 패턴을
