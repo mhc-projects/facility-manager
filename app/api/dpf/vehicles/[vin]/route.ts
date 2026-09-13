@@ -141,6 +141,18 @@ export async function GET(
         .order('created_at', { ascending: false }),
     ]);
 
+    const serviceRecordIds = (serviceRecordData.data ?? []).map((r: { id: string }) => r.id);
+    const attachmentCounts: Record<string, number> = {};
+    if (serviceRecordIds.length > 0) {
+      const { data: attachRows } = await supabaseAdmin
+        .from('dpf_service_record_attachments')
+        .select('record_id')
+        .in('record_id', serviceRecordIds);
+      for (const row of attachRows ?? []) {
+        attachmentCounts[row.record_id] = (attachmentCounts[row.record_id] ?? 0) + 1;
+      }
+    }
+
     return NextResponse.json({
       vehicle,
       installations: instData.data ?? [],
@@ -148,6 +160,7 @@ export async function GET(
       subsidies: subsidyData.data ?? [],
       callMonitoring: callData.data ?? [],
       serviceRecords: serviceRecordData.data ?? [],
+      attachmentCounts,
     });
   } catch (err) {
     console.error('[DPF Vehicle Detail] error:', err);

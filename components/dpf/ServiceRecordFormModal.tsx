@@ -11,6 +11,7 @@ interface Props {
   vin: string;
   record?: DpfServiceRecord;
   initialCategory?: DpfServiceCategory;
+  onAttachmentsChange?: (recordId: string, count: number) => void;
 }
 
 export const CATEGORY_OPTIONS: { value: DpfServiceCategory; label: string }[] = [
@@ -54,7 +55,7 @@ function isImageExt(ext: string) {
   return ['jpg', 'jpeg', 'png', 'webp'].includes(ext.toLowerCase());
 }
 
-export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin, record, initialCategory }: Props) {
+export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin, record, initialCategory, onAttachmentsChange }: Props) {
   const isEdit = Boolean(record);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
@@ -83,6 +84,13 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, recordId]);
+
+  // 목록/카드는 이 모달 상태를 직접 구독하지 않으므로(취소/X로 닫으면 onSuccess가 안 불려 상위 refetch가 없다),
+  // 업로드·삭제로 attachments가 바뀔 때마다 부모에 개수를 그때그때 반영한다
+  useEffect(() => {
+    if (recordId) onAttachmentsChange?.(recordId, Object.keys(attachments).length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachments, recordId]);
 
   async function fetchAttachments(id: string) {
     try {

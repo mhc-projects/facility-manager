@@ -14,7 +14,7 @@ import {
 } from '@/types/dpf';
 import {
   ChevronRight, Pencil, Trash2, Plus, ArrowLeft,
-  Car, Phone, MapPin, Hash, Calendar,
+  Car, Phone, MapPin, Hash, Calendar, Paperclip,
 } from 'lucide-react';
 
 interface VehicleDetail {
@@ -24,6 +24,7 @@ interface VehicleDetail {
   subsidies: DpfSubsidyApplication[];
   callMonitoring: DpfCallMonitoring[];
   serviceRecords: DpfServiceRecord[];
+  attachmentCounts: Record<string, number>;
 }
 
 const ALL_TABS = [
@@ -160,7 +161,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
     );
   }
 
-  const { vehicle, installations, inspections, subsidies, callMonitoring, serviceRecords } = detail;
+  const { vehicle, installations, inspections, subsidies, callMonitoring, serviceRecords, attachmentCounts } = detail;
   const tabs = ALL_TABS.filter(t => t.vendors.includes(vehicle.vendor ?? 'fujino'));
 
   const tabCounts: Partial<Record<TabKey, number>> = {
@@ -298,6 +299,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
         {activeTab === 'service' && (
           <ServiceTab
             records={serviceRecords}
+            attachmentCounts={attachmentCounts}
             onAdd={() => setServiceModal({})}
             onEdit={r => setServiceModal({ record: r })}
             onDelete={r => openDeleteRecord('service-records', r.id, `${CATEGORY_LABELS[r.category]} ${r.round_no}회차`)}
@@ -367,6 +369,10 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
           vin={vin}
           record={serviceModal.record}
           initialCategory={serviceModal.category}
+          onAttachmentsChange={(id, count) => setDetail(d => d && ({
+            ...d,
+            attachmentCounts: { ...d.attachmentCounts, [id]: count },
+          }))}
         />
       )}
 
@@ -556,9 +562,10 @@ function BasicInfoTab({ vehicle }: { vehicle: DpfVehicle }) {
 }
 
 function ServiceTab({
-  records, onAdd, onEdit, onDelete,
+  records, attachmentCounts, onAdd, onEdit, onDelete,
 }: {
   records: DpfServiceRecord[];
+  attachmentCounts: Record<string, number>;
   onAdd: () => void;
   onEdit: (r: DpfServiceRecord) => void;
   onDelete: (r: DpfServiceRecord) => void;
@@ -627,6 +634,12 @@ function ServiceTab({
                         {label}
                       </span>
                     ))}
+                    {!!attachmentCounts[r.id] && (
+                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600">
+                        <Paperclip className="w-3 h-3" />
+                        {attachmentCounts[r.id]}
+                      </span>
+                    )}
                     <span className="text-sm font-medium text-gray-700 tabular-nums">
                       {r.reception_date || '접수일 미등록'}
                     </span>
