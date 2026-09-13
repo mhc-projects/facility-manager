@@ -43,6 +43,7 @@ export default function DpfServiceListView({ mode }: Props) {
   const [serviceBranch, setServiceBranch] = useState('');
   const [courier, setCourier] = useState('');
   const [costType, setCostType] = useState('');
+  const [conversion, setConversion] = useState('');
   const [billingStatus, setBillingStatus] = useState('');
   const [dateField, setDateField] = useState<string>(DEFAULT_DATE_FIELD);
   const [dateFrom, setDateFrom] = useState('');
@@ -56,7 +57,7 @@ export default function DpfServiceListView({ mode }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const search = useCallback(async (
-    q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string,
+    q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string, conv: string,
     billing: string, field: string, from: string, to: string, p: number,
   ) => {
     setLoading(true);
@@ -70,6 +71,7 @@ export default function DpfServiceListView({ mode }: Props) {
       if (mode === 'reception' && branch) params.set('service_branch', branch);
       if (mode === 'logistics' && cour) params.set('courier', cour);
       if (mode === 'logistics' && cost) params.set('cost_type', cost);
+      if (mode === 'reception' && conv) params.set('conversion', conv);
       if (billing) params.set('billing_status', billing);
       if (from || to) params.set('date_field', field);
       if (from) params.set('date_from', from);
@@ -85,16 +87,16 @@ export default function DpfServiceListView({ mode }: Props) {
   }, [mode]);
 
   const triggerSearch = useCallback((
-    q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string,
+    q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string, conv: string,
     billing: string, field: string, from: string, to: string, p: number,
   ) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(q, cat, st, gov, branch, cour, cost, billing, field, from, to, p), 300);
+    debounceRef.current = setTimeout(() => search(q, cat, st, gov, branch, cour, cost, conv, billing, field, from, to, p), 300);
   }, [search]);
 
   useEffect(() => {
-    triggerSearch(query, category, status, localGov, serviceBranch, courier, costType, billingStatus, dateField, dateFrom, dateTo, page);
-  }, [query, category, status, localGov, serviceBranch, courier, costType, billingStatus, dateField, dateFrom, dateTo, page, triggerSearch]);
+    triggerSearch(query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, page);
+  }, [query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, page, triggerSearch]);
 
   useEffect(() => {
     // 이 화면엔 등록 버튼이 없어 로컬 변이로 통계가 바뀔 일이 없다 — 마운트 시 1회면 충분(2단계 사후검토에서 지적된
@@ -112,18 +114,19 @@ export default function DpfServiceListView({ mode }: Props) {
   function handleServiceBranchChange(v: string) { setServiceBranch(v); setPage(1); }
   function handleCourierChange(v: string) { setCourier(v); setPage(1); }
   function handleCostTypeChange(v: string) { setCostType(v); setPage(1); }
+  function handleConversionChange(v: string) { setConversion(v); setPage(1); }
   function handleBillingStatusChange(v: string) { setBillingStatus(v); setPage(1); }
   function handleDateFieldChange(v: string) { setDateField(v); setPage(1); }
   function handleDateFromChange(v: string) { setDateFrom(v); setPage(1); }
   function handleDateToChange(v: string) { setDateTo(v); setPage(1); }
   function clearAll() {
     setQuery(''); setCategory(''); setStatus(''); setLocalGov(''); setServiceBranch('');
-    setCourier(''); setCostType(''); setBillingStatus('');
+    setCourier(''); setCostType(''); setConversion(''); setBillingStatus('');
     setDateField(DEFAULT_DATE_FIELD); setDateFrom(''); setDateTo(''); setPage(1);
   }
 
-  const hasFilter = category || status || localGov || serviceBranch || courier || costType || billingStatus || dateFrom || dateTo;
-  const activeFilterCount = [category, status, localGov, serviceBranch, courier, costType, billingStatus, dateFrom || dateTo]
+  const hasFilter = category || status || localGov || serviceBranch || courier || costType || conversion || billingStatus || dateFrom || dateTo;
+  const activeFilterCount = [category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateFrom || dateTo]
     .filter(Boolean).length;
 
   const summaryTiles = mode === 'logistics'
@@ -244,6 +247,21 @@ export default function DpfServiceListView({ mode }: Props) {
                     <option value="paid">유상</option>
                     <option value="free">무상</option>
                     <option value="mixed">유무상</option>
+                  </select>
+                </>
+              )}
+
+              {mode === 'reception' && (
+                <>
+                  <label className="text-xs font-medium text-gray-500 w-16 ml-2">전환</label>
+                  <select
+                    value={conversion}
+                    onChange={e => handleConversionChange(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">전체</option>
+                    <option value="clean_to_as">크리닝→AS</option>
+                    <option value="as_to_clean">AS→크리닝</option>
                   </select>
                 </>
               )}
