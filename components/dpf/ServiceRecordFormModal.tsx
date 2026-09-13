@@ -65,6 +65,7 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
   const recordIdRef = useRef(recordId);
   recordIdRef.current = recordId;
   const [attachments, setAttachments] = useState<Record<string, AttachmentData>>({});
+  const [attachmentsLoaded, setAttachmentsLoaded] = useState(false);
   const [attachmentUploading, setAttachmentUploading] = useState<Record<string, boolean>>({});
   const [attachmentError, setAttachmentError] = useState('');
 
@@ -77,6 +78,7 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
 
   useEffect(() => {
     setAttachments({});
+    setAttachmentsLoaded(false);
     setAttachmentUploading({});
     setAttachmentError('');
     if (isOpen && recordId) {
@@ -86,20 +88,26 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
   }, [isOpen, recordId]);
 
   // 목록/카드는 이 모달 상태를 직접 구독하지 않으므로(취소/X로 닫으면 onSuccess가 안 불려 상위 refetch가 없다),
-  // 업로드·삭제로 attachments가 바뀔 때마다 부모에 개수를 그때그때 반영한다
+  // 업로드·삭제로 attachments가 바뀔 때마다 부모에 개수를 그때그때 반영한다. 단, 서버 확인 전(attachmentsLoaded
+  // false, 모달을 막 열어 초기화만 된 상태)에는 호출하지 않는다 — 안 그러면 조회 실패 시 0으로 잘못 패치해서
+  // 기존에 있던 첨부파일의 배지를 지워버린다.
   useEffect(() => {
-    if (recordId) onAttachmentsChange?.(recordId, Object.keys(attachments).length);
+    if (recordId && attachmentsLoaded) onAttachmentsChange?.(recordId, Object.keys(attachments).length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachments, recordId]);
+  }, [attachments, recordId, attachmentsLoaded]);
 
   async function fetchAttachments(id: string) {
     try {
       const res = await fetch(`/api/dpf/service-records/${id}/attachments`);
       const data = await res.json();
       // 조회 중 모달이 다른 레코드로 전환됐다면(업로드가 오래 걸려 응답이 늦게 온 경우) 반영하지 않는다
-      if (res.ok && id === recordIdRef.current) setAttachments(data);
+      if (res.ok && id === recordIdRef.current) {
+        setAttachments(data);
+        setAttachmentsLoaded(true);
+      }
     } catch {
-      // 조회 실패는 조용히 무시 — 업로드/삭제는 그대로 시도 가능
+      // 조회 실패는 조용히 무시 — 업로드/삭제는 그대로 시도 가능(단, attachmentsLoaded는 false로 남겨
+      // 부모 배지를 잘못된 0으로 패치하지 않는다)
     }
   }
 
