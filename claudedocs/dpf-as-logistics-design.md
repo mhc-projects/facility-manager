@@ -448,6 +448,7 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
 1~4단계 구현에도 빠져 있었다. `DpfServiceListView.tsx`에 독립적으로 프리셋 버튼(1/3/6/12개월)을 추가해 반영 — `dateFrom`만
 설정하고 `dateTo`는 비워 열린 범위로 둔다(닫힌 범위로 오늘까지 잡으면 `date_field`가 접수일 등 미래 예약 가능한 필드일 때
 당일 이후 값이 필터에서 빠지는 경계 문제가 생긴다).
+→ 같은 시점(2026-09-13) 정렬 토글(최근/과거)도 추가 — `sort=asc|desc`, 필터 카운트 미포함(`dateField`와 같은 "기준" 취급).
 목록 테이블은 `DpfVehicleTable.tsx`와 같은 구조(고정 `COLUMNS` 배열 + `cellValue` switch + 페이지네이션)의 신규 `DpfServiceRecordTable.tsx`.
 행 클릭 시 `/dpf/[vin]?tab=service`로 이동 — 상세 페이지(`app/dpf/[vin]/page.tsx`)가 `?tab=` 쿼리 파라미터로 초기 `activeTab`을 정할 수 있도록
 작은 변경 추가(현재는 항상 `'basic'`으로 시작).
