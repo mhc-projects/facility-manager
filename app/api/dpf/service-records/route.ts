@@ -7,6 +7,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const CATEGORIES = ['as', 'clean', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
+// 크린어스 관찰(§2.2/§2.5): 접수일/처리일/기사처리일/완료일/등록일 중 하나를 날짜range 필터 기준으로 선택
+const DATE_FIELDS = ['reception_date', 'processed_at', 'technician_processed_at', 'completed_at', 'created_at'];
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,6 +29,8 @@ export async function GET(request: NextRequest) {
     const courier = searchParams.get('courier')?.trim() ?? '';
     const dateFrom = searchParams.get('date_from')?.trim() ?? '';
     const dateTo = searchParams.get('date_to')?.trim() ?? '';
+    const dateFieldParam = searchParams.get('date_field')?.trim() ?? '';
+    const dateField = DATE_FIELDS.includes(dateFieldParam) ? dateFieldParam : 'reception_date';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
     const pageSize = Math.min(100, parseInt(searchParams.get('pageSize') ?? '20'));
     const offset = (page - 1) * pageSize;
@@ -51,12 +55,21 @@ export async function GET(request: NextRequest) {
     if (billingStatus) dbQuery = dbQuery.eq('billing_status', billingStatus);
     if (costType) dbQuery = dbQuery.eq('cost_type', costType);
     if (courier) dbQuery = dbQuery.ilike('courier', `%${courier}%`);
-    if (dateFrom) dbQuery = dbQuery.gte('reception_date', dateFrom);
-    if (dateTo) dbQuery = dbQuery.lte('reception_date', dateTo);
+    // created_at만 timestamptz라 date 컬럼과 같은 날짜 문자열로 비교하면 UTC 자정 기준으로 잘려
+    // KST 기준 그날 생성된 행이 빠진다 — KST 오프셋을 명시해 하루 전체를 커버한다.
+    if (dateField === 'created_at') {
+      if (dateFrom) dbQuery = dbQuery.gte(dateField, `${dateFrom}T00:00:00+09:00`);
+      if (dateTo) dbQuery = dbQuery.lte(dateField, `${dateTo}T23:59:59.999+09:00`);
+    } else {
+      if (dateFrom) dbQuery = dbQuery.gte(dateField, dateFrom);
+      if (dateTo) dbQuery = dbQuery.lte(dateField, dateTo);
+    }
 
-    const { data, error, count } = await dbQuery
-      .order('reception_date', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
+    let orderedQuery = dbQuery.order(dateField, { ascending: false, nullsFirst: false });
+    if (dateField !== 'created_at') {
+      orderedQuery = orderedQuery.order('created_at', { ascending: false });
+    }
+    const { data, error, count } = await orderedQuery
       .range(offset, offset + pageSize - 1);
 
     if (error) {
