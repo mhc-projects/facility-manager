@@ -31,6 +31,20 @@ const DATE_FIELD_OPTIONS = [
 ] as const;
 const DEFAULT_DATE_FIELD = 'reception_date';
 
+const DATE_PRESET_MONTHS = [1, 3, 6, 12] as const;
+
+// 로컬 날짜 기준 "n개월 전" — toISOString()은 UTC라 KST 09:00 이전엔 하루 밀린다(이번 세션 created_at 버그와 동일 계열)
+function monthsAgoLocal(months: number): string {
+  const d = new Date();
+  const day = d.getDate();
+  d.setMonth(d.getMonth() - months);
+  if (d.getDate() !== day) d.setDate(0); // 말일 오버플로 클램프(예: 05-31 - 3개월 → 02-28)
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
 interface Props {
   mode: 'reception' | 'logistics';
 }
@@ -119,6 +133,7 @@ export default function DpfServiceListView({ mode }: Props) {
   function handleDateFieldChange(v: string) { setDateField(v); setPage(1); }
   function handleDateFromChange(v: string) { setDateFrom(v); setPage(1); }
   function handleDateToChange(v: string) { setDateTo(v); setPage(1); }
+  function handleDatePreset(months: number) { setDateFrom(monthsAgoLocal(months)); setDateTo(''); setPage(1); }
   function clearAll() {
     setQuery(''); setCategory(''); setStatus(''); setLocalGov(''); setServiceBranch('');
     setCourier(''); setCostType(''); setConversion(''); setBillingStatus('');
@@ -321,6 +336,18 @@ export default function DpfServiceListView({ mode }: Props) {
                 onChange={e => handleDateToChange(e.target.value)}
                 className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+
+              <div className="flex items-center gap-1 ml-1">
+                {DATE_PRESET_MONTHS.map(m => (
+                  <button
+                    key={m}
+                    onClick={() => handleDatePreset(m)}
+                    className="px-2 py-1 text-xs font-medium text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                  >
+                    {m}개월
+                  </button>
+                ))}
+              </div>
 
               {hasFilter && (
                 <button onClick={clearAll} className="text-xs text-blue-600 hover:text-blue-700 font-medium ml-2">
