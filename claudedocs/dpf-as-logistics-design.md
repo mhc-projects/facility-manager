@@ -441,8 +441,13 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
 
 ### 8.1 `/dpf/service` — 접수현황 (신규 페이지, 2026-09-11 어드바이저 검토로 구체화)
 크린어스 접수현황과 동일한 목적. 상단 요약 바(크리닝대기/완료, AS대기/완료, 상담종료 — 전부 §7 stats 엔드포인트에서 실시간 계산),
-필터 바는 **새로 설계하지 않고 `/dpf`(부착현황) 페이지의 기존 패턴(검색행 + 확장 필터 패널 + 탭 행)을 그대로 재사용**한다 — 기간 프리셋(1/3/6/12개월),
+필터 바는 **새로 설계하지 않고 `/dpf`(부착현황) 페이지의 기존 패턴(검색행 + 확장 필터 패널 + 탭 행)을 그대로 재사용**한다 —
 분류, 상태, 지자체, 처리점, 차량번호/차대번호/계약자 텍스트 검색.
+→ 2026-09-13 정정: "`/dpf`의 기존 패턴을 재사용"이라 기간 프리셋(1/3/6/12개월)도 당연히 따라올 거라 적었으나, 실제로는
+`/dpf`(부착현황) 자체에 프리셋이 없어(§3.1 "이미 있는 것" 범위 밖, 크린어스 대비 재점검 bucket (d)) 전제가 틀렸고 그 결과
+1~4단계 구현에도 빠져 있었다. `DpfServiceListView.tsx`에 독립적으로 프리셋 버튼(1/3/6/12개월)을 추가해 반영 — `dateFrom`만
+설정하고 `dateTo`는 비워 열린 범위로 둔다(닫힌 범위로 오늘까지 잡으면 `date_field`가 접수일 등 미래 예약 가능한 필드일 때
+당일 이후 값이 필터에서 빠지는 경계 문제가 생긴다).
 목록 테이블은 `DpfVehicleTable.tsx`와 같은 구조(고정 `COLUMNS` 배열 + `cellValue` switch + 페이지네이션)의 신규 `DpfServiceRecordTable.tsx`.
 행 클릭 시 `/dpf/[vin]?tab=service`로 이동 — 상세 페이지(`app/dpf/[vin]/page.tsx`)가 `?tab=` 쿼리 파라미터로 초기 `activeTab`을 정할 수 있도록
 작은 변경 추가(현재는 항상 `'basic'`으로 시작).
@@ -480,6 +485,15 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
   전환 필터는 `conversion` 쿼리 파라미터(`clean_to_as`/`as_to_clean`)로 `DpfServiceListView`의 reception 모드에만
   추가 — `converted_from_category`와 `category`를 함께 검사해야 정확하다(트리거가 카테고리 변경마다 매번 `OLD.category`를
   기록하므로 둘 이상 전환된 레코드를 배제하려면 현재 category까지 봐야 함).
+  → 2026-09-13 (계속): 필드 단위 재감사로 추가 발견된 항목(A/B/C, `checklist.md` 최종 재점검 섹션 참고)도 같은 폴드
+  원칙으로 반영. `billing_status` 셀에 `cost_type`(비용) 3번째 줄 폴드 — 폼에서 이 필드가 카테고리 무관 항상 노출됨을
+  확인해 reception/logistics 양쪽 variant 공통으로 적용(처음엔 필터가 logistics 전용이라 필드도 그런 줄 오판할 뻔함).
+  `vin` 셀에 `installation_date`(구변일), `vehicle_name` 셀에 `device_type`(부착장치, `DpfVehicleTable`의 배지 색상
+  재사용) 폴드 — 크린어스 §2.5 접수현황 목록에 이 두 컬럼이 명시돼 있었으나 서비스레코드 조인엔 빠져 있었음.
+  차량상세 접수이력 카드(`app/dpf/[vin]/page.tsx`)에도 처리기사/비용/필터 3종/택배사/배송주소/접수유형을 `dl`에,
+  세부내용/처리내용/연장사유/비고를 라벨 붙은 문단으로, 긴급/통화요청/출동/입고를 배지로 추가 — 목록과 달리 카드는
+  압축 없이 전부 나열(공간 여유가 있어 §8.3 컬럼 예산 제약이 적용되지 않음).
+  `DpfServiceListView`에 1/3/6/12개월 기간 프리셋 추가(§8.1 정정 참고) — `dateFrom`만 설정하는 열린 구간.
 - **부수 효과**: 이 추출 작업을 하는 김에 2단계 사후검토에서 지적된 `/dpf/service`의 통계 `useEffect([result.total])` 문제를
   같이 고친다 — 이 페이지엔 등록 버튼이 없어 `result.total`이 바뀌는 건 필터 변경 때뿐이므로, 통계 fetch는 **마운트 시 1회만**
   (`useEffect(() => { ... }, [])`)으로 충분하다.

@@ -41,6 +41,29 @@ logistics 화면은 앞 5개를 무시할 뿐이다). `category` 콤마 리스�
 ## 지자체/처리점/기사 — 자유 텍스트, 코드 테이블 없음
 `local_government`/`service_branch`/`assigned_as_technician`/`processing_technician` 전부 자유 텍스트다. 참조할 코드 테이블(크린어스의 지자체 168개 등)이 이 프로젝트에 없어서다 — 드롭다운/자동완성을 넣으려면 먼저 실제 값이 쌓인 뒤 UI에서만 구현해야지, 코드 테이블을 새로 설계하면 안 된다.
 
+## 목록/카드 컬럼 예산 — 새 필드는 기본적으로 기존 셀에 폴드, 새 컬럼 추가는 최후 수단
+`DpfServiceRecordTable.tsx`(접수현황/물류관리 목록)와 `app/dpf/[vin]/page.tsx`(차량상세 접수이력 카드)는
+크린어스 대비 재점검(2026-09-13)에서 여러 차례 "폼엔 있고 DB에도 저장되지만 읽기 화면엔 안 보이는 필드"를
+발견했다 — 새 필드를 추가할 때 새 컬럼/새 dl 항목을 잊기 쉬운 지점이니 필드를 늘릴 때마다 이 두 파일을 같이
+검토한다. 목록 쪽은 §8.3 "컬럼 예산" 원칙(19개에 6개를 그대로 더하지 않는다)에 따라 압축 폴드가 기본값이다 —
+지금까지 쌓인 폴드 패턴: `process_dates`(기사처리/처리/완료 3줄 스택), `status`+연장 배지, `category`+전환 배지,
+`billing_status`+협회청구일자+비용(`cost_type`), `vin`+구변일(`installation_date`), `vehicle_name`+부착장치
+배지(`device_type`, 색상 매핑은 `DpfVehicleTable.tsx`의 `DEVICE_TYPE_COLORS` export를 재사용 — 색상표를 두 곳에
+중복 정의하지 않는다). 카드는 목록보다 여유가 있어 압축 없이 `dl`/문단으로 전부 나열해도 된다 — 실제로
+목록에선 폴드한 필드도 카드는 라벨 붙은 개별 항목으로 보여준다.
+⚠️ 필드가 "필터 UI에 물류 모드에서만 노출된다"고 해서 그 필드 자체가 물류 전용이라고 넘겨짚지 말 것 —
+`cost_type`이 실제로는 카테고리 무관 항상 폼에 있는데 필터만 물류 모드 전용이라 처음에 오판한 전례가 있다.
+필드 존재 여부는 항상 `ServiceRecordFormModal.tsx` 폼 소스로 확인한다.
+
+## 날짜 필터 — date_field 화이트리스트 + 프리셋은 열린 구간
+`GET /api/dpf/service-records`는 `date_field` 파라미터(reception_date/processed_at/technician_processed_at/
+completed_at/created_at 화이트리스트, 기본 reception_date)로 어떤 날짜 컬럼을 range 필터·정렬 기준으로 쓸지
+고른다. `created_at`만 timestamptz라 KST +09:00 오프셋을 명시해야 당일 생성 행이 안 빠진다(다른 필드는 date
+타입이라 문자열 비교로 충분). `DpfServiceListView.tsx`의 1/3/6/12개월 프리셋 버튼은 **`dateFrom`만 설정하고
+`dateTo`는 비운다**(열린 구간) — `date_field`가 접수일처럼 미래 예약이 가능한 값일 수 있어 `dateTo=오늘`로
+닫으면 당일 이후 값이 빠지는 경계 문제가 생기기 때문. 프리셋 계산은 `monthsAgoLocal()`(로컬 날짜 기준, 말일
+오버플로는 `setDate(0)`으로 클램프) — `toISOString()`은 UTC라 KST 09:00 이전엔 하루 밀린다.
+
 ## 첨부파일(`dpf_service_record_attachments`) — 레코드 소프트 삭제와 별개의 하드 삭제 축
 - 크린어스 관찰 12고정슬롯(`ATTACHMENT_SLOTS`, `components/dpf/ServiceRecordFormModal.tsx`): 차량사진/매연측정기/필터전단면 클리닝전·후/필터일련번호 클리닝전·후/자가진단장치배압 전·후/매연검사결과표 전·후/AS부품/AS처리. `slot_key`는 DB CHECK 제약과 `DpfAttachmentSlotKey` 유니온 타입 양쪽에 고정 — 슬롯 추가 시 둘 다 갱신.
 - **레코드의 `is_deleted` 소프트 삭제 원칙과 달리, 첨부파일은 하드 삭제**다(`DELETE /api/dpf/service-records/[id]/attachments/[slotKey]`가 DB 행 삭제 + storage 파일 삭제). 청구 이력이 걸린 건 레코드 자체지 첨부파일이 아니고, 첨부파일은 재업로드로 언제든 대체 가능해서다.
