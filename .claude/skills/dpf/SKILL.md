@@ -63,6 +63,9 @@ completed_at/created_at 화이트리스트, 기본 reception_date)로 어떤 날
 `dateTo`는 비운다**(열린 구간) — `date_field`가 접수일처럼 미래 예약이 가능한 값일 수 있어 `dateTo=오늘`로
 닫으면 당일 이후 값이 빠지는 경계 문제가 생기기 때문. 프리셋 계산은 `monthsAgoLocal()`(로컬 날짜 기준, 말일
 오버플로는 `setDate(0)`으로 클램프) — `toISOString()`은 UTC라 KST 09:00 이전엔 하루 밀린다.
+`sort` 파라미터(`asc`/기본 `desc`)는 `date_field` 컬럼(+보조 정렬 `created_at`)의 오름차순/내림차순을 고른다
+— "최근순/과거순" 토글. `date_field`와 같은 성격(필터가 아니라 정렬 기준)이라 `hasFilter`/`activeFilterCount`
+계산에는 포함하지 않는다.
 
 ## 첨부파일(`dpf_service_record_attachments`) — 레코드 소프트 삭제와 별개의 하드 삭제 축
 - 크린어스 관찰 12고정슬롯(`ATTACHMENT_SLOTS`, `components/dpf/ServiceRecordFormModal.tsx`): 차량사진/매연측정기/필터전단면 클리닝전·후/필터일련번호 클리닝전·후/자가진단장치배압 전·후/매연검사결과표 전·후/AS부품/AS처리. `slot_key`는 DB CHECK 제약과 `DpfAttachmentSlotKey` 유니온 타입 양쪽에 고정 — 슬롯 추가 시 둘 다 갱신.

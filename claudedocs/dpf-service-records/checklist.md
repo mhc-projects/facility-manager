@@ -281,3 +281,15 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       검토로 재확인 — dispatch_area_*/contact_wireless·wired는 차량 오버레이가 최신값을 대신 보여줘서 의도적
       제외, 장착점은 설치이력 탭에 이미 있음, created_by/created_at 등 감사 필드는 크린어스 관찰 항목 자체가
       아님).
+
+## 정렬 토글 구현 (2026-09-13, 마지막 재확인 라운드에서 발견한 잔여 1건)
+사용자 지시 "정렬 토글 고쳐줘"로 구현. §2.4 추론 근거만 있던 항목(§2.5 직접 관찰엔 없음)이라 C보다 근거가
+약하다고 보고했으나 사용자가 진행 승인.
+- [x] `app/api/dpf/service-records/route.ts`에 `sort` 파라미터(`asc`/기본 `desc`) 추가 — 기존 하드코딩된
+      `ascending: false`를 `ascending` 변수로 교체(주 정렬 `date_field` + 보조 정렬 `created_at` 둘 다 적용).
+- [x] `DpfServiceListView.tsx`에 "최근순/과거순" 토글 버튼 추가(날짜 프리셋 옆). `dateField`와 같은 성격 —
+      필터가 아니라 정렬 기준이라 `hasFilter`/`activeFilterCount`에는 포함하지 않음(기존 dateField 처리와
+      동일 원칙). `clearAll()`은 기본값(`desc`)으로 복원.
+- [x] 검증: 같은 차량(85가8787)에 상담종료 레코드 2건(접수일 2026-01-05/2026-09-10)을 만들어 최근순(09-10
+      먼저)/과거순(01-05 먼저) 순서가 정확히 뒤집히는 것 확인 → 물류관리 화면도 회귀 없이 토글 렌더 확인 →
+      콘솔 에러 없음 → 소프트 삭제, DB 하드 삭제 SQL 전달.
