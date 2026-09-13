@@ -568,6 +568,8 @@ function ServiceTab({
     completed:   { label: '완료',   color: 'bg-emerald-100 text-emerald-700' },
     cancelled:   { label: '취소',   color: 'bg-gray-100 text-gray-500' },
   };
+  const COST_TYPE_LABELS: Record<string, string> = { paid: '유상', free: '무상', mixed: '유/무상' };
+  const DELIVERY_REQUEST_LABELS: Record<string, string> = { request: '요청', fixed: '고정' };
 
   return (
     <div>
@@ -608,6 +610,16 @@ function ServiceTab({
                         {r.extension_approved === true ? '연장승인' : r.extension_approved === false ? '연장반려' : '연장요청'}
                       </span>
                     )}
+                    {([
+                      [r.is_urgent, '긴급'],
+                      [r.needs_callback, '통화요청'],
+                      [r.is_dispatch, '출동'],
+                      [r.is_dropoff, '입고'],
+                    ] as [boolean | null | undefined, string][]).filter(([v]) => v).map(([, label]) => (
+                      <span key={label} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600">
+                        {label}
+                      </span>
+                    ))}
                     <span className="text-sm font-medium text-gray-700 tabular-nums">
                       {r.reception_date || '접수일 미등록'}
                     </span>
@@ -619,8 +631,16 @@ function ServiceTab({
                   {([
                     ['처리점', r.service_branch],
                     ['담당AS기사', r.assigned_as_technician],
+                    ['처리기사', r.processing_technician],
                     ...dates,
                     ['협회청구', r.association_billing_date],
+                    ['비용', r.cost_type ? COST_TYPE_LABELS[r.cost_type] : null],
+                    ['필터', r.filter_type],
+                    ['회수필터', r.collected_filter],
+                    ['교체필터', r.replaced_filter],
+                    ['택배사', r.courier],
+                    ['접수유형', r.delivery_request_type ? DELIVERY_REQUEST_LABELS[r.delivery_request_type] : null],
+                    ['배송주소', r.delivery_address],
                   ] as [string, string | null | undefined][]).filter(([, v]) => v).map(([k, v]) => (
                     <div key={k}>
                       <dt className="text-[10px] text-gray-400 uppercase tracking-wide">{k}</dt>
@@ -628,9 +648,17 @@ function ServiceTab({
                     </div>
                   ))}
                 </dl>
-                {r.reception_content && (
-                  <p className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">{r.reception_content}</p>
-                )}
+                {([
+                  ['접수내용', r.reception_content],
+                  ['세부내용', r.detail_content],
+                  ['처리내용', r.processing_content],
+                  ['연장사유', r.extension_note],
+                  ['비고', r.notes],
+                ] as [string, string | null | undefined][]).filter(([, v]) => v).map(([k, v]) => (
+                  <p key={k} className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                    <span className="text-[10px] text-gray-400 mr-1">{k}</span>{v}
+                  </p>
+                ))}
               </div>
             );
           })}
