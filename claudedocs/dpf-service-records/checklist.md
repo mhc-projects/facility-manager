@@ -210,6 +210,23 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       - (e) **재확인만 하고 다시 나열 안 함**: 사용자가 명시적으로 확정한 차이(본사/협력사 구분, 크린어스 vendor
         미추가, 연장 전자결재 미연동)와 미관찰이라 추측하지 않은 것들(서류 보기 상세, 접수종류 하위옵션, 일괄
         업로드 매칭방식)은 직전 턴에서 이미 보고했으므로 반복하지 않음.
-- [ ] (a)(b) 항목을 추가할지는 사용자 결정 대기 — 추가 시 `DpfServiceRecordTable`의 "컬럼 예산" 원칙(§8.3,
-      "19개에 6개를 그대로 더하지 않는다") 적용해 압축된 형태로 제안(기사처리/처리/완료를 스택 셀 하나로, 연장은
-      상태 배지에 덧붙이는 형태, 협회청구일자는 청구상태 셀에 폴드)
+- [x] (a)(b) 항목 구현 완료(사용자 지시: "(a)(b) 다음에 고쳐줘"):
+      - (a) `DpfServiceRecordTable.tsx`: `processed_at`/`completed_at` 두 컬럼을 `process_dates`(기사/처리/완료
+        3줄 스택) 하나로 압축(13→12/11컬럼, "컬럼 예산" 원칙 §8.3 적용). `status` 셀에 연장 배지(연장요청/
+        연장승인/연장반려, `extension_requested`+`extension_approved` 3단) 폴드. `billing_status` 셀에
+        `association_billing_date` 2번째 줄로 폴드. `category` 셀에 `converted_from_category` 전환 배지 폴드.
+        `SkeletonRow` 너비도 `col.width * 0.7`로 컬럼 수 변화에 안전하게 수정. `app/dpf/[vin]/page.tsx` 접수이력
+        카드에도 협회청구일자(`dl`에 추가)·연장 배지(3단) 추가 — 어드바이저 지적대로 카드도 (a) 대상.
+      - (b) `app/api/dpf/service-records/route.ts`에 `conversion` 파라미터 추가(`clean_to_as`/`as_to_clean`,
+        `converted_from_category`+`category` 둘 다로 필터 — 트리거가 카테고리 변경마다 매번 기록하므로 두 번
+        이상 전환된 레코드 오탐 방지). `DpfServiceListView.tsx`에 "전환" 드롭다운 추가(접수현황 모드 전용,
+        `hasFilter`/`activeFilterCount`에도 포함).
+      - 트리거 재확인(`supabase/migrations/20260911_dpf_service_records.sql:90-91`): `category`가 바뀔 때마다
+        (최초 1회만) `converted_from_category`에 `OLD.category` 기록 — 단순 clean/as 왕복이 아니라 매 전환마다
+        기록되는 구조라 `conversion` 필터가 category 컬럼도 함께 봐야 한다는 어드바이저 지적이 맞았음.
+      - 실제 브라우저 검증(85가8787/VIN 260132205738, 크리닝 1회차 생성 → 기사처리 09-10/처리 09-11/완료
+        09-12/협회청구 09-13/청구완료/연장요청(미정) → 접수현황 목록·차량상세 카드 모두 스택/배지/폴드 정상
+        렌더 확인 → 분류를 AS로 수정해 전환 유발 → `converted_from_category=clean`, `category=as`,
+        `round_no=1` DB 확인 → 카드/목록에 "크리닝에서 전환" 배지 확인 → 전환 필터 크리닝→AS=1건,
+        AS→크리닝=0건 확인 → 콘솔 에러 없음(하드리로드 전 1회 hydration 에러는 기존에 알려진 stale-chunk
+        아티팩트, 하드리로드 후 재현 안 됨) → 소프트 삭제 완료, DB 잔여분 하드 삭제 SQL 사용자에게 전달 예정

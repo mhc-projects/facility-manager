@@ -16,7 +16,9 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 - 유니크 인덱스(`vehicle_id, category, round_no`) 위반(`23505`) 시 API가 1회만 재시도한다 — 트리거가 재계산하므로 재시도하면 해소됨. 회차 번호에 이빨(gap)이 생기는 것은 허용한다(취소 건도 번호를 먹는다).
 
 ## 전환(conversion) — 크리닝↔AS
-접수 도중 분류가 바뀌면 `converted_from_category`에 원래 분류를 남기고, `round_no`는 **새 category 기준으로 재채번**한다(원래 채번을 유지하지 않음). 트리거가 `category is distinct from old.category`일 때 자동 처리한다.
+접수 도중 분류가 바뀌면 `converted_from_category`에 원래 분류를 남기고, `round_no`는 **새 category 기준으로 재채번**한다(원래 채번을 유지하지 않음). 트리거가 `category is distinct from old.category`일 때 자동 처리한다(단, `converted_from_category`가 이미 채워져 있으면 덮어쓰지 않아 최초 분류가 보존된다 — 두 번 이상 전환돼도 마찬가지).
+- `GET /api/dpf/service-records?conversion=clean_to_as|as_to_clean` 필터는 `converted_from_category`뿐 아니라 현재 `category`까지 함께 검사한다 — 트리거가 카테고리가 바뀔 때마다(왕복이 아니어도) 기록하므로 `category` 없이 `converted_from_category`만 보면 이미 다시 전환된 레코드까지 오탐한다. `DpfServiceListView`의 reception 모드 전용 "전환" 드롭다운이 이 파라미터를 보낸다.
+- `DpfServiceRecordTable`의 `category` 셀에 "{원분류}에서 전환" 배지, `app/dpf/[vin]/page.tsx` 접수이력 카드에도 동일 배지가 있다.
 
 ## 변경정보 오버레이 write-back — "최신 레코드일 때만"
 연락처(`contact_wireless`/`contact_wired`)·출동지역(`dispatch_area_primary`/`secondary`)은 접수 등록/수정 시 `dpf_vehicles` 오버레이 컬럼에 자동 반영되지만, **PUT(수정)은 그 레코드가 해당 차량의 최신 레코드(reception_date desc, created_at desc)일 때만 write-back한다.** 오래된 티켓을 수정한다고 이후 더 최신 접수에서 확인된 정보를 덮어쓰면 안 되기 때문이다. POST(신규 접수)는 항상 최신이므로 조건 없이 write-back한다.

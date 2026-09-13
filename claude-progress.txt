@@ -221,3 +221,20 @@
   기간 프리셋/특판 등 필터·정렬 UI는 크린어스엔 있으나 1~5단계 재설계 범위 밖(pre-existing)으로 별도 분류.
   차량 레벨 필드(성능검사기간/보증기간/주행시간 등)는 `types/dpf.ts`에 전혀 없음을 그렙으로 확인, 스코프 밖이지만
   발견사항으로 보고.
+
+## 2026-09-13 (계속) | 크린어스 대비 재점검 발견사항 (a)(b) 구현
+- 사용자 지시 "(a)(b) 다음에 고쳐줘"에 따라 구현. 어드바이저 계획 검토 후 진행.
+- (a) `DpfServiceRecordTable.tsx`: processed_at/completed_at 2컬럼 → process_dates(기사처리/처리/완료 3줄 스택)
+  1컬럼으로 압축(컬럼 예산 원칙 적용). status 셀에 연장 배지(연장요청/연장승인/연장반려 3단, 폼의 실제 라디오
+  구조 확인 후 결정), billing_status 셀에 협회청구일자, category 셀에 전환 배지를 각각 폴드. SkeletonRow 너비
+  하드코딩 배열을 col.width*0.7 계산식으로 교체(컬럼 수 변경에 안전). app/dpf/[vin]/page.tsx 접수이력 카드에도
+  협회청구일자·연장 배지 추가.
+- (b) `app/api/dpf/service-records/route.ts`에 conversion 파라미터(clean_to_as/as_to_clean) 추가.
+  트리거(supabase/migrations/20260911_dpf_service_records.sql:90-91) 재확인 결과 category 변경마다 매번
+  converted_from_category를 기록(단순 왕복이 아님)하는 구조라, converted_from_category 단독이 아니라 category와
+  함께 필터링해야 이중 전환 오탐을 막을 수 있음을 확인 후 반영. DpfServiceListView.tsx에 "전환" 드롭다운 추가
+  (접수현황 모드 전용, hasFilter/activeFilterCount 포함).
+- 검증: 85가8787(VIN 260132205738)에 크리닝 레코드 1건 생성해 기사처리/처리/완료/협회청구/청구완료/연장요청
+  전부 채운 뒤 목록·상세 카드 렌더 확인 → 분류를 AS로 수정해 전환 유발 → DB에서 converted_from_category=clean,
+  category=as, round_no=1 확인 → "크리닝에서 전환" 배지 확인 → 전환 필터 크리닝→AS=1건/AS→크리닝=0건 확인 →
+  콘솔 에러 없음. 테스트 레코드 소프트 삭제 완료, DB 하드 삭제는 SQL로 사용자에게 전달.

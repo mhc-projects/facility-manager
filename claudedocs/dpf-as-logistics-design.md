@@ -472,8 +472,14 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
 - **요약 바**: `reception`은 기존 5타일(크리닝대기/완료, AS대기/완료, 상담종료) 그대로. `logistics`는 4타일(요소수대기/완료,
   부품전달대기/완료) — §7의 `/stats` 응답에 추가되는 4개 필드를 사용.
 - **테이블 컬럼**: `DpfServiceRecordTable`에 `variant?: 'reception' | 'logistics'`(기본 reception) prop 추가. `logistics`는
-  처리점/담당AS기사/기사처리일자 3개 컬럼을 빼고 택배사(courier) 1개를 더한다(§2.4 "부착현황과 거의 동일 + 택배사 추가,
-  크리닝/AS 관련 컬럼 제거" 그대로).
+  처리점/담당AS기사 2개 컬럼을 빼고 택배사(courier) 1개를 더한다(§2.4 "부착현황과 거의 동일 + 택배사 추가, 크리닝/AS 관련
+  컬럼 제거" 그대로). → 2026-09-13: `processed_at`/`completed_at`은 두 variant 모두 `process_dates`(기사처리/처리/완료
+  3줄 스택, "컬럼 예산" 원칙 §8.3 적용) 하나로 압축 — logistics는 기사처리 개념이 없어 그 줄만 자동으로 숨는다. `status`
+  셀에 연장 배지, `billing_status` 셀에 협회청구일자, `category` 셀에 전환(`converted_from_category`) 배지를 각각 폴드
+  — 크린어스 대비 재점검(2026-09-13)에서 "기록되지만 목록에 안 보임"으로 지적된 항목들을 새 컬럼 없이 추가.
+  전환 필터는 `conversion` 쿼리 파라미터(`clean_to_as`/`as_to_clean`)로 `DpfServiceListView`의 reception 모드에만
+  추가 — `converted_from_category`와 `category`를 함께 검사해야 정확하다(트리거가 카테고리 변경마다 매번 `OLD.category`를
+  기록하므로 둘 이상 전환된 레코드를 배제하려면 현재 category까지 봐야 함).
 - **부수 효과**: 이 추출 작업을 하는 김에 2단계 사후검토에서 지적된 `/dpf/service`의 통계 `useEffect([result.total])` 문제를
   같이 고친다 — 이 페이지엔 등록 버튼이 없어 `result.total`이 바뀌는 건 필터 변경 때뿐이므로, 통계 fetch는 **마운트 시 1회만**
   (`useEffect(() => { ... }, [])`)으로 충분하다.

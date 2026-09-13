@@ -339,3 +339,34 @@ UTC 경계 이슈로 한 번 겪었던 것과 같은 클래스의 실수를 반�
 `types/dpf.ts`를 그렙해도 전혀 없다 — 이건 `dpf_service_records`(이번 프로젝트 대상)가 아니라 `dpf_vehicles`
 마스터 스키마 자체의 문제라 이번 5단계 프로젝트의 스코프 밖이지만, "기록하고 작성하던 부분"이라는 질문에 정확히
 해당하므로 발견사항으로 보고한다.
+
+### (a)(b) 구현 — 압축 설계와 전환 필터의 정확도 (2026-09-13)
+사용자 지시 "(a)(b) 다음에 고쳐줘"에 따라 구현 전 어드바이저에게 구체적 계획(정확한 셀 레이아웃, 필터 파라미터
+설계)을 검토받았다. 두 가지 교정이 있었다:
+
+1. **전환 필터는 `converted_from_category` 단독으로는 부정확하다.** 처음엔 `converted_from_category='clean'`
+   AND `category='as'` 없이 `converted_from_category` 값만으로 필터링하려 했으나, 어드바이저가 트리거 본문
+   확인을 제안했다. `supabase/migrations/20260911_dpf_service_records.sql:90-91`을 실제로 읽어보니 트리거는
+   "clean↔as 왕복"이 아니라 **`category`가 바뀔 때마다(어떤 값이든) `converted_from_category`가 비어있을 때만
+   `OLD.category`를 기록**하는 구조였다 — 즉 `cs→as→clean` 같은 두 번째 전환에서도 `converted_from_category`는
+   최초값(`cs`)을 유지한 채 `category`만 `clean`으로 바뀐다. 이 경우 `converted_from_category` 하나만 보고
+   "크리닝→AS" 필터를 걸면 이미 다시 크리닝으로 돌아간 레코드까지 오탐한다. `category` 컬럼까지 함께 검사하는
+   것으로 수정 — 이 프로젝트에서 "먼저 실제 스키마/트리거를 읽고 가정을 검증한다"는 원칙이 다시 한번 적중했다.
+
+2. **연장 배지는 처음부터 3단이 맞았다.** 어드바이저가 "혹시 승인 체크박스가 단순 boolean이라면 반려 상태를
+   지어내지 말라"고 선제적으로 지적했으나, `ServiceRecordFormModal.tsx:333`을 확인해보니 실제로는
+   `{v: true, label: '승인'}, {v: false, label: '반려'}, {v: null, label: '미정'}` 3단 라디오였다 — 원래 계획한
+   3색 배지(연장승인/연장반려/연장요청)가 맞았다. "폼을 먼저 읽고 확정한다"가 두 번째로 적중한 순간.
+
+**압축 설계 실행**: `DpfServiceRecordTable.tsx`에서 `processed_at`+`completed_at` 2컬럼을 `process_dates`
+(기사처리/처리/완료 3줄 스택 — `app/dpf/[vin]/page.tsx`의 `dates` 배열과 동일 패턴 재사용) 1컬럼으로 압축,
+`status` 셀에 연장 배지, `billing_status` 셀에 협회청구일자, `category` 셀에 전환 배지를 각각 폴드 — 컬럼 수는
+13→12(reception)/11→11(logistics, 이미 completed_at 하나만 있었으므로 순증감 없음)로 줄었다. `SkeletonRow`의
+하드코딩된 13개 너비 배열은 `col.width * 0.7` 계산식으로 교체 — 이전 phase-4 리뷰에서도 지적된 "컬럼 배열과
+인덱스 기반 배열이 따로 논다" 클래스의 drift를 원천 차단.
+
+검증은 실제 차량(85가8787/VIN 260132205738)에 레코드 1건을 만들어 6개 기사처리/처리/완료/협회청구/청구상태/
+연장요청 필드를 모두 채운 뒤, 목록·상세 카드 렌더를 확인하고, 분류를 크리닝→AS로 수정해 전환을 유발시켜
+`converted_from_category`/`category`/`round_no`를 DB에서 직접 재확인하고, 전환 필터 양방향(1건/0건)까지
+확인하는 방식으로 진행했다 — 새 필드 하나가 아니라 상호작용하는 여러 필드를 한 레코드에 모아 검증 비용을
+낮췄다(어드바이저 제안).
