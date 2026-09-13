@@ -569,6 +569,13 @@ function ServiceTab({
     cancelled:   { label: '취소',   color: 'bg-gray-100 text-gray-500' },
   };
   const COST_TYPE_LABELS: Record<string, string> = { paid: '유상', free: '무상', mixed: '유/무상' };
+  const BILLING_LABELS: Record<string, string> = {
+    none: '청구 전',
+    billed: '청구완료',
+    unbillable_reception: '지급불가(접수)',
+    unbillable_completion: '지급불가(완료)',
+    held: '보류',
+  };
   const DELIVERY_REQUEST_LABELS: Record<string, string> = { request: '요청', fixed: '고정' };
 
   return (
@@ -629,10 +636,12 @@ function ServiceTab({
 
                 <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
                   {([
+                    ['지자체', r.local_government],
                     ['처리점', r.service_branch],
                     ['담당AS기사', r.assigned_as_technician],
                     ['처리기사', r.processing_technician],
                     ...dates,
+                    ['청구상태', r.billing_status ? BILLING_LABELS[r.billing_status] : null],
                     ['협회청구', r.association_billing_date],
                     ['비용', r.cost_type ? COST_TYPE_LABELS[r.cost_type] : null],
                     ['필터', r.filter_type],
