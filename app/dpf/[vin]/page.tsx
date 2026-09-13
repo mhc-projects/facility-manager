@@ -599,6 +599,15 @@ function ServiceTab({
                         {CATEGORY_LABELS[r.converted_from_category]}에서 전환
                       </span>
                     )}
+                    {r.extension_requested && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
+                        r.extension_approved === true ? 'bg-emerald-50 text-emerald-600'
+                        : r.extension_approved === false ? 'bg-red-50 text-red-600'
+                        : 'bg-amber-50 text-amber-600'
+                      }`}>
+                        {r.extension_approved === true ? '연장승인' : r.extension_approved === false ? '연장반려' : '연장요청'}
+                      </span>
+                    )}
                     <span className="text-sm font-medium text-gray-700 tabular-nums">
                       {r.reception_date || '접수일 미등록'}
                     </span>
@@ -611,6 +620,7 @@ function ServiceTab({
                     ['처리점', r.service_branch],
                     ['담당AS기사', r.assigned_as_technician],
                     ...dates,
+                    ['협회청구', r.association_billing_date],
                   ] as [string, string | null | undefined][]).filter(([, v]) => v).map(([k, v]) => (
                     <div key={k}>
                       <dt className="text-[10px] text-gray-400 uppercase tracking-wide">{k}</dt>

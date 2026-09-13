@@ -23,7 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const RECEPTION_COLUMNS = [
   { key: 'category',       label: '분류',       width: 90 },
-  { key: 'status',         label: '상태',       width: 80 },
+  { key: 'status',         label: '상태',       width: 90 },
   { key: 'reception_date', label: '접수일',     width: 100 },
   { key: 'plate_number',   label: '차량번호',   width: 100 },
   { key: 'vin',            label: '차대번호',   width: 160 },
@@ -32,15 +32,15 @@ const RECEPTION_COLUMNS = [
   { key: 'local_government', label: '지자체',   width: 100 },
   { key: 'service_branch', label: '처리점',     width: 130 },
   { key: 'assigned_as_technician', label: '담당AS기사', width: 100 },
-  { key: 'processed_at',   label: '처리일자',   width: 100 },
-  { key: 'completed_at',   label: '완료일자',   width: 100 },
+  { key: 'process_dates',  label: '처리·완료',  width: 120 },
   { key: 'billing_status', label: '청구상태',   width: 110 },
 ] as const;
 
-// 물류(부품전달/요소수)는 처리점/담당AS기사/기사처리일자 개념이 없어 빼고, 택배사를 추가한다(설계 §8.2)
+// 물류(부품전달/요소수)는 처리점/담당AS기사 개념이 없어 빼고, 택배사를 추가한다(설계 §8.2)
+// process_dates는 기사처리/처리/완료 3줄을 한 셀에 스택 — 물류는 기사처리가 항상 null이라 자동으로 숨는다
 const LOGISTICS_COLUMNS = [
   { key: 'category',       label: '분류',       width: 90 },
-  { key: 'status',         label: '상태',       width: 80 },
+  { key: 'status',         label: '상태',       width: 90 },
   { key: 'reception_date', label: '접수일',     width: 100 },
   { key: 'plate_number',   label: '차량번호',   width: 100 },
   { key: 'vin',            label: '차대번호',   width: 160 },
@@ -48,7 +48,7 @@ const LOGISTICS_COLUMNS = [
   { key: 'vehicle_name',   label: '차명',       width: 130 },
   { key: 'local_government', label: '지자체',   width: 100 },
   { key: 'courier',        label: '택배사',     width: 110 },
-  { key: 'completed_at',   label: '완료일자',   width: 100 },
+  { key: 'process_dates',  label: '처리·완료',  width: 120 },
   { key: 'billing_status', label: '청구상태',   width: 110 },
 ] as const;
 
@@ -63,11 +63,11 @@ const BILLING_LABELS: Record<string, string> = {
 function SkeletonRow({ columns }: { columns: ReadonlyArray<{ key: string; width: number }> }) {
   return (
     <tr className="border-b border-gray-100">
-      {columns.map((col, i) => (
+      {columns.map((col) => (
         <td key={col.key} className="px-3 py-3">
           <div
             className="h-4 bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 rounded animate-pulse"
-            style={{ width: `${[60, 50, 70, 80, 130, 70, 90, 70, 90, 70, 70, 70, 80][i] ?? 80}px` }}
+            style={{ width: `${Math.round(col.width * 0.7)}px` }}
           />
         </td>
       ))}
@@ -89,16 +89,37 @@ export default function DpfServiceRecordTable({
     switch (key) {
       case 'category':
         return (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700">
-            {CATEGORY_LABELS[r.category]} {r.round_no}회차
-          </span>
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700">
+              {CATEGORY_LABELS[r.category]} {r.round_no}회차
+            </span>
+            {r.converted_from_category && (
+              <span className="text-[10px] text-amber-600">
+                {CATEGORY_LABELS[r.converted_from_category]}에서 전환
+              </span>
+            )}
+          </div>
         );
       case 'status': {
         const st = STATUS_CONFIG[r.status] ?? STATUS_CONFIG.in_progress;
+        const ext = r.extension_requested
+          ? r.extension_approved === true
+            ? { label: '연장승인', color: 'bg-emerald-50 text-emerald-600' }
+            : r.extension_approved === false
+            ? { label: '연장반려', color: 'bg-red-50 text-red-600' }
+            : { label: '연장요청', color: 'bg-amber-50 text-amber-600' }
+          : null;
         return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${st.color}`}>
-            {st.label}
-          </span>
+          <div className="flex flex-col items-start gap-0.5">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${st.color}`}>
+              {st.label}
+            </span>
+            {ext && (
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${ext.color}`}>
+                {ext.label}
+              </span>
+            )}
+          </div>
         );
       }
       case 'reception_date':
@@ -126,19 +147,36 @@ export default function DpfServiceRecordTable({
       case 'service_branch': return <span className="text-xs text-gray-600">{r.service_branch || '-'}</span>;
       case 'courier':        return <span className="text-xs text-gray-600">{r.courier || '-'}</span>;
       case 'assigned_as_technician': return <span className="text-xs text-gray-600">{r.assigned_as_technician || '-'}</span>;
-      case 'processed_at':
-        return r.processed_at
-          ? <span className="text-xs tabular-nums text-gray-500">{r.processed_at}</span>
-          : <span className="text-gray-300">-</span>;
-      case 'completed_at':
-        return r.completed_at
-          ? <span className="text-xs tabular-nums text-gray-500">{r.completed_at}</span>
-          : <span className="text-gray-300">-</span>;
+      case 'process_dates': {
+        const dates = (
+          [
+            ['기사', r.technician_processed_at],
+            ['처리', r.processed_at],
+            ['완료', r.completed_at],
+          ] as [string, string | null | undefined][]
+        ).filter(([, v]) => v);
+        if (dates.length === 0) return <span className="text-gray-300">-</span>;
+        return (
+          <div className="flex flex-col gap-0.5">
+            {dates.map(([label, v]) => (
+              <div key={label} className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-400 w-6 inline-block">{label}</span>
+                <span className="text-xs tabular-nums text-gray-600">{v}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
       case 'billing_status':
         return (
-          <span className="text-xs text-gray-500">
-            {BILLING_LABELS[r.billing_status ?? 'none'] ?? '청구 전'}
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-gray-500">
+              {BILLING_LABELS[r.billing_status ?? 'none'] ?? '청구 전'}
+            </span>
+            {r.association_billing_date && (
+              <span className="text-[10px] tabular-nums text-gray-400">{r.association_billing_date}</span>
+            )}
+          </div>
         );
       default: return '-';
     }
