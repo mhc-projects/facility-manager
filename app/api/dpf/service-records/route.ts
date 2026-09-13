@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('date_to')?.trim() ?? '';
     const dateFieldParam = searchParams.get('date_field')?.trim() ?? '';
     const dateField = DATE_FIELDS.includes(dateFieldParam) ? dateFieldParam : 'reception_date';
+    // 크린어스 관찰(§2.1): 최근/과거 정렬 토글. 기본값은 기존 동작(최근순) 유지.
+    const ascending = searchParams.get('sort')?.trim() === 'asc';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
     const pageSize = Math.min(100, parseInt(searchParams.get('pageSize') ?? '20'));
     const offset = (page - 1) * pageSize;
@@ -73,9 +75,9 @@ export async function GET(request: NextRequest) {
       if (dateTo) dbQuery = dbQuery.lte(dateField, dateTo);
     }
 
-    let orderedQuery = dbQuery.order(dateField, { ascending: false, nullsFirst: false });
+    let orderedQuery = dbQuery.order(dateField, { ascending, nullsFirst: false });
     if (dateField !== 'created_at') {
-      orderedQuery = orderedQuery.order('created_at', { ascending: false });
+      orderedQuery = orderedQuery.order('created_at', { ascending });
     }
     const { data, error, count } = await orderedQuery
       .range(offset, offset + pageSize - 1);

@@ -30,6 +30,7 @@ const DATE_FIELD_OPTIONS = [
   { value: 'created_at', label: '등록일' },
 ] as const;
 const DEFAULT_DATE_FIELD = 'reception_date';
+const DEFAULT_SORT = 'desc';
 
 const DATE_PRESET_MONTHS = [1, 3, 6, 12] as const;
 
@@ -62,6 +63,7 @@ export default function DpfServiceListView({ mode }: Props) {
   const [dateField, setDateField] = useState<string>(DEFAULT_DATE_FIELD);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [sortOrder, setSortOrder] = useState<string>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<SearchResult>({ records: [], total: 0, page: 1, pageSize: 20 });
   const [stats, setStats] = useState<DpfServiceRecordStats>(EMPTY_STATS);
@@ -72,11 +74,11 @@ export default function DpfServiceListView({ mode }: Props) {
 
   const search = useCallback(async (
     q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string, conv: string,
-    billing: string, field: string, from: string, to: string, p: number,
+    billing: string, field: string, from: string, to: string, sort: string, p: number,
   ) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ q, page: String(p), pageSize: '20' });
+      const params = new URLSearchParams({ q, page: String(p), pageSize: '20', sort });
       // 로직스틱스 모드는 "전체"도 부품전달/요소수 우주 안이어야 한다 — 빈 값으로 보내면 API가 6개 카테고리 전부를 돌려준다
       const effectiveCategory = mode === 'logistics' ? (cat || LOGISTICS_UNIVERSE) : cat;
       if (effectiveCategory) params.set('category', effectiveCategory);
@@ -102,15 +104,15 @@ export default function DpfServiceListView({ mode }: Props) {
 
   const triggerSearch = useCallback((
     q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string, conv: string,
-    billing: string, field: string, from: string, to: string, p: number,
+    billing: string, field: string, from: string, to: string, sort: string, p: number,
   ) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(q, cat, st, gov, branch, cour, cost, conv, billing, field, from, to, p), 300);
+    debounceRef.current = setTimeout(() => search(q, cat, st, gov, branch, cour, cost, conv, billing, field, from, to, sort, p), 300);
   }, [search]);
 
   useEffect(() => {
-    triggerSearch(query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, page);
-  }, [query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, page, triggerSearch]);
+    triggerSearch(query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, sortOrder, page);
+  }, [query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, sortOrder, page, triggerSearch]);
 
   useEffect(() => {
     // 이 화면엔 등록 버튼이 없어 로컬 변이로 통계가 바뀔 일이 없다 — 마운트 시 1회면 충분(2단계 사후검토에서 지적된
@@ -134,10 +136,12 @@ export default function DpfServiceListView({ mode }: Props) {
   function handleDateFromChange(v: string) { setDateFrom(v); setPage(1); }
   function handleDateToChange(v: string) { setDateTo(v); setPage(1); }
   function handleDatePreset(months: number) { setDateFrom(monthsAgoLocal(months)); setDateTo(''); setPage(1); }
+  function handleSortOrderChange(v: string) { setSortOrder(v); setPage(1); }
   function clearAll() {
     setQuery(''); setCategory(''); setStatus(''); setLocalGov(''); setServiceBranch('');
     setCourier(''); setCostType(''); setConversion(''); setBillingStatus('');
-    setDateField(DEFAULT_DATE_FIELD); setDateFrom(''); setDateTo(''); setPage(1);
+    setDateField(DEFAULT_DATE_FIELD); setDateFrom(''); setDateTo('');
+    setSortOrder(DEFAULT_SORT); setPage(1);
   }
 
   const hasFilter = category || status || localGov || serviceBranch || courier || costType || conversion || billingStatus || dateFrom || dateTo;
@@ -345,6 +349,20 @@ export default function DpfServiceListView({ mode }: Props) {
                     className="px-2 py-1 text-xs font-medium text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
                   >
                     {m}개월
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1 ml-1 border border-gray-200 rounded-lg p-0.5 bg-white">
+                {[{ value: 'desc', label: '최근순' }, { value: 'asc', label: '과거순' }].map(o => (
+                  <button
+                    key={o.value}
+                    onClick={() => handleSortOrderChange(o.value)}
+                    className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                      sortOrder === o.value ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {o.label}
                   </button>
                 ))}
               </div>
