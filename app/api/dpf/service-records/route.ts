@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     let dbQuery = supabaseAdmin
       .from('dpf_service_records')
-      .select('*, dpf_vehicles!inner(vin, plate_number, owner_name, vehicle_name, local_government)', { count: 'exact' })
+      .select('*, dpf_vehicles!inner(vin, plate_number, owner_name, vehicle_name, local_government, installation_date, device_type)', { count: 'exact' })
       .eq('is_deleted', false)
       .eq('dpf_vehicles.is_deleted', false);
 

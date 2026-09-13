@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { DpfServiceRecordWithVehicle } from '@/types/dpf';
 import { CATEGORY_LABELS } from '@/components/dpf/ServiceRecordFormModal';
+import { DEVICE_TYPE_COLORS } from '@/components/dpf/DpfVehicleTable';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 
 interface Props {
@@ -59,6 +60,8 @@ const BILLING_LABELS: Record<string, string> = {
   unbillable_completion: '지급불가(완료)',
   held: '보류',
 };
+
+const COST_TYPE_LABELS: Record<string, string> = { paid: '유상', free: '무상', mixed: '유/무상' };
 
 function SkeletonRow({ columns }: { columns: ReadonlyArray<{ key: string; width: number }> }) {
   return (
@@ -136,13 +139,30 @@ export default function DpfServiceRecordTable({
         );
       case 'vin':
         return (
-          <Link href={`/dpf/${encodeURIComponent(vehicle.vin)}?tab=service`}
-            className="font-mono text-xs text-blue-600 hover:text-blue-800 transition-colors underline-offset-2 hover:underline">
-            {vehicle.vin}
-          </Link>
+          <div className="flex flex-col gap-0.5">
+            <Link href={`/dpf/${encodeURIComponent(vehicle.vin)}?tab=service`}
+              className="font-mono text-xs text-blue-600 hover:text-blue-800 transition-colors underline-offset-2 hover:underline">
+              {vehicle.vin}
+            </Link>
+            {vehicle.installation_date && (
+              <span className="text-[10px] tabular-nums text-gray-400">구변 {vehicle.installation_date.split('T')[0]}</span>
+            )}
+          </div>
         );
       case 'owner_name':    return <span className="text-sm font-medium text-gray-800">{vehicle.owner_name || '-'}</span>;
-      case 'vehicle_name':  return <span className="text-sm">{vehicle.vehicle_name || '-'}</span>;
+      case 'vehicle_name': {
+        const dt = vehicle.device_type;
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="text-sm">{vehicle.vehicle_name || '-'}</span>
+            {dt && (
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${DEVICE_TYPE_COLORS[dt] ?? 'bg-gray-100 text-gray-600'}`}>
+                {dt}
+              </span>
+            )}
+          </div>
+        );
+      }
       case 'local_government': return <span className="text-xs text-gray-500">{r.local_government || vehicle.local_government || '-'}</span>;
       case 'service_branch': return <span className="text-xs text-gray-600">{r.service_branch || '-'}</span>;
       case 'courier':        return <span className="text-xs text-gray-600">{r.courier || '-'}</span>;
@@ -175,6 +195,9 @@ export default function DpfServiceRecordTable({
             </span>
             {r.association_billing_date && (
               <span className="text-[10px] tabular-nums text-gray-400">{r.association_billing_date}</span>
+            )}
+            {r.cost_type && (
+              <span className="text-[10px] text-gray-400">{COST_TYPE_LABELS[r.cost_type] ?? r.cost_type}</span>
             )}
           </div>
         );

@@ -21,6 +21,14 @@ function raw(vehicle: DpfVehicle, key: string): string {
   return v != null && v !== '' ? String(v) : '-';
 }
 
+export const DEVICE_TYPE_COLORS: Record<string, string> = {
+  '복합중형': 'bg-blue-50 text-blue-700',
+  '복합소형': 'bg-cyan-50 text-cyan-700',
+  '2종 파샬': 'bg-amber-50 text-amber-700',
+  '1종 대형': 'bg-orange-50 text-orange-700',
+  '정보없음': 'bg-gray-100 text-gray-500',
+};
+
 const COLUMNS = [
   { key: 'vendor',           label: '구분',        width: 60 },
   { key: 'plate_number',     label: '차량번호',    width: 100 },
@@ -170,15 +178,8 @@ export default function DpfVehicleTable({
       case 'device_type': {
         const dt = v.device_type || raw(v, '부착장치');
         if (!dt || dt === '-') return <span className="text-gray-300">-</span>;
-        const dtColors: Record<string, string> = {
-          '복합중형': 'bg-blue-50 text-blue-700',
-          '복합소형': 'bg-cyan-50 text-cyan-700',
-          '2종 파샬': 'bg-amber-50 text-amber-700',
-          '1종 대형': 'bg-orange-50 text-orange-700',
-          '정보없음': 'bg-gray-100 text-gray-500',
-        };
         return (
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${dtColors[dt] ?? 'bg-gray-100 text-gray-600'}`}>
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${DEVICE_TYPE_COLORS[dt] ?? 'bg-gray-100 text-gray-600'}`}>
             {dt}
           </span>
         );
