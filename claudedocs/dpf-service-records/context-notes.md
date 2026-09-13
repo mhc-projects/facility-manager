@@ -404,3 +404,11 @@ UTC 경계 이슈로 한 번 겪었던 것과 같은 클래스의 실수를 반�
 `<input>`을 감싸는 컴포넌트는 `label.querySelector(...)`(라벨 내부)를 먼저 써야 하고, `label.parentElement`
 경유는 형제 요소가 여러 개인 그룹에서 항상 위험하다 — 이번처럼 "값을 읽으면 그럴듯하게 true가 나온다"는 것도
 검증이 아니다, 스크린샷으로 실제 렌더를 봐야 한다는 이 세션의 반복된 교훈과 같은 계열.
+
+### 미해결 나이스투해브 — 라벨 매핑 중복 (2026-09-13, 의도적 보류)
+`COST_TYPE_LABELS`(비용: paid/free/mixed)와 `DELIVERY_REQUEST_LABELS`(접수유형: request/fixed)가 이번에
+`app/dpf/[vin]/page.tsx`와 `DpfServiceRecordTable.tsx` 두 곳에 각각 로컬 상수로 추가됐고, `ServiceRecordFormModal.tsx`
+(280행대 SelectField의 `options` 배열)에도 같은 매핑이 인라인으로 이미 있다 — `DEVICE_TYPE_COLORS`를
+`DpfVehicleTable.tsx`에서 export로 뺀 것과 같은 클래스의 중복인데, 이번엔 손대지 않고 남겨뒀다(어드바이저
+지적, 스코프 확대 방지 차원에서 의도적 보류). 다음에 이 두 라벨을 만지게 되면 `CATEGORY_LABELS` 패턴대로
+`ServiceRecordFormModal.tsx`에서 export해 3곳 모두 import하도록 정리한다.
