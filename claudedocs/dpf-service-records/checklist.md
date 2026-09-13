@@ -265,3 +265,19 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
       실제 데이터 오염 없이 넘어감.)
 - [ ] 첨부파일 유무 표시(목록/카드)는 이번 A/B/C 범위에서 제외 — 별도 항목으로 대기(카드는 기존 GET으로 가능,
       목록은 API 집계 추가 필요해 비용이 다름)
+
+## 재확인 라운드 2 — 카드 잔여 누락 2건 수정 (2026-09-13, 계속)
+"진짜 더 빠진 부분이 없는지" 재요청 → 필드별로 `ServiceTab` 함수 범위(라인 단위)만 스코프해 `r.<field>` 패턴을
+다시 그렙 → `billing_status`(청구상태 값 자체 — 협회청구일자/비용은 이미 있었는데 정작 상태값이 빠짐)와
+`r.local_government`(레코드 스냅샷 지자체 — 목록엔 `r.x || vehicle.x`로 이미 보이는데 카드엔 아예 없었음)
+2건 발견 → 사용자 지시 "둘 다 고쳐줘"로 즉시 반영.
+- [x] `app/dpf/[vin]/page.tsx` dl에 `['지자체', r.local_government]`(처리점 앞), `['청구상태', ...BILLING_LABELS]`
+      (협회청구 앞) 추가. `DpfServiceRecordTable.tsx`의 `BILLING_LABELS`와 동일한 맵을 페이지 로컬로 복제
+      (기존에 이미 존재하던 COST_TYPE_LABELS/DELIVERY_REQUEST_LABELS 중복과 같은 계열 — 의도적 보류, 다음에
+      `ServiceRecordFormModal.tsx`에서 한 번에 export 정리 예정).
+- [x] 검증: 상담종료 레코드 1건(지자체="테스트지자체", 청구상태=보류)만 최소 필드로 생성 → 카드에 지자체/청구상태
+      둘 다 정상 렌더 확인 → 콘솔 에러 없음 → 소프트 삭제, DB 하드 삭제 SQL 전달.
+- [x] 재확인 결과 이 2건 외엔 §2 전 항목이 구현됨/사용자 제외 확정/미관찰/프로젝트 범위 밖으로 설명됨(어드바이저
+      검토로 재확인 — dispatch_area_*/contact_wireless·wired는 차량 오버레이가 최신값을 대신 보여줘서 의도적
+      제외, 장착점은 설치이력 탭에 이미 있음, created_by/created_at 등 감사 필드는 크린어스 관찰 항목 자체가
+      아님).

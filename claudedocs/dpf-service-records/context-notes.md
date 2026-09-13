@@ -412,3 +412,14 @@ UTC 경계 이슈로 한 번 겪었던 것과 같은 클래스의 실수를 반�
 `DpfVehicleTable.tsx`에서 export로 뺀 것과 같은 클래스의 중복인데, 이번엔 손대지 않고 남겨뒀다(어드바이저
 지적, 스코프 확대 방지 차원에서 의도적 보류). 다음에 이 두 라벨을 만지게 되면 `CATEGORY_LABELS` 패턴대로
 `ServiceRecordFormModal.tsx`에서 export해 3곳 모두 import하도록 정리한다.
+
+### 재확인 라운드 2 — 스코프 없는 그렙의 함정 (2026-09-13)
+1차 재감사 때 `grep -c "\.$f\b" page.tsx`로 파일 전체를 훑었는데, 이게 거짓 음성을 만들었다 — `vehicle.local_government`
+(헤더 배지, 기본정보 탭)와 `r.local_government`(접수이력 탭, 서비스 레코드 자체)가 같은 필드명을 공유해서 카운트에
+섞였고, `notes`도 `r.notes`+`inst.notes`+`sub.notes` 3개가 합쳐져 보였다. 어드바이저가 "ServiceTab 함수 범위(라인
+번호)로 스코프하고 `r.` 접두사까지 붙여서 다시 그렙하라"고 정확히 지적한 뒤에야 `billing_status`와
+`r.local_government` 딱 2개의 진짜 누락이 드러났다 — 나머지(`dispatch_area_*`, `contact_wireless/wired`)는 이미
+1차 재감사에서 "차량 오버레이가 대신 보여줘서 의도적 제외"로 정리된 항목이었다. **교훈**: 필드 존재 여부를
+그렙으로 검증할 때는 (1) 변수 접두사(`r.`/`vehicle.`/`inst.`)까지 포함하고 (2) 검사 대상 함수/컴포넌트 범위로
+`sed`든 `grep -A/-B`든 스코프를 좁혀야 한다 — 파일 전체 카운트는 이름이 겹치는 다른 엔티티의 필드를 자기 것으로
+착각하게 만든다.
