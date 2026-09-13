@@ -570,6 +570,10 @@ create policy "dpf_service_record_attachments_write" on dpf_service_record_attac
 **세부 결정 4가지 (2026-09-11, 코드 작성 전 확정):**
 - **날짜 필터 기준**: 2단계는 `reception_date` 고정, 크린어스처럼 접수일/처리일/기사처리일/완료일/등록일 드롭다운은 **의도적으로 미룬다**
   (3단계 이후 재검토 대상으로 여기 명시해둠 — 나중에 "빠졌다"고 재논의하지 않도록).
+  **→ 2026-09-13 구현 완료.** `GET /api/dpf/service-records`에 `date_field` 파라미터 추가(5개 화이트리스트, 미지정 시
+  `reception_date`로 하위호환), `DpfServiceListView.tsx`에 드롭다운 UI 추가. `created_at`만 timestamptz라 date 컬럼과
+  같은 문자열로 비교하면 UTC 자정 기준으로 잘려 KST 당일 생성 행이 빠지는 문제가 있어 이 필드일 때만 `+09:00` 오프셋을
+  명시했다. 정렬 기준도 `date_field`를 따라간다(완료일로 필터링했는데 접수일 순으로 정렬되는 혼란 방지).
 - **요약 바 집계 의미**: 크리닝대기=`category='clean' AND status='in_progress'`, 크리닝완료=`status='completed'`,
   AS대기/완료도 동일 패턴. `cancelled`(취소)는 대기/완료 어느 쪽에도 넣지 않고 집계에서 제외한다. 상담종료(`cs`)는 상태 구분 없이 전체 건수 1개만 보여준다.
   즉 쿼리는 **5개**(크리닝대기/완료, AS대기/완료, 상담종료 전체) — §7의 "6개 내외"는 이 표현으로 수정.
