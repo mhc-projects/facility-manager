@@ -344,7 +344,7 @@ function ApprovalsContent() {
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
-    if (!token) return
+    if (!token || !TokenManager.isTokenValid(token)) return
     try {
       const res = await fetch('/api/approvals/pending-count', {
         headers: { Authorization: `Bearer ${token}` },

@@ -67,7 +67,12 @@ export async function verifyTokenHybrid(token: string): Promise<TokenVerificatio
   try {
     decoded = jwt.verify(token, NEW_JWT_SECRET) as JWTPayload;
   } catch (error: any) {
-    console.error('❌ [JWT] 토큰 검증 실패:', error.message);
+    // 토큰 만료는 정상적인 세션 만료 상황이므로 error가 아닌 warn으로 기록 (자동 갱신 미구현 상태라 반복 발생 가능)
+    if (error.name === 'TokenExpiredError') {
+      console.warn('⚠️ [JWT] 토큰 만료:', error.message);
+    } else {
+      console.error('❌ [JWT] 토큰 검증 실패:', error.message);
+    }
     return {
       user: null,
       isOldToken: false,
