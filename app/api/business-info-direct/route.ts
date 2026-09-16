@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 const DEBUG = process.env.NODE_ENV === 'development';
 const log = (...args: any[]) => DEBUG && console.log(...args);
 const logError = (...args: any[]) => console.error(...args); // Always log errors
+const logWarn = (...args: any[]) => console.warn(...args); // Always log warnings
 
 // 매출 계산(lib/services/revenue-calculator.ts)이 실제로 참조하는 business_info 컬럼 목록
 // 이 필드가 수정되면 revenue_calculations 캐시가 최신 값을 반영하도록 재계산을 트리거한다
@@ -581,7 +582,7 @@ export async function PUT(request: NextRequest) {
         );
 
         if (existingWithSameName) {
-          logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명(활성):', normalizedName);
+          logWarn('⚠️ [BUSINESS-INFO-DIRECT] 중복 사업장명(활성):', normalizedName, '- 충돌 id:', existingWithSameName.id);
           return NextResponse.json({
             success: false,
             error: `이미 동일한 사업장명이 존재합니다. 다른 이름을 사용해주세요.`
@@ -1374,7 +1375,7 @@ export async function POST(request: NextRequest) {
       [normalizedData.business_name]
     );
     if (existingWithSameName) {
-      logError('❌ [BUSINESS-INFO-DIRECT] 중복 사업장명(활성):', normalizedData.business_name);
+      logWarn('⚠️ [BUSINESS-INFO-DIRECT] 중복 사업장명(활성):', normalizedData.business_name, '- 충돌 id:', existingWithSameName.id);
       return NextResponse.json({
         success: false,
         error: '이미 동일한 사업장명이 존재합니다. 다른 이름을 사용해주세요.'
