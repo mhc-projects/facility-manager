@@ -90,6 +90,9 @@ const TYPE_COLORS: Record<WorkLog['type'], string> = {
   other: 'bg-gray-100 text-gray-600',
 }
 
+// 목록 1회 조회 건수 (서버 상한 200 이내)
+const PAGE_SIZE = 100
+
 const STATUS_LABELS: Record<WorkLog['status'], string> = {
   in_progress: '진행중',
   completed: '완료',
@@ -943,8 +946,11 @@ export default function DevWorkLogPage() {
   // 데이터
   const [items, setItems] = useState<WorkLog[]>([])
   const [total, setTotal] = useState(0)
+  // 상단 카드용 전체 건수 (필터·로드된 목록과 무관, 서버 집계)
+  const [stats, setStats] = useState({ total: 0, in_progress: 0, completed: 0, on_hold: 0 })
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // 필터 상태
@@ -1024,37 +1030,63 @@ export default function DevWorkLogPage() {
   }, [isDeveloper, authHeader])
 
   // ── 목록 로드 ──
+  const fetchPage = useCallback(async (offset: number) => {
+    const params = new URLSearchParams({
+      search,
+      status: filterStatus,
+      period: filterPeriod,
+      sort: sortKey,
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+    })
+    const res = await fetch(`/api/dev-work-log?${params}`, {
+      headers: authHeader() as HeadersInit,
+      cache: 'no-store',
+    })
+    return res.json()
+  }, [search, filterStatus, filterPeriod, sortKey, authHeader])
+
   const loadItems = useCallback(async () => {
     if (!isDeveloper) return
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        search,
-        status: filterStatus,
-        period: filterPeriod,
-        sort: sortKey,
-        limit: '100',
-        offset: '0',
-      })
-      const res = await fetch(`/api/dev-work-log?${params}`, {
-        headers: authHeader() as HeadersInit,
-        cache: 'no-store',
-      })
-      const data = await res.json()
+      const data = await fetchPage(0)
       if (data.success) {
         setItems(data.data || [])
         setTotal(data.total || 0)
+        if (data.stats) setStats(data.stats)
       }
     } catch {
       showToast('목록을 불러오는 데 실패했습니다', 'error')
     } finally {
       setLoading(false)
     }
-  }, [isDeveloper, search, filterStatus, filterPeriod, sortKey, authHeader])
+  }, [isDeveloper, fetchPage])
 
   useEffect(() => {
     loadItems()
   }, [loadItems])
+
+  // ── 다음 페이지 이어붙이기 ──
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const data = await fetchPage(items.length)
+      if (data.success) {
+        const incoming: WorkLog[] = data.data || []
+        setItems(prev => {
+          const seen = new Set(prev.map(p => p.id))
+          return [...prev, ...incoming.filter(n => !seen.has(n.id))]
+        })
+        setTotal(data.total || 0)
+        if (data.stats) setStats(data.stats)
+      }
+    } catch {
+      showToast('목록을 불러오는 데 실패했습니다', 'error')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   // ── 업무 저장 ──
   const handleSave = async (data: Partial<WorkLog> & { new_note?: string }) => {
@@ -1165,14 +1197,6 @@ export default function DevWorkLogPage() {
         </div>
       </AdminLayout>
     )
-  }
-
-  // ── 통계 집계 ──
-  const stats = {
-    total: items.length,
-    in_progress: items.filter(i => i.status === 'in_progress').length,
-    completed: items.filter(i => i.status === 'completed').length,
-    on_hold: items.filter(i => i.status === 'on_hold').length,
   }
 
   return (
@@ -1570,6 +1594,16 @@ export default function DevWorkLogPage() {
                 총 <span className="font-semibold text-gray-700">{total}</span>건
                 {filterStatus !== 'all' && ` · ${STATUS_LABELS[filterStatus as WorkLog['status']]} ${items.length}건`}
               </p>
+              {items.length < total && (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="mt-2 w-full sm:w-auto px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {loadingMore && <Loader2 size={14} className="animate-spin" />}
+                  더 보기 ({total - items.length}건 남음)
+                </button>
+              )}
             </div>
           )}
 

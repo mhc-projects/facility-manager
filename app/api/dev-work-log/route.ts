@@ -127,6 +127,22 @@ export async function GET(request: NextRequest) {
 
     const total = parseInt((countResult as { total?: string })?.total || '0')
 
+    // 상단 카드용 집계 — 검색/상태/기간 필터와 무관한 전체 건수
+    const statsRow = await queryOne(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress,
+         COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+         COUNT(*) FILTER (WHERE status = 'on_hold') AS on_hold
+       FROM dev_work_log`
+    ) as Record<string, string> | null
+    const stats = {
+      total: parseInt(statsRow?.total || '0'),
+      in_progress: parseInt(statsRow?.in_progress || '0'),
+      completed: parseInt(statsRow?.completed || '0'),
+      on_hold: parseInt(statsRow?.on_hold || '0'),
+    }
+
     const items = (rows || []).map((r: Record<string, unknown>) => ({
       ...r,
       progress_notes: typeof r.progress_notes === 'string'
@@ -134,7 +150,7 @@ export async function GET(request: NextRequest) {
         : (r.progress_notes || []),
     }))
 
-    return NextResponse.json({ success: true, data: items, total, limit, offset })
+    return NextResponse.json({ success: true, data: items, total, stats, limit, offset })
   } catch (err) {
     console.error('[DEV-WORK-LOG GET]', err)
     return NextResponse.json({ success: false, error: '서버 오류가 발생했습니다' }, { status: 500 })
