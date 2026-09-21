@@ -27,6 +27,8 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 - `is_deleted`(소프트 삭제) — 협회청구 이력(`association_billing_date`)이 걸린 원장을 보존하기 위해 하드 삭제하지 않는다. DELETE API는 `is_deleted=true`로만 갱신한다.
 - `status='cancelled'`(취소) — 고객이 접수를 철회한 경우. **집계 시 두 축을 헷갈리지 말 것**: 접수현황 요약 바(대기/완료)와 부착현황 파생 컬럼(크리닝횟수/AS횟수)은 `cancelled`를 카운트에서 제외하지만, 최근접수일/마지막처리일 같은 "날짜" 집계는 취소 건도 포함한다(접수·처리 자체는 실제 발생했으므로). 새 집계를 추가할 때마다 이 둘 중 어느 쪽 성격인지 먼저 정해야 한다.
 
+- **차량 삭제 ≠ 접수 삭제 (2026-09-21 실제 사고)**: `/dpf/[vin]` 상단 히어로 카드의 "차량 삭제"(`DELETE /api/dpf/vehicles/[vin]`)는 `dpf_vehicles.is_deleted=true`로 차량을 소프트 삭제하고, 접수 건은 `is_deleted=false`인 채로 남는다. 그러나 접수현황 API는 `dpf_vehicles!inner`에 `is_deleted=false`를 걸어서 **삭제된 차량의 접수 건도 접수현황에서 사라진다**(차량관리에도 없고 상세는 404, 복구 UI 없음). 접수 건만 지우려는 사용자가 이 버튼을 잘못 눌러 "접수현황에서 안 지워지고 차량관리에서도 사라졌다"는 문의가 나왔다. 그래서 버튼 문구는 "차량 삭제"로, 확인창은 "차량 삭제 확인" 제목 + 접수 이력 건수 경고로 구분해 뒀다. 접수 건 삭제는 접수이력 탭 각 행의 작은 휴지통(`DELETE .../service-records/[id]`). 복구는 SQL로 `dpf_vehicles.is_deleted=false`.
+
 ## 부착현황(`/dpf`) 파생 컬럼 — 배치 조회, 메인 목록에 조인 금지
 `GET /api/dpf/service-records/derived-stats?vehicle_ids=...`가 화면에 보이는 vehicle_id만 모아 `dpf_service_records`+`dpf_device_installations`를 별도로 조회하고 애플리케이션 코드에서 집계한다(PostgREST에 GROUP BY가 없다). `/api/dpf/search`(메인 목록)에는 손대지 않는다 — 새 파생 지표를 추가할 때도 이 배치 API에 필드를 얹지, 메인 쿼리에 조인하지 않는다.
 

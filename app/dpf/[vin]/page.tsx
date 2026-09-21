@@ -50,6 +50,7 @@ interface ServiceRecordModal {
 }
 
 interface DeleteState {
+  title?: string;
   label: string;
   onConfirm: () => Promise<void>;
 }
@@ -97,8 +98,13 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
   function openDeleteVehicle() {
+    // 차량 삭제는 소프트 삭제라 접수 건도 접수현황에서 함께 보이지 않게 된다 — 접수 건만 지우려는 오조작 방지용 안내
+    const recordCount = detail?.serviceRecords.length ?? 0;
     setDeleteState({
-      label: `${detail?.vehicle.plate_number ?? vin} 차량을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      title: '차량 삭제 확인',
+      label: `${detail?.vehicle.plate_number ?? vin} 차량을 삭제하시겠습니까? 차량관리 목록에서 사라지고${
+        recordCount > 0 ? `, 접수 이력 ${recordCount}건도 접수현황에서 보이지 않게 됩니다` : ''
+      }. 화면에서는 복구할 수 없습니다. 접수 건만 지우려면 취소한 뒤 접수이력 탭의 휴지통 버튼을 사용하세요.`,
       onConfirm: async () => {
         const res = await fetch(`/api/dpf/vehicles/${encodeURIComponent(vin)}`, { method: 'DELETE' });
         if (res.ok) router.replace('/dpf');
@@ -222,9 +228,10 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
               </button>
               <button
                 onClick={openDeleteVehicle}
+                title="차량 전체 삭제 (접수 이력 포함)"
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all backdrop-blur-sm"
               >
-                <Trash2 className="w-3.5 h-3.5" /> 삭제
+                <Trash2 className="w-3.5 h-3.5" /> 차량 삭제
               </button>
             </div>
           </div>
@@ -381,7 +388,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
         isOpen={Boolean(deleteState)}
         onClose={() => setDeleteState(null)}
         onConfirm={handleConfirmDelete}
-        title="삭제 확인"
+        title={deleteState?.title ?? '삭제 확인'}
         message={deleteState?.label ?? ''}
         confirmText="삭제"
         cancelText="취소"
