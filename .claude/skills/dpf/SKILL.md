@@ -31,6 +31,7 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 
 ## 부착현황(`/dpf`) 파생 컬럼 — 배치 조회, 메인 목록에 조인 금지
 `GET /api/dpf/service-records/derived-stats?vehicle_ids=...`가 화면에 보이는 vehicle_id만 모아 `dpf_service_records`+`dpf_device_installations`를 별도로 조회하고 애플리케이션 코드에서 집계한다(PostgREST에 GROUP BY가 없다). `/api/dpf/search`(메인 목록)에는 손대지 않는다 — 새 파생 지표를 추가할 때도 이 배치 API에 필드를 얹지, 메인 쿼리에 조인하지 않는다.
+- ⚠️ **차량 목록 정렬은 `created_at desc, vin asc`(2026-09-21)** — 차량 26,838대의 `created_at`이 3종류뿐이고 9,076대가 같은 값(대량 임포트)이라, `created_at` 하나로만 정렬하면 동점 행 순서가 DB 내부 저장 순서에 맡겨진다. 차량 행을 UPDATE하는 작업(접수 write-back, 차량 수정/삭제/복구)이 그 순서를 바꾸고, offset 페이징에서 페이지 간 중복·누락이 생긴다(실측: 20건씩 5페이지에 4건 중복). `/api/dpf/search`와 `/api/dpf/export`(1000건 배치)가 같은 보조 정렬을 쓴다 — 새 목록/내보내기 쿼리를 만들 때도 `vin`(UNIQUE) 같은 유일 키를 마지막 정렬 기준으로 붙일 것.
 
 ## 접수현황/물류관리 — 같은 원장의 필터 뷰, 별도 화면 아님
 `/dpf/service`(접수현황)와 `/dpf/service/logistics`(물류관리)는 둘 다 `components/dpf/DpfServiceListView.tsx`

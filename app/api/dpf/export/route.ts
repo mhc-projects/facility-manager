@@ -49,8 +49,10 @@ export async function GET(request: NextRequest) {
         dbQuery = dbQuery.eq('vendor', vendor);
       }
 
+      // 배치 조회라 정렬이 완전히 고정돼야 한다 — created_at 동점 대비 vin 보조 정렬(search 라우트와 동일)
       const { data, error } = await dbQuery
         .order('created_at', { ascending: false })
+        .order('vin', { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
 
       if (error) {

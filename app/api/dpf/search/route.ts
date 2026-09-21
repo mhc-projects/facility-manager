@@ -40,8 +40,11 @@ export async function GET(request: NextRequest) {
       dbQuery = dbQuery.eq('vendor', vendor);
     }
 
+    // created_at은 일괄 임포트로 동점이 대부분이라(9천대가 같은 값) vin(UNIQUE)을 보조 정렬로 둬서 순서를 고정한다.
+    // 없으면 차량 행 UPDATE(접수 write-back 등)로 순서가 흔들리고 offset 페이지 간 중복/누락이 생긴다.
     const { data, error, count } = await dbQuery
       .order('created_at', { ascending: false })
+      .order('vin', { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) {
