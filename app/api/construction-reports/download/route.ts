@@ -18,6 +18,9 @@ import {
   convertInchesToTwip
 } from 'docx'
 
+// request.url을 읽으므로 정적 렌더링 대상에서 제외한다 (빌드 시 Dynamic server usage 오류 방지)
+export const dynamic = 'force-dynamic'
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 

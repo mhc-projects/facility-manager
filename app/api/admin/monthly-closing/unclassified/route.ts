@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyTokenString } from '@/utils/auth';
 
+// request.headers를 읽으므로 정적 렌더링 대상에서 제외한다 (빌드 시 Dynamic server usage 오류 방지)
+export const dynamic = 'force-dynamic';
+
 // GET: 설치일 없는 미분류 사업장 조회
 export async function GET(request: NextRequest) {
   try {

@@ -7,6 +7,9 @@ import { createClient } from '@supabase/supabase-js'
 import jwt from 'jsonwebtoken'
 import { isFullAccessUser, canAccessMeetingMinute } from '@/lib/meeting-minutes-access'
 
+// request.headers를 읽으므로 정적 렌더링 대상에서 제외한다 (빌드 시 Dynamic server usage 오류 방지)
+export const dynamic = 'force-dynamic'
+
 // Supabase 클라이언트 설정
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
