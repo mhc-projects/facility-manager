@@ -391,6 +391,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
           onSuccess={() => { setSubModal(null); loadDetail(); }}
           type={subModal.type}
           vin={vin}
+          vehicle={vehicle}
           record={subModal.record}
         />
       )}

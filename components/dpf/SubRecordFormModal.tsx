@@ -1,7 +1,15 @@
 'use client';
+// DPF 차량 상세의 설치이력/성능검사/보조금/콜모니터링 추가·수정 모달
 
 import { useState, useEffect } from 'react';
+import {
+  ArrowRight, Banknote, Building2, FileText, Gauge, Headphones, ShieldCheck, Star, StickyNote, Wrench,
+} from 'lucide-react';
 import Modal, { ModalActions } from '@/components/ui/Modal';
+import {
+  Card, FieldLabel, FooterStatus, FormCanvas, INPUT_CLASS, Segmented, SubmitKbd, TextArea, TextInput,
+  useCmdEnter, vehicleSummary, type VehicleSummaryType,
+} from '@/components/dpf/DpfFormUI';
 import {
   DpfDeviceInstallation,
   DpfPerformanceInspection,
@@ -19,6 +27,7 @@ interface Props {
   onSuccess: () => void;
   type: SubRecordType;
   vin: string;
+  vehicle?: VehicleSummaryType;
   record?: AnyRecord;
 }
 
@@ -29,7 +38,7 @@ const TITLES: Record<SubRecordType, string> = {
   call: '콜모니터링',
 };
 
-export default function SubRecordFormModal({ isOpen, onClose, onSuccess, type, vin, record }: Props) {
+export default function SubRecordFormModal({ isOpen, onClose, onSuccess, type, vin, vehicle, record }: Props) {
   const isEdit = Boolean(record);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
@@ -47,6 +56,7 @@ export default function SubRecordFormModal({ isOpen, onClose, onSuccess, type, v
   }
 
   async function handleSubmit() {
+    if (saving) return;
     setSaving(true);
     setError('');
     try {
@@ -80,276 +90,279 @@ export default function SubRecordFormModal({ isOpen, onClose, onSuccess, type, v
     }
   }
 
+  useCmdEnter(isOpen, handleSubmit);
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${isEdit ? '수정' : '추가'} — ${TITLES[type]}`}
+      title={`${TITLES[type]} ${isEdit ? '수정' : '추가'}`}
+      description={vehicleSummary(vin, vehicle)}
       size="lg"
+      closeOnOverlayClick={false}
       actions={
         <>
+          <FooterStatus error={error} />
           <ModalActions.Cancel onClick={onClose} />
           <ModalActions.Confirm onClick={handleSubmit} loading={saving}>
             {isEdit ? '수정 저장' : '추가'}
+            <SubmitKbd />
           </ModalActions.Confirm>
         </>
       }
     >
-      <div className="space-y-4">
-        {error && (
-          <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            {error}
-          </div>
-        )}
+      <FormCanvas>
         {type === 'installation' && <InstallationFields values={values} set={set} />}
         {type === 'inspection' && <InspectionFields values={values} set={set} />}
         {type === 'subsidy' && <SubsidyFields values={values} set={set} />}
         {type === 'call' && <CallFields values={values} set={set} />}
-      </div>
+      </FormCanvas>
     </Modal>
   );
 }
 
 // ─── 필드 그룹들 ──────────────────────────────────────────────
 
-function Field({
-  label, name, value, onChange, type = 'text', required, placeholder, className = ''
-}: {
-  label: string; name: string; value: unknown; onChange: (v: unknown) => void;
-  type?: string; required?: boolean; placeholder?: string; className?: string;
-}) {
+type FieldsProps = { values: Record<string, unknown>; set: (k: string, v: unknown) => void };
+
+const toNumberOrNull = (v: string) => (v === '' ? null : Number(v));
+
+function NotesCard({ values, set, field = 'notes' }: FieldsProps & { field?: string }) {
   return (
-    <div className={className}>
-      <label className="block text-xs font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      <input
-        type={type}
-        value={value != null ? String(value) : ''}
-        onChange={e => onChange(type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-    </div>
+    <Card icon={StickyNote} title="메모">
+      <TextArea label="메모" hideLabel value={values[field]} onChange={v => set(field, v)} placeholder="내부 메모" rows={3} />
+    </Card>
   );
 }
 
-function SelectField({
-  label, value, onChange, options
-}: {
-  label: string; value: unknown; onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
+const ACTION_DATE_LABELS: Record<string, string> = { install: '설치일', remove: '탈착일', replace: '교체일' };
+
+function InstallationFields({ values, set }: FieldsProps) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-      <select
-        value={value != null ? String(value) : ''}
-        onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-      >
-        <option value="">선택...</option>
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
+    <>
+      <Card icon={Wrench} title="설치 정보">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <FieldLabel>동작 유형</FieldLabel>
+            <Segmented
+              value={String(values.action_type ?? '')}
+              onChange={v => set('action_type', v)}
+              options={[
+                { value: 'install', label: '설치', dot: 'bg-emerald-500' },
+                { value: 'remove', label: '탈착', dot: 'bg-red-500' },
+                { value: 'replace', label: '교체', dot: 'bg-blue-500' },
+              ]}
+            />
+          </div>
+          <TextInput
+            label={ACTION_DATE_LABELS[String(values.action_type)] ?? '설치/탈착일'}
+            value={values.installation_date}
+            onChange={v => set('installation_date', v)}
+            type="date"
+          />
+          <TextInput label="시리얼번호" value={values.serial_number} onChange={v => set('serial_number', v)} placeholder="SN-001" />
+        </div>
+      </Card>
+      <Card icon={Building2} title="업체 · 관리">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <TextInput label="설치업체" value={values.installer_company} onChange={v => set('installer_company', v)} />
+          <TextInput label="관리번호" value={values.management_number} onChange={v => set('management_number', v)} />
+          <TextInput label="판매사무소" value={values.sales_office} onChange={v => set('sales_office', v)} />
+        </div>
+      </Card>
+      <NotesCard values={values} set={set} />
+    </>
   );
 }
 
-function InstallationFields({ values, set }: { values: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <SelectField
-        label="동작 유형"
-        value={values.action_type}
-        onChange={v => set('action_type', v)}
-        options={[
-          { value: 'install', label: '설치' },
-          { value: 'remove', label: '탈착' },
-          { value: 'replace', label: '교체' },
-        ]}
-      />
-      <Field label="설치/탈착일" name="installation_date" value={values.installation_date} onChange={v => set('installation_date', v)} type="date" />
-      <Field label="시리얼번호" name="serial_number" value={values.serial_number} onChange={v => set('serial_number', v)} placeholder="SN-001" />
-      <Field label="설치업체" name="installer_company" value={values.installer_company} onChange={v => set('installer_company', v)} />
-      <Field label="관리번호" name="management_number" value={values.management_number} onChange={v => set('management_number', v)} />
-      <Field label="판매사무소" name="sales_office" value={values.sales_office} onChange={v => set('sales_office', v)} />
-      <div className="col-span-2">
-        <label className="block text-xs font-medium text-gray-700 mb-1">메모</label>
-        <textarea
-          value={values.notes != null ? String(values.notes) : ''}
-          onChange={e => set('notes', e.target.value)}
-          rows={2}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-      </div>
-    </div>
-  );
+const MEASUREMENTS = [
+  { label: 'KD147', before: 'kd147_before', after: 'kd147_after' },
+  { label: 'Lugdown', before: 'lugdown_before', after: 'lugdown_after' },
+  { label: '자유가속', before: 'free_accel_before', after: 'free_accel_after' },
+];
+
+// 부착 전 대비 저감률(%) — 두 값이 다 있고 부착 전이 0보다 클 때만
+function reductionRate(before: unknown, after: unknown): number | null {
+  if (before == null || after == null || before === '' || after === '') return null;
+  const b = Number(before);
+  const a = Number(after);
+  if (!Number.isFinite(b) || !Number.isFinite(a) || b <= 0) return null;
+  return ((b - a) / b) * 100;
 }
 
-function InspectionFields({ values, set }: { values: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
+function InspectionFields({ values, set }: FieldsProps) {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="검사일" name="inspection_date" value={values.inspection_date} onChange={v => set('inspection_date', v)} type="date" />
-        <Field label="검사기관" name="inspection_agency" value={values.inspection_agency} onChange={v => set('inspection_agency', v)} />
-        <SelectField
-          label="검사유형"
-          value={values.inspection_type}
-          onChange={v => set('inspection_type', v)}
-          options={[
-            { value: 'initial', label: '최초검사' },
-            { value: 'confirmation', label: '확인검사' },
-            { value: 'periodic', label: '정기검사' },
-          ]}
-        />
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">합격 여부</label>
-          <div className="flex gap-4 mt-2">
-            {[{ v: true, label: '합격' }, { v: false, label: '불합격' }].map(({ v, label }) => (
-              <label key={label} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={values.pass_yn === v}
-                  onChange={() => set('pass_yn', v)}
-                  className="text-blue-600"
-                />
-                <span className="text-sm">{label}</span>
-              </label>
-            ))}
+    <>
+      <Card icon={ShieldCheck} title="검사 정보">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextInput label="검사일" value={values.inspection_date} onChange={v => set('inspection_date', v)} type="date" />
+          <TextInput label="검사기관" value={values.inspection_agency} onChange={v => set('inspection_agency', v)} />
+          <div>
+            <FieldLabel>검사유형</FieldLabel>
+            <Segmented
+              value={String(values.inspection_type ?? '')}
+              onChange={v => set('inspection_type', v)}
+              options={[
+                { value: '', label: '미지정' },
+                { value: 'initial', label: '최초' },
+                { value: 'confirmation', label: '확인' },
+                { value: 'periodic', label: '정기' },
+              ]}
+            />
+          </div>
+          <div>
+            <FieldLabel>합격 여부</FieldLabel>
+            <Segmented
+              value={values.pass_yn === true ? 'true' : values.pass_yn === false ? 'false' : 'null'}
+              onChange={v => set('pass_yn', v === 'true' ? true : v === 'false' ? false : null)}
+              options={[
+                { value: 'null', label: '미정' },
+                { value: 'true', label: '합격', dot: 'bg-emerald-500' },
+                { value: 'false', label: '불합격', dot: 'bg-red-500' },
+              ]}
+            />
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="border rounded-lg p-3 bg-gray-50">
-        <div className="text-xs font-semibold text-gray-600 mb-3">측정값 (부착 전 → 부착 후)</div>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'KD147', before: 'kd147_before', after: 'kd147_after' },
-            { label: 'Lugdown', before: 'lugdown_before', after: 'lugdown_after' },
-            { label: '자유가속', before: 'free_accel_before', after: 'free_accel_after' },
-          ].map(({ label, before, after }) => (
-            <div key={label}>
-              <div className="text-xs text-gray-500 mb-1">{label}</div>
-              <div className="flex gap-1 items-center">
+      <Card icon={Gauge} title="측정값" description="부착 전 → 부착 후, 저감률은 자동 계산">
+        <div className="hidden grid-cols-[88px_1fr_16px_1fr_72px] items-center gap-2 pb-1.5 text-[11px] font-semibold tracking-wide text-gray-400 sm:grid">
+          <span>항목</span><span>부착 전</span><span /><span>부착 후</span><span className="text-right">저감률</span>
+        </div>
+        <div className="space-y-2">
+          {MEASUREMENTS.map(({ label, before, after }) => {
+            const rate = reductionRate(values[before], values[after]);
+            return (
+              <div key={label} className="grid grid-cols-[1fr_16px_1fr] items-center gap-2 sm:grid-cols-[88px_1fr_16px_1fr_72px]">
+                <span className="col-span-3 text-xs font-medium text-gray-700 sm:col-span-1">{label}</span>
                 <input
                   type="number"
                   step="0.01"
+                  aria-label={`${label} 부착 전`}
                   value={values[before] != null ? String(values[before]) : ''}
-                  onChange={e => set(before, e.target.value === '' ? null : Number(e.target.value))}
+                  onChange={e => set(before, toNumberOrNull(e.target.value))}
                   placeholder="전"
-                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`${INPUT_CLASS} tabular-nums`}
                 />
-                <span className="text-gray-400 text-xs">→</span>
+                <ArrowRight className="h-4 w-4 text-gray-300" />
                 <input
                   type="number"
                   step="0.01"
+                  aria-label={`${label} 부착 후`}
                   value={values[after] != null ? String(values[after]) : ''}
-                  onChange={e => set(after, e.target.value === '' ? null : Number(e.target.value))}
+                  onChange={e => set(after, toNumberOrNull(e.target.value))}
                   placeholder="후"
-                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`${INPUT_CLASS} tabular-nums`}
                 />
+                <span className={`col-span-3 text-xs font-semibold tabular-nums sm:col-span-1 sm:text-right ${
+                  rate == null ? 'text-gray-300' : rate >= 0 ? 'text-emerald-600' : 'text-red-600'
+                }`}>
+                  {rate == null ? '—' : `${rate >= 0 ? '↓' : '↑'} ${Math.abs(rate).toFixed(1)}%`}
+                </span>
               </div>
+            );
+          })}
+        </div>
+      </Card>
+      <NotesCard values={values} set={set} />
+    </>
+  );
+}
+
+const formatWon = (v: unknown) =>
+  v != null && v !== '' && Number.isFinite(Number(v)) ? `${Number(v).toLocaleString('ko-KR')}원` : undefined;
+
+function SubsidyFields({ values, set }: FieldsProps) {
+  return (
+    <>
+      <Card icon={FileText} title="신청">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextInput label="지자체" value={values.local_government} onChange={v => set('local_government', v)} placeholder="예: 울산광역시" />
+          <TextInput label="접수일" value={values.reception_date} onChange={v => set('reception_date', v)} type="date" />
+          <div className="sm:col-span-2">
+            <FieldLabel>승인상태</FieldLabel>
+            <Segmented
+              value={String(values.approval_status ?? '')}
+              onChange={v => set('approval_status', v)}
+              options={[
+                { value: '', label: '미지정' },
+                { value: 'pending', label: '대기', dot: 'bg-amber-500' },
+                { value: 'approved', label: '승인', dot: 'bg-emerald-500' },
+                { value: 'rejected', label: '반려', dot: 'bg-red-500' },
+                { value: 'cancelled', label: '취소', dot: 'bg-gray-400' },
+              ]}
+            />
+          </div>
+        </div>
+      </Card>
+      <Card icon={Banknote} title="금액 · 지급">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextInput
+            label="청구금액" type="number" suffix="원"
+            value={values.subsidy_claim_amount}
+            onChange={v => set('subsidy_claim_amount', toNumberOrNull(v))}
+            hint={formatWon(values.subsidy_claim_amount)}
+          />
+          <TextInput
+            label="자부담 탈거금액" type="number" suffix="원"
+            value={values.self_payment_removal}
+            onChange={v => set('self_payment_removal', toNumberOrNull(v))}
+            hint={formatWon(values.self_payment_removal)}
+          />
+          <TextInput label="예상지급일" value={values.subsidy_expected_date} onChange={v => set('subsidy_expected_date', v)} type="date" />
+          <TextInput label="지급일" value={values.subsidy_payment_date} onChange={v => set('subsidy_payment_date', v)} type="date" />
+        </div>
+      </Card>
+      <NotesCard values={values} set={set} />
+    </>
+  );
+}
+
+const SATISFACTION_LABELS = ['', '매우 불만', '불만', '보통', '만족', '매우 만족'];
+
+function CallFields({ values, set }: FieldsProps) {
+  const score = typeof values.satisfaction_score === 'number' ? values.satisfaction_score : 0;
+  return (
+    <>
+      <Card icon={Headphones} title="모니터링">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextInput label="모니터링일" value={values.monitoring_date} onChange={v => set('monitoring_date', v)} type="date" />
+          <TextInput label="담당자" value={values.call_agent} onChange={v => set('call_agent', v)} />
+          <div>
+            <FieldLabel>모니터링 여부</FieldLabel>
+            <Segmented
+              value={values.monitoring_yn === true ? 'true' : values.monitoring_yn === false ? 'false' : 'null'}
+              onChange={v => set('monitoring_yn', v === 'true' ? true : v === 'false' ? false : null)}
+              options={[
+                { value: 'null', label: '미정' },
+                { value: 'true', label: '완료', dot: 'bg-emerald-500' },
+                { value: 'false', label: '미실시', dot: 'bg-gray-400' },
+              ]}
+            />
+          </div>
+          <div>
+            <FieldLabel>만족도</FieldLabel>
+            <div className="flex h-10 items-center gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-label={`${n}점`}
+                  aria-pressed={score === n}
+                  // 같은 별을 다시 누르면 선택 해제
+                  onClick={() => set('satisfaction_score', score === n ? null : n)}
+                  className="rounded p-0.5 transition hover:scale-110"
+                >
+                  <Star className={`h-6 w-6 ${n <= score ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />
+                </button>
+              ))}
+              <span className="ml-2 text-xs text-gray-500">{score ? `${score}점 · ${SATISFACTION_LABELS[score]}` : '미평가'}</span>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">메모</label>
-        <textarea
-          value={values.notes != null ? String(values.notes) : ''}
-          onChange={e => set('notes', e.target.value)}
-          rows={2}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-      </div>
-    </div>
-  );
-}
-
-function SubsidyFields({ values, set }: { values: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <Field label="지자체" name="local_government" value={values.local_government} onChange={v => set('local_government', v)} />
-      <Field label="접수일" name="reception_date" value={values.reception_date} onChange={v => set('reception_date', v)} type="date" />
-      <SelectField
-        label="승인상태"
-        value={values.approval_status}
-        onChange={v => set('approval_status', v)}
-        options={[
-          { value: 'pending', label: '대기' },
-          { value: 'approved', label: '승인' },
-          { value: 'rejected', label: '반려' },
-          { value: 'cancelled', label: '취소' },
-        ]}
-      />
-      <Field label="청구금액 (원)" name="subsidy_claim_amount" value={values.subsidy_claim_amount} onChange={v => set('subsidy_claim_amount', v)} type="number" />
-      <Field label="지급일" name="subsidy_payment_date" value={values.subsidy_payment_date} onChange={v => set('subsidy_payment_date', v)} type="date" />
-      <Field label="예상지급일" name="subsidy_expected_date" value={values.subsidy_expected_date} onChange={v => set('subsidy_expected_date', v)} type="date" />
-      <Field label="자부담 탈거금액 (원)" name="self_payment_removal" value={values.self_payment_removal} onChange={v => set('self_payment_removal', v)} type="number" />
-      <div className="col-span-2">
-        <label className="block text-xs font-medium text-gray-700 mb-1">메모</label>
-        <textarea
-          value={values.notes != null ? String(values.notes) : ''}
-          onChange={e => set('notes', e.target.value)}
-          rows={2}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-      </div>
-    </div>
-  );
-}
-
-function CallFields({ values, set }: { values: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <Field label="모니터링일" name="monitoring_date" value={values.monitoring_date} onChange={v => set('monitoring_date', v)} type="date" />
-      <Field label="담당자" name="call_agent" value={values.call_agent} onChange={v => set('call_agent', v)} />
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-2">만족도</label>
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map(n => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => set('satisfaction_score', n)}
-              className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                values.satisfaction_score === n
-                  ? 'bg-yellow-400 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-2">모니터링 여부</label>
-        <div className="flex gap-3 mt-1">
-          {[{ v: true, label: '완료' }, { v: false, label: '미실시' }].map(({ v, label }) => (
-            <label key={label} className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="radio"
-                checked={values.monitoring_yn === v}
-                onChange={() => set('monitoring_yn', v)}
-                className="text-blue-600"
-              />
-              <span className="text-sm">{label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      <div className="col-span-2">
-        <label className="block text-xs font-medium text-gray-700 mb-1">메모</label>
-        <textarea
-          value={values.memo != null ? String(values.memo) : ''}
-          onChange={e => set('memo', e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-      </div>
-    </div>
+      </Card>
+      <NotesCard values={values} set={set} field="memo" />
+    </>
   );
 }
 
