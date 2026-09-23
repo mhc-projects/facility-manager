@@ -294,6 +294,7 @@ export default function DpfPage() {
             search(query, localGov, vendor, page);
           }}
           vin={serviceModal.vehicle.vin}
+          vehicle={serviceModal.vehicle}
           initialCategory={serviceModal.initialCategory}
         />
       )}

@@ -402,6 +402,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
           onClose={() => setServiceModal(null)}
           onSuccess={() => { setServiceModal(null); loadDetail(); }}
           vin={vin}
+          vehicle={vehicle}
           record={serviceModal.record}
           initialCategory={serviceModal.category}
           onAttachmentsChange={(id, count) => setDetail(d => d && ({
