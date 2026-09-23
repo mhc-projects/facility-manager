@@ -108,9 +108,11 @@ export type DpfServiceCategory = 'as' | 'clean' | 'clean_elapsed' | 'cs' | 'part
 export interface DpfServiceRecord {
   id: string;
   vehicle_id: string;
-  category: DpfServiceCategory;
+  category: DpfServiceCategory; // 대표 분류 = categories[0] (트리거가 동기화)
+  categories: DpfServiceCategory[]; // 접수 1건의 분류 전체, 선택 순서 유지 (2026-09-23)
   converted_from_category?: DpfServiceCategory | null;
-  round_no: number; // DB 트리거가 채번 — 클라이언트/API에서 세팅하지 않음
+  round_no: number; // 대표 분류의 회차 — DB 트리거가 채번, 클라이언트/API에서 세팅하지 않음
+  round_nos: Partial<Record<DpfServiceCategory, number>>; // 분류별 회차 — 트리거가 채번
   status: 'in_progress' | 'completed' | 'cancelled';
   is_deleted: boolean;
 

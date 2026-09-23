@@ -10,8 +10,16 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 - `dpf_service_records` — AS/크리닝/물류(부품전달/요소수)/엔진교체 통합 원장. `as_records`(사업장 AS, [[as-management]] 스킬 참고)와는 완전히 별개 시스템 — 대상 엔티티가 다르다(차량 vs 사업장), 연결 컬럼 없음. 접수현황/물류관리/부착현황 3화면은 이 표를 서로 다른 category 집합으로 필터링한 뷰일 뿐, 별도 테이블이 아니다.
 - `dpf_device_installations` — 설치/탈착/교체 이력. **엠즈(mz) 벤더 차량은 이 테이블이 애초에 비어 있다** — 엠즈는 자체 DB 파일을 그대로 가져와 차량 마스터 필드만 채우고, 설치이력/성능검사/보조금 서브테이블은 임포트 경로 자체가 없다(103ec33 커밋). `/dpf/[vin]`의 설치이력/성능검사/보조금 탭이 `vendors: ['fujino']`로만 노출되는 이유이자, 부착현황 목록의 철부횟수가 엠즈 차량에서 항상 0으로 돌아오는 이유(화면에는 `-`로 표시해 "추적 안 함"과 "실제 0회"를 구분).
 
+## 접수 1건 = 분류 여러 개(`categories`), 회차는 분류마다(`round_nos`) (2026-09-23)
+- `categories text[]`(선택 순서 유지, [1]=대표) + `round_nos jsonb`(`{"as":1,"clean":4}`). `category`/`round_no`는 삭제하지 않고 트리거가 **대표 분류 값으로 동기화**한다 — 기존 유니크 인덱스·정렬·구버전 코드 호환용. 마이그레이션 `20260923_dpf_service_records_multi_category.sql`.
+- ⚠️ **분류로 거르거나 세는 코드는 `category`가 아니라 `categories`를 봐야 한다**: 목록 필터·물류 우주·전환 필터는 PostgREST `.overlaps('categories', …)`, stats도 overlaps, derived-stats는 `categories.includes`. 한 건이 AS대기와 크리닝대기 타일에 동시에 잡히는 게 정상이다(크리닝 두 종이 같이 있어도 크리닝은 1건).
+- 표시는 `categoryRoundLabels(r)`(`ServiceRecordFormModal.tsx` export) 하나로 — 목록 셀·차량상세 카드·삭제/영구삭제 확인 문구·수정 모달 헤더가 공용. `CATEGORY_LABELS[r.category] + r.round_no`로 직접 조합하면 대표 분류만 보인다.
+- API: POST/PUT은 `categories` 배열을 받고(구버전 단일 `category`도 수용) `category=categories[0]`으로 맞춘다. `round_no`/`round_nos`는 절대 받지 않는다.
+- 트리거 규칙: 수정 시 **남아 있는 분류는 기존 회차 유지, 새로 들어온 분류만 채번**, 빠진 분류 회차는 버림(이빨 허용). 같은 차량 채번은 `pg_advisory_xact_lock`으로 직렬화(유니크 인덱스만으론 분류별 회차 전체를 못 지키므로). 로컬 임시 Postgres에서 10개 시나리오 + 동시 등록 검증 완료.
+- 물류(부품전달/요소수)도 AS/크리닝과 자유 조합 가능(사용자 결정) → 그런 건은 접수현황과 물류관리 양쪽에 보이고, 폼은 물류 분류가 하나라도 있으면 물류 섹션을 보여준다.
+
 ## round_no(회차) — DB 트리거로만 채번, API에서 계산 금지
-- `(vehicle_id, category)` 단위로 증가. `dpf_service_records_set_round_no()` 트리거가 INSERT 시 또는 UPDATE로 category가 바뀔 때만 재계산(`MAX(round_no)+1`).
+- 분류별로 증가(위 섹션 참고 — 2026-09-23부터 `round_nos` 기준). `dpf_service_records_set_round_no()` 트리거가 INSERT 시 또는 UPDATE로 categories/category/vehicle_id가 바뀔 때만 재계산(`round_nos ? 분류`인 행의 MAX+1).
 - ⚠️ API/클라이언트가 round_no를 직접 계산해서 넣으면 안 된다 — "MAX 조회 → +1 → INSERT"를 일반 호출로 하면 동시 접수 시 경쟁 상태(race)가 생긴다(전자결재 approve/submit이 트랜잭션 헬퍼를 빠뜨려 부분 업데이트 버그가 났던 전례를 반면교사 삼아 DB 트리거로 강제, [[project_approval_pending_fixes]] 참고).
 - 유니크 인덱스(`vehicle_id, category, round_no`) 위반(`23505`) 시 API가 1회만 재시도한다 — 트리거가 재계산하므로 재시도하면 해소됨. 회차 번호에 이빨(gap)이 생기는 것은 허용한다(취소 건도 번호를 먹는다).
 
@@ -19,6 +27,7 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 `clean`은 DB 값은 그대로 두고 라벨만 "정기 크리닝"으로 바꿨고, "경과 크리닝"은 새 category `clean_elapsed`다(마이그레이션 `20260923_dpf_clean_elapsed_category.sql`). 기존 행을 새 키로 UPDATE하지 않은 이유: category UPDATE는 트리거가 round_no를 재채번하고 `converted_from_category`를 채워 "전환" 배지가 붙는다. 별도 category라 회차는 정기/경과 각각 따로 매겨진다. 대신 "크리닝" 성격 집계(접수현황 크리닝대기/완료 타일, 부착현황 크리닝횟수, 크리닝↔AS 전환 필터)는 두 분류를 **합산**한다 — 새 크리닝 집계를 만들 때 `'clean'` 하나만 비교하지 말 것.
 
 ## 전환(conversion) — 크리닝↔AS
+(2026-09-23 복수 분류 이후) 전환 = 수정에서 분류가 하나 이상 **빠지고** 새 분류가 **들어온** 경우, 처음 빠진 분류를 기록한다. 단순 추가(AS에 크리닝 덧붙임)는 전환이 아니다. 전환 필터는 `converted_from_category ∈ 원분류 AND categories overlaps 대상분류`.
 접수 도중 분류가 바뀌면 `converted_from_category`에 원래 분류를 남기고, `round_no`는 **새 category 기준으로 재채번**한다(원래 채번을 유지하지 않음). 트리거가 `category is distinct from old.category`일 때 자동 처리한다(단, `converted_from_category`가 이미 채워져 있으면 덮어쓰지 않아 최초 분류가 보존된다 — 두 번 이상 전환돼도 마찬가지).
 - `GET /api/dpf/service-records?conversion=clean_to_as|as_to_clean` 필터는 `converted_from_category`뿐 아니라 현재 `category`까지 함께 검사한다 — 트리거가 카테고리가 바뀔 때마다(왕복이 아니어도) 기록하므로 `category` 없이 `converted_from_category`만 보면 이미 다시 전환된 레코드까지 오탐한다. `DpfServiceListView`의 reception 모드 전용 "전환" 드롭다운이 이 파라미터를 보낸다.
 - `DpfServiceRecordTable`의 `category` 셀에 "{원분류}에서 전환" 배지, `app/dpf/[vin]/page.tsx` 접수이력 카드에도 동일 배지가 있다.

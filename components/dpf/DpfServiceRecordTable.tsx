@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { DpfServiceRecordWithVehicle } from '@/types/dpf';
-import { CATEGORY_LABELS } from '@/components/dpf/ServiceRecordFormModal';
+import { CATEGORY_LABELS, categoryRoundLabels } from '@/components/dpf/ServiceRecordFormModal';
 import { DEVICE_TYPE_COLORS } from '@/components/dpf/DpfVehicleTable';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 
@@ -24,7 +24,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const RECEPTION_COLUMNS = [
   { key: 'manufacturer',   label: '제작사',     width: 80 },
-  { key: 'category',       label: '분류',       width: 90 },
+  { key: 'category',       label: '분류',       width: 110 },
   { key: 'status',         label: '상태',       width: 90 },
   { key: 'reception_date', label: '접수일',     width: 100 },
   { key: 'plate_number',   label: '차량번호',   width: 100 },
@@ -41,7 +41,7 @@ const RECEPTION_COLUMNS = [
 // 물류(부품전달/요소수)는 처리점/담당AS기사 개념이 없어 빼고, 택배사를 추가한다(설계 §8.2)
 // process_dates는 기사처리/처리/완료 3줄을 한 셀에 스택 — 물류는 기사처리가 항상 null이라 자동으로 숨는다
 const LOGISTICS_COLUMNS = [
-  { key: 'category',       label: '분류',       width: 90 },
+  { key: 'category',       label: '분류',       width: 110 },
   { key: 'status',         label: '상태',       width: 90 },
   { key: 'reception_date', label: '접수일',     width: 100 },
   { key: 'plate_number',   label: '차량번호',   width: 100 },
@@ -101,9 +101,12 @@ export default function DpfServiceRecordTable({
       case 'category':
         return (
           <div className="flex flex-col items-start gap-0.5">
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700">
-              {CATEGORY_LABELS[r.category]} {r.round_no}회차
-            </span>
+            {/* 분류가 여러 개면 분류별 회차를 한 줄씩(첫 줄 = 대표 분류) */}
+            {categoryRoundLabels(r).map((label, i) => (
+              <span key={i} className={`inline-flex items-center gap-1 text-xs ${i === 0 ? 'font-semibold text-gray-700' : 'font-medium text-gray-500'}`}>
+                {label}
+              </span>
+            ))}
             {r.converted_from_category && (
               <span className="text-[10px] text-amber-600">
                 {CATEGORY_LABELS[r.converted_from_category]}에서 전환

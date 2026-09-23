@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AdminLayout from '@/components/ui/AdminLayout';
 import VehicleFormModal from '@/components/dpf/VehicleFormModal';
 import SubRecordFormModal, { SubRecordType } from '@/components/dpf/SubRecordFormModal';
-import ServiceRecordFormModal, { CATEGORY_LABELS } from '@/components/dpf/ServiceRecordFormModal';
+import ServiceRecordFormModal, { CATEGORY_LABELS, categoryRoundLabels } from '@/components/dpf/ServiceRecordFormModal';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -138,7 +138,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
   function openPurgeRecord(r: DpfServiceRecord) {
     setDeleteState({
       title: '영구 삭제 확인',
-      label: `삭제된 ${CATEGORY_LABELS[r.category]} ${r.round_no}회차 접수를 영구 삭제하시겠습니까? 첨부파일도 함께 지워지며 되돌릴 수 없습니다.`,
+      label: `삭제된 ${categoryRoundLabels(r).join(' · ')} 접수를 영구 삭제하시겠습니까? 첨부파일도 함께 지워지며 되돌릴 수 없습니다.`,
       onConfirm: async () => {
         const res = await fetch(
           `/api/dpf/vehicles/${encodeURIComponent(vin)}/service-records/${r.id}?permanent=1`,
@@ -331,7 +331,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
             attachmentCounts={attachmentCounts}
             onAdd={() => setServiceModal({})}
             onEdit={r => setServiceModal({ record: r })}
-            onDelete={r => openDeleteRecord('service-records', r.id, `${CATEGORY_LABELS[r.category]} ${r.round_no}회차`)}
+            onDelete={r => openDeleteRecord('service-records', r.id, categoryRoundLabels(r).join(' · '))}
             deleted={isSuperAdmin ? {
               show: showDeleted,
               onToggle: setShowDeleted,
@@ -657,9 +657,11 @@ function ServiceTab({
               <div key={r.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700">
-                      {CATEGORY_LABELS[r.category]} {r.round_no}회차
-                    </span>
+                    {categoryRoundLabels(r).map((label, i) => (
+                      <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700">
+                        {label}
+                      </span>
+                    ))}
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${st.color}`}>
                       {st.label}
                     </span>
@@ -752,7 +754,7 @@ function ServiceTab({
                 <div key={r.id} className="flex items-center justify-between gap-3 px-5 py-3 opacity-60">
                   <div className="flex items-center gap-2 flex-wrap min-w-0 text-xs text-gray-600">
                     <span className="px-2 py-0.5 rounded-md font-semibold bg-gray-100 text-gray-600">
-                      {CATEGORY_LABELS[r.category]} {r.round_no}회차
+                      {categoryRoundLabels(r).join(' · ')}
                     </span>
                     <span className="tabular-nums">{r.reception_date || '접수일 미등록'}</span>
                     {r.reception_content && <span className="truncate">{r.reception_content}</span>}

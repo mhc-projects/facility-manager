@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// 크리닝 타일은 정기(clean)+경과(clean_elapsed) 합산
+// 크리닝 타일은 정기(clean)+경과(clean_elapsed) 합산. 분류가 여러 개인 접수는 해당하는 타일마다 1건씩 잡힌다.
 const CLEAN_CATEGORIES = ['clean', 'clean_elapsed'];
 
 // cancelled(취소)는 대기/완료 어느 쪽에도 포함하지 않고 집계에서 제외한다(설계 §9 결정)
@@ -16,7 +16,7 @@ async function countByCategoryStatus(category: string | string[], status?: strin
     .select('id, dpf_vehicles!inner(id)', { count: 'exact', head: true })
     .eq('is_deleted', false)
     .eq('dpf_vehicles.is_deleted', false)
-    .in('category', Array.isArray(category) ? category : [category]);
+    .overlaps('categories', Array.isArray(category) ? category : [category]);
   if (status) q = q.eq('status', status);
   const { count, error } = await q;
   if (error) throw error;

@@ -59,14 +59,15 @@ export async function GET(request: NextRequest) {
         { foreignTable: 'dpf_vehicles' }
       );
     }
-    if (categories.length > 0) dbQuery = dbQuery.in('category', categories);
+    // 접수 1건이 분류를 여러 개 가질 수 있어 대표 분류가 아니라 categories 전체와 겹치는지로 거른다
+    if (categories.length > 0) dbQuery = dbQuery.overlaps('categories', categories);
     if (status) dbQuery = dbQuery.eq('status', status);
     if (localGov) dbQuery = dbQuery.ilike('local_government', `%${localGov}%`);
     if (serviceBranch) dbQuery = dbQuery.ilike('service_branch', `%${serviceBranch}%`);
     if (billingStatus) dbQuery = dbQuery.eq('billing_status', billingStatus);
     if (costType) dbQuery = dbQuery.eq('cost_type', costType);
     if (courier) dbQuery = dbQuery.ilike('courier', `%${courier}%`);
-    if (conversion) dbQuery = dbQuery.in('converted_from_category', conversion[0]).in('category', conversion[1]);
+    if (conversion) dbQuery = dbQuery.in('converted_from_category', conversion[0]).overlaps('categories', conversion[1]);
     // created_at만 timestamptz라 date 컬럼과 같은 날짜 문자열로 비교하면 UTC 자정 기준으로 잘려
     // KST 기준 그날 생성된 행이 빠진다 — KST 오프셋을 명시해 하루 전체를 커버한다.
     if (dateField === 'created_at') {

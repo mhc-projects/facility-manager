@@ -10,6 +10,7 @@ export const runtime = 'nodejs';
 interface ServiceRecordRow {
   vehicle_id: string;
   category: string;
+  categories: string[] | null;
   status: string;
   reception_date: string | null;
   processed_at: string | null;
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     const [recordsRes, installationsRes] = await Promise.all([
       supabaseAdmin
         .from('dpf_service_records')
-        .select('vehicle_id, category, status, reception_date, processed_at, completed_at')
+        .select('vehicle_id, category, categories, status, reception_date, processed_at, completed_at')
         .in('vehicle_id', ids)
         .eq('is_deleted', false),
       supabaseAdmin
@@ -65,8 +66,10 @@ export async function GET(request: NextRequest) {
         stat.last_processed_date = processedDate;
       }
       if (row.status !== 'cancelled') {
-        if (row.category === 'clean' || row.category === 'clean_elapsed') stat.clean_count += 1;
-        else if (row.category === 'as') stat.as_count += 1;
+        // 한 건에 여러 분류가 있으면 크리닝·AS 양쪽에 1씩(정기+경과 크리닝이 같이 있어도 크리닝은 1회)
+        const cats = row.categories?.length ? row.categories : [row.category];
+        if (cats.includes('clean') || cats.includes('clean_elapsed')) stat.clean_count += 1;
+        if (cats.includes('as')) stat.as_count += 1;
       }
     }
 

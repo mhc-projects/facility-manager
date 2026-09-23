@@ -8,6 +8,15 @@ export const runtime = 'nodejs';
 
 const CATEGORIES = ['as', 'clean', 'clean_elapsed', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
 
+// 접수 1건의 분류 목록(선택 순서 유지, 첫 번째 = 대표). categories 배열이 없으면 구버전 단일 category를 받는다.
+// 유효하지 않은 값이 하나라도 있으면 null.
+function parseCategories(body: Record<string, unknown>): string[] | null {
+  const raw = Array.isArray(body.categories) ? body.categories : body.category !== undefined ? [body.category] : [];
+  const cats = Array.from(new Set(raw));
+  if (cats.length === 0 || !cats.every(c => typeof c === 'string' && CATEGORIES.includes(c))) return null;
+  return cats as string[];
+}
+
 // 접수 등록 폼에 실제로 있는 필드만 dpf_vehicles 변경정보 오버레이로 write-back한다(설계 §4.6).
 // 차량번호/차대번호는 이 폼에 입력란이 없으므로 여기서 다루지 않는다 — VehicleFormModal에서만 수동 수정.
 function buildOverlayUpdate(body: Record<string, unknown>): Record<string, unknown> {
@@ -49,15 +58,16 @@ export async function POST(
       return NextResponse.json({ error: '차량을 찾을 수 없습니다' }, { status: 404 });
     }
 
-    const { category } = body;
-    if (!category || !CATEGORIES.includes(category)) {
+    const categories = parseCategories(body);
+    if (!categories) {
       return NextResponse.json({ error: '분류(category)가 올바르지 않습니다' }, { status: 400 });
     }
 
     const trimOrNull = (v: unknown) => (typeof v === 'string' ? (v.trim() || null) : v ?? null);
     const insertData: Record<string, unknown> = {
       vehicle_id: vehicle.id,
-      category,
+      category: categories[0],
+      categories,
       status: body.status ?? 'in_progress',
       reception_date: body.reception_date || null,
       reception_content: trimOrNull(body.reception_content),
@@ -93,7 +103,7 @@ export async function POST(
       notes: trimOrNull(body.notes),
       created_by: auth.user.id,
     };
-    // round_no는 절대 세팅하지 않는다 — DB 트리거가 채번한다(설계 §4.2)
+    // round_no/round_nos는 절대 세팅하지 않는다 — DB 트리거가 분류별로 채번한다(설계 §4.2)
 
     let { data, error } = await supabaseAdmin
       .from('dpf_service_records')

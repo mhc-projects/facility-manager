@@ -8,6 +8,15 @@ export const runtime = 'nodejs';
 
 const CATEGORIES = ['as', 'clean', 'clean_elapsed', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
 
+// 접수 1건의 분류 목록(선택 순서 유지, 첫 번째 = 대표). categories 배열이 없으면 구버전 단일 category를 받는다.
+// 유효하지 않은 값이 하나라도 있으면 null.
+function parseCategories(body: Record<string, unknown>): string[] | null {
+  const raw = Array.isArray(body.categories) ? body.categories : body.category !== undefined ? [body.category] : [];
+  const cats = Array.from(new Set(raw));
+  if (cats.length === 0 || !cats.every(c => typeof c === 'string' && CATEGORIES.includes(c))) return null;
+  return cats as string[];
+}
+
 // 접수 등록 폼에 실제로 있는 필드만 write-back 대상(설계 §4.6) — POST 라우트와 동일 매핑
 function buildOverlayUpdate(body: Record<string, unknown>): Record<string, unknown> {
   const overlay: Record<string, unknown> = {};
@@ -48,14 +57,16 @@ export async function PUT(
       return NextResponse.json({ error: '차량을 찾을 수 없습니다' }, { status: 404 });
     }
 
-    if (body.category !== undefined && !CATEGORIES.includes(body.category)) {
+    const categoryChanged = body.categories !== undefined || body.category !== undefined;
+    const categories = categoryChanged ? parseCategories(body) : null;
+    if (categoryChanged && !categories) {
       return NextResponse.json({ error: '분류(category)가 올바르지 않습니다' }, { status: 400 });
     }
 
     const trimOrNull = (v: unknown) => (typeof v === 'string' ? (v.trim() || null) : v ?? null);
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    // 전환(크리닝↔AS 등) 허용 — round_no 재채번과 converted_from_category 기록은 DB 트리거가 처리(설계 §4.2)
-    if (body.category !== undefined) update.category = body.category;
+    // 분류 추가/제거·전환 허용 — 새로 들어온 분류의 회차 채번과 converted_from_category 기록은 DB 트리거가 처리(설계 §4.2)
+    if (categories) { update.categories = categories; update.category = categories[0]; }
     if (body.status !== undefined) update.status = body.status;
     if (body.reception_date !== undefined) update.reception_date = body.reception_date || null;
     if (body.reception_content !== undefined) update.reception_content = trimOrNull(body.reception_content);
@@ -89,7 +100,7 @@ export async function PUT(
     if (body.extension_approved !== undefined) update.extension_approved = body.extension_approved ?? null;
     if (body.extension_note !== undefined) update.extension_note = trimOrNull(body.extension_note);
     if (body.notes !== undefined) update.notes = trimOrNull(body.notes);
-    // vehicle_id, round_no, converted_from_category, is_deleted는 이 라우트에서 받지 않는다(설계 §4.2/§4.10)
+    // vehicle_id, round_no, round_nos, converted_from_category, is_deleted는 이 라우트에서 받지 않는다(설계 §4.2/§4.10)
 
     let { data, error } = await supabaseAdmin
       .from('dpf_service_records')

@@ -30,6 +30,15 @@ export const CATEGORY_LABELS: Record<DpfServiceCategory, string> = Object.fromEn
 
 export const LOGISTICS_CATEGORIES: DpfServiceCategory[] = ['parts_delivery', 'urea'];
 
+// "AS 1회차", "정기 크리닝 4회차"처럼 분류별 회차 라벨 — 목록/카드/삭제 확인 문구 공용
+export function categoryRoundLabels(r: Pick<DpfServiceRecord, 'category' | 'categories' | 'round_no' | 'round_nos'>): string[] {
+  const cats = r.categories?.length ? r.categories : [r.category];
+  return cats.map(c => {
+    const n = r.round_nos?.[c] ?? (c === r.category ? r.round_no : undefined);
+    return n != null ? `${CATEGORY_LABELS[c]} ${n}회차` : CATEGORY_LABELS[c];
+  });
+}
+
 // 첨부파일 12슬롯(§2.2 크린어스 관찰 그대로) — key↔한글 라벨 단일 소스
 export const ATTACHMENT_SLOTS: { key: DpfAttachmentSlotKey; label: string }[] = [
   { key: 'vehicle_photo', label: '차량사진' },
@@ -73,7 +82,9 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
   useEffect(() => {
     if (isOpen) {
       setError('');
-      setValues(record ? { ...(record as unknown as Record<string, unknown>) } : defaultValues(initialCategory));
+      setValues(record
+        ? { ...(record as unknown as Record<string, unknown>), categories: record.categories?.length ? record.categories : [record.category] }
+        : defaultValues(initialCategory));
     }
   }, [isOpen, record, initialCategory]);
 
@@ -167,11 +178,19 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
     setValues(prev => ({ ...prev, [key]: val }));
   }
 
-  const category = values.category as DpfServiceCategory | undefined;
-  const isLogistics = category ? LOGISTICS_CATEGORIES.includes(category) : false;
+  // 분류는 복수 선택 — 선택 순서 유지, 첫 번째가 대표 분류(목록 정렬·전환 기준)
+  const categories = (values.categories as DpfServiceCategory[] | undefined) ?? [];
+  const isLogistics = categories.some(c => LOGISTICS_CATEGORIES.includes(c));
+
+  function toggleCategory(c: DpfServiceCategory) {
+    setValues(prev => {
+      const cur = (prev.categories as DpfServiceCategory[] | undefined) ?? [];
+      return { ...prev, categories: cur.includes(c) ? cur.filter(x => x !== c) : [...cur, c] };
+    });
+  }
 
   async function handleSubmit() {
-    if (!values.category) { setError('분류를 선택해주세요'); return; }
+    if (categories.length === 0) { setError('분류를 선택해주세요'); return; }
     setSaving(true);
     setError('');
     try {
@@ -200,7 +219,7 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${isEdit ? '수정' : '접수 등록'} — ${category ? CATEGORY_LABELS[category] : 'AS/크리닝'}`}
+      title={`${isEdit ? '수정' : '접수 등록'} — ${categories.length ? categories.map(c => CATEGORY_LABELS[c]).join(' · ') : 'AS/크리닝'}`}
       size="xl"
       actions={
         <>
@@ -220,7 +239,7 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
 
         {isEdit && record?.round_no != null && (
           <div className="text-xs text-gray-500">
-            {CATEGORY_LABELS[record.category]} {record.round_no}회차
+            {categoryRoundLabels(record).join(' · ')}
             {record.converted_from_category && (
               <span className="ml-1.5 text-amber-600">
                 ({CATEGORY_LABELS[record.converted_from_category]}에서 전환됨)
@@ -231,7 +250,32 @@ export default function ServiceRecordFormModal({ isOpen, onClose, onSuccess, vin
 
         <Section title="분류 / 상태">
           <div className="grid grid-cols-2 gap-4">
-            <SelectField label="분류" value={values.category} onChange={v => set('category', v)} options={CATEGORY_OPTIONS} required />
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                분류<span className="text-red-500 ml-0.5">*</span>
+                <span className="ml-1.5 font-normal text-gray-400">복수 선택 · 처음 고른 분류가 대표</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORY_OPTIONS.map(o => {
+                  const idx = categories.indexOf(o.value);
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => toggleCategory(o.value)}
+                      className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors ${
+                        idx >= 0
+                          ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                          : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {idx === 0 && categories.length > 1 && <span className="mr-1 text-[10px] text-blue-500">대표</span>}
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <SelectField
               label="상태"
               value={values.status}
@@ -557,7 +601,7 @@ function AttachmentSlotView({
 
 function defaultValues(initialCategory?: DpfServiceCategory): Record<string, unknown> {
   return {
-    category: initialCategory ?? '',
+    categories: initialCategory ? [initialCategory] : [],
     status: 'in_progress',
     reception_date: new Date().toISOString().split('T')[0],
     local_government: '', service_branch: '',
@@ -577,7 +621,9 @@ function defaultValues(initialCategory?: DpfServiceCategory): Record<string, unk
 function buildBody(values: Record<string, unknown>): Record<string, unknown> {
   const clean = { ...values };
   // 서버가 받지 않는(트리거/시스템 관리 대상) 필드 — 있어도 API가 무시하지만 명시적으로 제거
-  delete clean.id; delete clean.vehicle_id; delete clean.round_no; delete clean.converted_from_category;
+  delete clean.id; delete clean.vehicle_id; delete clean.round_no; delete clean.round_nos; delete clean.converted_from_category;
+  // 대표 분류(category)는 서버가 categories[0]으로 맞추므로 보내지 않는다
+  delete clean.category;
   delete clean.is_deleted; delete clean.created_at; delete clean.updated_at; delete clean.created_by;
   return clean;
 }

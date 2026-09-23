@@ -306,3 +306,18 @@ logistics 전용 추가, `/stats`는 엔드포인트 분리 없이 4필드 addit
 - [x] `DELETE .../service-records/[id]?permanent=1` — requireAuth(4), 소프트 삭제 + 협회청구일자 없음 조건부 DELETE(0건→409), storage 첨부 정리
 - [x] 접수이력 탭: 권한 4 전용 토글, 삭제된 건 흐리게 + [영구 삭제](청구 이력 있으면 버튼 대신 "영구 삭제 불가")
 - [x] 검증(로컬 dev + 운영 DB, 사용자 승인): 110134227949에 상담종료 1건 등록 → 휴지통 → 토글에 표시 → 영구 삭제 → UI 0건, DB 0행 확인. 비로그인 401, 대상 없음 409 확인. 콘솔 에러 없음
+
+## 접수 1건 복수 분류 + 분류별 회차 (2026-09-23)
+배경: 사용자 요청 "접수 추가할 때 분류를 복수로 선택". 사용자 결정 — 접수 1건에 분류 여러 개(분류별로 건을 나누지 않음),
+회차는 분류마다 각각("AS 1회차 · 정기 크리닝 4회차"), 물류(부품전달/요소수)도 AS/크리닝과 자유 조합.
+- [x] 마이그레이션 `20260923_dpf_service_records_multi_category.sql`: categories text[] + round_nos jsonb 추가·백필, 회차 트리거 재작성(사용자 실행)
+- [x] SQL 실행 후 DB 확인: 8건 백필, 구버전 코드(category만 전송) 호환 경로
+- [x] types: DpfServiceRecord에 categories/round_nos
+- [x] POST/PUT: categories 배열 수용·검증(구버전 category 단일값도 수용), category=categories[0]
+- [x] 목록 API: category 필터 → categories overlaps, 전환 필터 → converted_from ∈ X AND categories overlaps Y
+- [x] stats / derived-stats: categories 기준(한 건이 AS대기·크리닝대기 양쪽에 잡힐 수 있음, 크리닝 두 종은 1회로)
+- [x] 폼: 분류 칩 복수 선택(첫 선택 = 대표), 물류 섹션은 물류 분류가 하나라도 있으면 표시
+- [x] 표시: 목록 분류 셀 / 차량상세 카드 / 삭제 확인 문구 / 수정 모달 헤더에 분류별 회차
+- [x] 검증: 로컬 임시 Postgres 트리거 11개 시나리오+동시 등록, 운영 DB 백필 8건·불일치 0건, tsc 446(동일)·build 성공, 로컬 화면(목록/필터/물류/전환/stats/derived-stats/등록 폼 칩·물류 섹션/수정 모달) 확인
+- [ ] 실제 복수 분류 저장(운영 DB 쓰기)은 사용자 승인 전이라 미검증
+- [x] SKILL.md round_no/전환 섹션 갱신
