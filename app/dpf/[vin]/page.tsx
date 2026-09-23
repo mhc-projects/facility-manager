@@ -656,7 +656,18 @@ function ServiceTab({
             ] as [string, string | null | undefined][]).filter(([, v]) => v);
 
             return (
-              <div key={r.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+              // 카드 아무 곳이나 누르면 수정 모달 — 글자를 드래그해 선택한 경우는 열지 않는다
+              <div
+                key={r.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${categoryRoundLabels(r).join(' · ')} 접수 수정`}
+                onClick={() => { if (!window.getSelection()?.toString()) onEdit(r); }}
+                onKeyDown={e => {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onEdit(r); }
+                }}
+                className="cursor-pointer px-5 py-4 transition-colors hover:bg-blue-50/40 focus:outline-none focus-visible:bg-blue-50/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     {categoryRoundLabels(r).map((label, i) => (
@@ -701,7 +712,10 @@ function ServiceTab({
                       {r.reception_date || '접수일 미등록'}
                     </span>
                   </div>
-                  <RecordActions onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} />
+                  {/* 버튼 클릭이 카드 클릭(수정 열기)으로 번지지 않게 */}
+                  <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+                    <RecordActions onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} />
+                  </div>
                 </div>
 
                 <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
