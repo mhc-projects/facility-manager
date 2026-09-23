@@ -318,3 +318,18 @@
   발생시킨 뒤에도 error_logs 162 그대로.
 - 부수 발견(수정 안 함): next.config.js의 env.NEXT_FONT_GOOGLE_MOCKED_RESPONSES='true'는 효과 없는 설정(env는 번들
   인라인 전용이고, 이 값에는 원래 mock JSON 경로가 들어가야 함).
+
+## 2026-09-23 (계속) | [HEALTH] Google API 실패 원인 확인 + 계약서 PDF 저장 Supabase Storage 이전 (브라우저 미검증)
+- [HEALTH] 원인: GOOGLE_SERVICE_ACCOUNT_EMAIL/PRIVATE_KEY가 Vercel·로컬 어디에도 없음 → /api/health는 항상 degraded.
+  같은 서비스 계정을 쓰는 라우트(upload, uploaded-files, create-folders, verify-folders, generate-report)는
+  test-upload 페이지 말고 호출처가 없음. 실제 영향은 계약서 PDF 자동 저장 1건(contract_history 4건 전부 pdf_file_url NULL).
+- 수정(92e398d): 신규 POST /api/document-automation/contract/pdf(requireAuth 1) → facility-files 공개 버킷
+  documents/contracts/<business_id>/ 업로드(getSupabaseStorageAdmin, contentType application/pdf) 후 contract_history.pdf_file_url(공개 URL)
+  + document_history.file_path(상대 경로)/file_size 기록. 계약서 POST 응답에 document_history_id 추가.
+  목록/실행이력 다운로드는 document_history.file_path를 읽으므로 이것까지 채워야 화면에 반영됨.
+- 검증: tsc 446(기존과 같음)만 확인. 운영 DB에 계약서를 만들어야 해서 브라우저 검증은 하지 않음. 사용자 결정: 거의 안 쓰는
+  기능이라 문제 생기면 그때 확인. 재검증 시 볼 것: 실행이력 "파일 없음"→"다운로드", storage.objects mimetype=application/pdf,
+  PDF 크기(서버 한도 4MB, html2canvas PNG라 초과 가능).
+- 미처리로 남김: (1) 기존 계약서 4건 PDF 없음 (2) history/[id] DELETE가 Storage 파일을 안 지움 (3) contract/route.ts DELETE는
+  document_data->>contract_id로 찾는데 document_data가 jsonb 문자열이라 이력 동기화 삭제가 안 됨(현재 UI는 이 경로를 안 씀)
+  (4) PDF 저장 실패 시 사용자 알림 없음 (5) 계약서 PUT 핸들러는 이제 호출처 없음 (6) 계약서가 공개 버킷에 저장됨(발주서와 같은 규약).
