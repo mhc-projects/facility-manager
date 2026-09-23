@@ -1,8 +1,8 @@
 // Service Worker for PWA and caching
-// 🔄 버전 업데이트: v1.7 (인증 경로 캐시 제외, 로그아웃 쿠키 버그 수정)
-const CACHE_NAME = 'facility-manager-v1.7';
-const STATIC_CACHE_NAME = 'facility-static-v1.7';
-const DYNAMIC_CACHE_NAME = 'facility-dynamic-v1.7';
+// 🔄 버전 업데이트: v1.8 (API 요청 SW 캐시 제외 — 타임아웃 시 옛 API 응답 반환 방지, 기존 캐시 폐기)
+const CACHE_NAME = 'facility-manager-v1.8';
+const STATIC_CACHE_NAME = 'facility-static-v1.8';
+const DYNAMIC_CACHE_NAME = 'facility-dynamic-v1.8';
 
 // 캐시할 정적 리소스
 const STATIC_ASSETS = [
@@ -13,9 +13,9 @@ const STATIC_ASSETS = [
   '/favicon.svg',
 ];
 
-// 캐시에서 완전히 제외할 경로 (인증 관련 - 항상 최신 응답 필요)
+// 캐시에서 완전히 제외할 경로 (API·인증 관련 - 항상 최신 응답 필요)
 const NO_CACHE_PATHS = [
-  /^\/api\/auth\//,
+  /^\/api\//, // API는 항상 네트워크 직접 요청 (스테일 데이터 방지)
   /^\/login/,
   /^\/signup/,
   /^\/set-password/,
@@ -31,11 +31,8 @@ const CACHE_STRATEGIES = {
     /\.(?:js|css|woff2?|png|jpg|jpeg|gif|svg|ico)$/,
   ],
   
-  // 네트워크 우선, 실패 시 캐시
-  NETWORK_FIRST: [
-    /\/api\/facilities/,
-    /\/api\/business/,
-  ],
+  // 네트워크 우선, 실패 시 캐시 (API는 NO_CACHE_PATHS로 SW를 우회하므로 여기 두지 않는다)
+  NETWORK_FIRST: [],
   
   // 캐시 우선, 실패 시 네트워크
   CACHE_FIRST_UPDATE: [

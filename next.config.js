@@ -233,13 +233,14 @@ const nextConfig = {
           }
         ],
       },
-      // 🔥 일반 API - 적당한 캐싱
+      // 🔥 일반 API - 캐싱 금지. 인증/권한별 응답을 CDN이 URL만으로 공유 캐싱하면 비로그인 요청에도 캐시된 200이
+      // 나가고, 변경 직후 재조회가 옛 데이터를 받는다. 개별 캐싱이 필요한 라우트는 route 응답 헤더로 직접 지정한다.
       {
         source: '/api/(.*)',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, s-maxage=180, stale-while-revalidate=600, max-age=60'
+            value: 'private, no-store'
           }
         ],
       },
