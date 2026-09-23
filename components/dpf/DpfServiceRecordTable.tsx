@@ -23,6 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const RECEPTION_COLUMNS = [
+  { key: 'manufacturer',   label: '제작사',     width: 80 },
   { key: 'category',       label: '분류',       width: 90 },
   { key: 'status',         label: '상태',       width: 90 },
   { key: 'reception_date', label: '접수일',     width: 100 },
@@ -90,6 +91,13 @@ export default function DpfServiceRecordTable({
   function cellValue(r: DpfServiceRecordWithVehicle, key: string): React.ReactNode {
     const vehicle = r.dpf_vehicles;
     switch (key) {
+      case 'manufacturer': {
+        // 차량관리 목록과 같은 원천(raw_data.제작사) — 엠즈 임포트 차량만 값이 있다
+        const maker = vehicle.raw_data?.['제작사'];
+        return maker != null && maker !== ''
+          ? <span className="text-xs text-gray-600">{String(maker)}</span>
+          : <span className="text-gray-300">-</span>;
+      }
       case 'category':
         return (
           <div className="flex flex-col items-start gap-0.5">
