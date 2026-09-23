@@ -10,6 +10,10 @@ export async function register() {
     return;
   }
 
+  // 로컬 dev/`npm run build`·`next start`(NODE_ENV=production이라 NODE_ENV로는 못 거름)와
+  // 프리뷰 배포의 에러가 프로덕션 error_logs로 들어가 theion 오보고를 만들던 문제 방지.
+  if (process.env.VERCEL_ENV !== 'production') return;
+
   const { waitUntil } = await import('@vercel/functions');
   const { getSupabaseAdmin } = await import('./lib/supabase');
   const { inspect } = await import('node:util');

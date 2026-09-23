@@ -305,3 +305,16 @@
 - 남은 한계: (1) 저장/삭제 후 loadItems()가 첫 100건으로 리셋하므로 더 보기로 펼친 목록이 접힘. (2) 보고서 생성
   모달(ReportModal)은 여전히 로드된 items만 집계 - 100건 초과 범위는 더 보기로 펼친 뒤에 생성해야 반영됨.
   (3) "전체"는 취소(cancelled) 포함이라 진행중+완료+보류와 다를 수 있음(현재 취소 0건).
+
+## 2026-09-23 | 운영 에러 자동 보고(9/22, 4건) 조치 - 로컬 실행 로그의 프로덕션 유입 차단
+- 4건 = next/font의 Google Fonts 요청 재시도 메시지(Inter/Noto Sans KR 각 "Retrying 1/3, 2/3"), 최종 실패 없이 성공.
+  발생 시각 9/21 21:52:37 KST가 로컬 커밋 7a76876(21:53:24) 47초 전 → 로컬 실행(빌드/dev)에서 난 로그. Vercel 런타임은
+  빌드 때 폰트를 자체 호스팅하므로 Google에 요청하지 않아 프로덕션에서는 날 수 없는 로그.
+- 근본 원인: instrumentation.ts가 NEXT_RUNTIME만 확인하고 환경은 확인하지 않아 로컬 dev·build·start 로그가 프로덕션
+  error_logs에 기록됨(전체 162행 중 /Users/mh.c 경로 포함 8행, 9/17 './38948.js' 및 ::1 SECURITY 오보고도 같은 원인).
+- 수정: process.env.VERCEL_ENV !== 'production'이면 가로채기 등록 안 함. NODE_ENV는 로컬 build/start에서도 production이라 사용 안 함.
+  프리뷰 배포 로그도 같이 빠지는데, main만 배포하는 구조라 문제없음.
+- 검증: tsc 446(기존과 같음, instrumentation 관련 0). 로컬 dev에서 /api/health·/api/notifications로 console.error 2건
+  발생시킨 뒤에도 error_logs 162 그대로.
+- 부수 발견(수정 안 함): next.config.js의 env.NEXT_FONT_GOOGLE_MOCKED_RESPONSES='true'는 효과 없는 설정(env는 번들
+  인라인 전용이고, 이 값에는 원래 mock JSON 경로가 들어가야 함).
