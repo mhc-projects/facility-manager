@@ -12,10 +12,11 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 
-// HTTP 캐시 헤더 설정
+// HTTP 캐시 헤더 설정 — 인증 응답이라 공유 캐시 금지. CDN-Cache-Control(public)을 두면 Vercel CDN이 URL만으로
+// 캐싱해 비로그인 요청에도 200이 나간다(2026-09-23 실측). 서버 측 재사용은 memoryCache가 담당한다.
 const CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=300, stale-while-revalidate=60', // 5분 캐시, 1분 stale
-  'CDN-Cache-Control': 'public, max-age=600', // CDN에서 10분 캐시
+  'Cache-Control': 'private, no-store',
+  'CDN-Cache-Control': 'no-store',
 };
 
 export async function GET(
