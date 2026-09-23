@@ -174,7 +174,8 @@ export default function DpfVehicleTable({
             {v.owner_address || '-'}
           </span>
         );
-      case 'manufacturer':    return <span className="text-xs text-gray-600">{raw(v, '제작사')}</span>;
+      // 엠즈만 raw_data.제작사(SK/JMCK)가 있고, 그 외(vendor=fujino)는 전부 후지노
+      case 'manufacturer':    return <span className="text-xs text-gray-600">{v.vendor === 'fujino' ? '후지노' : raw(v, '제작사')}</span>;
       case 'device_type': {
         const dt = v.device_type || raw(v, '부착장치');
         if (!dt || dt === '-') return <span className="text-gray-300">-</span>;

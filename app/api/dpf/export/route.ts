@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
         prev_owner: raw(v, '이전 업체명'),
         owner_contact: v.owner_contact ?? '',
         owner_address: v.owner_address ?? '',
-        manufacturer: raw(v, '제작사'),
+        manufacturer: v.vendor === 'fujino' ? '후지노' : raw(v, '제작사'), // 엠즈만 제작사 값이 있고 그 외는 후지노
         device_type: v.device_type || raw(v, '부착장치'),
         local_gov_large: v.local_government ?? '',
         local_gov_small: raw(v, '지자체(소)'),
