@@ -343,3 +343,9 @@
   로그인 응답 MISS/no-store 확인.
 - 남은 확인: `facilities-supabase/[businessName]` route가 자체 `CDN-Cache-Control: public, max-age=600`을 붙임 — Vercel은
   이 헤더를 우선하므로 CDN 캐싱이 남아 있을 수 있음(미확인).
+
+## 2026-09-23 DPF 슈퍼관리자 접수 영구 삭제 (f95ae29)
+- 110134227949 테스트 접수 3건은 사용자 SQL로 하드 삭제 완료(DB 0행 확인).
+- 권한 4 전용: 차량상세 접수이력 탭 "삭제된 접수 보기" 토글 + [영구 삭제]. 소프트 삭제 건 + 협회청구일자 없음만 허용,
+  첨부 storage 정리. 로컬 dev(운영 DB)에서 등록→삭제→영구삭제 전 과정 검증, DB 0행 확인. 상세는 claudedocs/dpf-service-records.
+- DB에 남은 소프트 삭제 접수: 2026-09-21 생성 AS 1건(다른 차량) — 테스트 여부 사용자 확인 필요.
