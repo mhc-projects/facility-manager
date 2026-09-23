@@ -132,25 +132,25 @@ export async function generateContractPDF(
 }
 
 /**
- * PDF를 Supabase Storage에 업로드
+ * PDF를 Supabase Storage에 업로드하고 계약서/실행이력에 경로를 기록
  * @param blob - PDF Blob
- * @param contractNumber - 계약서 번호
- * @param contractType - 계약서 유형
+ * @param contractId - contract_history.id
+ * @param documentHistoryId - document_history.id
  * @returns 업로드된 파일 URL
  */
 export async function uploadContractPDF(
   blob: Blob,
-  contractNumber: string,
-  contractType: string
+  contractId: string,
+  documentHistoryId: string
 ): Promise<string> {
   try {
-    const filename = `${contractType}_${contractNumber}_${Date.now()}.pdf`;
     const formData = new FormData();
-    formData.append('file', blob, filename);
-    formData.append('folder', 'contracts');
+    formData.append('file', blob, 'contract.pdf');
+    formData.append('contract_id', contractId);
+    formData.append('document_history_id', documentHistoryId);
 
     const token = localStorage.getItem('auth_token');
-    const response = await fetch('/api/upload', {
+    const response = await fetch('/api/document-automation/contract/pdf', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`
@@ -159,22 +159,11 @@ export async function uploadContractPDF(
     });
 
     const data = await response.json();
-    console.log('📤 PDF 업로드 API 응답:', {
-      status: response.status,
-      ok: response.ok,
-      data
-    });
-
     if (data.success && data.url) {
       return data.url;
-    } else {
-      console.error('❌ PDF 업로드 실패 상세:', {
-        message: data.message,
-        error: data.error,
-        response_data: data
-      });
-      throw new Error(data.message || '파일 업로드 실패');
     }
+    console.error('❌ PDF 업로드 실패 상세:', { status: response.status, response_data: data });
+    throw new Error(data.message || '파일 업로드 실패');
   } catch (error) {
     console.error('PDF 업로드 오류:', error);
     throw new Error('PDF 업로드에 실패했습니다.');

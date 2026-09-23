@@ -303,7 +303,7 @@ export async function POST(request: NextRequest) {
 
     // 6. document_history 테이블에도 이력 추가 (실행이력 탭에 표시되도록)
     const documentName = `${contract_type === 'subsidy' ? '보조금' : '자비'} 계약서 - ${business.business_name}`;
-    await supabaseAdmin
+    const { data: historyRow } = await supabaseAdmin
       .from('document_history')
       .insert({
         business_id,
@@ -316,14 +316,17 @@ export async function POST(request: NextRequest) {
         file_format: 'pdf',
         file_size: 0, // PDF 생성 후 업데이트 가능
         created_by: userId
-      });
+      })
+      .select('id')
+      .single();
 
     return NextResponse.json({
       success: true,
       message: '계약서가 생성되었습니다.',
       data: {
         contract: savedContract,
-        template_data: contractData
+        template_data: contractData,
+        document_history_id: historyRow?.id ?? null  // PDF 저장 시 실행이력 file_path 갱신용
       }
     });
 

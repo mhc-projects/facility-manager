@@ -284,7 +284,7 @@ export default function ContractManagement({ onDocumentCreated }: ContractManage
 
         // 생성된 계약서로 자동 PDF 저장 (백그라운드)
         const createdContract = data.data.contract
-        savePDFAfterCreation(createdContract)
+        savePDFAfterCreation(createdContract, data.data.document_history_id)
           .then(() => {
             console.log('PDF 자동 저장 완료')
             // PDF 저장 후 다시 로드하여 file_path 업데이트
@@ -306,7 +306,8 @@ export default function ContractManagement({ onDocumentCreated }: ContractManage
     }
   }
 
-  const savePDFAfterCreation = async (contract: any) => {
+  const savePDFAfterCreation = async (contract: any, documentHistoryId: string | null) => {
+    if (!documentHistoryId) throw new Error('실행 이력 ID가 없어 PDF를 저장할 수 없습니다.')
     try {
       // 임시로 DOM에 렌더링하기 위한 div 생성
       const tempDiv = document.createElement('div')
@@ -371,26 +372,9 @@ export default function ContractManagement({ onDocumentCreated }: ContractManage
         `${contract.contract_type}_${contract.contract_number}.pdf`
       )
 
-      // Supabase에 업로드
-      const pdfUrl = await uploadContractPDF(
-        blob,
-        contract.contract_number,
-        contract.contract_type
-      )
-
-      // 계약서 레코드 업데이트
-      const token = localStorage.getItem('auth_token')
-      await fetch('/api/document-automation/contract', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contract_id: contract.id,
-          pdf_file_url: pdfUrl
-        })
-      })
+      // Supabase Storage에 업로드 (서버가 contract_history/document_history 경로까지 기록)
+      console.log('PDF 크기(bytes):', blob.size)
+      const pdfUrl = await uploadContractPDF(blob, contract.id, documentHistoryId)
 
       // 정리
       root.unmount()
