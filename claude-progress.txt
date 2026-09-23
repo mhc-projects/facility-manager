@@ -359,3 +359,11 @@
 - 캐시 조사: 운영 API private,no-store + x-vercel-cache MISS, sw.js v1.8 배포 확인 — 강제새로고침 증상은 7d97b43 이전 CDN/SW 캐시가 원인(해결됨).
 - 검증: tsc 446(기존과 같음), 로컬 dev(운영 DB)에서 제작사 컬럼·라벨·복수 선택(category=as,clean → 8건)·탭 복귀 재조회·전환/stats API 200 확인.
   경과 크리닝 실제 저장은 SQL 실행 전이라 미검증.
+
+## 2026-09-23 DPF 접수 1건 복수 분류 + 분류별 회차 (f6072ae, 46965a4)
+- f6072ae: 접수현황 제작사 — vendor=fujino 차량은 '후지노'(엠즈만 raw_data.제작사 SK/JMCK).
+- 46965a4: 사용자 결정 "접수 1건에 분류 여러 개 / 회차는 분류마다 / 물류도 자유 조합". categories text[] + round_nos jsonb,
+  회차 트리거 재작성(SQL 20260923_dpf_service_records_multi_category.sql 사용자 실행 완료, 8건 백필 확인).
+  등록 폼 칩 복수 선택, 목록/카드 "AS 1회차 · 정기 크리닝 4회차", 필터·타일·횟수는 categories 기준.
+- 검증: 로컬 임시 Postgres로 트리거 시나리오+동시 등록, tsc 446 동일, build 성공, 로컬 화면 확인(저장 없이).
+  실제 복수 분류 저장은 운영 DB 쓰기라 사용자 승인 전 미검증.
