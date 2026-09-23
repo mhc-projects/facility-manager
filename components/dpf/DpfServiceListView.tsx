@@ -71,12 +71,16 @@ export default function DpfServiceListView({ mode }: Props) {
   const [showFilter, setShowFilter] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // 탭 복귀 시 재조회 — 다른 탭/다른 사용자가 등록한 접수를 새로고침 없이 반영. 이때는 스켈레톤 깜빡임 없이 조용히 갱신
+  const [refreshTick, setRefreshTick] = useState(0);
+  const silentRefreshRef = useRef(false);
 
   const search = useCallback(async (
     q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string, conv: string,
     billing: string, field: string, from: string, to: string, sort: string, p: number,
   ) => {
-    setLoading(true);
+    if (silentRefreshRef.current) silentRefreshRef.current = false;
+    else setLoading(true);
     try {
       const params = new URLSearchParams({ q, page: String(p), pageSize: '20', sort });
       // 로직스틱스 모드는 "전체"도 부품전달/요소수 우주 안이어야 한다 — 빈 값으로 보내면 API가 6개 카테고리 전부를 돌려준다
@@ -112,15 +116,25 @@ export default function DpfServiceListView({ mode }: Props) {
 
   useEffect(() => {
     triggerSearch(query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, sortOrder, page);
-  }, [query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, sortOrder, page, triggerSearch]);
+  }, [query, category, status, localGov, serviceBranch, courier, costType, conversion, billingStatus, dateField, dateFrom, dateTo, sortOrder, page, refreshTick, triggerSearch]);
 
   useEffect(() => {
-    // 이 화면엔 등록 버튼이 없어 로컬 변이로 통계가 바뀔 일이 없다 — 마운트 시 1회면 충분(2단계 사후검토에서 지적된
+    // 이 화면엔 등록 버튼이 없어 로컬 변이로 통계가 바뀔 일이 없다 — 마운트 시와 탭 복귀 시에만 조회(2단계 사후검토에서 지적된
     // [result.total] 의존성 문제를 여기서 함께 수정)
     fetch('/api/dpf/service-records/stats')
       .then(r => r.json())
       .then(setStats)
       .catch(console.error);
+  }, [refreshTick]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return;
+      silentRefreshRef.current = true;
+      setRefreshTick(t => t + 1);
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   function handleQueryChange(v: string) { setQuery(v); setPage(1); }
