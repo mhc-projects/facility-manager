@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { DpfServiceRecordWithVehicle } from '@/types/dpf';
 import { CATEGORY_LABELS, categoryRoundLabels } from '@/components/dpf/ServiceRecordFormModal';
 import { DEVICE_TYPE_COLORS } from '@/components/dpf/DpfVehicleTable';
-import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Paperclip } from 'lucide-react';
 
 interface Props {
   records: DpfServiceRecordWithVehicle[];
@@ -131,6 +131,12 @@ export default function DpfServiceRecordTable({
             {ext && (
               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${ext.color}`}>
                 {ext.label}
+              </span>
+            )}
+            {!!r.attachment_count && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600" title="첨부파일">
+                <Paperclip className="w-3 h-3" />
+                {r.attachment_count}
               </span>
             )}
           </div>

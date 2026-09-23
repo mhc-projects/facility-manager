@@ -90,8 +90,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // 첨부파일 개수 — 이 페이지 레코드만 한 번에 조회해 붙인다(차량상세 attachmentCounts와 같은 방식)
+    const records = data ?? [];
+    const ids = records.map((r: { id: string }) => r.id);
+    const attachmentCounts: Record<string, number> = {};
+    if (ids.length > 0) {
+      const { data: attachRows, error: attachErr } = await supabaseAdmin
+        .from('dpf_service_record_attachments')
+        .select('record_id')
+        .in('record_id', ids);
+      if (attachErr) console.error('[DPF Service Records Search] 첨부 개수 조회 실패:', attachErr.message);
+      for (const row of attachRows ?? []) {
+        attachmentCounts[row.record_id] = (attachmentCounts[row.record_id] ?? 0) + 1;
+      }
+    }
+
     return NextResponse.json({
-      records: data ?? [],
+      records: records.map((r: { id: string }) => ({ ...r, attachment_count: attachmentCounts[r.id] ?? 0 })),
       total: count ?? 0,
       page,
       pageSize,

@@ -164,6 +164,7 @@ export interface DpfServiceRecord {
 // 접수현황 통합 목록용 — dpf_vehicles 조인 결과 (2단계, 2026-09-11)
 export type DpfServiceRecordWithVehicle = DpfServiceRecord & {
   dpf_vehicles: Pick<DpfVehicle, 'vin' | 'plate_number' | 'owner_name' | 'vehicle_name' | 'local_government' | 'installation_date' | 'device_type' | 'vendor' | 'raw_data'>;
+  attachment_count?: number; // 목록 API가 붙이는 첨부파일 개수
 };
 
 export interface DpfServiceRecordSearchResult {
