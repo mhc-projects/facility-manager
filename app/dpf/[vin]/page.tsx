@@ -8,6 +8,7 @@ import VehicleFormModal from '@/components/dpf/VehicleFormModal';
 import SubRecordFormModal, { SubRecordType } from '@/components/dpf/SubRecordFormModal';
 import ServiceRecordFormModal, { CATEGORY_LABELS } from '@/components/dpf/ServiceRecordFormModal';
 import { ConfirmModal } from '@/components/ui/Modal';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   DpfVehicle, DpfDeviceInstallation, DpfPerformanceInspection,
   DpfSubsidyApplication, DpfCallMonitoring, DpfServiceRecord, DpfServiceCategory, FormTemplate,
@@ -24,6 +25,7 @@ interface VehicleDetail {
   subsidies: DpfSubsidyApplication[];
   callMonitoring: DpfCallMonitoring[];
   serviceRecords: DpfServiceRecord[];
+  deletedServiceRecords: DpfServiceRecord[];
   attachmentCounts: Record<string, number>;
 }
 
@@ -83,9 +85,14 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
   const [subModal, setSubModal] = useState<SubRecordModal | null>(null);
   const [serviceModal, setServiceModal] = useState<ServiceRecordModal | null>(null);
 
+  // 슈퍼관리자 전용: 소프트 삭제된 접수 건 보기 → 영구 삭제
+  const { user } = useAuth();
+  const isSuperAdmin = user?.permission_level === 4;
+  const [showDeleted, setShowDeleted] = useState(false);
+
   const loadDetail = useCallback(() => {
     setLoading(true);
-    fetch(`/api/dpf/vehicles/${encodeURIComponent(vin)}`)
+    fetch(`/api/dpf/vehicles/${encodeURIComponent(vin)}${showDeleted ? '?include_deleted=1' : ''}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) setError(data.error);
@@ -93,7 +100,7 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
       })
       .catch(() => setError('데이터를 불러올 수 없습니다.'))
       .finally(() => setLoading(false));
-  }, [vin]);
+  }, [vin, showDeleted]);
 
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
@@ -124,6 +131,21 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
         const res = await fetch(`/api/dpf/vehicles/${encodeURIComponent(vin)}/${type}/${id}`, { method: 'DELETE' });
         if (res.ok) loadDetail();
         else setError('삭제에 실패했습니다');
+      },
+    });
+  }
+
+  function openPurgeRecord(r: DpfServiceRecord) {
+    setDeleteState({
+      title: '영구 삭제 확인',
+      label: `삭제된 ${CATEGORY_LABELS[r.category]} ${r.round_no}회차 접수를 영구 삭제하시겠습니까? 첨부파일도 함께 지워지며 되돌릴 수 없습니다.`,
+      onConfirm: async () => {
+        const res = await fetch(
+          `/api/dpf/vehicles/${encodeURIComponent(vin)}/service-records/${r.id}?permanent=1`,
+          { method: 'DELETE' }
+        );
+        if (res.ok) loadDetail();
+        else setError((await res.json().catch(() => null))?.error ?? '영구 삭제에 실패했습니다');
       },
     });
   }
@@ -310,6 +332,12 @@ function DpfVehicleDetailContent({ params }: { params: { vin: string } }) {
             onAdd={() => setServiceModal({})}
             onEdit={r => setServiceModal({ record: r })}
             onDelete={r => openDeleteRecord('service-records', r.id, `${CATEGORY_LABELS[r.category]} ${r.round_no}회차`)}
+            deleted={isSuperAdmin ? {
+              show: showDeleted,
+              onToggle: setShowDeleted,
+              records: detail.deletedServiceRecords ?? [],
+              onPurge: openPurgeRecord,
+            } : undefined}
           />
         )}
         {activeTab === 'installation' && (
@@ -569,13 +597,20 @@ function BasicInfoTab({ vehicle }: { vehicle: DpfVehicle }) {
 }
 
 function ServiceTab({
-  records, attachmentCounts, onAdd, onEdit, onDelete,
+  records, attachmentCounts, onAdd, onEdit, onDelete, deleted,
 }: {
   records: DpfServiceRecord[];
   attachmentCounts: Record<string, number>;
   onAdd: () => void;
   onEdit: (r: DpfServiceRecord) => void;
   onDelete: (r: DpfServiceRecord) => void;
+  // 슈퍼관리자에게만 전달 — 없으면 토글/삭제된 건 섹션을 렌더하지 않는다
+  deleted?: {
+    show: boolean;
+    onToggle: (v: boolean) => void;
+    records: DpfServiceRecord[];
+    onPurge: (r: DpfServiceRecord) => void;
+  };
 }) {
   const statusConfig: Record<string, { label: string; color: string }> = {
     in_progress: { label: '진행중', color: 'bg-amber-100 text-amber-700' },
@@ -595,6 +630,17 @@ function ServiceTab({
   return (
     <div>
       <TabHeader title="접수이력" count={records.length} onAdd={onAdd} />
+      {deleted && (
+        <label className="flex items-center gap-1.5 px-5 py-2 text-xs text-gray-500 border-b border-gray-100 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            checked={deleted.show}
+            onChange={e => deleted.onToggle(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          삭제된 접수 보기
+        </label>
+      )}
       {records.length === 0 ? (
         <EmptyState message="접수 이력이 없습니다." />
       ) : (
@@ -691,6 +737,43 @@ function ServiceTab({
               </div>
             );
           })}
+        </div>
+      )}
+      {deleted?.show && (
+        <div className="border-t border-gray-100">
+          <p className="px-5 py-2 text-xs font-semibold text-gray-500 bg-gray-50">
+            삭제된 접수 {deleted.records.length}건
+          </p>
+          {deleted.records.length === 0 ? (
+            <p className="px-5 py-3 text-xs text-gray-400">삭제된 접수가 없습니다.</p>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {deleted.records.map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3 px-5 py-3 opacity-60">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0 text-xs text-gray-600">
+                    <span className="px-2 py-0.5 rounded-md font-semibold bg-gray-100 text-gray-600">
+                      {CATEGORY_LABELS[r.category]} {r.round_no}회차
+                    </span>
+                    <span className="tabular-nums">{r.reception_date || '접수일 미등록'}</span>
+                    {r.reception_content && <span className="truncate">{r.reception_content}</span>}
+                    {r.association_billing_date && (
+                      <span className="text-red-600">협회청구 {r.association_billing_date}</span>
+                    )}
+                  </div>
+                  {r.association_billing_date ? (
+                    <span className="shrink-0 text-[11px] text-gray-400">청구 이력 있음 · 영구 삭제 불가</span>
+                  ) : (
+                    <button
+                      onClick={() => deleted.onPurge(r)}
+                      className="shrink-0 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                      영구 삭제
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

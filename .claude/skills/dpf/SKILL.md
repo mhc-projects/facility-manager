@@ -27,6 +27,7 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 - `is_deleted`(소프트 삭제) — 협회청구 이력(`association_billing_date`)이 걸린 원장을 보존하기 위해 하드 삭제하지 않는다. DELETE API는 `is_deleted=true`로만 갱신한다.
 - `status='cancelled'`(취소) — 고객이 접수를 철회한 경우. **집계 시 두 축을 헷갈리지 말 것**: 접수현황 요약 바(대기/완료)와 부착현황 파생 컬럼(크리닝횟수/AS횟수)은 `cancelled`를 카운트에서 제외하지만, 최근접수일/마지막처리일 같은 "날짜" 집계는 취소 건도 포함한다(접수·처리 자체는 실제 발생했으므로). 새 집계를 추가할 때마다 이 둘 중 어느 쪽 성격인지 먼저 정해야 한다.
 
+- **영구 삭제(슈퍼관리자 전용, 2026-09-23)**: 소프트 삭제된 건도 `round_no` 채번(`MAX(round_no)+1`, `is_deleted` 무관)에 계속 잡혀서, 테스트/오등록 건을 지워도 다음 실제 접수가 2·3회차로 시작한다. 그래서 권한 4에게만 `/dpf/[vin]` 접수이력 탭의 "삭제된 접수 보기" 토글(`GET /api/dpf/vehicles/[vin]?include_deleted=1` → 별도 필드 `deletedServiceRecords`, 기존 `serviceRecords`에는 섞지 않음)과 [영구 삭제] 버튼(`DELETE .../service-records/[id]?permanent=1`, `requireAuth(4)`)을 둔다. 서버는 `is_deleted=true AND association_billing_date IS NULL` 조건부 DELETE로만 지우고(0건이면 409), 첨부파일 DB 행은 FK cascade, storage 파일은 행 삭제 후 베스트에포트 제거. 2단계(소프트 삭제 → 영구 삭제)라 활성 건을 바로 하드 삭제하는 경로는 없다.
 - **차량 삭제 ≠ 접수 삭제 (2026-09-21 실제 사고)**: `/dpf/[vin]` 상단 히어로 카드의 "차량 삭제"(`DELETE /api/dpf/vehicles/[vin]`)는 `dpf_vehicles.is_deleted=true`로 차량을 소프트 삭제하고, 접수 건은 `is_deleted=false`인 채로 남는다. 그러나 접수현황 API는 `dpf_vehicles!inner`에 `is_deleted=false`를 걸어서 **삭제된 차량의 접수 건도 접수현황에서 사라진다**(차량관리에도 없고 상세는 404, 복구 UI 없음). 접수 건만 지우려는 사용자가 이 버튼을 잘못 눌러 "접수현황에서 안 지워지고 차량관리에서도 사라졌다"는 문의가 나왔다. 그래서 버튼 문구는 "차량 삭제"로, 확인창은 "차량 삭제 확인" 제목 + 접수 이력 건수 경고로 구분해 뒀다. 접수 건 삭제는 접수이력 탭 각 행의 작은 휴지통(`DELETE .../service-records/[id]`). 복구는 SQL로 `dpf_vehicles.is_deleted=false`.
 
 ## 부착현황(`/dpf`) 파생 컬럼 — 배치 조회, 메인 목록에 조인 금지

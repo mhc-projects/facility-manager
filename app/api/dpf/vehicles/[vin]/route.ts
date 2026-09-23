@@ -141,6 +141,19 @@ export async function GET(
         .order('created_at', { ascending: false }),
     ]);
 
+    // 슈퍼관리자(4)가 ?include_deleted=1로 요청하면 소프트 삭제된 접수 건을 별도 필드로 준다(영구 삭제 UI용).
+    // serviceRecords에 섞지 않는 이유: 탭 건수 배지·차량 삭제 경고 건수 등 기존 소비처가 활성 건만 전제한다.
+    let deletedServiceRecords: unknown[] = [];
+    if (request.nextUrl.searchParams.get('include_deleted') === '1' && auth.user.permission_level >= 4) {
+      const { data } = await supabaseAdmin
+        .from('dpf_service_records')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .eq('is_deleted', true)
+        .order('updated_at', { ascending: false });
+      deletedServiceRecords = data ?? [];
+    }
+
     const serviceRecordIds = (serviceRecordData.data ?? []).map((r: { id: string }) => r.id);
     const attachmentCounts: Record<string, number> = {};
     if (serviceRecordIds.length > 0) {
@@ -160,6 +173,7 @@ export async function GET(
       subsidies: subsidyData.data ?? [],
       callMonitoring: callData.data ?? [],
       serviceRecords: serviceRecordData.data ?? [],
+      deletedServiceRecords,
       attachmentCounts,
     });
   } catch (err) {

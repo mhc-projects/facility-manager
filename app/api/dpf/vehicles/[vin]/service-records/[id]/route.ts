@@ -1,6 +1,6 @@
 // DPF 사후관리(AS/크리닝/물류) 접수 건 수정/삭제
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin, getSupabaseStorageAdmin } from '@/lib/supabase';
 import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
@@ -150,7 +150,9 @@ export async function DELETE(
   { params }: { params: { vin: string; id: string } }
 ) {
   try {
-    const auth = await requireAuth(request, 1);
+    // ?permanent=1 — 이미 소프트 삭제된 건의 영구 삭제(슈퍼관리자 전용). 테스트/오등록 건이 회차 번호를 계속 점유하는 문제 정리용
+    const permanent = request.nextUrl.searchParams.get('permanent') === '1';
+    const auth = await requireAuth(request, permanent ? 4 : 1);
     if (!auth.ok) return auth.response;
 
     const vin = decodeURIComponent(params.vin);
@@ -166,6 +168,8 @@ export async function DELETE(
       return NextResponse.json({ error: '차량을 찾을 수 없습니다' }, { status: 404 });
     }
 
+    if (permanent) return permanentDelete(params.id, vehicle.id);
+
     // 협회청구일자 등 청구 이력을 담고 있어 하드 삭제하지 않는다(설계 §4.10) — as_records/dpf_vehicles와 동일한 소프트 삭제 패턴
     const { error } = await supabaseAdmin
       .from('dpf_service_records')
@@ -179,4 +183,38 @@ export async function DELETE(
     console.error('[DPF Service Record] DELETE error:', err);
     return NextResponse.json({ error: '서버 오류' }, { status: 500 });
   }
+}
+
+// 소프트 삭제된 건만, 협회청구일자가 없을 때만 하드 삭제한다 — 청구 이력 보존 원칙(§4.10)은 그대로 유지.
+// 첨부파일 DB 행은 FK cascade로 지워지고, storage 파일은 행 삭제 후 베스트에포트로 지운다(첨부 교체 흐름과 동일).
+async function permanentDelete(id: string, vehicleId: string) {
+  const { data: attachments } = await supabaseAdmin
+    .from('dpf_service_record_attachments')
+    .select('storage_path')
+    .eq('record_id', id);
+
+  const { data: deleted, error } = await supabaseAdmin
+    .from('dpf_service_records')
+    .delete()
+    .eq('id', id)
+    .eq('vehicle_id', vehicleId)
+    .eq('is_deleted', true)
+    .is('association_billing_date', null)
+    .select('id');
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!deleted || deleted.length === 0) {
+    return NextResponse.json(
+      { error: '삭제된 접수 건이 아니거나 협회청구 이력이 있어 영구 삭제할 수 없습니다' },
+      { status: 409 }
+    );
+  }
+
+  const paths = (attachments ?? []).map((a: { storage_path: string }) => a.storage_path).filter(Boolean);
+  if (paths.length > 0) {
+    const { error: removeError } = await getSupabaseStorageAdmin().storage.from('dpf-attachments').remove(paths);
+    if (removeError) console.error('[DPF Service Record] 영구 삭제 storage 정리 실패(무시):', removeError.message);
+  }
+
+  return NextResponse.json({ success: true });
 }
