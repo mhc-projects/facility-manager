@@ -3,7 +3,7 @@
 // 접수현황(AS/크리닝)과 물류관리(부품전달/요소수) 화면이 공유하는 본문 — mode로 분류 우주/필터 슬롯/요약 타일/테이블 컬럼만 분기한다
 import { useState, useEffect, useCallback, useRef } from 'react';
 import DpfServiceRecordTable from '@/components/dpf/DpfServiceRecordTable';
-import { CATEGORY_OPTIONS, LOGISTICS_CATEGORIES } from '@/components/dpf/ServiceRecordFormModal';
+import ServiceRecordFormModal, { CATEGORY_OPTIONS, LOGISTICS_CATEGORIES } from '@/components/dpf/ServiceRecordFormModal';
 import { DpfServiceRecordWithVehicle, DpfServiceRecordStats } from '@/types/dpf';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 
@@ -74,6 +74,13 @@ export default function DpfServiceListView({ mode }: Props) {
   // 탭 복귀 시 재조회 — 다른 탭/다른 사용자가 등록한 접수를 새로고침 없이 반영. 이때는 스켈레톤 깜빡임 없이 조용히 갱신
   const [refreshTick, setRefreshTick] = useState(0);
   const silentRefreshRef = useRef(false);
+  // 행을 눌러 연 접수(수정 모달)
+  const [openRecord, setOpenRecord] = useState<DpfServiceRecordWithVehicle | null>(null);
+
+  function refreshSilently() {
+    silentRefreshRef.current = true;
+    setRefreshTick(t => t + 1);
+  }
 
   const search = useCallback(async (
     q: string, cat: string, st: string, gov: string, branch: string, cour: string, cost: string, conv: string,
@@ -130,8 +137,7 @@ export default function DpfServiceListView({ mode }: Props) {
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState !== 'visible') return;
-      silentRefreshRef.current = true;
-      setRefreshTick(t => t + 1);
+      refreshSilently();
     }
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -426,8 +432,28 @@ export default function DpfServiceListView({ mode }: Props) {
           onPageChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           loading={loading}
           variant={mode}
+          onRowClick={setOpenRecord}
         />
       </div>
+
+      {openRecord && (() => {
+        // 목록 전용 필드(dpf_vehicles/attachment_count)는 떼고 접수 원장 값만 모달에 넘긴다
+        const { dpf_vehicles: v, attachment_count: _count, ...record } = openRecord;
+        return (
+          <ServiceRecordFormModal
+            isOpen={true}
+            onClose={() => setOpenRecord(null)}
+            onSuccess={() => { setOpenRecord(null); refreshSilently(); }}
+            vin={v.vin}
+            vehicle={v}
+            record={record}
+            onAttachmentsChange={(id, count) => setResult(prev => ({
+              ...prev,
+              records: prev.records.map(r => (r.id === id ? { ...r, attachment_count: count } : r)),
+            }))}
+          />
+        );
+      })()}
     </>
   );
 }

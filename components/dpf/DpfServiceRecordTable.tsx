@@ -14,6 +14,8 @@ interface Props {
   onPageChange: (page: number) => void;
   loading?: boolean;
   variant?: 'reception' | 'logistics';
+  // 행을 누르면(또는 Enter) 해당 접수를 연다 — 차량번호/차대번호 링크는 차량 상세로 이동
+  onRowClick?: (record: DpfServiceRecordWithVehicle) => void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -64,6 +66,8 @@ const BILLING_LABELS: Record<string, string> = {
 
 const COST_TYPE_LABELS: Record<string, string> = { paid: '유상', free: '무상', mixed: '유/무상' };
 
+const rowLabel = (r: DpfServiceRecordWithVehicle) => r.dpf_vehicles.plate_number || r.dpf_vehicles.vin;
+
 function SkeletonRow({ columns }: { columns: ReadonlyArray<{ key: string; width: number }> }) {
   return (
     <tr className="border-b border-gray-100">
@@ -80,7 +84,7 @@ function SkeletonRow({ columns }: { columns: ReadonlyArray<{ key: string; width:
 }
 
 export default function DpfServiceRecordTable({
-  records, total, page, pageSize, onPageChange, loading, variant = 'reception',
+  records, total, page, pageSize, onPageChange, loading, variant = 'reception', onRowClick,
 }: Props) {
   const COLUMNS = variant === 'logistics' ? LOGISTICS_COLUMNS : RECEPTION_COLUMNS;
   const tableMinWidth = COLUMNS.reduce((sum, col) => sum + col.width, 0) + 40;
@@ -149,6 +153,7 @@ export default function DpfServiceRecordTable({
       case 'plate_number':
         return (
           <Link href={`/dpf/${encodeURIComponent(vehicle.vin)}?tab=service`}
+            onClick={e => e.stopPropagation()}
             className="group/link inline-flex items-center gap-1 font-semibold text-gray-900 hover:text-blue-600 transition-colors text-sm">
             {vehicle.plate_number || '-'}
             <ArrowRight className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
@@ -158,6 +163,7 @@ export default function DpfServiceRecordTable({
         return (
           <div className="flex flex-col gap-0.5">
             <Link href={`/dpf/${encodeURIComponent(vehicle.vin)}?tab=service`}
+              onClick={e => e.stopPropagation()}
               className="font-mono text-xs text-blue-600 hover:text-blue-800 transition-colors underline-offset-2 hover:underline">
               {vehicle.vin}
             </Link>
@@ -283,7 +289,19 @@ export default function DpfServiceRecordTable({
                 </tr>
               )
               : records.map(r => (
-                <tr key={r.id} className="hover:bg-blue-50/50 transition-colors duration-100">
+                <tr
+                  key={r.id}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  aria-label={onRowClick ? `${rowLabel(r)} 접수 열기` : undefined}
+                  // 글자를 드래그해 선택한 경우는 열지 않는다
+                  onClick={onRowClick ? () => { if (!window.getSelection()?.toString()) onRowClick(r); } : undefined}
+                  onKeyDown={onRowClick ? e => {
+                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRowClick(r); }
+                  } : undefined}
+                  className={`hover:bg-blue-50/50 transition-colors duration-100 ${
+                    onRowClick ? 'cursor-pointer focus:outline-none focus-visible:bg-blue-50/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500' : ''
+                  }`}
+                >
                   {COLUMNS.map(col => (
                     <td key={col.key} className="px-3 py-2.5 whitespace-nowrap">
                       {cellValue(r, col.key)}
