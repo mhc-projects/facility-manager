@@ -92,9 +92,9 @@ export default function DpfServiceRecordTable({
     const vehicle = r.dpf_vehicles;
     switch (key) {
       case 'manufacturer': {
-        // 차량관리 목록과 같은 원천(raw_data.제작사) — 엠즈 임포트 차량만 값이 있다
-        const maker = vehicle.raw_data?.['제작사'];
-        return maker != null && maker !== ''
+        // 엠즈 임포트 차량만 raw_data.제작사(SK/JMCK)가 있고, 그 외(vendor=fujino)는 전부 후지노
+        const maker = vehicle.vendor === 'fujino' ? '후지노' : vehicle.raw_data?.['제작사'];
+        return maker != null && String(maker).trim() !== ''
           ? <span className="text-xs text-gray-600">{String(maker)}</span>
           : <span className="text-gray-300">-</span>;
       }
