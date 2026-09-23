@@ -952,11 +952,17 @@ function AttachmentSlotView({
 
 // ─── 유틸 ───────────────────────────────────────────────────
 
+// 브라우저 로컬 날짜(YYYY-MM-DD) — toISOString()은 UTC라 KST 09시 전엔 전날이 된다
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function defaultValues(initialCategory?: DpfServiceCategory): Record<string, unknown> {
   return {
     categories: initialCategory ? [initialCategory] : [],
     status: 'in_progress',
-    reception_date: new Date().toISOString().split('T')[0],
+    reception_date: todayLocal(),
     local_government: '', service_branch: '',
     reception_content: '', detail_content: '', processing_content: '',
     assigned_as_technician: '', processing_technician: '',
