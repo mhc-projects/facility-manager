@@ -468,6 +468,37 @@ function TabHeader({ title, count, onAdd }: { title: string; count?: number; onA
   );
 }
 
+// 이력 카드 — 아무 곳이나 누르거나(Enter/Space) 하면 수정 모달. 글자를 드래그해 선택한 경우는 열지 않는다
+function ClickableRecordCard({
+  label, onOpen, className = '', children,
+}: {
+  label: string; onOpen: () => void; className?: string; children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onClick={() => { if (!window.getSelection()?.toString()) onOpen(); }}
+      onKeyDown={e => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen(); }
+      }}
+      className={`cursor-pointer px-5 py-4 transition-colors hover:bg-blue-50/40 focus:outline-none focus-visible:bg-blue-50/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// 카드 안 버튼 클릭이 카드 클릭(수정 열기)으로 번지지 않게 감싼다
+function StopCardClick({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <div className={className} onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      {children}
+    </div>
+  );
+}
+
 function RecordActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   return (
     <div className="flex gap-1">
@@ -656,18 +687,7 @@ function ServiceTab({
             ] as [string, string | null | undefined][]).filter(([, v]) => v);
 
             return (
-              // 카드 아무 곳이나 누르면 수정 모달 — 글자를 드래그해 선택한 경우는 열지 않는다
-              <div
-                key={r.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`${categoryRoundLabels(r).join(' · ')} 접수 수정`}
-                onClick={() => { if (!window.getSelection()?.toString()) onEdit(r); }}
-                onKeyDown={e => {
-                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onEdit(r); }
-                }}
-                className="cursor-pointer px-5 py-4 transition-colors hover:bg-blue-50/40 focus:outline-none focus-visible:bg-blue-50/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-              >
+              <ClickableRecordCard key={r.id} label={`${categoryRoundLabels(r).join(' · ')} 접수 수정`} onOpen={() => onEdit(r)}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     {categoryRoundLabels(r).map((label, i) => (
@@ -712,10 +732,9 @@ function ServiceTab({
                       {r.reception_date || '접수일 미등록'}
                     </span>
                   </div>
-                  {/* 버튼 클릭이 카드 클릭(수정 열기)으로 번지지 않게 */}
-                  <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+                  <StopCardClick>
                     <RecordActions onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} />
-                  </div>
+                  </StopCardClick>
                 </div>
 
                 <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
@@ -752,7 +771,7 @@ function ServiceTab({
                     <span className="text-[10px] text-gray-400 mr-1">{k}</span>{v}
                   </p>
                 ))}
-              </div>
+              </ClickableRecordCard>
             );
           })}
         </div>
@@ -822,7 +841,7 @@ function InstallationTab({
           {installations.map(inst => {
             const cfg = actionConfig[inst.action_type] ?? { label: inst.action_type, color: 'bg-gray-100 text-gray-600' };
             return (
-              <div key={inst.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors group">
+              <ClickableRecordCard key={inst.id} label={`${cfg.label} 이력 ${inst.installation_date ?? ''} 수정`} onOpen={() => onEdit(inst)} className="group">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${cfg.color}`}>
@@ -832,9 +851,9 @@ function InstallationTab({
                       {inst.installation_date || '날짜 미등록'}
                     </span>
                   </div>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <StopCardClick className="opacity-0 group-hover:opacity-100 transition-opacity">
                     <RecordActions onEdit={() => onEdit(inst)} onDelete={() => onDelete(inst)} />
-                  </div>
+                  </StopCardClick>
                 </div>
                 <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
                   {([
@@ -850,7 +869,7 @@ function InstallationTab({
                   ))}
                 </dl>
                 {inst.notes && <p className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">{inst.notes}</p>}
-              </div>
+              </ClickableRecordCard>
             );
           })}
         </div>
@@ -877,7 +896,7 @@ function InspectionTab({
       ) : (
         <div className="divide-y divide-gray-50">
           {inspections.map(insp => (
-            <div key={insp.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors group">
+            <ClickableRecordCard key={insp.id} label={`성능검사 ${insp.inspection_date ?? ''} 수정`} onOpen={() => onEdit(insp)} className="group">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-gray-800 tabular-nums">
@@ -899,9 +918,9 @@ function InspectionTab({
                     <span className="text-xs text-gray-400">{insp.inspection_agency}</span>
                   )}
                 </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <StopCardClick className="opacity-0 group-hover:opacity-100 transition-opacity">
                   <RecordActions onEdit={() => onEdit(insp)} onDelete={() => onDelete(insp)} />
-                </div>
+                </StopCardClick>
               </div>
 
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -920,7 +939,7 @@ function InspectionTab({
                   </div>
                 ))}
               </div>
-            </div>
+            </ClickableRecordCard>
           ))}
         </div>
       )}
@@ -953,7 +972,7 @@ function SubsidyTab({
           {subsidies.map(sub => {
             const st = sub.approval_status ? statusConfig[sub.approval_status] : null;
             return (
-              <div key={sub.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors group">
+              <ClickableRecordCard key={sub.id} label={`보조금 ${sub.reception_date ?? ''} 수정`} onOpen={() => onEdit(sub)} className="group">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800 tabular-nums">
@@ -963,9 +982,9 @@ function SubsidyTab({
                       <span className={`px-2 py-0.5 text-xs font-semibold rounded-md ${st.color}`}>{st.label}</span>
                     )}
                   </div>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <StopCardClick className="opacity-0 group-hover:opacity-100 transition-opacity">
                     <RecordActions onEdit={() => onEdit(sub)} onDelete={() => onDelete(sub)} />
-                  </div>
+                  </StopCardClick>
                 </div>
                 <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
                   {([
@@ -981,7 +1000,7 @@ function SubsidyTab({
                   ))}
                 </dl>
                 {sub.notes && <p className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">{sub.notes}</p>}
-              </div>
+              </ClickableRecordCard>
             );
           })}
         </div>
@@ -1077,7 +1096,7 @@ function CallMonitoringTab({
       ) : (
         <div className="divide-y divide-gray-50">
           {records.map(r => (
-            <div key={r.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors group">
+            <ClickableRecordCard key={r.id} label={`콜모니터링 ${r.monitoring_date ?? ''} 수정`} onOpen={() => onEdit(r)} className="group">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-semibold text-gray-800 tabular-nums">
@@ -1097,14 +1116,14 @@ function CallMonitoringTab({
                     <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">담당: {r.call_agent}</span>
                   )}
                 </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <StopCardClick className="opacity-0 group-hover:opacity-100 transition-opacity">
                   <RecordActions onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} />
-                </div>
+                </StopCardClick>
               </div>
               {r.memo && (
                 <p className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">{r.memo}</p>
               )}
-            </div>
+            </ClickableRecordCard>
           ))}
         </div>
       )}

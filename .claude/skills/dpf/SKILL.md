@@ -92,7 +92,7 @@ completed_at/created_at 화이트리스트, 기본 reception_date)로 어떤 날
 - 서명 URL은 Storage CDN이 `cacheControl: max-age=3600`으로 캐싱하므로, 파일 교체/삭제 직후에도 **이전 서명 URL이 최대 1시간 동안 계속 200을 반환할 수 있다**(엣지 캐시일 뿐 실제 삭제 여부와 무관 — 실제 상태 확인은 DB 행 존재 여부 또는 storage list API로 해야 한다).
 - 파일 업로드는 실제 브라우저 `<input type=file>` onChange → 페이지 자체 fetch로는 정상 동작한다. `javascript_tool` 스크립트가 파일을 직접 읽어 fetch로 보내는 방식만 브라우저 확장 보안필터에 차단된다(스크립트-드리븐 파일 업로드 전반의 한계이지 이 기능 자체의 문제는 아님).
 - **첨부 유무 표시**: `/dpf/[vin]` 접수이력 카드(`GET /api/dpf/vehicles/[vin]`의 `attachmentCounts`)와 **접수현황/물류관리 목록**(2026-09-23, `GET /api/dpf/service-records`가 페이지 레코드 id로 한 번에 조회해 각 행에 `attachment_count`를 붙임 → `DpfServiceRecordTable` 상태 셀의 📎N 배지) 둘 다 있다. 업로드/삭제는 폼 저장과 별개 축이라 카드 배지 갱신은 `ServiceRecordFormModal`의 `onAttachmentsChange` 콜백으로 직접 패치한다 — 모달 X/취소로 닫아도 반영되게 하려면 `onSuccess`(폼 저장 시에만 호출)에 의존하면 안 된다.
-- **모달 UI(2026-09-23)**: 접수·설치이력·성능검사·보조금·콜모니터링 모달은 `components/dpf/DpfFormUI.tsx` 공용 부품(Card/Segmented/TextInput/FormCanvas/FooterStatus/useCmdEnter 등)을 쓴다. 새 DPF 입력 모달도 여기 부품으로 만들 것. 접수이력 카드는 카드 전체 클릭(또는 Enter)으로 수정 모달이 열리고, 카드 안 버튼은 `stopPropagation` 래퍼로 감싸 둔다.
+- **모달 UI(2026-09-23)**: 접수·설치이력·성능검사·보조금·콜모니터링 모달은 `components/dpf/DpfFormUI.tsx` 공용 부품(Card/Segmented/TextInput/FormCanvas/FooterStatus/useCmdEnter 등)을 쓴다. 새 DPF 입력 모달도 여기 부품으로 만들 것. `/dpf/[vin]`의 모든 이력 탭(접수·설치·성능검사·보조금·콜모니터링) 카드는 `ClickableRecordCard`로 전체 클릭(또는 Enter)하면 수정 모달이 열리고, 카드 안 버튼은 `StopCardClick`으로 감싸 클릭이 번지지 않게 한다.
 
 ## 설계/구현 이력
 전체 설계 배경과 단계별 결정 근거는 `claudedocs/dpf-as-logistics-design.md`(크린어스 DEAR System 화면 분석 포함), 단계별 체크리스트/발견사항은 `claudedocs/dpf-service-records/checklist.md`·`context-notes.md` 참고.
