@@ -6,14 +6,16 @@ import { requireAuth } from '@/lib/auth/require-auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const CATEGORIES = ['as', 'clean', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
+const CATEGORIES = ['as', 'clean', 'clean_elapsed', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
 // 크린어스 관찰(§2.2/§2.5): 접수일/처리일/기사처리일/완료일/등록일 중 하나를 날짜range 필터 기준으로 선택
 const DATE_FIELDS = ['reception_date', 'processed_at', 'technician_processed_at', 'completed_at', 'created_at'];
 // 크린어스 "전환전체" 필터(§2.2) 대응 — converted_from_category뿐 아니라 현재 category까지 같이 봐야
 // 두 번 이상 전환된 레코드(예: cs→as→clean)를 오탐하지 않는다
-const CONVERSIONS: Record<string, [string, string]> = {
-  clean_to_as: ['clean', 'as'],
-  as_to_clean: ['as', 'clean'],
+// 크리닝은 정기(clean)·경과(clean_elapsed) 둘 다 포함
+const CLEAN_CATEGORIES = ['clean', 'clean_elapsed'];
+const CONVERSIONS: Record<string, [string[], string[]]> = {
+  clean_to_as: [CLEAN_CATEGORIES, ['as']],
+  as_to_clean: [['as'], CLEAN_CATEGORIES],
 };
 
 export async function GET(request: NextRequest) {
@@ -64,7 +66,7 @@ export async function GET(request: NextRequest) {
     if (billingStatus) dbQuery = dbQuery.eq('billing_status', billingStatus);
     if (costType) dbQuery = dbQuery.eq('cost_type', costType);
     if (courier) dbQuery = dbQuery.ilike('courier', `%${courier}%`);
-    if (conversion) dbQuery = dbQuery.eq('converted_from_category', conversion[0]).eq('category', conversion[1]);
+    if (conversion) dbQuery = dbQuery.in('converted_from_category', conversion[0]).in('category', conversion[1]);
     // created_at만 timestamptz라 date 컬럼과 같은 날짜 문자열로 비교하면 UTC 자정 기준으로 잘려
     // KST 기준 그날 생성된 행이 빠진다 — KST 오프셋을 명시해 하루 전체를 커버한다.
     if (dateField === 'created_at') {

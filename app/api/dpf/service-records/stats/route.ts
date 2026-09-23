@@ -6,14 +6,17 @@ import { requireAuth } from '@/lib/auth/require-auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// 크리닝 타일은 정기(clean)+경과(clean_elapsed) 합산
+const CLEAN_CATEGORIES = ['clean', 'clean_elapsed'];
+
 // cancelled(취소)는 대기/완료 어느 쪽에도 포함하지 않고 집계에서 제외한다(설계 §9 결정)
-async function countByCategoryStatus(category: string, status?: string) {
+async function countByCategoryStatus(category: string | string[], status?: string) {
   let q = supabaseAdmin
     .from('dpf_service_records')
     .select('id, dpf_vehicles!inner(id)', { count: 'exact', head: true })
     .eq('is_deleted', false)
     .eq('dpf_vehicles.is_deleted', false)
-    .eq('category', category);
+    .in('category', Array.isArray(category) ? category : [category]);
   if (status) q = q.eq('status', status);
   const { count, error } = await q;
   if (error) throw error;
@@ -29,8 +32,8 @@ export async function GET(request: NextRequest) {
       cleanPending, cleanCompleted, asPending, asCompleted, csTotal,
       ureaPending, ureaCompleted, partsPending, partsCompleted,
     ] = await Promise.all([
-      countByCategoryStatus('clean', 'in_progress'),
-      countByCategoryStatus('clean', 'completed'),
+      countByCategoryStatus(CLEAN_CATEGORIES, 'in_progress'),
+      countByCategoryStatus(CLEAN_CATEGORIES, 'completed'),
       countByCategoryStatus('as', 'in_progress'),
       countByCategoryStatus('as', 'completed'),
       countByCategoryStatus('cs'), // 상태 구분 없이 전체

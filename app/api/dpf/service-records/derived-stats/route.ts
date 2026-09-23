@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         stat.last_processed_date = processedDate;
       }
       if (row.status !== 'cancelled') {
-        if (row.category === 'clean') stat.clean_count += 1;
+        if (row.category === 'clean' || row.category === 'clean_elapsed') stat.clean_count += 1;
         else if (row.category === 'as') stat.as_count += 1;
       }
     }

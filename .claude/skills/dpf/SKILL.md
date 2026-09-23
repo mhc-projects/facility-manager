@@ -15,6 +15,9 @@ description: Facility Manager 프로젝트의 DPF(매연저감장치) 차량관�
 - ⚠️ API/클라이언트가 round_no를 직접 계산해서 넣으면 안 된다 — "MAX 조회 → +1 → INSERT"를 일반 호출로 하면 동시 접수 시 경쟁 상태(race)가 생긴다(전자결재 approve/submit이 트랜잭션 헬퍼를 빠뜨려 부분 업데이트 버그가 났던 전례를 반면교사 삼아 DB 트리거로 강제, [[project_approval_pending_fixes]] 참고).
 - 유니크 인덱스(`vehicle_id, category, round_no`) 위반(`23505`) 시 API가 1회만 재시도한다 — 트리거가 재계산하므로 재시도하면 해소됨. 회차 번호에 이빨(gap)이 생기는 것은 허용한다(취소 건도 번호를 먹는다).
 
+## 크리닝 = 정기(`clean`) + 경과(`clean_elapsed`) 두 분류 (2026-09-23)
+`clean`은 DB 값은 그대로 두고 라벨만 "정기 크리닝"으로 바꿨고, "경과 크리닝"은 새 category `clean_elapsed`다(마이그레이션 `20260923_dpf_clean_elapsed_category.sql`). 기존 행을 새 키로 UPDATE하지 않은 이유: category UPDATE는 트리거가 round_no를 재채번하고 `converted_from_category`를 채워 "전환" 배지가 붙는다. 별도 category라 회차는 정기/경과 각각 따로 매겨진다. 대신 "크리닝" 성격 집계(접수현황 크리닝대기/완료 타일, 부착현황 크리닝횟수, 크리닝↔AS 전환 필터)는 두 분류를 **합산**한다 — 새 크리닝 집계를 만들 때 `'clean'` 하나만 비교하지 말 것.
+
 ## 전환(conversion) — 크리닝↔AS
 접수 도중 분류가 바뀌면 `converted_from_category`에 원래 분류를 남기고, `round_no`는 **새 category 기준으로 재채번**한다(원래 채번을 유지하지 않음). 트리거가 `category is distinct from old.category`일 때 자동 처리한다(단, `converted_from_category`가 이미 채워져 있으면 덮어쓰지 않아 최초 분류가 보존된다 — 두 번 이상 전환돼도 마찬가지).
 - `GET /api/dpf/service-records?conversion=clean_to_as|as_to_clean` 필터는 `converted_from_category`뿐 아니라 현재 `category`까지 함께 검사한다 — 트리거가 카테고리가 바뀔 때마다(왕복이 아니어도) 기록하므로 `category` 없이 `converted_from_category`만 보면 이미 다시 전환된 레코드까지 오탐한다. `DpfServiceListView`의 reception 모드 전용 "전환" 드롭다운이 이 파라미터를 보낸다.

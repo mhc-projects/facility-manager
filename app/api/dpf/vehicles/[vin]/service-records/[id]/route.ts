@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const CATEGORIES = ['as', 'clean', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
+const CATEGORIES = ['as', 'clean', 'clean_elapsed', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
 
 // 접수 등록 폼에 실제로 있는 필드만 write-back 대상(설계 §4.6) — POST 라우트와 동일 매핑
 function buildOverlayUpdate(body: Record<string, unknown>): Record<string, unknown> {

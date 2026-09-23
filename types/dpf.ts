@@ -103,7 +103,7 @@ export interface DpfCallMonitoring {
 }
 
 // 사후관리(AS/크리닝/물류) 접수·처리 원장 — 크린어스 부착현황/물류관리/접수현황 3화면의 통합 원천 (2026-09-11)
-export type DpfServiceCategory = 'as' | 'clean' | 'cs' | 'parts_delivery' | 'urea' | 'engine_replace';
+export type DpfServiceCategory = 'as' | 'clean' | 'clean_elapsed' | 'cs' | 'parts_delivery' | 'urea' | 'engine_replace';
 
 export interface DpfServiceRecord {
   id: string;

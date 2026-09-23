@@ -16,7 +16,8 @@ interface Props {
 
 export const CATEGORY_OPTIONS: { value: DpfServiceCategory; label: string }[] = [
   { value: 'as', label: 'AS' },
-  { value: 'clean', label: '크리닝' },
+  { value: 'clean_elapsed', label: '경과 크리닝' },
+  { value: 'clean', label: '정기 크리닝' },
   { value: 'cs', label: '상담종료' },
   { value: 'parts_delivery', label: '부품전달' },
   { value: 'urea', label: '요소수' },

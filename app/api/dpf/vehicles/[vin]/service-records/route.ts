@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const CATEGORIES = ['as', 'clean', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
+const CATEGORIES = ['as', 'clean', 'clean_elapsed', 'cs', 'parts_delivery', 'urea', 'engine_replace'];
 
 // 접수 등록 폼에 실제로 있는 필드만 dpf_vehicles 변경정보 오버레이로 write-back한다(설계 §4.6).
 // 차량번호/차대번호는 이 폼에 입력란이 없으므로 여기서 다루지 않는다 — VehicleFormModal에서만 수동 수정.
