@@ -138,7 +138,13 @@ export default function DpfServiceListView({ mode }: Props) {
   }, []);
 
   function handleQueryChange(v: string) { setQuery(v); setPage(1); }
-  function handleCategoryChange(v: string) { setCategory(v); setPage(1); }
+  // 분류는 복수 선택 — 상태는 API 파라미터와 같은 콤마 리스트 문자열로 유지('' = 전체)
+  function handleCategoryToggle(v: string) {
+    const selected = category ? category.split(',') : [];
+    const next = selected.includes(v) ? selected.filter(c => c !== v) : [...selected, v];
+    setCategory(next.join(','));
+    setPage(1);
+  }
   function handleStatusChange(v: string) { setStatus(v); setPage(1); }
   function handleLocalGovChange(v: string) { setLocalGov(v); setPage(1); }
   function handleServiceBranchChange(v: string) { setServiceBranch(v); setPage(1); }
@@ -233,16 +239,36 @@ export default function DpfServiceListView({ mode }: Props) {
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-xs font-medium text-gray-500 w-16">분류</label>
-              <select
-                value={category}
-                onChange={e => handleCategoryChange(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">전체</option>
-                {categoryOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setCategory(''); setPage(1); }}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                    !category ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  전체
+                </button>
+                {categoryOptions.map(o => {
+                  const active = category.split(',').includes(o.value);
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => handleCategoryToggle(o.value)}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                        active ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-              <label className="text-xs font-medium text-gray-500 w-16 ml-2">상태</label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-xs font-medium text-gray-500 w-16">상태</label>
               <select
                 value={status}
                 onChange={e => handleStatusChange(e.target.value)}
