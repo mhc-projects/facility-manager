@@ -61,48 +61,51 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
 async function getUserFromToken(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+
+  // JWT 토큰 형식 검증
+  const tokenParts = token.split('.');
+  if (tokenParts.length !== 3) {
+    console.warn('⚠️ [NOTIFICATIONS] JWT 토큰 형식이 잘못됨:', tokenParts.length, 'parts');
+    return null;
+  }
+
+  let decoded: any;
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
-    }
-
-    const token = authHeader.substring(7);
-
-    // JWT 토큰 형식 검증
-    const tokenParts = token.split('.');
-    if (tokenParts.length !== 3) {
-      console.warn('⚠️ [NOTIFICATIONS] JWT 토큰 형식이 잘못됨:', tokenParts.length, 'parts');
-      return null;
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-
-    console.log('🔍 [AUTH] JWT 디코딩 성공:', {
-      userId: decoded.userId || decoded.id,
-      hasExpiry: !!decoded.exp
-    });
-
-    // 사용자 정보 조회 - 직접 PostgreSQL 연결 사용
-    const user = await queryOne(
-      'SELECT id, name, email, permission_level, department FROM employees WHERE id = $1 AND is_active = true LIMIT 1',
-      [decoded.userId || decoded.id]
-    );
-
-    if (!user) {
-      console.error('❌ [AUTH] 사용자 조회 실패:', {
-        error: 'User not found or inactive',
-        userId: decoded.userId || decoded.id,
-        hasUser: false
-      });
-      return null;
-    }
-
-    return user;
+    decoded = jwt.verify(token, JWT_SECRET) as any;
   } catch (error) {
     console.warn('⚠️ [AUTH] JWT 토큰 검증 실패:', error);
     return null;
   }
+
+  console.log('🔍 [AUTH] JWT 디코딩 성공:', {
+    userId: decoded.userId || decoded.id,
+    hasExpiry: !!decoded.exp
+  });
+
+  // 사용자 정보 조회 - 직접 PostgreSQL 연결 사용
+  // DB 오류(EMAXCONN 등)는 null(401)로 삼키지 않고 던져서 각 핸들러의 catch가 500으로 응답하게 한다.
+  // 401이면 클라이언트(NotificationContext)가 토큰을 지워 DB 장애가 강제 로그아웃으로 번진다.
+  const user = await queryOne(
+    'SELECT id, name, email, permission_level, department FROM employees WHERE id = $1 AND is_active = true LIMIT 1',
+    [decoded.userId || decoded.id]
+  );
+
+  if (!user) {
+    console.error('❌ [AUTH] 사용자 조회 실패:', {
+      error: 'User not found or inactive',
+      userId: decoded.userId || decoded.id,
+      hasUser: false
+    });
+    return null;
+  }
+
+  return user;
 }
 
 // GET: 사용자 알림 목록 조회 (3-tier 지원)
@@ -116,7 +119,8 @@ export const GET = withApiHandler(async (request: NextRequest) => {
     // JWT 토큰에서 사용자 정보 추출
     const user = await getUserFromToken(request);
     if (!user) {
-      console.error('❌ [NOTIFICATIONS] 사용자 인증 실패');
+      // 토큰 없음·만료 등 클라이언트 상태 문제라 warn으로 남긴다(console.error만 error_logs에 기록됨)
+      console.warn('⚠️ [NOTIFICATIONS] 사용자 인증 실패');
       return createErrorResponse('인증이 필요합니다', 401);
     }
 
