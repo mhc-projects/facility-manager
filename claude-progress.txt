@@ -386,3 +386,13 @@
 
 ## 2026-09-23 접수현황 행 클릭 수정
 - 접수현황/물류관리 행 클릭·Enter → 목록에서 바로 ServiceRecordFormModal. 링크는 차량 상세 이동 유지. 저장 후 조용한 재조회. 로컬 확인(저장 없음), tsc 446, build 성공.
+
+## 2026-09-24 운영 에러 b15·b16 수정 (e6797b5, e857812)
+- b15 `[NOTIFICATIONS] 사용자 인증 실패`: error_logs 14일 5건 중 4건이 DB 장애(9/11 EMAXCONN 한도 200, 9/14 EHOSTUNREACH) 시점.
+  getUserFromToken이 DB 예외를 401로 삼켜 fetchNotifications가 토큰을 지웠다(=DB 장애 때 강제 로그아웃). DB 예외는 500으로, 401 로그는 warn으로.
+  폴링 401 토큰 정리(분석 3번)는 반복 전제가 로그와 맞지 않아(30초 폴링 폭주 없음) 하지 않음.
+- b16 `[HEALTH] Google API 연결 실패`: Drive 미사용(사용자 확인) → 헬스체크의 Google 검사 제거, status는 Supabase 변수만.
+- 검증: tsc 446 동일, build 성공, 로컬 next start에서 무토큰/잘못된 토큰/없는 사용자 401, DB 연결 차단 시 GET 3종 500
+  (수정 전 코드는 같은 조건에서 401 + b15 메시지 재현), /api/health 200 healthy.
+- 남은 것: EMAXCONN(풀러 연결 200 한도) 자체는 별건. BusinessProgressSection의 헤더 없는 알림 호출은 렌더링 안 되는 죽은 코드라 손대지 않음.
+  notifications 스킬 파일 갱신은 .claude/ 편집 권한 문제로 못 함.
