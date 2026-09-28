@@ -9,7 +9,7 @@ export interface HolidayEntry {
 type PublicHolidaySource = 'kasi' | 'google' | 'nager';
 
 // 서버 메모리 캐시 (연도별) — DB 동기화 결과가 늦게 반영되지 않도록 1시간만 유지
-const cache = new Map<number, { dates: string[]; fetchedAt: number }>();
+const cache = new Map<number, { entries: HolidayEntry[]; fetchedAt: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 // ── 한국천문연구원 특일 정보 (공공데이터포털) ──
@@ -151,42 +151,49 @@ async function fetchPublicHolidays(year: number, allowNager: boolean): Promise<{
 }
 
 /**
- * 연도별 공휴일(YYYY-MM-DD) 목록.
+ * 연도별 공휴일(날짜+이름) 목록.
  * public_holidays 테이블에 그 해 공공 공휴일이 동기화돼 있으면 DB를 쓰고, 없거나 테이블 조회가 실패하면
  * 외부 출처에서 직접 받아온다. 회사 지정 휴무일(source='company')은 항상 합친다.
  */
-export async function getKoreanHolidays(year: number): Promise<{ dates: string[]; cacheHit: boolean }> {
+export async function getKoreanHolidayEntries(year: number): Promise<{ entries: HolidayEntry[]; cacheHit: boolean }> {
   const cached = cache.get(year);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return { dates: cached.dates, cacheHit: true };
+    return { entries: cached.entries, cacheHit: true };
   }
 
-  let publicDates: string[] = [];
-  let companyDates: string[] = [];
+  let publicEntries: HolidayEntry[] = [];
+  let companyEntries: HolidayEntry[] = [];
   let source = 'db';
   try {
     const rows = await queryAll(
-      `SELECT holiday_date::TEXT AS date, source FROM public_holidays
-       WHERE holiday_date BETWEEN $1::DATE AND $2::DATE`,
+      `SELECT holiday_date::TEXT AS date, name, source FROM public_holidays
+       WHERE holiday_date BETWEEN $1::DATE AND $2::DATE
+       ORDER BY holiday_date`,
       [`${year}-01-01`, `${year}-12-31`]
     );
-    publicDates = rows.filter((r: any) => r.source !== 'company').map((r: any) => r.date);
-    companyDates = rows.filter((r: any) => r.source === 'company').map((r: any) => r.date);
+    publicEntries = rows.filter((r: any) => r.source !== 'company').map((r: any) => ({ date: r.date, name: r.name }));
+    companyEntries = rows.filter((r: any) => r.source === 'company').map((r: any) => ({ date: r.date, name: r.name }));
   } catch (err: any) {
     console.warn(`[공휴일] public_holidays 조회 실패, 외부 출처로 대체: ${err.message}`);
   }
 
-  if (publicDates.length === 0) {
+  if (publicEntries.length === 0) {
     const fetched = await fetchPublicHolidays(year, true);
-    publicDates = fetched.entries.map(e => e.date);
+    publicEntries = fetched.entries;
     source = fetched.source;
   }
 
-  const dates = [...new Set([...publicDates, ...companyDates])].sort();
-  cache.set(year, { dates, fetchedAt: Date.now() });
-  console.log(`✅ [공휴일] ${year}년 ${dates.length}개 (${source})`);
+  const entries = [...publicEntries, ...companyEntries].sort((a, b) => a.date.localeCompare(b.date));
+  cache.set(year, { entries, fetchedAt: Date.now() });
+  console.log(`✅ [공휴일] ${year}년 ${entries.length}건 (${source})`);
 
-  return { dates, cacheHit: false };
+  return { entries, cacheHit: false };
+}
+
+// 연도별 공휴일 날짜(YYYY-MM-DD, 중복 제거) 목록 — 근무일 계산용
+export async function getKoreanHolidays(year: number): Promise<{ dates: string[]; cacheHit: boolean }> {
+  const { entries, cacheHit } = await getKoreanHolidayEntries(year);
+  return { dates: [...new Set(entries.map(e => e.date))].sort(), cacheHit };
 }
 
 /**
