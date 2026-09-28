@@ -39,6 +39,11 @@ interface LeaveSummaryRow {
   requester_name: string | null
   approved_count: number
   approved_days: number
+  annual_days: number      // 유급휴가 (반차 포함)
+  half_days: number        // 그중 반차
+  condolence_days: number
+  special_days: number
+  other_days: number
   pending_count: number
   pending_days: number
 }
@@ -53,6 +58,10 @@ const TAB_LABELS: Record<TabType, string> = {
 }
 
 const APPROVALS_PAGE_SIZE = 50
+
+// 휴가원 휴가일 연도 필터 선택지 (내년 ~ 2년 전)
+const CURRENT_YEAR = new Date().getFullYear()
+const LEAVE_YEAR_OPTIONS = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map(String)
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-'
@@ -231,6 +240,12 @@ function ApprovalsContent() {
   const [departmentFilter, setDepartmentFilter] = useState(() => initialTab === 'completed' ? (searchParams?.get('department') || '') : '')
   const [completedPage, setCompletedPage] = useState(() => initialTab === 'completed' ? Math.max(1, parseInt(searchParams?.get('page') || '1', 10) || 1) : 1)
 
+  // 휴가원 휴가일 연도 필터 (전체·결재완료 탭, 유형이 휴가원일 때만 노출)
+  const [leaveYear, setLeaveYear] = useState(() => (initialTab === 'all' || initialTab === 'completed') ? (searchParams?.get('leave_year') || '') : '')
+  const isLeaveTypeSelected = (tab === 'all' && typeFilter === 'leave_request') || (tab === 'completed' && completedTypeFilter === 'leave_request')
+  // 유형을 휴가원으로 바꾸면 올해로 기본 설정, 다른 유형이면 해제
+  const leaveYearForType = (type: string) => type === 'leave_request' ? String(CURRENT_YEAR) : ''
+
   // 처리확인 모달
   const [processTarget, setProcessTarget] = useState<ApprovalDoc | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -255,10 +270,12 @@ function ApprovalsContent() {
       if (dateFrom) p.set('date_from', dateFrom)
       if (dateTo) p.set('date_to', dateTo)
       if (departmentFilter) p.set('department', departmentFilter)
+      if (isLeaveTypeSelected && leaveYear) p.set('leave_year', leaveYear)
       if (completedPage > 1) p.set('page', String(completedPage))
     } else {
       if (typeFilter) p.set('type', typeFilter)
       if (tab === 'all' && statusFilter) p.set('status', statusFilter)
+      if (isLeaveTypeSelected && leaveYear) p.set('leave_year', leaveYear)
       if (generalSearchQuery) p.set('q', generalSearchQuery)
       if (tab === 'all' && allSortBy !== 'submitted_at') p.set('sort_by', allSortBy)
       if (tab === 'all' && allPage > 1) p.set('page', String(allPage))
@@ -298,6 +315,7 @@ function ApprovalsContent() {
         if (dateFrom) params.set('date_from', dateFrom)
         if (dateTo) params.set('date_to', dateTo)
         if (departmentFilter) params.set('department', departmentFilter)
+        if (isLeaveTypeSelected && leaveYear) params.set('leave_year', leaveYear)
         params.set('limit', String(APPROVALS_PAGE_SIZE))
         params.set('offset', String((completedPage - 1) * APPROVALS_PAGE_SIZE))
       } else {
@@ -315,6 +333,7 @@ function ApprovalsContent() {
         if (tab === 'all' && allSortBy !== 'submitted_at') params.set('sort_by', allSortBy)
         if (tab === 'all') {
           if (debouncedGeneralSearchQuery) params.set('search', debouncedGeneralSearchQuery)
+          if (isLeaveTypeSelected && leaveYear) params.set('leave_year', leaveYear)
           params.set('limit', String(APPROVALS_PAGE_SIZE))
           params.set('offset', String((allPage - 1) * APPROVALS_PAGE_SIZE))
         } else {
@@ -343,17 +362,17 @@ function ApprovalsContent() {
     } finally {
       setLoading(false)
     }
-  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, debouncedSearchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage, allPage, debouncedGeneralSearchQuery])
+  }, [tab, mySubTab, typeFilter, statusFilter, allSortBy, debouncedSearchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, completedPage, allPage, debouncedGeneralSearchQuery, isLeaveTypeSelected, leaveYear])
 
   // 결재완료 탭 필터 변경 시 1페이지로 복귀
   useEffect(() => {
     setCompletedPage(1)
-  }, [debouncedSearchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter])
+  }, [debouncedSearchQuery, completedTypeFilter, processedFilter, dateFrom, dateTo, departmentFilter, leaveYear])
 
   // 전체 탭 필터 변경 시 1페이지로 복귀
   useEffect(() => {
     setAllPage(1)
-  }, [typeFilter, statusFilter, allSortBy, debouncedGeneralSearchQuery])
+  }, [typeFilter, statusFilter, allSortBy, debouncedGeneralSearchQuery, leaveYear])
 
   const fetchPendingCount = useCallback(async () => {
     const token = TokenManager.getToken()
@@ -484,6 +503,7 @@ function ApprovalsContent() {
     setDateFrom('')
     setDateTo('')
     setDepartmentFilter('')
+    setLeaveYear('')
   }
 
   const hasActiveFilters = searchInput || completedTypeFilter || processedFilter || dateFrom || dateTo || departmentFilter
@@ -506,24 +526,48 @@ function ApprovalsContent() {
     </div>
   )
 
+  const renderLeaveYearSelect = () => isLeaveTypeSelected && (
+    <select
+      value={leaveYear}
+      onChange={e => setLeaveYear(e.target.value)}
+      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="">휴가일 전체 연도</option>
+      {LEAVE_YEAR_OPTIONS.map(y => (
+        <option key={y} value={y}>{y}년 휴가</option>
+      ))}
+    </select>
+  )
+
   // 휴가원 필터 + 작성자 검색 시 작성자별 휴가 합계일 (승인완료 기준, 결재중은 별도 표기)
+  // 유급휴가는 반차 포함 합계이고 반차는 괄호로 따로 보여준다
   const renderLeaveSummary = () => {
     if (loading || !leaveSummary || (tab !== 'all' && tab !== 'completed')) return null
     return (
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-        <p className="text-xs font-semibold text-blue-700 mb-2">휴가 합계 (승인완료 기준)</p>
+        <p className="text-xs font-semibold text-blue-700 mb-2">
+          휴가 합계 (승인완료 기준{leaveYear ? ` · ${leaveYear}년 휴가일` : ''})
+        </p>
         {leaveSummary.length === 0 ? (
           <p className="text-sm text-gray-500">승인완료·결재중인 휴가원이 없습니다</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {leaveSummary.map(r => (
-              <div key={r.requester_id} className="bg-white border border-blue-100 rounded-lg px-3 py-1.5 text-sm">
-                <span className="font-medium text-gray-800">{r.requester_name || '-'}</span>
-                <span className="ml-2 font-bold text-blue-600">{r.approved_days}일</span>
-                <span className="ml-1 text-xs text-gray-400">({r.approved_count}건)</span>
-                {r.pending_count > 0 && (
-                  <span className="ml-2 text-xs text-yellow-600">결재중 {r.pending_days}일</span>
-                )}
+              <div key={r.requester_id} className="bg-white border border-blue-100 rounded-lg px-3 py-2 text-sm">
+                <div>
+                  <span className="font-medium text-gray-800">{r.requester_name || '-'}</span>
+                  <span className="ml-2 font-bold text-blue-600">{r.approved_days}일</span>
+                  <span className="ml-1 text-xs text-gray-400">({r.approved_count}건)</span>
+                  {r.pending_count > 0 && (
+                    <span className="ml-2 text-xs text-yellow-600">결재중 {r.pending_days}일</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-600">
+                  <span>유급휴가 <b className="text-gray-800">{r.annual_days}일</b>{r.half_days > 0 && <span className="text-gray-400"> (반차 {r.half_days}일 포함)</span>}</span>
+                  <span>경조휴가 <b className="text-gray-800">{r.condolence_days}일</b></span>
+                  <span>특별휴가 <b className="text-gray-800">{r.special_days}일</b></span>
+                  {r.other_days > 0 && <span>기타 <b className="text-gray-800">{r.other_days}일</b></span>}
+                </div>
               </div>
             ))}
           </div>
@@ -562,7 +606,10 @@ function ApprovalsContent() {
 
             <select
               value={completedTypeFilter}
-              onChange={e => setCompletedTypeFilter(e.target.value)}
+              onChange={e => {
+                setCompletedTypeFilter(e.target.value)
+                setLeaveYear(leaveYearForType(e.target.value))
+              }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">전체 유형</option>
@@ -570,6 +617,8 @@ function ApprovalsContent() {
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
+
+            {renderLeaveYearSelect()}
 
             {/* 기간 필터: 컴팩트 범위 입력 */}
             <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 bg-white">
@@ -866,6 +915,7 @@ function ApprovalsContent() {
                   setGeneralSearchInput('')
                   setGeneralSearchQuery('')
                   setAllSortBy('submitted_at')
+                  setLeaveYear('')
                   router.push(`/admin/approvals?tab=${t}`)
                 }}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -911,7 +961,10 @@ function ApprovalsContent() {
               </div>
               <select
                 value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value)}
+                onChange={e => {
+                  setTypeFilter(e.target.value)
+                  setLeaveYear(leaveYearForType(e.target.value))
+                }}
                 className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">전체 유형</option>
@@ -919,6 +972,7 @@ function ApprovalsContent() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
+              {renderLeaveYearSelect()}
               {tab === 'my' && (
                 <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
                   <button

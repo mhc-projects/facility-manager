@@ -38,5 +38,8 @@ description: Facility Manager 프로젝트의 전자결재 시스템(승인 라�
 결재 액션마다 `notifications` DB insert + Supabase broadcast(`approval-notify:{userId}`) + Web Push + 텔레그램, 4개 채널을 각 라우트가 개별 구현한 헬퍼로 중복 발송한다(`sendApprovalNotification`/`sendNotification` — 파일마다 이름·구현이 조금씩 다르고 공통화돼 있지 않음).
 
 ## 목록 화면 휴가 합계 (`app/api/approvals/route.ts` GET, 2026-09-28)
-- 전체·결재완료 탭에서 유형=휴가원(`leave_request`) + 검색어(`search`, 작성자명 포함)가 둘 다 걸리면 응답에 `leaveSummary`(작성자별 `approved_days`/`pending_days`/건수)를 내려준다. 목록과 같은 WHERE로 서버에서 집계 — 50건 페이지네이션 때문에 클라이언트 합산 금지.
-- 합계 기준은 `form_data.total_days`(`items[].days` 재합산 아님 — 불일치 문서 1건 존재, approve 라우트도 `total_days` 사용). 승인완료만 사용일수로 표시하고 결재중은 별도 표기, 임시저장·반려·재상신필요·취소는 제외(확정된 업무 규칙).
+- 전체·결재완료 탭에서 유형=휴가원(`leave_request`) + 검색어(`search`, 작성자명 포함)가 둘 다 걸리면 응답에 `leaveSummary`(작성자별 합계·유급/반차/경조/특별/기타·결재중)를 내려준다. 목록과 같은 WHERE로 서버에서 집계 — 50건 페이지네이션 때문에 클라이언트 합산 금지.
+- 합계는 `form_data.items[]` 항목 단위(`days`, `leave_type`)로 낸다. items가 없는 초기 양식 문서(최상위 `start_date`/`leave_type`/`total_days`, 예: BLUEON-LVE-20260324-002)는 `LEAVE_ITEMS_SQL`이 단일 항목으로 변환한다.
+- 휴가종류: 유급휴가 = `annual` + 반차(`half_am`/`half_pm`, 각 0.5일), 반차는 따로도 표시. `condolence`=경조, `special`=특별, 그 외=기타.
+- `leave_year`(YYYY): 휴가일 연도 필터. 항목 시작일(`items[].date`) 연도로 판정 — 목록은 해당 연도 항목이 하나라도 있는 문서, 합계는 해당 연도 항목만. 연말~연초에 걸친 기간 항목은 시작일 연도로 전부 잡힌다(근무일 재계산 불가, 2026-09 기준 해당 데이터 없음). 프론트는 유형을 휴가원으로 바꾸면 올해로 기본 설정.
+- 승인완료만 사용일수로 표시하고 결재중은 별도 표기, 임시저장·반려·재상신필요·취소는 제외(확정된 업무 규칙).

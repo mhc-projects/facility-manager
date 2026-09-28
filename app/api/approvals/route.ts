@@ -6,30 +6,61 @@ import { normalizeApproverIds } from '@/lib/approval-line';
 
 export const dynamic = 'force-dynamic';
 
+// 휴가원 항목 배열 — items가 없는 초기 양식(start_date/leave_type/total_days 최상위 저장)은 단일 항목으로 변환
+const LEAVE_ITEMS_SQL = `jsonb_array_elements(
+  CASE WHEN jsonb_typeof(d.form_data->'items') = 'array' THEN d.form_data->'items'
+  ELSE jsonb_build_array(jsonb_build_object(
+    'date', d.form_data->>'start_date',
+    'leave_type', COALESCE(d.form_data->>'leave_type', 'annual'),
+    'days', d.form_data->'total_days'
+  )) END
+)`;
+
 /**
- * 휴가원 + 검색어(작성자) 필터가 걸렸을 때, 필터된 문서들의 휴가일수(form_data.total_days)를 작성자별로 합산한다.
+ * 휴가원 + 검색어(작성자) 필터가 걸렸을 때, 필터된 문서들의 휴가일수를 작성자별·휴가종류별로 합산한다.
  * 목록이 50건씩 페이지네이션되므로 현재 페이지가 아닌 필터 전체 기준으로 서버에서 집계한다.
+ * 항목(items[].days) 단위로 합산하며, leaveYear가 있으면 휴가일(항목 시작일)이 그 해인 항목만 센다.
+ * 반차(half_am/half_pm)는 유급휴가에 포함하되 반차 일수를 따로 내려준다.
  * 승인완료만 사용일수로 보고, 결재중은 별도 표기한다(임시저장·반려·재상신필요·취소는 제외).
  */
-async function getLeaveSummary(whereClause: string, vals: any[]) {
+async function getLeaveSummary(whereClause: string, vals: any[], leaveYear: string | null) {
+  const summaryVals = [...vals];
+  let yearCond = '';
+  if (leaveYear) {
+    summaryVals.push(leaveYear);
+    yearCond = `AND substr(it->>'date', 1, 4) = $${summaryVals.length}`;
+  }
+  const approvedDays = (typeCond: string) =>
+    `COALESCE(SUM((it->>'days')::NUMERIC) FILTER (WHERE d.status = 'approved' AND ${typeCond}), 0)`;
   const rows = await queryAll(
     `SELECT d.requester_id, e.name AS requester_name,
-            COUNT(*) FILTER (WHERE d.status = 'approved') AS approved_count,
-            COALESCE(SUM((d.form_data->>'total_days')::NUMERIC) FILTER (WHERE d.status = 'approved'), 0) AS approved_days,
-            COUNT(*) FILTER (WHERE d.status = 'pending') AS pending_count,
-            COALESCE(SUM((d.form_data->>'total_days')::NUMERIC) FILTER (WHERE d.status = 'pending'), 0) AS pending_days
+            COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'approved') AS approved_count,
+            ${approvedDays('TRUE')} AS approved_days,
+            ${approvedDays(`it->>'leave_type' IN ('annual', 'half_am', 'half_pm')`)} AS annual_days,
+            ${approvedDays(`it->>'leave_type' IN ('half_am', 'half_pm')`)} AS half_days,
+            ${approvedDays(`it->>'leave_type' = 'condolence'`)} AS condolence_days,
+            ${approvedDays(`it->>'leave_type' = 'special'`)} AS special_days,
+            ${approvedDays(`it->>'leave_type' NOT IN ('annual', 'half_am', 'half_pm', 'condolence', 'special')`)} AS other_days,
+            COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'pending') AS pending_count,
+            COALESCE(SUM((it->>'days')::NUMERIC) FILTER (WHERE d.status = 'pending'), 0) AS pending_days
      FROM approval_documents d
      LEFT JOIN employees e ON e.id = d.requester_id
-     WHERE ${whereClause} AND d.status IN ('approved', 'pending')
+     CROSS JOIN LATERAL ${LEAVE_ITEMS_SQL} it
+     WHERE ${whereClause} AND d.status IN ('approved', 'pending') ${yearCond}
      GROUP BY d.requester_id, e.name
      ORDER BY e.name`,
-    vals
+    summaryVals
   );
   return (rows || []).map((r: any) => ({
     requester_id: r.requester_id,
     requester_name: r.requester_name,
     approved_count: parseInt(r.approved_count, 10),
     approved_days: parseFloat(r.approved_days),
+    annual_days: parseFloat(r.annual_days),
+    half_days: parseFloat(r.half_days),
+    condolence_days: parseFloat(r.condolence_days),
+    special_days: parseFloat(r.special_days),
+    other_days: parseFloat(r.other_days),
     pending_count: parseInt(r.pending_count, 10),
     pending_days: parseFloat(r.pending_days),
   }));
@@ -49,6 +80,7 @@ async function getLeaveSummary(whereClause: string, vals: any[]) {
  *   - date_to: 완료일 범위 끝 (YYYY-MM-DD)
  *   - processed: 'true'|'false' → 처리확인 여부 필터
  *   - department: 부서 필터
+ *   - leave_year: 휴가원 휴가일 연도 필터 (YYYY, type=leave_request일 때만)
  *   - limit, offset
  */
 export async function GET(request: NextRequest) {
@@ -81,6 +113,9 @@ export async function GET(request: NextRequest) {
     const limit           = parseInt(searchParams.get('limit') || '50');
     const offset          = parseInt(searchParams.get('offset') || '0');
     const sortBy          = searchParams.get('sort_by') === 'completed_at' ? 'completed_at' : 'submitted_at';
+    // 휴가원 휴가일 연도 필터 (휴가원 유형일 때만 적용)
+    const leaveYearParam  = searchParams.get('leave_year');
+    const leaveYear       = typeFilter === 'leave_request' && leaveYearParam && /^\d{4}$/.test(leaveYearParam) ? leaveYearParam : null;
 
     // ── 결재완료 탭: 총무팀 또는 권한4 전용 ──
     if (completedTab) {
@@ -143,6 +178,11 @@ export async function GET(request: NextRequest) {
         vals.push(departmentFilter);
       }
 
+      if (leaveYear) {
+        conds.push(`EXISTS (SELECT 1 FROM ${LEAVE_ITEMS_SQL} it WHERE substr(it->>'date', 1, 4) = $${ci++})`);
+        vals.push(leaveYear);
+      }
+
       // 미처리/처리완료 배지는 processedFilter와 무관하게 항상 전체 기준으로 집계
       const baseWhereClause = conds.join(' AND ');
       const [unprocessedResult, processedResult] = await Promise.all([
@@ -176,7 +216,7 @@ export async function GET(request: NextRequest) {
            WHERE ${whereClause}`,
           vals
         ),
-        typeFilter === 'leave_request' && searchQuery ? getLeaveSummary(whereClause, vals) : Promise.resolve(null),
+        typeFilter === 'leave_request' && searchQuery ? getLeaveSummary(whereClause, vals, leaveYear) : Promise.resolve(null),
       ]);
 
       vals.push(limit, offset);
@@ -293,6 +333,11 @@ export async function GET(request: NextRequest) {
       values.push(typeFilter);
     }
 
+    if (leaveYear) {
+      conditions.push(`EXISTS (SELECT 1 FROM ${LEAVE_ITEMS_SQL} it WHERE substr(it->>'date', 1, 4) = $${idx++})`);
+      values.push(leaveYear);
+    }
+
     if (statusFilter) {
       const statuses = statusFilter.split(',').map(s => s.trim()).filter(Boolean);
       if (statuses.length > 0) {
@@ -321,7 +366,7 @@ export async function GET(request: NextRequest) {
          WHERE ${whereClause}`,
         values
       ),
-      typeFilter === 'leave_request' && searchQuery ? getLeaveSummary(whereClause, values) : Promise.resolve(null),
+      typeFilter === 'leave_request' && searchQuery ? getLeaveSummary(whereClause, values, leaveYear) : Promise.resolve(null),
     ]);
 
     // 목록 조회
