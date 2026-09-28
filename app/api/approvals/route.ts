@@ -3,6 +3,7 @@ import { query as pgQuery, queryOne, queryAll } from '@/lib/supabase-direct';
 import { verifyTokenString } from '@/utils/auth';
 import { isApprovalFullAccessEmail, isApprovalCompletedTabAccessEmail } from '@/lib/approval-access';
 import { normalizeApproverIds } from '@/lib/approval-line';
+import { getKoreanHolidays } from '@/lib/holidays';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,27 +12,63 @@ const LEAVE_ITEMS_SQL = `jsonb_array_elements(
   CASE WHEN jsonb_typeof(d.form_data->'items') = 'array' THEN d.form_data->'items'
   ELSE jsonb_build_array(jsonb_build_object(
     'date', d.form_data->>'start_date',
+    'end_date', d.form_data->>'end_date',
     'leave_type', COALESCE(d.form_data->>'leave_type', 'annual'),
     'days', d.form_data->'total_days'
   )) END
 )`;
 
+// 휴가 항목(it)이 $n 연도와 하루라도 겹치는지 — 해를 넘기는 기간 항목은 양쪽 연도 모두에 걸린다
+function leaveYearOverlapSql(paramIdx: number) {
+  return `(it->>'date') <= ($${paramIdx}::TEXT || '-12-31') AND COALESCE(it->>'end_date', it->>'date') >= ($${paramIdx}::TEXT || '-01-01')`;
+}
+
+// 연도 분할용 공휴일 — 해를 넘기는 기간(최대 31일)만 대상이라 전·당·다음 해만 필요.
+// 외부 조회가 실패해도 신정·성탄절은 고정 공휴일로 넣어 연말연초 분할이 크게 틀리지 않게 한다
+async function getLeaveHolidays(year: number): Promise<string[]> {
+  const years = [year - 1, year, year + 1];
+  const fixed = years.flatMap(y => [`${y}-01-01`, `${y}-12-25`]);
+  const fetched = await Promise.all(years.map(y =>
+    getKoreanHolidays(y).then(r => r.dates).catch(err => {
+      console.warn(`[approvals] ${y}년 공휴일 조회 실패, 고정 공휴일만 사용:`, err);
+      return [] as string[];
+    })
+  ));
+  return [...new Set([...fixed, ...fetched.flat()])];
+}
+
 /**
  * 휴가원 + 검색어(작성자) 필터가 걸렸을 때, 필터된 문서들의 휴가일수를 작성자별·휴가종류별로 합산한다.
  * 목록이 50건씩 페이지네이션되므로 현재 페이지가 아닌 필터 전체 기준으로 서버에서 집계한다.
- * 항목(items[].days) 단위로 합산하며, leaveYear가 있으면 휴가일(항목 시작일)이 그 해인 항목만 센다.
+ * 항목(items[].days) 단위로 합산하며, leaveYear가 있으면 그 해와 겹치는 항목만 센다.
+ * 해를 넘기는 기간 항목은 그 해에 속한 근무일(주말·공휴일 제외, 작성 화면과 같은 기준) 비율만큼만 넣는다 —
+ * 정상 작성된 항목은 days가 전체 근무일수와 같으므로 정확히 그 해 근무일수가 된다(0.5일 단위 반올림).
  * 반차(half_am/half_pm)는 유급휴가에 포함하되 반차 일수를 따로 내려준다.
  * 승인완료만 사용일수로 보고, 결재중은 별도 표기한다(임시저장·반려·재상신필요·취소는 제외).
  */
 async function getLeaveSummary(whereClause: string, vals: any[], leaveYear: string | null) {
   const summaryVals = [...vals];
   let yearCond = '';
+  let daysExpr = `(it->>'days')::NUMERIC`;
   if (leaveYear) {
     summaryVals.push(leaveYear);
-    yearCond = `AND substr(it->>'date', 1, 4) = $${summaryVals.length}`;
+    const yIdx = summaryVals.length;
+    summaryVals.push(await getLeaveHolidays(parseInt(leaveYear, 10)));
+    const hIdx = summaryVals.length;
+    yearCond = `AND ${leaveYearOverlapSql(yIdx)}`;
+    const itStart = `(it->>'date')::DATE`;
+    const itEnd = `COALESCE(it->>'end_date', it->>'date')::DATE`;
+    const yStart = `($${yIdx}::TEXT || '-01-01')::DATE`;
+    const yEnd = `($${yIdx}::TEXT || '-12-31')::DATE`;
+    const workdays = (from: string, to: string) =>
+      `(SELECT COUNT(*) FROM generate_series(${from}, ${to}, INTERVAL '1 day') g
+        WHERE EXTRACT(ISODOW FROM g) < 6 AND NOT (g::DATE = ANY($${hIdx}::DATE[])))`;
+    daysExpr = `(CASE WHEN ${itStart} >= ${yStart} AND ${itEnd} <= ${yEnd} THEN (it->>'days')::NUMERIC
+      ELSE COALESCE(ROUND((it->>'days')::NUMERIC * ${workdays(`GREATEST(${itStart}, ${yStart})`, `LEAST(${itEnd}, ${yEnd})`)}
+        / NULLIF(${workdays(itStart, itEnd)}, 0) * 2) / 2, 0) END)`;
   }
   const approvedDays = (typeCond: string) =>
-    `COALESCE(SUM((it->>'days')::NUMERIC) FILTER (WHERE d.status = 'approved' AND ${typeCond}), 0)`;
+    `COALESCE(SUM(${daysExpr}) FILTER (WHERE d.status = 'approved' AND ${typeCond}), 0)`;
   const rows = await queryAll(
     `SELECT d.requester_id, e.name AS requester_name,
             COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'approved') AS approved_count,
@@ -42,7 +79,7 @@ async function getLeaveSummary(whereClause: string, vals: any[], leaveYear: stri
             ${approvedDays(`it->>'leave_type' = 'special'`)} AS special_days,
             ${approvedDays(`it->>'leave_type' NOT IN ('annual', 'half_am', 'half_pm', 'condolence', 'special')`)} AS other_days,
             COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'pending') AS pending_count,
-            COALESCE(SUM((it->>'days')::NUMERIC) FILTER (WHERE d.status = 'pending'), 0) AS pending_days
+            COALESCE(SUM(${daysExpr}) FILTER (WHERE d.status = 'pending'), 0) AS pending_days
      FROM approval_documents d
      LEFT JOIN employees e ON e.id = d.requester_id
      CROSS JOIN LATERAL ${LEAVE_ITEMS_SQL} it
@@ -179,7 +216,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (leaveYear) {
-        conds.push(`EXISTS (SELECT 1 FROM ${LEAVE_ITEMS_SQL} it WHERE substr(it->>'date', 1, 4) = $${ci++})`);
+        conds.push(`EXISTS (SELECT 1 FROM ${LEAVE_ITEMS_SQL} it WHERE ${leaveYearOverlapSql(ci++)})`);
         vals.push(leaveYear);
       }
 
@@ -334,7 +371,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (leaveYear) {
-      conditions.push(`EXISTS (SELECT 1 FROM ${LEAVE_ITEMS_SQL} it WHERE substr(it->>'date', 1, 4) = $${idx++})`);
+      conditions.push(`EXISTS (SELECT 1 FROM ${LEAVE_ITEMS_SQL} it WHERE ${leaveYearOverlapSql(idx++)})`);
       values.push(leaveYear);
     }
 
