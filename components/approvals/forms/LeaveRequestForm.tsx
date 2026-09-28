@@ -124,7 +124,22 @@ function labelFor(leave_type: LeaveType): string {
   return LEAVE_TYPES.find(lt => lt.value === leave_type)?.label ?? ''
 }
 
-export default function LeaveRequestForm({ data, onChange, disabled = false }: Props) {
+// items 배열이 생기기 전 초기 양식(최상위 start_date/end_date/leave_type 저장, 예: BLUEON-LVE-20260324-002)을 items 형식으로 변환
+function normalizeLeaveData(data: LeaveRequestData): LeaveRequestData {
+  if (Array.isArray(data.items)) return data
+  const legacy = data as LeaveRequestData & { start_date?: string; end_date?: string; leave_type?: LeaveType }
+  if (!legacy.start_date) return { ...data, items: [] }
+  const item: LeaveItem = {
+    date: legacy.start_date,
+    leave_type: legacy.leave_type ?? 'annual',
+    days: data.total_days ?? 0,
+  }
+  if (legacy.end_date && legacy.end_date !== legacy.start_date) item.end_date = legacy.end_date
+  return { ...data, items: [item] }
+}
+
+export default function LeaveRequestForm({ data: rawData, onChange, disabled = false }: Props) {
+  const data = normalizeLeaveData(rawData)
   // 공휴일 Set — 마운트 시 /api/holidays 에서 동적 로드, 실패 시 fallback 사용
   const [holidays, setHolidays] = useState<Set<string>>(KR_HOLIDAYS_FALLBACK)
 
