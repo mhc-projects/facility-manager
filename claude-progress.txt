@@ -435,3 +435,13 @@
 - 특일정보 파서는 가상 응답으로만 검증(여러 건·1건 객체·빈 월·키 오류). 실제 키로는 아직 미검증
 - 남은 사용자 작업: ① SQL 실행 ② 공공데이터포털 특일정보 서비스키 신청 → DATA_GO_KR_SERVICE_KEY(디코딩 키) ③ CRON_SECRET — 둘 다 Vercel + .env.local ④ 첫 동기화 실행 후 DB/화면 확인
 - 회사 휴무일은 나중에 생기면 public_holidays에 source='company'로 넣으면 모든 계산에 반영됨(관리 화면은 필요할 때 추가)
+
+---
+
+## 2026-09-28 | 공휴일 동기화 가동 + 일정관리 캘린더 공휴일 표시 복구
+- 특일정보 키 검증: 저장된 값은 인코딩 키(% 포함) — 그대로 보내면 SERVICE_KEY_IS_NOT_REGISTERED_ERROR, 디코딩하면 정상 → 코드에서 자동 디코딩(1c7ec79)
+- 특일정보 vs Google 비교: 2026 동일(22일), 2027은 02-06(토, 설 연휴 첫날)만 특일정보에 추가 — 근무일 계산 영향 없음
+- CRON_SECRET 생성해 .env.local + Vercel(Production·Development)에 추가. Preview는 권한 확인에서 막혀 미추가(cron은 Production에서만 돌아 영향 없음)
+- 첫 동기화 실행(사용자 승인): public_holidays에 2026 22건·2027 24건(source=kasi), /api/holidays가 DB에서 읽는 것 확인
+- 일정관리(/schedule) 캘린더는 원래 year+month로 {success,data:[{date,name}]}를 기대했는데, 휴가원 작업(e407e3a)에서 API가 날짜 배열로 바뀌며 공휴일이 전혀 안 보이고 있었음 → month가 있으면 이름 포함 형식으로 응답(같은 날 공휴일은 이름 합침). 9월 추석, 10월 개천절·대체공휴일·한글날 표시 확인
+- 운영 반영은 push 후 — 매주 월 03:00 KST 자동 동기화도 배포 이후부터
