@@ -803,3 +803,12 @@ export interface MigrationSummary {
   migration_time_ms: number
   validation_results: MigrationValidationResult[]
 }
+// 공휴일·회사 휴무일 (public_holidays 테이블)
+export interface PublicHolidayType {
+  id: number
+  holiday_date: string          // YYYY-MM-DD
+  name: string
+  source: 'kasi' | 'google' | 'nager' | 'company'
+  created_at: string
+  updated_at: string
+}
