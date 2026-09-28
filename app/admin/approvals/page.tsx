@@ -59,9 +59,10 @@ const TAB_LABELS: Record<TabType, string> = {
 
 const APPROVALS_PAGE_SIZE = 50
 
-// 휴가원 휴가일 연도 필터 선택지 (내년 ~ 2년 전)
+// 휴가원 휴가일 연도 필터 선택지 (내년 ~ 시스템 사용 시작 연도 2026, 최신순)
 const CURRENT_YEAR = new Date().getFullYear()
-const LEAVE_YEAR_OPTIONS = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map(String)
+const LEAVE_YEAR_START = 2026
+const LEAVE_YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR + 1 - LEAVE_YEAR_START + 1 }, (_, i) => String(CURRENT_YEAR + 1 - i))
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-'
