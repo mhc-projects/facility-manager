@@ -33,6 +33,16 @@ interface ApprovalDoc {
   process_note?: string | null
 }
 
+// 휴가원 + 작성자 검색 시 서버가 내려주는 작성자별 휴가일수 합계
+interface LeaveSummaryRow {
+  requester_id: string
+  requester_name: string | null
+  approved_count: number
+  approved_days: number
+  pending_count: number
+  pending_days: number
+}
+
 type TabType = 'my' | 'pending' | 'all' | 'completed'
 
 const TAB_LABELS: Record<TabType, string> = {
@@ -176,6 +186,7 @@ function ApprovalsContent() {
   const [unprocessedTotal, setUnprocessedTotal] = useState(0)
   const [processedTotal, setProcessedTotal] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
+  const [leaveSummary, setLeaveSummary] = useState<LeaveSummaryRow[] | null>(null)
   const [loading, setLoading] = useState(true)
 
   // 내 문서 서브탭
@@ -321,11 +332,13 @@ function ApprovalsContent() {
         setTotal(data.total || 0)
         setUnprocessedTotal(data.unprocessedTotal ?? 0)
         setProcessedTotal(data.processedTotal ?? 0)
+        setLeaveSummary(data.leaveSummary ?? null)
       } else {
         setDocs([])
         setTotal(0)
         setUnprocessedTotal(0)
         setProcessedTotal(0)
+        setLeaveSummary(null)
       }
     } finally {
       setLoading(false)
@@ -493,6 +506,32 @@ function ApprovalsContent() {
     </div>
   )
 
+  // 휴가원 필터 + 작성자 검색 시 작성자별 휴가 합계일 (승인완료 기준, 결재중은 별도 표기)
+  const renderLeaveSummary = () => {
+    if (loading || !leaveSummary || (tab !== 'all' && tab !== 'completed')) return null
+    return (
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+        <p className="text-xs font-semibold text-blue-700 mb-2">휴가 합계 (승인완료 기준)</p>
+        {leaveSummary.length === 0 ? (
+          <p className="text-sm text-gray-500">승인완료·결재중인 휴가원이 없습니다</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {leaveSummary.map(r => (
+              <div key={r.requester_id} className="bg-white border border-blue-100 rounded-lg px-3 py-1.5 text-sm">
+                <span className="font-medium text-gray-800">{r.requester_name || '-'}</span>
+                <span className="ml-2 font-bold text-blue-600">{r.approved_days}일</span>
+                <span className="ml-1 text-xs text-gray-400">({r.approved_count}건)</span>
+                {r.pending_count > 0 && (
+                  <span className="ml-2 text-xs text-yellow-600">결재중 {r.pending_days}일</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // 결재완료 탭 전용 컨텐츠 — 컴포넌트가 아닌 렌더 함수로 정의해야 매 렌더마다 새 타입이 생기지 않아 input 언마운트 문제를 방지할 수 있다
   const renderCompletedTab = () => {
 
@@ -596,6 +635,8 @@ function ApprovalsContent() {
             </div>
           )}
         </div>
+
+        {renderLeaveSummary()}
 
         {/* 모바일: 카드 목록 */}
         <div className="md:hidden">
@@ -923,6 +964,8 @@ function ApprovalsContent() {
                 </select>
               )}
             </div>
+
+            {renderLeaveSummary()}
 
             {/* 모바일: 카드형 목록 */}
             <div className="md:hidden">

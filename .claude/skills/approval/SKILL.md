@@ -36,3 +36,7 @@ description: Facility Manager 프로젝트의 전자결재 시스템(승인 라�
 
 ## 알림
 결재 액션마다 `notifications` DB insert + Supabase broadcast(`approval-notify:{userId}`) + Web Push + 텔레그램, 4개 채널을 각 라우트가 개별 구현한 헬퍼로 중복 발송한다(`sendApprovalNotification`/`sendNotification` — 파일마다 이름·구현이 조금씩 다르고 공통화돼 있지 않음).
+
+## 목록 화면 휴가 합계 (`app/api/approvals/route.ts` GET, 2026-09-28)
+- 전체·결재완료 탭에서 유형=휴가원(`leave_request`) + 검색어(`search`, 작성자명 포함)가 둘 다 걸리면 응답에 `leaveSummary`(작성자별 `approved_days`/`pending_days`/건수)를 내려준다. 목록과 같은 WHERE로 서버에서 집계 — 50건 페이지네이션 때문에 클라이언트 합산 금지.
+- 합계 기준은 `form_data.total_days`(`items[].days` 재합산 아님 — 불일치 문서 1건 존재, approve 라우트도 `total_days` 사용). 승인완료만 사용일수로 표시하고 결재중은 별도 표기, 임시저장·반려·재상신필요·취소는 제외(확정된 업무 규칙).

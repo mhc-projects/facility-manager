@@ -7,6 +7,35 @@ import { normalizeApproverIds } from '@/lib/approval-line';
 export const dynamic = 'force-dynamic';
 
 /**
+ * 휴가원 + 검색어(작성자) 필터가 걸렸을 때, 필터된 문서들의 휴가일수(form_data.total_days)를 작성자별로 합산한다.
+ * 목록이 50건씩 페이지네이션되므로 현재 페이지가 아닌 필터 전체 기준으로 서버에서 집계한다.
+ * 승인완료만 사용일수로 보고, 결재중은 별도 표기한다(임시저장·반려·재상신필요·취소는 제외).
+ */
+async function getLeaveSummary(whereClause: string, vals: any[]) {
+  const rows = await queryAll(
+    `SELECT d.requester_id, e.name AS requester_name,
+            COUNT(*) FILTER (WHERE d.status = 'approved') AS approved_count,
+            COALESCE(SUM((d.form_data->>'total_days')::NUMERIC) FILTER (WHERE d.status = 'approved'), 0) AS approved_days,
+            COUNT(*) FILTER (WHERE d.status = 'pending') AS pending_count,
+            COALESCE(SUM((d.form_data->>'total_days')::NUMERIC) FILTER (WHERE d.status = 'pending'), 0) AS pending_days
+     FROM approval_documents d
+     LEFT JOIN employees e ON e.id = d.requester_id
+     WHERE ${whereClause} AND d.status IN ('approved', 'pending')
+     GROUP BY d.requester_id, e.name
+     ORDER BY e.name`,
+    vals
+  );
+  return (rows || []).map((r: any) => ({
+    requester_id: r.requester_id,
+    requester_name: r.requester_name,
+    approved_count: parseInt(r.approved_count, 10),
+    approved_days: parseFloat(r.approved_days),
+    pending_count: parseInt(r.pending_count, 10),
+    pending_days: parseFloat(r.pending_days),
+  }));
+}
+
+/**
  * GET /api/approvals
  * 결재 문서 목록 조회
  * Query params:
@@ -139,13 +168,16 @@ export async function GET(request: NextRequest) {
 
       const whereClause = conds.join(' AND ');
 
-      const countResult = await queryOne(
-        `SELECT COUNT(*) AS total
-         FROM approval_documents d
-         LEFT JOIN employees e ON e.id = d.requester_id
-         WHERE ${whereClause}`,
-        vals
-      );
+      const [countResult, leaveSummary] = await Promise.all([
+        queryOne(
+          `SELECT COUNT(*) AS total
+           FROM approval_documents d
+           LEFT JOIN employees e ON e.id = d.requester_id
+           WHERE ${whereClause}`,
+          vals
+        ),
+        typeFilter === 'leave_request' && searchQuery ? getLeaveSummary(whereClause, vals) : Promise.resolve(null),
+      ]);
 
       vals.push(limit, offset);
       const rows = await queryAll(
@@ -170,6 +202,7 @@ export async function GET(request: NextRequest) {
         total: parseInt(countResult?.total || '0', 10),
         unprocessedTotal: parseInt(unprocessedResult?.total || '0', 10),
         processedTotal: parseInt(processedResult?.total || '0', 10),
+        leaveSummary,
       });
     }
 
@@ -280,13 +313,16 @@ export async function GET(request: NextRequest) {
 
     const whereClause = conditions.join(' AND ');
 
-    // 총 건수
-    const countResult = await queryOne(
-      `SELECT COUNT(*) AS total FROM approval_documents d
-       LEFT JOIN employees e ON e.id = d.requester_id
-       WHERE ${whereClause}`,
-      values
-    );
+    // 총 건수 (+ 휴가원·작성자 검색 시 휴가일수 합계)
+    const [countResult, leaveSummary] = await Promise.all([
+      queryOne(
+        `SELECT COUNT(*) AS total FROM approval_documents d
+         LEFT JOIN employees e ON e.id = d.requester_id
+         WHERE ${whereClause}`,
+        values
+      ),
+      typeFilter === 'leave_request' && searchQuery ? getLeaveSummary(whereClause, values) : Promise.resolve(null),
+    ]);
 
     // 목록 조회
     values.push(limit, offset);
@@ -316,7 +352,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: rows || [],
-      total: parseInt(countResult?.total || '0', 10)
+      total: parseInt(countResult?.total || '0', 10),
+      leaveSummary,
     });
   } catch (error: any) {
     console.error('[API] GET /approvals error:', error);
