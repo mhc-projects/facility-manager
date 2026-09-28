@@ -194,7 +194,9 @@ export default function CalendarBoard() {
     try {
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
-      const response = await fetch(`/api/holidays?year=${year}&month=${month}`);
+      // no-store: 예전 /api/holidays가 같은 URL에 날짜 배열을 public max-age=86400으로 응답했어서,
+      // 브라우저에 남은 그 캐시를 쓰면 공휴일이 표시되지 않는다 (2026-09-28 운영에서 확인)
+      const response = await fetch(`/api/holidays?year=${year}&month=${month}`, { cache: 'no-store' });
       const result = await response.json();
       if (result.success) {
         setHolidays(result.data || []);
