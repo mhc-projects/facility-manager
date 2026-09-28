@@ -445,3 +445,4 @@
 - 첫 동기화 실행(사용자 승인): public_holidays에 2026 22건·2027 24건(source=kasi), /api/holidays가 DB에서 읽는 것 확인
 - 일정관리(/schedule) 캘린더는 원래 year+month로 {success,data:[{date,name}]}를 기대했는데, 휴가원 작업(e407e3a)에서 API가 날짜 배열로 바뀌며 공휴일이 전혀 안 보이고 있었음 → month가 있으면 이름 포함 형식으로 응답(같은 날 공휴일은 이름 합침). 9월 추석, 10월 개천절·대체공휴일·한글날 표시 확인
 - 운영 반영은 push 후 — 매주 월 03:00 KST 자동 동기화도 배포 이후부터
+- 운영 배포 후 일정관리에 공휴일이 안 보임 → 원인: 예전 /api/holidays가 같은 URL(year+month)에 날짜 배열을 public max-age=86400으로 응답해 브라우저에 남은 캐시를 CalendarBoard가 계속 사용. fetch에 cache:'no-store' 추가(bc8fe8d) 후 push, 사용자 운영 확인 완료
