@@ -122,7 +122,9 @@ async function fetchFromNager(year: number): Promise<HolidayEntry[]> {
  * 빈 결과는 실패로 보고 다음 출처로 넘어간다 (예: 특일 정보는 다음 해 자료가 늦게 공개됨).
  */
 async function fetchPublicHolidays(year: number, allowNager: boolean): Promise<{ entries: HolidayEntry[]; source: PublicHolidaySource }> {
-  const kasiKey = process.env.DATA_GO_KR_SERVICE_KEY;
+  // 인코딩된 키(%xx 포함)를 넣어도 동작하도록 디코딩해서 쓴다 — URLSearchParams가 다시 인코딩함
+  const rawKasiKey = process.env.DATA_GO_KR_SERVICE_KEY?.trim();
+  const kasiKey = rawKasiKey && rawKasiKey.includes('%') ? decodeURIComponent(rawKasiKey) : rawKasiKey;
   if (kasiKey) {
     try {
       const entries = await fetchFromKasi(year, kasiKey);
