@@ -562,16 +562,6 @@ function BusinessManagementPage() {
     return adminProgressCategories.filter(c => c.is_active)
   }, [adminProgressCategories, adminDataLoading])
 
-  // 🗄️ 비즈니스 데이터 캐시 시스템
-  const businessCacheRef = useRef<Map<string, {
-    data: UnifiedBusinessInfo;
-    timestamp: number;
-    ttl: number; // Time To Live in milliseconds
-  }>>(new Map())
-
-  // 캐시 TTL 설정 (5분)
-  const CACHE_TTL = 5 * 60 * 1000;
-
   // Revenue 모달 state
   const [showRevenueModal, setShowRevenueModal] = useState(false)
   const [selectedRevenueBusiness, setSelectedRevenueBusiness] = useState<UnifiedBusinessInfo | null>(null)
@@ -2486,69 +2476,15 @@ function BusinessManagementPage() {
     }
   }, [returnPath, selectedBusiness, allBusinesses, router]);
 
-  // 🗄️ 캐시 관리 함수들
-
   /**
-   * 캐시에서 비즈니스 데이터 조회
-   * @param businessId 사업장 ID
-   * @returns 캐시된 데이터 또는 null (만료/없음)
-   */
-  const getCachedBusiness = useCallback((businessId: string): UnifiedBusinessInfo | null => {
-    const cached = businessCacheRef.current.get(businessId);
-
-    if (!cached) {
-      console.log(`📦 [CACHE-MISS] 캐시 없음: ${businessId}`);
-      return null;
-    }
-
-    const now = Date.now();
-    const age = now - cached.timestamp;
-
-    // TTL 체크
-    if (age > cached.ttl) {
-      console.log(`⏰ [CACHE-EXPIRED] 캐시 만료 (${Math.round(age / 1000)}초 경과): ${businessId}`);
-      businessCacheRef.current.delete(businessId);
-      return null;
-    }
-
-    console.log(`✅ [CACHE-HIT] 캐시 사용 (유효시간: ${Math.round((cached.ttl - age) / 1000)}초 남음): ${businessId}`);
-    return cached.data;
-  }, []);
-
-  /**
-   * 캐시에 비즈니스 데이터 저장
-   * @param businessId 사업장 ID
-   * @param data 사업장 데이터
-   * @param ttl Time To Live (기본: CACHE_TTL)
-   */
-  const setCachedBusiness = useCallback((businessId: string, data: UnifiedBusinessInfo, ttl: number = CACHE_TTL) => {
-    businessCacheRef.current.set(businessId, {
-      data,
-      timestamp: Date.now(),
-      ttl
-    });
-    console.log(`💾 [CACHE-SET] 캐시 저장 (TTL: ${Math.round(ttl / 1000)}초): ${businessId} - ${data.사업장명}`);
-  }, [CACHE_TTL]);
-
-  /**
-   * 특정 비즈니스 캐시 무효화
+   * 특정 비즈니스 캐시 무효화 (sessionStorage에 남은 예전 매출 계산 보관본 정리)
    * @param businessId 사업장 ID (없으면 전체 캐시 무효화)
    */
   const invalidateBusinessCache = useCallback((businessId?: string) => {
     if (businessId) {
-      const deleted = businessCacheRef.current.delete(businessId);
-      if (deleted) {
-        console.log(`🗑️ [CACHE-INVALIDATE] 캐시 무효화: ${businessId}`);
-      } else {
-        console.log(`ℹ️ [CACHE-INVALIDATE] 캐시 없음 (무효화 불필요): ${businessId}`);
-      }
-      // sessionStorage의 매출 계산 캐시도 함께 무효화
       sessionStorage.removeItem(`revenue_calc_${businessId}`);
       console.log(`🗑️ [CACHE-INVALIDATE] sessionStorage 매출 계산 캐시 무효화: revenue_calc_${businessId}`);
     } else {
-      const size = businessCacheRef.current.size;
-      businessCacheRef.current.clear();
-      console.log(`🧹 [CACHE-INVALIDATE-ALL] 전체 캐시 무효화 (${size}개 항목 삭제)`);
       // sessionStorage의 모든 매출 계산 캐시 무효화
       const keysToRemove: string[] = [];
       for (let i = 0; i < sessionStorage.length; i++) {
@@ -2587,20 +2523,10 @@ function BusinessManagementPage() {
   };
 
   // 통합 새로고침 함수 - 모든 데이터 동기화를 위한 단일 소스
-  const refreshBusinessData = async (businessId: string, businessName: string, forceRefresh: boolean = false): Promise<UnifiedBusinessInfo | null> => {
+  const refreshBusinessData = async (businessId: string, businessName: string): Promise<UnifiedBusinessInfo | null> => {
     try {
-      // 1. 캐시 확인 (forceRefresh가 false인 경우)
-      if (!forceRefresh) {
-        const cachedData = getCachedBusiness(businessId);
-        if (cachedData) {
-          console.log(`🚀 [refreshBusinessData] 캐시 데이터 반환: ${businessName}`);
-          return cachedData;
-        }
-      } else {
-        console.log(`🔄 [refreshBusinessData] 강제 새로고침 - 캐시 무시: ${businessName}`);
-      }
-
-      // 2. API에서 최신 데이터 가져오기
+      // 캐시 없이 항상 API에서 최신 데이터 조회 — 메모리 캐시는 다른 사용자의 수정을 알 수 없어 예전 정보를 보여줬음
+      console.log(`🔄 [refreshBusinessData] 최신 데이터 조회: ${businessName}`);
       const timestamp = Date.now()
       const response = await fetch(`/api/business-info-direct?id=${businessId}&t=${timestamp}`, {
         headers: {
@@ -2850,9 +2776,6 @@ function BusinessManagementPage() {
           fileCount: 0,
           files: null
         }
-
-        // 3. 캐시에 저장
-        setCachedBusiness(businessId, refreshedBusiness);
 
         return refreshedBusiness
       }

@@ -462,4 +462,5 @@
 - 원인: BusinessRevenueModal이 계산 결과를 탭별 sessionStorage(revenue_calc_{id})에 5분 보관. 저장 시 캐시를 지우는 코드는 저장한 사람의 탭에만 작동해서, 다른 사용자가 5분 안에 다시 열면 예전 결과가 보임
 - 수정: 모달을 열 때 캐시를 쓰지 않고 항상 /api/revenue/calculate 호출. 다른 곳의 revenue_calc_* 삭제 코드는 이제 할 일이 없지만 남은 예전 보관본을 지우는 역할이라 그대로 둠
 - 검증: tsc 오류 수 수정 전후 동일(446, 모두 기존 오류), 브라우저에서 사업장관리 상세모달 → 매출 상세보기 두 번 열어 매번 API-CALL + 게이트웨이(1,2) 표시 확인, 매출관리 페이지 모달도 정상
-- 참고: 사업장관리 상세모달의 사업장 데이터도 페이지 메모리 캐시(TTL 300초)를 써서 다른 사용자의 수정이 최대 5분 늦게 보일 수 있음(미수정)
+- 후속: 사업장관리 상세모달의 사업장 데이터도 페이지 메모리 캐시(businessCacheRef, TTL 300초)라 같은 문제 → 캐시 제거, 열 때마다 business-info-direct 조회. invalidateBusinessCache는 revenue_calc_* 정리만 남김. 브라우저에서 두 번 열어 매번 조회·게이트웨이 표시 확인
+- 미수정(사용자 결정 대기): 매출관리 페이지 목록 sessionStorage 캐시(5분). 실시간 갱신이 CacheManager.invalidateAll()을 부르지만 키가 버전 없는 이름(revenue_businesses_cache)이라 실제 키(..._v4_dealer)를 못 지워 사실상 동작 안 함. 고치면 사업장 수정마다(시스템 자동 수정 포함) 전체 목록 재조회가 생겨 디바운스 필요
