@@ -3741,6 +3741,22 @@ function BusinessManagementPage() {
       return
     }
 
+    // 이름 없는 대표자/담당자는 저장 시 제거되므로, 다른 칸을 입력했는데 이름만 비어 있으면 저장을 막고 알린다
+    const namelessRepIndex = (finalFormData.representatives || []).findIndex(
+      (r: Representative) => !r.name?.trim() && !!r.birth_date
+    )
+    if (namelessRepIndex >= 0) {
+      alert(`대표자 ${namelessRepIndex + 1}번째 줄에 이름을 입력해주세요.\n이름이 없으면 저장되지 않습니다.`)
+      return
+    }
+    const namelessContactIndex = (finalFormData.contacts_list || []).findIndex(
+      (c: ContactPerson) => !c.name?.trim() && [c.position, c.phone, c.email, c.comment].some(v => v?.trim())
+    )
+    if (namelessContactIndex >= 0) {
+      alert(`담당자 ${namelessContactIndex + 1}번째 줄에 이름을 입력해주세요.\n이름이 없으면 저장되지 않습니다.`)
+      return
+    }
+
     // 제출 버튼 비활성화를 위한 상태 추가
     const submitButton = document.querySelector('button[type="submit"]') as HTMLButtonElement
     if (submitButton) {
