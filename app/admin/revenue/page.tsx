@@ -402,6 +402,26 @@ function RevenueDashboard() {
     onDelete: () => { CacheManager.invalidateAll(); loadBusinesses(); },
   });
 
+  // 탭으로 돌아오면 목록 재조회 — business_info는 Realtime 발행 대상이 아니라 위 구독으로는 다른 사용자의 수정이 들어오지 않음
+  const lastVisibleReloadRef = useRef(0);
+  const reloadOnVisibleRef = useRef<() => void>(() => {});
+  reloadOnVisibleRef.current = () => {
+    if (dataLoadingState !== 'ready') return;
+    const now = Date.now();
+    if (now - lastVisibleReloadRef.current < 30 * 1000) return; // 잦은 탭 전환 시 전체 재조회 반복 방지
+    lastVisibleReloadRef.current = now;
+    console.log('👀 [VISIBLE-RELOAD] 탭 복귀 → 사업장·계산 결과 재조회');
+    loadBusinesses();
+    loadCalculations({ silent: true });
+  };
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') reloadOnVisibleRef.current();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // businesses 배열 갱신 시 열린 모달의 business 데이터도 동기화
   // (multiple_stack_install_extra 등 저장 후 새로고침 시 최신값 반영)
   useEffect(() => {
@@ -577,9 +597,8 @@ function RevenueDashboard() {
   // 캐시 버전: revenue_adjustments 포함된 데이터 구조 (변경 시 자동 무효화)
   const CACHE_VERSION = 'v4_dealer';
   const CACHE_KEYS = {
+    // 사업장 목록·계산 결과는 다른 사용자의 수정이 바로 보여야 해서 캐싱하지 않음 (단가 기준표만 캐싱)
     PRICING: `revenue_pricing_cache_${CACHE_VERSION}`,
-    BUSINESSES: `revenue_businesses_cache_${CACHE_VERSION}`,
-    CALCULATIONS: `revenue_calculations_cache_${CACHE_VERSION}`,
   };
   const CACHE_DURATION = 5 * 60 * 1000; // 5분
 
@@ -944,33 +963,7 @@ function RevenueDashboard() {
     const startTime = performance.now();
 
     try {
-      // 🚀 캐시 확인
-      const cachedBusinesses = getCachedData(CACHE_KEYS.BUSINESSES);
-      if (cachedBusinesses) {
-        setBusinesses(cachedBusinesses);
-        const cachedRiskMap: Record<string, string | null> = {};
-        const cachedManualMap: Record<string, boolean> = {};
-        for (const b of cachedBusinesses) {
-          const isManual = Boolean(b.risk_is_manual);
-          cachedManualMap[b.id] = isManual;
-          if (isManual) {
-            cachedRiskMap[b.id] = b.receivable_risk ?? null;
-          } else {
-            cachedRiskMap[b.id] = calcAutoRisk(b.installation_date);
-          }
-        }
-        setRiskMap(cachedRiskMap);
-        setRiskIsManualMap(cachedManualMap);
-        const cachedCollectionManagerMap: Record<string, string[]> = {};
-        for (const b of cachedBusinesses) {
-          cachedCollectionManagerMap[b.id] = Array.isArray(b.collection_manager_ids) ? b.collection_manager_ids : [];
-        }
-        setCollectionManagerMap(cachedCollectionManagerMap);
-        const endTime = performance.now();
-        console.log(`⚡ [LOAD-BUSINESSES] 캐시에서 ${cachedBusinesses.length}개 로드 완료 (${(endTime - startTime).toFixed(0)}ms)`);
-        return;
-      }
-
+      // 캐시 없이 항상 서버에서 조회 — 탭별 sessionStorage 캐시는 다른 사용자의 수정을 알 수 없어 예전 목록을 보여줬음
       console.log('📊 [LOAD-BUSINESSES] 사업장 데이터 로드 시작');
 
       // ✅ 전체 사업장 데이터 조회 (매출 계산을 위해 전체 데이터 필요)
@@ -1010,9 +1003,6 @@ function RevenueDashboard() {
           initialCollectionManagerMap[b.id] = Array.isArray(b.collection_manager_ids) ? b.collection_manager_ids : [];
         }
         setCollectionManagerMap(initialCollectionManagerMap);
-
-        // 🚀 캐시 저장
-        setCachedData(CACHE_KEYS.BUSINESSES, businessData);
 
         const endTime = performance.now();
         console.log(`✅ [LOAD-BUSINESSES] 사업장 로드 완료 (${(endTime - startTime).toFixed(0)}ms)`);
@@ -1068,46 +1058,21 @@ function RevenueDashboard() {
     }
   };
 
-  const loadCalculations = async () => {
+  // silent: 탭 복귀 시 재조회처럼 표를 스피너로 가리지 않고 조용히 교체할 때 사용
+  const loadCalculations = async ({ silent = false }: { silent?: boolean } = {}) => {
     console.log('📊 [LOAD-CALCULATIONS] 계산 결과 로드 시작');
-    const calcCacheTimeKey = getCacheTimeKey(CACHE_KEYS.CALCULATIONS);
-    console.log('🔍 [LOAD-CALCULATIONS-DEBUG] 현재 SessionStorage 상태:', {
-      hasCalculationsCache: !!sessionStorage.getItem(CACHE_KEYS.CALCULATIONS),
-      hasCacheTime: !!sessionStorage.getItem(calcCacheTimeKey),
-      cacheTime: sessionStorage.getItem(calcCacheTimeKey),
-      elapsed: sessionStorage.getItem(calcCacheTimeKey)
-        ? `${((Date.now() - parseInt(sessionStorage.getItem(calcCacheTimeKey)!)) / 1000).toFixed(1)}초`
-        : 'N/A',
-      cacheExpired: sessionStorage.getItem(calcCacheTimeKey)
-        ? (Date.now() - parseInt(sessionStorage.getItem(calcCacheTimeKey)!)) > CACHE_DURATION
-        : true
-    });
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
-      // 🚀 캐시 확인 (페이지 재방문 시 API 호출 생략)
-      const cachedCalculations = getCachedData(CACHE_KEYS.CALCULATIONS);
-      if (cachedCalculations) {
-        setCalculations(cachedCalculations);
-        console.log('✅ [LOAD-CALCULATIONS] 캐시에서 로드 완료:', cachedCalculations.length, '개 (API 호출 생략)');
-        setLoading(false);
-        return;
-      }
-
-      console.log('⚠️ [LOAD-CALCULATIONS-DEBUG] 캐시 미스 → API 호출 진행');
-
+      // 캐시 없이 항상 서버에서 조회 — 탭별 sessionStorage 캐시는 다른 사용자의 수정을 알 수 없어 예전 결과를 보여줬음
       const params = new URLSearchParams();
       // 다중 선택 필터는 클라이언트에서 처리하므로 서버 필터는 제거
       if (selectedOffices.length === 1) params.append('sales_office', selectedOffices[0]);
-      // ✅ 캐시 사용 시에는 타임스탬프 제거 (불필요)
       // limit 파라미터 제거 (API 기본값 10000 사용)
-
-      console.log('📊 [LOAD-CALCULATIONS] API 호출 시작 (캐시 없음)');
 
       const response = await fetch(`/api/revenue/calculate?${params}`, {
         headers: {
           ...getAuthHeaders()
-          // ✅ Cache-Control 제거 (SessionStorage 캐싱 사용)
         }
       });
       const data = await response.json();
@@ -1127,16 +1092,13 @@ function RevenueDashboard() {
 
         setCalculations(loadedCalcs);
 
-        // 💾 캐시 저장
-        setCachedData(CACHE_KEYS.CALCULATIONS, loadedCalcs);
-
-        console.log('✅ [LOAD-CALCULATIONS] API 로드 완료:', loadedCalcs.length, '개 (캐시 저장 완료)');
+        console.log('✅ [LOAD-CALCULATIONS] API 로드 완료:', loadedCalcs.length, '개');
         // calculateStats는 useEffect에서 필터링된 데이터로 자동 계산됨
       }
     } catch (error) {
       console.error('🔴 [LOAD-CALCULATIONS] 계산 결과 로드 오류:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

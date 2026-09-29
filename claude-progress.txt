@@ -463,4 +463,7 @@
 - 수정: 모달을 열 때 캐시를 쓰지 않고 항상 /api/revenue/calculate 호출. 다른 곳의 revenue_calc_* 삭제 코드는 이제 할 일이 없지만 남은 예전 보관본을 지우는 역할이라 그대로 둠
 - 검증: tsc 오류 수 수정 전후 동일(446, 모두 기존 오류), 브라우저에서 사업장관리 상세모달 → 매출 상세보기 두 번 열어 매번 API-CALL + 게이트웨이(1,2) 표시 확인, 매출관리 페이지 모달도 정상
 - 후속: 사업장관리 상세모달의 사업장 데이터도 페이지 메모리 캐시(businessCacheRef, TTL 300초)라 같은 문제 → 캐시 제거, 열 때마다 business-info-direct 조회. invalidateBusinessCache는 revenue_calc_* 정리만 남김. 브라우저에서 두 번 열어 매번 조회·게이트웨이 표시 확인
-- 미수정(사용자 결정 대기): 매출관리 페이지 목록 sessionStorage 캐시(5분). 실시간 갱신이 CacheManager.invalidateAll()을 부르지만 키가 버전 없는 이름(revenue_businesses_cache)이라 실제 키(..._v4_dealer)를 못 지워 사실상 동작 안 함. 고치면 사업장 수정마다(시스템 자동 수정 포함) 전체 목록 재조회가 생겨 디바운스 필요
+- 매출관리 목록: business_info는 supabase_realtime 발행 대상이 아니고 RLS도 anon 차단("server only access")이라 useBusinessInfoRealtime 구독은 한 번도 이벤트를 받은 적 없음(업무관리 tasks 페이지도 동일). 사용자 결정으로 목록(BUSINESSES)·계산결과(CALCULATIONS) sessionStorage 캐시 제거(단가표 PRICING만 유지) + 탭 복귀(visibilitychange) 시 재조회 추가(30초 간격 제한, 스피너 없이 조용히 교체)
+- 검증: tsc 오류 수 동일(446), 강제 새로고침 후 캐시 키는 pricing만 남음, 탭 복귀 이벤트 2회 중 1회만 재조회·표 유지 확인
+- 참고: public/sw.js가 /_next/static/을 cache-first로 줘서 개발 서버에서 일반 새로고침 시 예전 JS가 실행됨(하드 리로드가 필요한 실제 원인). 운영은 파일명 해시라 영향 없음
+- 미수정: utils/cache-manager.ts의 키가 버전 없는 이름이라 updateBusinessField/updateBusinessFields(매출관리·InvoiceRecordForm)가 실제 캐시에 안 닿음 — 목록 캐시를 없애서 이제 영향 없는 죽은 코드
