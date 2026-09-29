@@ -35,6 +35,7 @@ export function formatBusinessPhone(value: string): string {
 /**
  * 일반 전화번호 포맷팅: xx-xxx-xxxx (지역번호 2자리) 또는 xxx-xxx-xxxx (지역번호 3자리)
  * 팩스번호 등 10자리 숫자(xx-xxxx-xxxx 또는 xxx-xxxx-xxxx)도 지원
+ * 050X 모바일팩스 번호는 최대 12자리(xxxx-xxxx-xxxx)까지 지원
  */
 export function formatLandlinePhone(value: string): string {
   const numbers = value.replace(/[^0-9]/g, '')
@@ -61,6 +62,19 @@ export function formatLandlinePhone(value: string): string {
       return `${numbers.slice(0, 3)}-${numbers.slice(3)}`
     } else {
       return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`
+    }
+  }
+
+  // 050X (모바일팩스·평생번호) - xxxx-xxx-xxxx (11자리) 또는 xxxx-xxxx-xxxx (12자리)
+  if (numbers.startsWith('050')) {
+    if (numbers.length <= 4) {
+      return numbers
+    } else if (numbers.length <= 8) {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4)}`
+    } else if (numbers.length <= 11) {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4, 7)}-${numbers.slice(7, 11)}`
+    } else {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4, 8)}-${numbers.slice(8, 12)}`
     }
   }
 
