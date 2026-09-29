@@ -127,13 +127,12 @@ export default function BusinessRevenueModal({
   useEffect(() => {
     if (!isOpen) {
       prevIsOpenRef.current = false;
-      // businessId는 유지 (다음에 같은 사업장 열면 캐시 사용)
+      // businessId는 유지
     }
   }, [isOpen]);
 
   // API에서 최신 계산 결과 가져오기 (Hook은 항상 최상위에서 호출)
   // ⚠️ 중요: isOpen이 true로 변경될 때만 실행 (모달 열릴 때만)
-  // ✨ 최적화: SessionStorage 캐싱으로 복귀 시 로딩 시간 단축
   useEffect(() => {
     // 조건 체크는 Hook 내부에서 수행
     if (!isOpen || !businessId) {
@@ -161,32 +160,7 @@ export default function BusinessRevenueModal({
       setError(null);
 
       try {
-        // 1️⃣ 캐시 확인
-        const cacheKey = `revenue_calc_${businessId}`;
-        const cached = sessionStorage.getItem(cacheKey);
-
-        if (cached) {
-          try {
-            const { data, timestamp } = JSON.parse(cached);
-            const age = Date.now() - timestamp;
-            const TTL = 5 * 60 * 1000; // 5분
-
-            if (age < TTL) {
-              console.log('✅ [CACHE-HIT] Revenue 계산 캐시 사용 (모달 열림):', business?.business_name || business?.사업장명);
-              setCalculatedData(data);
-              setIsRefreshing(false);
-              return; // 캐시 사용, API 호출 생략
-            } else {
-              console.log('⏰ [CACHE-EXPIRED] 캐시 만료, 재계산:', business?.business_name || business?.사업장명);
-            }
-          } catch (e) {
-            console.warn('⚠️ [CACHE-ERROR] 캐시 파싱 실패:', e);
-          }
-        } else {
-          console.log('📭 [NO-CACHE] 캐시 없음, API 호출:', business?.business_name || business?.사업장명);
-        }
-
-        // 2️⃣ API 호출 (캐시 없거나 만료된 경우)
+        // 캐시 없이 항상 서버에서 재계산 — 탭별 sessionStorage 캐시는 다른 사용자의 수정을 알 수 없어 예전 결과를 보여줬음
         console.log('🔄 [API-CALL] Revenue 계산 API 호출:', business?.business_name || business?.사업장명);
         const token = TokenManager.getToken();
         const response = await fetch('/api/revenue/calculate', {
@@ -205,13 +179,6 @@ export default function BusinessRevenueModal({
 
         if (data.success && data.data && data.data.calculation) {
           setCalculatedData(data.data.calculation);
-
-          // 3️⃣ 캐시 저장
-          sessionStorage.setItem(cacheKey, JSON.stringify({
-            data: data.data.calculation,
-            timestamp: Date.now()
-          }));
-          console.log('💾 [CACHE-SET] Revenue 계산 결과 캐시 저장:', business?.business_name || business?.사업장명);
         } else {
           setError(data.message || '계산 결과를 가져올 수 없습니다.');
         }
