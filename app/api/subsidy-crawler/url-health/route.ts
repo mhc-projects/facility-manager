@@ -50,6 +50,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate summary statistics
+    // 응답시간은 측정된 URL만 평균한다(한 번도 성공하지 못한 URL은 null)
+    const responseTimes = (healthMetrics || [])
+      .map(m => m.avg_response_time_ms)
+      .filter((v): v is number => typeof v === 'number');
     const stats = healthMetrics ? {
       total_urls: healthMetrics.length,
       healthy_urls: healthMetrics.filter(m => m.is_healthy).length,
@@ -60,6 +64,9 @@ export async function GET(request: NextRequest) {
       avg_relevance_rate: healthMetrics.length > 0
         ? healthMetrics.reduce((sum, m) => sum + m.relevance_rate, 0) / healthMetrics.length
         : 0,
+      avg_response_time_ms: responseTimes.length > 0
+        ? responseTimes.reduce((sum, v) => sum + v, 0) / responseTimes.length
+        : null,
       urls_with_failures: healthMetrics.filter(m => m.consecutive_failures > 0).length,
       critical_urls: healthMetrics.filter(m => m.consecutive_failures >= 3).length,
     } : null;

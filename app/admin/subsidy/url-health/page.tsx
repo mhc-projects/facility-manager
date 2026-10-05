@@ -40,7 +40,7 @@ interface UrlHealthData {
     healthy_urls: number;
     unhealthy_urls: number;
     avg_success_rate: number;
-    avg_response_time_ms: number;
+    avg_response_time_ms: number | null;
   };
 }
 
@@ -148,7 +148,7 @@ export default function UrlHealthMonitor() {
         />
         <StatCard
           label="평균 응답시간"
-          value={`${data.statistics.avg_response_time_ms.toFixed(0)}ms`}
+          value={data.statistics.avg_response_time_ms != null ? `${data.statistics.avg_response_time_ms.toFixed(0)}ms` : '-'}
           icon="⚡"
         />
       </div>
