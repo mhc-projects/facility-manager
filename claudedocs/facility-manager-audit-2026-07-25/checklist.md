@@ -350,7 +350,7 @@
   - 파일 상단 TODO 주석(14-16행)이 '인증 없이 결제 거래 내역을 조회할 수 있다'고 스스로 명시하는데, 실제 GET 핸들러(23-144행)에는 어떤 인증 코드도 없다. GET 요청은 middleware의 CSRF 검증에서도 safeMethods로 제외되므로(protectCSRF, GET/HEAD/OPTIONS 스킵) CSRF 토큰조차 필요 없이 누구나 결제 거래 상세를 조회할 수 있다. (evidence: app/api/nicepay/transactions/route.ts:14-16…
   - 권장 조치: Add the Bearer-token + permissionLevel>=3 check exactly as the file's own TODO already specifies, mirroring app/api/admin/monthly-closing/route.ts; no active frontend caller was found, so this is a low-risk isolated change.
 
-- [ ] **BUG-285** [버그 / 수정위험도:낮음] 댓글 API가 더미 verifyAuth를 사용 - GET은 인증 우회, POST는 항상 500 크래시
+- [x] **BUG-285** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:낮음] 댓글 API가 더미 verifyAuth를 사용 - GET은 인증 우회, POST는 항상 500 크래시
   - 위치: `app/api/tasks/[id]/comments/route.ts:3, 16, 62, 122`
   - line 3에서 '@/lib/auth'를 import하는데, 이는 lib/auth.ts(디렉터리 lib/auth/middleware.ts의 실제 구현과 별개)의 더미 함수로 인자 없이 항상 true를 반환한다. GET(line 16)과 POST(line 62) 모두 `const { user, error: authError } = await verifyAuth() as any`로 boolean true를 구조분해하므로 user와 authError가 모두 undefined가 되고, `if…
   - 권장 조치: Change the import from `@/lib/auth` to `@/lib/auth/middleware` in `app/api/tasks/[id]/comments/route.ts`, matching the correct pattern already used by sibling routes `tasks/route.ts` and `tasks/[id]/route.ts`.
@@ -535,7 +535,7 @@
   - `const [userLevel, setUserLevel] = useState<number>(3)`로 초기화된 뒤 어디서도 갱신되지 않아 180행 `{userLevel >= 3 && (<button onClick={handleCreateClick}>작성</button>)}`이 항상 참이 되어 모든 사용자에게 작성 버튼이 노출된다. 클라이언트 문제뿐 아니라 서버도 무방비인데, app/api/announcements/route.ts POST 핸들러(88-100행)는 제목/내용/작성자 필드 존재…
   - 권장 조치: Initialize `userLevel` from the real authenticated user's permission_level via AuthContext instead of a hardcoded 3, and add a server-side `permission_level >= 3` check to the POST handler in app/api/announcements/route.ts — do both together, since a client-only fix leaves the API still open to direct calls.
 
-- [ ] **BUG-286** [버그 / 수정위험도:중간] 업무 상세조회/수정/삭제 권한 체크가 permissionLevel>=1(모든 로그인 직원)이면 무조건 통과
+- [x] **BUG-286** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:중간] 업무 상세조회/수정/삭제 권한 체크가 permissionLevel>=1(모든 로그인 직원)이면 무조건 통과
   - 위치: `app/api/tasks/[id]/route.ts:153-158, 259-262, 460-462`
   - GET(hasAccess, line 153-156), PUT(canEdit, line 259-262), DELETE(canDelete, line 460-462) 모두 담당자/생성자 여부와 무관하게 `decodedToken.permissionLevel >= 1` 조건으로 통과시킨다. lib/auth/AuthLevels.ts 기준 permissionLevel 1은 AuthLevel.AUTHENTICATED, 즉 로그인한 일반 직원의 최저 레벨이므로(0=게스트만 미달) 사실상 로그인한 모든 직원이…
   - 권장 조치: Replace the blanket `permissionLevel >= 1` fallback in GET/PUT/DELETE with department-scoped access mirroring the existing list API pattern (`tasks/route.ts` GET), reserving unrestricted access for a genuinely elevated permission level.
@@ -987,7 +987,7 @@
   - pH센서(304,319), 차압계(335,350), 온도계(366,381), 펌프CT(397,412), 송풍CT(428,443)의 +/- 버튼이 모두 `parseInt(현재상태값)`을 직접 사용한다. 사용자가 입력창을 지워 상태값이 빈 문자열이 되면 다음 클릭에서 `parseInt('') + 1` = NaN이 되어 `setX(String(NaN))` = 'NaN'이 상태에 저장된다. handleSave(line 92-99)는 이 값을 검증 없이 그대로 updateData.ph 등에 담아 PUT…
   - 권장 조치: In each +/- handler, guard with `const n = parseInt(state) || 0` before incrementing/decrementing, and add a Number.isFinite/regex check in handleSave (and defensively on the API route) before writing to facility-measurement.
 
-- [ ] **BUG-245** [버그 / 수정위험도:낮음] components/projects/ 디렉토리 전체(프로젝트 관리 UI)가 어떤 페이지에서도 사용되지 않는 죽은 코드
+- [x] **BUG-245** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:낮음] components/projects/ 디렉토리 전체(프로젝트 관리 UI)가 어떤 페이지에서도 사용되지 않는 죽은 코드
   - 위치: `components/projects/ProjectDashboard.tsx:1`
   - ProjectDashboard.tsx가 자신의 하위 모듈 ProjectCard/ProjectModal을 import하는 것 외에는, 이 4개 컴포넌트(ProjectCard, ProjectDashboard, ProjectDetail, ProjectModal)를 프로젝트 전체(app/, components/ 전체)에서 import하는 곳이 없다. app/ 하위에도 'project' 관련 페이지 라우트가 전혀 없다(app/api/projects, app/api/project-templates 같은…
   - 권장 조치: Confirm with the user whether components/projects/ is intentionally shelved before deleting; if approved, remove the 4 unused files (backend API routes can stay) since nothing imports them.
@@ -1037,7 +1037,7 @@
   - 66행 `const [userLevel, setUserLevel] = useState<number>(1); // TODO: 실제 사용자 권한 레벨 가져오기`이며 파일 전체를 grep해도 setUserLevel을 호출하는 곳이 없어 userLevel은 세션 내내 1로 고정된다. 843행 `{userLevel >= 1 && (...)}`은 '일정 추가' 버튼 노출 조건인데 항상 참이 되므로 로그인 여부와 무관하게 모든 방문자에게 버튼이 노출된다. 서버 API(app/api/calendar/*)에도…
   - 권장 조치: Replace the hardcoded `useState<number>(1)` with the real permission level from the app's existing auth hook (e.g. `useAuth()`, already used elsewhere in the codebase), removing the dead TODO.
 
-- [ ] **BUG-287** [버그 / 수정위험도:낮음] 업무 생성 페이지가 project_id를 전송하지 않아 저장이 항상 400으로 실패
+- [x] **BUG-287** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:낮음] 업무 생성 페이지가 project_id를 전송하지 않아 저장이 항상 400으로 실패
   - 위치: `app/admin/tasks/create/page.tsx:46-58, 162-177`
   - TaskFormData(line 46-58)와 submitData(line 162-168)에 project_id 필드가 전혀 없이 '/api/tasks'로 POST하는데(line 170), 그 핸들러(app/api/tasks/route.ts line 155)는 `if (!title || !project_id) return 400 '작업명과 프로젝트는 필수입니다.'`로 project_id를 필수로 요구한다. 따라서 이 폼을 통해 업무 생성을 시도하면 항상 400 오류만 반환된다. 다만 이 페이지는…
   - 권장 조치: Either add a `project_id` selector to the create-task form's submitData, or delete this orphaned unlinked page since task creation already works via the modal in `app/admin/tasks/page.tsx`.
@@ -1047,7 +1047,7 @@
   - POST_APPLICATION_STATUSES(line 47-67)는 'document_supplement', 'pre_construction_inspection', 'installation', 'completion_inspection' 등 접두사 없는 값들로 구성되어 있으나, 실제 task.status는 lib/task-steps.ts의 TaskStatus 타입에 정의된 'subsidy_' 접두사 버전('subsidy_document_supplement',…
   - 권장 조치: Update `POST_APPLICATION_STATUSES` in `SubsidyActiveBadge.tsx` to use the actual `subsidy_`-prefixed status values from `lib/task-steps.ts` instead of the unprefixed legacy strings.
 
-- [ ] **BUG-291** [버그 / 수정위험도:낮음] 권한레벨 3 사용자의 업무 목록 조회가 PostgREST .or() 필터에 리터럴 SQL 서브쿼리 문자열을 넣어 무효한 필터가 됨
+- [x] **BUG-291** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:낮음] 권한레벨 3 사용자의 업무 목록 조회가 PostgREST .or() 필터에 리터럴 SQL 서브쿼리 문자열을 넣어 무효한 필터가 됨
   - 위치: `app/api/tasks/route.ts:74`
   - permissionLevel===3 사용자에 대해 line 74 `query.or(\`assigned_to.eq.${user.id},project_id.in.(select id from projects where manager_id = ${user.id})\`)`를 사용한다. PostgREST의 `.in.()`은 실제 SQL 서브쿼리를 지원하지 않고 리터럴 값 목록만 받으므로, 이 문자열은 project_id(UUID 컬럼)를 'select id from projects where…
   - 권장 조치: Replace the PostgREST `.in.(select ...)` literal-subquery string with a two-step query: first fetch the manager's project ids, then pass that array to `.in('project_id', ids)`.
@@ -1519,7 +1519,7 @@
   - isUploading is declared as boolean state (useState(false)) but line 266 calls setIsUploading with a template-literal progress string during sequential chunk upload. Reproduced with `npx tsc --noEmit`: TS2345 'string' not assignable to 'SetStateAction<boolean>'. Confirmed…
   - 권장 조치: Split state into `isUploading: boolean` plus a separate `uploadProgress: string` state, set the latter during chunk upload, and render `uploadProgress` in the button text instead of the static '업로드 중...' label.
 
-- [ ] **BUG-262** [버그 / 수정위험도:낮음] SSE /api/tasks/stream never removes disconnected clients due to wrong `this` binding in cancel()
+- [x] **BUG-262** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:낮음] SSE /api/tasks/stream never removes disconnected clients due to wrong `this` binding in cancel()
   - 위치: `app/api/tasks/stream/route.ts:111-115`
   - cancel() is a shorthand method on the object literal passed to new ReadableStream({...}), so `this` refers to that source object, not the controller instance added to the module-level clients Set inside start(controller). `clients.delete(this as any)` is therefore always a no-op…
   - 권장 조치: Capture the controller in a local closure variable inside `start(controller)` and reference that variable (not `this`) inside `cancel()` so `clients.delete(...)` actually removes the disconnected client.
@@ -1529,7 +1529,7 @@
   - 파일 헤더(1-12행)는 '미수금 계산 핵심 로직 — 단일 진실 공급원(SSOT)... 테이블(revenue page)과 모달(business-invoices API) 모두 이 함수를 사용합니다'라고 명시하지만, export async function computeReceivables()(51행)는 app/, lib/, components/ 전체에서 어디에서도 import되지 않는 완전한 dead code다. 실제 SSOT는 lib/receivables-engine.ts의…
   - 권장 조치: Delete the unused `computeReceivables()` export (and file, if nothing else lives in it) since grep confirms zero importers and lib/receivables-engine.ts is the actual consumed SSOT; safe to remove with no functional impact.
 
-- [ ] **BUG-275** [버그 / 수정위험도:낮음] ProjectCard의 ⋮ 드롭다운 메뉴에 외부 클릭 닫기 핸들러가 없어 메뉴가 계속 열려있음
+- [x] **BUG-275** (해당 없음, 2026-10-05 — 대상 파일 삭제) [버그 / 수정위험도:낮음] ProjectCard의 ⋮ 드롭다운 메뉴에 외부 클릭 닫기 핸들러가 없어 메뉴가 계속 열려있음
   - 위치: `components/projects/ProjectCard.tsx:29, 134-176`
   - showMenu 상태(29행)를 토글하는 드롭다운(134-176행)이 외부 클릭을 감지해 닫는 useEffect+mousedown 리스너를 전혀 갖고 있지 않다. 같은 프로젝트의 components/inputs/BusinessAutocomplete.tsx(89-103행)나 components/ui/BusinessAutocomplete.tsx(62행 이하)는 동일한 패턴을 useRef+document.addEventListener('mousedown', ...)로 구현하고 있어 이 컴포넌트에서만…
   - 권장 조치: Add a useRef + document mousedown listener to close the ⋮ dropdown on outside click, copying the existing pattern from components/inputs/BusinessAutocomplete.tsx.

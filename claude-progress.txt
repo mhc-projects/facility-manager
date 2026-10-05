@@ -587,3 +587,15 @@
   - task_statuses의 오늘 16:15:27 조회 기록: 16:15에 운영 DB 트리거 시험(트랜잭션 → ROLLBACK)을 돌린 실행 기록이 있으나, 그 시험이 옛 표를 건드렸는지는 기록이 잘려 확인 못 함(추정)
 - 삭제 뒤 확인(로컬 빌드 + 감사 세션, 열기만): 칸반 수정 창·알림 목록·사업장·관리자 홈 모두 실패 응답 0건. facility_tasks 680, task_notifications 3,168, task_stages 131, task_status_history 6,259 그대로
 - 이제 표가 없어 실행하면 실패하는 코드(전부터 부르는 화면이 없거나 projects 표가 없어 동작하지 않던 것, 지우지 않음): app/api/projects/*, app/api/workflows, components/tasks/TaskManagement·TaskComments, components/projects/*, scripts/create-sample-tasks.js·apply-task-categories.js
+
+## 2026-10-05 | 없는 표를 읽어 실패하던 코드 정리 (사용자 "실패하는 코드들도 정리해줘")
+- 지운 것(커밋만, 푸시 전)
+  - API: app/api/projects(route, [id]), app/api/workflows — 지난 보고에 적은 것. 읽는 표 projects·project_dashboard·task_dashboard·task_comments가 DB에 없음(to_regclass 확인), 부르는 곳은 아래 죽은 컴포넌트뿐
+  - 같은 이유로 더 찾아 같이 지운 API 2개: app/api/project-templates(project_templates 표 없음, 부르는 곳 0건), app/api/comments/[id](task_comments 표 없음, 부르는 곳 0건)
+  - 컴포넌트: components/projects/ 4개(7/25 감사 BUG-245가 이미 죽은 코드로 적어 둠), components/tasks/의 TaskManagement·TaskModal·TaskComments·TaskCard. 같은 폴더의 SubsidyActiveBadge·BusinessInfoPanel·BulkUploadModal은 칸반이 쓰므로 그대로. app/admin/tasks/components/TaskCard.tsx는 다른 파일(칸반 카드)이라 그대로
+  - 스크립트: scripts/create-sample-tasks.js·apply-task-categories.js (package.json·워크플로·셸 참조 0건)
+  - 위 삭제로 쓰는 곳이 없어진 것: lib/api-client.ts의 workTaskAPI, lib/security/csrf-protection.ts의 /api/tasks 예외 3줄(정확히 일치·/api/tasks/ 아래만 해당하는 항목이라 다른 API에 영향 없음), types/index.ts의 Project·Task·ProjectDashboardStats·Department(이름이 같은 app/admin/tasks/types.ts의 Task는 다른 파일)
+- 확인: import 검색(저장소 전체, 동적 import·barrel 포함) 0건 → 삭제 → 빌드 통과 → tsc 440 → 439(줄어든 1건은 app/api/comments/[id]/route.ts의 것, 삭제 전후 오류 목록 대조) → 지운 이름 재검색 0건 → 전체 화면 감사 57개 "조치할 항목 없음"
+- 확인 못 한 것: 지운 API를 저장소 밖에서 부르는 곳(접속 기록은 화면만 남김). error_logs(9/2~10/2, 166건)에 이 API·표 흔적은 0건이나 이 API들이 그 표에 오류를 남기는지는 확인하지 않음
+- 7/25 감사 체크리스트에서 대상 파일이 없어진 미해결 7건(BUG-245·262·275·285·286·287·291)을 "해당 없음"으로 표시
+- 남긴 것: csrf-protection의 /api/work-tasks 예외 2줄(그 API 폴더는 전부터 없음), contexts/TierNotificationContext.tsx:176과 app/api/organization/task-assignments의 없는 주소(/tasks/<id>), lib/hooks/useSimpleNotifications.ts:137의 `/admin/tasks?task=`, 문서(claudedocs·README)의 옛 이름
