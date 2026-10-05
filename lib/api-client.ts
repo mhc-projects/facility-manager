@@ -183,34 +183,6 @@ export const authAPI = {
   },
 };
 
-// Work Task API
-export const workTaskAPI = {
-  getTasks: async (params?: any) => {
-    const queryString = params ? `?${new URLSearchParams(params).toString()}` : '';
-    return apiClient.get(`/tasks${queryString}`);
-  },
-
-  getTask: async (id: string) => {
-    return apiClient.get(`/tasks/${id}`);
-  },
-
-  createTask: async (data: any) => {
-    return apiClient.post('/tasks', data);
-  },
-
-  updateTask: async (id: string, data: any) => {
-    return apiClient.put(`/tasks/${id}`, data);
-  },
-
-  deleteTask: async (id: string) => {
-    return apiClient.delete(`/tasks/${id}`);
-  },
-
-  getMetadata: async () => {
-    return apiClient.get('/tasks/metadata');
-  },
-};
-
 // Employee API
 export const employeeAPI = {
   getEmployees: async () => {

@@ -93,8 +93,6 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
     '/api/sync',  // 동기화 API 예외 추가
     '/api/profile/update',  // 프로필 업데이트 (JWT 인증 사용)
     '/api/profile/change-password',  // 비밀번호 변경 (JWT 인증 사용)
-    '/api/tasks',  // 업무 관리 API (JWT 인증 사용)
-    '/api/tasks/metadata',  // 업무 메타데이터 API (JWT 인증 사용)
     '/api/work-tasks',  // 업무 API (JWT 인증 사용)
     '/api/facility-tasks',  // 시설 업무 관리 API (JWT 인증 사용)
     '/api/business-progress',  // 사업장 진행 현황 API (withApiHandler 보안 사용)
@@ -124,7 +122,6 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
   const excludePatterns = [
     '/api/auth/social/',
     '/api/auth/social/*/callback',
-    '/api/tasks/*',
     '/api/work-tasks/*',
     '/api/facility-tasks/*',  // 시설 업무 관리 API 전체 제외 (JWT 인증 사용)
     '/api/revenue/*',  // 매출 관리 API 전체 제외 (JWT 인증 사용)
@@ -180,7 +177,7 @@ export function protectCSRF(request: NextRequest): { valid: boolean; error?: str
   // 패턴 기반 경로 제외
   if (excludePatterns.some(pattern => {
     if (pattern.includes('*')) {
-      // * 를 정규식으로 변환: /api/tasks/* → /api/tasks/.*
+      // * 를 정규식으로 변환: /api/approvals/* → /api/approvals/.*
       const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
       return regex.test(request.nextUrl.pathname);
     } else {

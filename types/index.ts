@@ -420,81 +420,6 @@ export interface MiscellaneousCost {
   updatedAt: string;
 }
 
-// 프로젝트 관리 타입 정의
-export interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  project_type: '자체자금' | '보조금';
-  business_name: string;
-  status: 'planning' | 'in_progress' | 'completed' | 'on_hold' | 'cancelled';
-  department_id: string;
-  manager_id: string;
-  start_date: string;
-  expected_end_date?: string;
-  actual_end_date?: string;
-  total_budget?: number;
-  subsidy_amount?: number;
-  current_budget_used?: number;
-  progress_percentage?: number;
-  created_at: string;
-  updated_at: string;
-
-  // 조인된 정보
-  department?: {
-    id: string;
-    name: string;
-  };
-  manager?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  task_stats?: {
-    total: number;
-    completed: number;
-    in_progress: number;
-    pending: number;
-  };
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  project_id: string;
-  status: 'todo' | 'in_progress' | 'review' | 'completed' | 'blocked';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  assigned_to?: string;
-  due_date?: string;
-  completed_at?: string;
-  created_at: string;
-  updated_at: string;
-
-  // 조인된 정보
-  project?: {
-    id: string;
-    name: string;
-    project_type: string;
-  };
-  assignee?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
-export interface ProjectDashboardStats {
-  total_projects: number;
-  active_projects: number;
-  completed_projects: number;
-  overdue_projects: number;
-  total_budget: number;
-  used_budget: number;
-  total_tasks: number;
-  completed_tasks: number;
-}
-
 export interface Employee {
   id: string;
   name: string;
@@ -512,14 +437,6 @@ export interface Employee {
   created_at: string;
   last_login_at?: string;
   password_changed_at?: string;
-}
-
-export interface Department {
-  id: string;
-  name: string;
-  parent_id?: string;
-  description?: string;
-  is_active: boolean;
 }
 
 // 매출 관리 시스템 타입 정의
