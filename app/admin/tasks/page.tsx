@@ -756,39 +756,6 @@ function TaskManagementPage() {
     setSearchTerm('')
   }, [])
 
-  // 업무 완료 핸들러 (다음 단계로 자동 이동)
-  const handleCompleteTask = useCallback(async (taskId: string) => {
-    try {
-      console.log('✅ 업무 완료 요청:', taskId)
-
-      const token = TokenManager.getToken()
-      const response = await fetch('/api/facility-tasks/advance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ taskId })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || '다음 단계로 이동하는 데 실패했습니다.')
-      }
-
-      const result = await response.json()
-      console.log('✅ 다음 단계로 이동 성공:', result)
-
-      // 업무 목록 새로고침
-      await refreshTasks()
-
-      alert(`${result.message}\n새 단계: ${result.newStatus}`)
-    } catch (error) {
-      console.error('Failed to complete task:', error)
-      alert(`업무 완료 처리 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
-    }
-  }, [refreshTasks])
-
   // 디바운스된 검색
   const debouncedSearch = useCallback((term: string) => {
     if (searchTimeoutRef.current) {
@@ -2485,7 +2452,6 @@ function TaskManagementPage() {
                 setEditBusinessSearchTerm(task.businessName || '')
                 setShowEditModal(true)
               }}
-              onComplete={handleCompleteTask}
               isLoading={isLoading}
               activeSubsidies={activeSubsidies}
             />
@@ -2956,7 +2922,6 @@ function TaskManagementPage() {
                             setEditBusinessSearchTerm(task.businessName || '')
                             setShowEditModal(true)
                           }}
-                          onComplete={handleCompleteTask}
                           activeSubsidies={activeSubsidies}
                         />
                       </div>

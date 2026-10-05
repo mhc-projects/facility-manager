@@ -43,7 +43,6 @@ interface TaskCardListProps {
   tasks: Task[]
   onTaskClick: (task: Task) => void
   onTaskEdit?: (task: Task) => void
-  onComplete?: (taskId: string) => Promise<void>
   isLoading?: boolean
   activeSubsidies?: Record<string, any>
 }
@@ -52,7 +51,6 @@ export default function TaskCardList({
   tasks,
   onTaskClick,
   onTaskEdit,
-  onComplete,
   isLoading,
   activeSubsidies = {}
 }: TaskCardListProps) {
@@ -122,7 +120,6 @@ export default function TaskCardList({
           task={task}
           onClick={onTaskClick}
           onEdit={onTaskEdit}
-          onComplete={onComplete}
           activeSubsidies={activeSubsidies}
           variant="list"
         />

@@ -45,7 +45,6 @@ interface TaskCardProps {
   task: Task
   onClick: (task: Task) => void
   onEdit?: (task: Task) => void
-  onComplete?: (taskId: string) => Promise<void>
   activeSubsidies?: Record<string, any>
   /** 'list' = 목록 compact row / 'kanban' = 칸반 확장 카드 (기본값) */
   variant?: 'list' | 'kanban'

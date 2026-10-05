@@ -48,13 +48,6 @@ export const PAGE_PERMISSIONS: PagePermission[] = [
     description: '시설 업무 관리 칸반보드'
   },
   {
-    path: '/admin/tasks/create',
-    name: '업무 생성',
-    requiredLevel: PERMISSION_LEVELS.MANAGER,
-    requiredPermission: 'canCreateTasks',
-    description: '새로운 업무 생성'
-  },
-  {
     path: '/admin/tasks/[id]/edit',
     name: '업무 수정',
     requiredLevel: PERMISSION_LEVELS.MANAGER,
