@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { TASK_STATUS_KR } from '@/lib/task-status-utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Manufacturer {
   id: number;
@@ -66,6 +67,9 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   const [taskStages, setTaskStages] = useState<TaskStage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // 설정 API는 로그인이 필요하다 — 로그인 전 화면(로그인·가입 등)에서 부르면 매번 401이 난다
+  const { user } = useAuth();
+  const userId = user?.id;
 
   const fetchManufacturers = useCallback(async () => {
     try {
@@ -93,13 +97,14 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
 
   // 초기 로드
   useEffect(() => {
+    if (!userId) return;
     Promise.all([fetchManufacturers(), fetchProgressCategories(), fetchTaskStages()])
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [userId]);
 
   // Supabase Realtime 구독
   useEffect(() => {
-    if (channelRef.current) return;
+    if (!userId || channelRef.current) return;
 
     channelRef.current = supabase
       .channel('admin-data-realtime')
@@ -114,7 +119,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
         channelRef.current = null;
       }
     };
-  }, [fetchManufacturers, fetchProgressCategories, fetchTaskStages]);
+  }, [userId, fetchManufacturers, fetchProgressCategories, fetchTaskStages]);
 
   // 이름 기반 task_type 추론 — DB의 task_type 컬럼이 없을 때 폴백용
   const inferTaskTypeFromName = (name: string): string => {
