@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
 import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
-import { getTaskStatusKR, getTaskTypeKR, getTaskTypeFromStatus, createStatusChangeMessage } from '@/lib/task-status-utils';
+import { getTaskStatusKR, getTaskTypeKR, getTaskTypeFromStatus } from '@/lib/task-status-utils';
 import { type TaskAssignee } from '@/lib/task-notification-service';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { logDebug, logError } from '@/lib/logger';
@@ -541,20 +541,8 @@ export const POST = withApiHandler(async (request: NextRequest) => {
     // 업무 생성 시 자동 메모 생성 (derivedTaskType을 명시적으로 주입)
     await createTaskCreationNote({ ...newTask, task_type: derivedTaskType });
 
-    // 담당자 알림 생성 — 수정(PUT) 경로와 같은 직접 INSERT(createTaskNotifications)를 쓴다.
-    // 2026-09-04: 예전엔 create_task_assignment_notifications RPC를 호출했지만 JSONB 파라미터에
-    // JSON.stringify 문자열을 넘겨 22023(cannot extract elements from a scalar)으로 한 번도 성공한
-    // 적이 없었다 — 업무 생성 시 담당자에게 알림이 전혀 안 가고, 나중에 누군가 업무를 수정할 때에야
-    // PUT 경로가 만들어주고 있었다. 실패해도 업무 생성 자체엔 영향 없음(함수 내부 try/catch).
-    if (finalAssignees.length > 0) {
-      await createTaskNotifications({
-        task: { ...newTask, assignees: finalAssignees },
-        oldTask: { assignees: [] },
-        statusChanged: false,
-        assigneesChanged: true,
-        modifierName: user.name
-      });
-    }
+    // 담당자 배정 알림은 facility_tasks 트리거(notify_facility_task_changes)가 만든다 — sql/rewrite_task_notification_trigger.sql
+    // (2026-09-04~10-05 사이엔 여기서 task_notifications에 직접 INSERT했다. 그 전의 RPC 경로는 한 번도 성공한 적이 없었다)
 
     return createSuccessResponse({
       task: newTask,
@@ -948,56 +936,9 @@ export const PUT = withApiHandler(async (request: NextRequest) => {
       }
     }
 
-    // 상태 변경 시 자동 메모 및 알림 생성
-    await createAutoProgressNoteAndNotification(existingTask, updatedTask, user);
-
-    // 담당자 변경 시 다중 담당자 알림 업데이트 (PostgreSQL 함수 사용)
-    // ✅ FIX: assignees가 문자열일 수 있으므로 파싱 필요
-    const parseAssignees = (assignees: any): TaskAssignee[] => {
-      if (!assignees) return [];
-      if (typeof assignees === 'string') {
-        try {
-          return JSON.parse(assignees);
-        } catch {
-          return [];
-        }
-      }
-      if (Array.isArray(assignees)) return assignees;
-      return [];
-    };
-
-    const oldAssigneesParsed = parseAssignees(existingTask.assignees);
-    const newAssigneesParsed = parseAssignees(updatedTask.assignees);
-    const assigneesChanged = JSON.stringify(oldAssigneesParsed) !== JSON.stringify(newAssigneesParsed);
-
-    if (assigneesChanged) {
-      // 제외된 담당자의 알림 만료 처리 — 직접 SQL.
-      // 2026-09-04: 예전엔 update_task_assignment_notifications RPC를 호출했지만 JSONB 파라미터에
-      // JSON.stringify 문자열을 넘겨 22023(cannot extract elements from a scalar)으로 한 번도 성공한
-      // 적이 없었다(게다가 2026-03 보안 마이그레이션의 search_path='' 때문에 함수가 테이블도 못 찾음).
-      // 새 담당자 알림은 위 createAutoProgressNoteAndNotification → createTaskNotifications가 이미
-      // 만들고 있으므로, RPC가 하려던 일 중 실제로 빠져 있던 "제외된 담당자 알림 만료"만 여기서 한다
-      // (알림 조회 API가 expires_at을 필터하므로 만료 즉시 목록에서 사라진다).
-      const removedUserIds = oldAssigneesParsed
-        .map(a => a?.id)
-        .filter((id): id is string => !!id)
-        .filter(id => !newAssigneesParsed.some(a => a?.id === id));
-      if (removedUserIds.length > 0) {
-        try {
-          const expireResult = await pgQuery(
-            `UPDATE task_notifications
-             SET expires_at = NOW(), updated_at = NOW()
-             WHERE task_id::text = $1
-               AND user_id::text = ANY($2::text[])
-               AND (expires_at IS NULL OR expires_at > NOW())`,
-            [String(updatedTask.id), removedUserIds]
-          );
-          console.log('✅ [NOTIFICATION] 제외된 담당자 알림 만료:', expireResult.rowCount ?? 0, '건');
-        } catch (notificationError) {
-          console.error('❌ [NOTIFICATION] 제외된 담당자 알림 만료 실패:', notificationError);
-        }
-      }
-    }
+    // 상태·담당자 변경 시 자동 메모 생성. 알림(상태 변경·새 담당자 배정·제외된 담당자 알림 만료)은
+    // facility_tasks 트리거(notify_facility_task_changes)가 위 UPDATE 시점에 만든다.
+    await createAutoProgressNotes(existingTask, updatedTask);
 
     // 🆕 메모 변경 감지 및 사업장 메모 동기화 (이력 누적)
     const notesChanged = notes !== undefined && notes !== null && notes.trim() !== '';
@@ -1134,7 +1075,7 @@ export const DELETE = withApiHandler(async (request: NextRequest) => {
 // 자동 메모 및 알림 생성 유틸리티 함수
 // ============================================================================
 
-async function createAutoProgressNoteAndNotification(existingTask: any, updatedTask: any, user: any) {
+async function createAutoProgressNotes(existingTask: any, updatedTask: any) {
   try {
     const statusChanged = existingTask.status !== updatedTask.status;
     const assigneesChanged = JSON.stringify(existingTask.assignees || []) !== JSON.stringify(updatedTask.assignees || []);
@@ -1158,20 +1099,8 @@ async function createAutoProgressNoteAndNotification(existingTask: any, updatedT
         changeType: 'assignee_change'
       });
     }
-
-    // 알림 생성 (담당자들에게)
-    if (statusChanged || assigneesChanged) {
-      await createTaskNotifications({
-        task: updatedTask,
-        oldTask: existingTask,
-        statusChanged,
-        assigneesChanged,
-        modifierName: user.name // 수정자 정보 추가
-      });
-    }
-
   } catch (error) {
-    console.error('🔴 [AUTO-PROGRESS] 자동 메모/알림 생성 오류:', error);
+    console.error('🔴 [AUTO-PROGRESS] 자동 메모 생성 오류:', error);
     // 에러가 발생해도 메인 로직에 영향을 주지 않도록 함
   }
 }
@@ -1268,133 +1197,6 @@ async function createAutoProgressNote(params: {
   }
 }
 
-async function createTaskNotifications(params: {
-  task: any;
-  oldTask: any;
-  statusChanged: boolean;
-  assigneesChanged: boolean;
-  modifierName?: string;
-}) {
-  const { task, oldTask, statusChanged, assigneesChanged, modifierName } = params;
-
-  // 알림을 받을 사용자 ID 수집
-  const userIds = new Set<string>();
-
-  // 현재 담당자들
-  if (task.assignees && Array.isArray(task.assignees)) {
-    task.assignees.forEach((assignee: any) => {
-      if (assignee.id) userIds.add(assignee.id);
-    });
-  }
-
-  // 이전 담당자들 (변경된 경우)
-  if (assigneesChanged && oldTask.assignees && Array.isArray(oldTask.assignees)) {
-    oldTask.assignees.forEach((assignee: any) => {
-      if (assignee.id) userIds.add(assignee.id);
-    });
-  }
-
-  const userIdArray = Array.from(userIds);
-  if (userIdArray.length === 0) return;
-
-  // 알림 생성
-  const notifications: any[] = [];
-
-  if (statusChanged) {
-    // 새로운 한글 상태 매핑과 수정자 정보를 사용하여 알림 메시지 생성
-    const message = createStatusChangeMessage(
-      oldTask.status,
-      task.status,
-      task.business_name,
-      modifierName
-    );
-
-    userIdArray.forEach(userId => {
-      notifications.push({
-        user_id: userId,
-        task_id: task.id,
-        business_name: task.business_name,
-        message: message,
-        notification_type: 'status_change',
-        priority: task.priority === 'urgent' ? 'urgent' : task.priority === 'high' ? 'high' : 'normal'
-      });
-    });
-  }
-
-  if (assigneesChanged) {
-    // 새로 배정된 담당자들에게 알림
-    const newUserIds = task.assignees?.map((a: any) => a.id).filter((id: string) => id) || [];
-    const oldUserIds = oldTask.assignees?.map((a: any) => a.id).filter((id: string) => id) || [];
-    const assignedUserIds = newUserIds.filter((id: string) => !oldUserIds.includes(id));
-
-    assignedUserIds.forEach((userId: string) => {
-      notifications.push({
-        user_id: userId,
-        task_id: task.id,
-        business_name: task.business_name,
-        message: `${task.business_name}의 새 업무 "${task.title}"이 담당자로 배정되었습니다.`,
-        notification_type: 'assignment',
-        priority: task.priority === 'urgent' ? 'urgent' : task.priority === 'high' ? 'high' : 'normal'
-      });
-    });
-  }
-
-  // 알림 일괄 생성 - Direct PostgreSQL
-  if (notifications.length > 0) {
-    try {
-      // 다중 INSERT를 위한 VALUES 절 생성
-      const values: any[] = [];
-      const valuePlaceholders: string[] = [];
-      let paramIndex = 1;
-
-      notifications.forEach((notif, index) => {
-        valuePlaceholders.push(
-          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5})`
-        );
-        values.push(
-          notif.user_id,
-          notif.task_id,
-          notif.business_name,
-          notif.message,
-          notif.notification_type,
-          notif.priority
-        );
-        paramIndex += 6;
-      });
-
-      const insertQuery = `
-        INSERT INTO task_notifications (
-          user_id, task_id, business_name, message, notification_type, priority
-        ) VALUES ${valuePlaceholders.join(', ')}
-        RETURNING *
-      `;
-
-      const insertResult = await pgQuery(insertQuery, values);
-      const createdNotifications = insertResult.rows;
-
-      console.log('✅ [AUTO-PROGRESS] 자동 알림 생성 성공:', notifications.length, '개');
-
-      // WebSocket으로 실시간 알림 전송
-      try {
-        const io = (global as any).io;
-        if (io && createdNotifications) {
-          createdNotifications.forEach((notification: any) => {
-            io.to(`user:${notification.user_id}`).emit('task_notification_created', {
-              notification: notification
-            });
-          });
-          console.log('🔔 [WEBSOCKET] 업무 변경 알림 WebSocket 전송 성공:', createdNotifications.length, '개');
-        }
-      } catch (wsError) {
-        console.warn('⚠️ [WEBSOCKET] 업무 변경 알림 WebSocket 전송 실패:', wsError);
-      }
-    } catch (error) {
-      console.error('🔴 [AUTO-PROGRESS] 자동 알림 생성 중 오류:', error);
-    }
-  }
-}
-
-// 업무 생성 시 자동 메모 생성 함수
 async function createTaskCreationNote(task: any) {
   try {
     const taskTypeLabel = getTaskTypeKR(getTaskTypeFromStatus(task.status, task.task_type));
@@ -1460,7 +1262,9 @@ async function createTaskCreationNote(task: any) {
 // ============================================================================
 
 // 참고:
-// - PostgreSQL 트리거 (sql/realtime_triggers.sql)가 facility_tasks 변경을 감지하여 자동으로 알림 생성
+// - PostgreSQL 트리거 notify_facility_task_changes(sql/rewrite_task_notification_trigger.sql)가 facility_tasks의
+//   INSERT·UPDATE를 보고 담당자 알림(task_notifications)을 만든다. 이 파일은 알림을 직접 넣지 않는다.
+// - 한꺼번에 많은 업무를 쓰는 작업은 같은 트랜잭션에서 SET LOCAL app.skip_task_notify = 'true' 로 알림을 건너뛴다.
 // - notifications 및 task_notifications 테이블에 Supabase Realtime 활성화
 // - 클라이언트는 useRealtimeNotifications 훅으로 실시간 알림 수신
 // - 폴링 폴백으로 연결 끊김 시에도 안정적인 알림 전달 보장

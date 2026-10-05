@@ -201,6 +201,9 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       const backupTasks: any[] = snapshot.data?.tasks || [];
 
       await transaction(async (client) => {
+        // 복원은 업무를 전부 지우고 다시 넣는다 — 담당자 알림 트리거(notify_facility_task_changes)를 이 트랜잭션에서 건너뛴다
+        await client.query(`SET LOCAL app.skip_task_notify = 'true'`);
+
         // 현재 업무 전체 삭제
         await client.query(`DELETE FROM facility_tasks WHERE is_deleted = false AND is_active = true`);
 

@@ -1,7 +1,7 @@
 // app/api/admin/tasks/bulk-upload/route.ts - 엑셀 일괄 업무 등록 API
 import { NextRequest } from 'next/server';
 import { withApiHandler, createSuccessResponse, createErrorResponse } from '@/lib/api-utils';
-import { queryOne, queryAll, query as pgQuery } from '@/lib/supabase-direct';
+import { queryOne, queryAll, transaction } from '@/lib/supabase-direct';
 import { TASK_STATUS_KR, TASK_TYPE_KR } from '@/lib/task-status-utils';
 import { verifyTokenHybrid } from '@/lib/secure-jwt';
 import { logDebug, logError } from '@/lib/logger';
@@ -10,6 +10,15 @@ import { startNewStatus } from '@/lib/task-status-history';
 import { convertTaskType, getInvalidTaskTypeMessage } from '@/lib/task-type-mappings';
 
 export const dynamic = 'force-dynamic';
+
+// 일괄 등록은 담당자 알림을 내지 않는다(예전과 같음). facility_tasks의 알림 트리거(notify_facility_task_changes)는
+// 같은 트랜잭션에서 이 값이 켜져 있으면 건너뛴다 — 풀러가 문장마다 연결을 바꾸므로 문장과 한 트랜잭션으로 묶는다.
+async function queryWithoutTaskNotify(text: string, params: any[]) {
+  return transaction(async (client) => {
+    await client.query(`SET LOCAL app.skip_task_notify = 'true'`);
+    return client.query(text, params);
+  });
+}
 export const runtime = 'nodejs';
 
 // 사용자 권한 확인 (권한 4만 허용)
@@ -301,7 +310,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
               RETURNING *
             `;
 
-            const updateResult = await pgQuery(updateQuery, values);
+            const updateResult = await queryWithoutTaskNotify(updateQuery, values);
 
             // 🆕 메모가 업데이트되었으면 사업장 메모에 동기화 (이력 누적)
             if (updatedFieldNames.includes('메모') && task.memo && task.memo.trim() !== '' && validation.businessId) {
@@ -367,7 +376,7 @@ export const POST = withApiHandler(async (request: NextRequest) => {
           email: ''
         }] : [];
 
-        const insertResult = await pgQuery(insertQuery, [
+        const insertResult = await queryWithoutTaskNotify(insertQuery, [
           title,
           task.memo || null,
           task.businessName,
