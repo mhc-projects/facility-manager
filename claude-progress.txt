@@ -578,3 +578,12 @@
 - 확인(로컬 빌드 + 감사 세션, 열기만): 살아 있는 업무는 칸반이 열리고 수정 창이 실제 단계([자비]준공서류 작성완료)·담당자(최정민)로 뜸. 삭제된 업무는 칸반만 열리고 창 없음(예전엔 옛 화면에 "[삭제됨]"). 옛 주소 /admin/tasks/<id>는 404. 빌드 통과, tsc 446 → 440(줄어든 6건은 지운 파일의 것 — 지우기 전 상태에서 그 파일들 오류가 6건)
 - 확인 못 한 것: /notifications 화면에서 업무 알림을 실제로 눌러 보지는 못함(확인용 계정에 업무 알림 없음). /api/tasks를 저장소 밖에서 부르는 곳이 있는지는 알 수 없음(접속 기록은 화면만 남김) — 옛 tasks 표 최신 수정이 2025-09-16
 - 남긴 것: 옛 tasks 표(14행)·task_details 뷰·create_task_history 트리거(DB는 안 건드림), /api/tasks를 부르지만 그리는 곳이 없는 components/tasks/TaskManagement·TaskComments·components/projects/ProjectDetail·lib/api-client의 /tasks 함수들, csrf-protection의 /api/tasks 예외 항목, 없는 주소(/tasks/<id>)를 만드는 contexts/TierNotificationContext.tsx:176·app/api/organization/task-assignments(푸시 알림 url)
+
+## 2026-10-05 | 알림 링크 변경 배포 + 옛 업무 표 계열 삭제 (사용자 "1,2번 둘다 진행해줘")
+- 17:27 배포 완료(af55d2d). 운영에서 GET /api/tasks/metadata 404, /api/facility-tasks 401(로그인 요구, 정상)
+- 운영 DB에서 지움(sql/drop_old_tasks_tables.sql, CASCADE 없이): 표 tasks(14행)·task_history(16행)·task_attachments(0행)·task_categories(21행)·task_statuses(11행), 뷰 task_details, 함수 create_task_history·update_task_updated_at(둘 다 tasks에만 붙어 있었음)
+  - 근거: 모든 표의 마지막 행 2025-09-16, 바깥에서 거는 외래키 없음, 다른 뷰·함수 참조 없음, 저장소(ts/tsx/js/yml/py)에서 이 표들을 읽는 살아 있는 코드 없음
+  - 되돌리기: sql/backup_dropped_2026-10-05/old_tasks_functions.sql → old_tasks_tables_and_view.sql (psql 17). 삭제 → 복원 → 개수 확인(14·16·21·11, 뷰 14, 트리거 2, 정책 11) → ROLLBACK 시험 통과
+  - task_statuses의 오늘 16:15:27 조회 기록: 16:15에 운영 DB 트리거 시험(트랜잭션 → ROLLBACK)을 돌린 실행 기록이 있으나, 그 시험이 옛 표를 건드렸는지는 기록이 잘려 확인 못 함(추정)
+- 삭제 뒤 확인(로컬 빌드 + 감사 세션, 열기만): 칸반 수정 창·알림 목록·사업장·관리자 홈 모두 실패 응답 0건. facility_tasks 680, task_notifications 3,168, task_stages 131, task_status_history 6,259 그대로
+- 이제 표가 없어 실행하면 실패하는 코드(전부터 부르는 화면이 없거나 projects 표가 없어 동작하지 않던 것, 지우지 않음): app/api/projects/*, app/api/workflows, components/tasks/TaskManagement·TaskComments, components/projects/*, scripts/create-sample-tasks.js·apply-task-categories.js
