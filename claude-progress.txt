@@ -551,3 +551,15 @@
   - delay_notifications 계열(mark_delay_notification_as_read, cleanup_expired_*): 앱 코드에 이 표를 쓰는 곳이 하나도 없음
   - 옛 tasks 표(create_task_history): /admin/tasks/create·/admin/tasks/[id]·[id]/edit 화면이 /api/tasks를 쓰지만 어디에서도 링크되지 않음(주소를 직접 쳐야 열림). 14행, 마지막 수정 2025-09. 화면 정리는 사용자 결정
   - log_contract_history_changes·save_data_history·validate_business_id: 어느 표에도 안 붙은 트리거 함수
+
+## 2026-10-05 | 쓰이지 않는 것 정리 (사용자 "현재 확인된 불필요한 내용들은 정리해줘")
+- 정정: 바로 위 항목은 옛 업무 화면 3개가 "어디에서도 링크되지 않는다"고 적었지만 틀렸다. /admin/tasks/[id]는 살아 있다 — 알림 종 → "모든 알림 보기"(/notifications) → 업무 알림 클릭이 relatedUrl(`/admin/tasks/<facility_tasks id>`, contexts/NotificationContext.tsx)을 새 탭으로 열고, /api/tasks/[id] GET은 task_details에 없으면 facility_tasks에서 찾는다. 그때는 `tasks/create`·`tasks/${` 문자열만 찾고 relatedUrl을 조립하는 곳을 보지 않았다. [id]/edit는 상세 화면의 수정 버튼으로 열린다. 그래서 두 화면과 /api/tasks는 지우지 않았다
+- 지운 코드(90899af, 푸시 전): handleCompleteTask·onComplete prop(page.tsx, TaskCardList, TaskCard), app/api/facility-tasks/advance/route.ts, app/admin/tasks/create/page.tsx(링크 0건 — 저장소 전체 검색, lib/permission-config.ts의 항목은 그 파일을 불러오는 곳이 없음), permission-config의 그 항목. tsc 오류 수 446 그대로, 빌드 통과
+- 지운 DB 객체(운영 적용, sql/drop_unused_delay_notifications_and_advance.sql): 표 delay_notifications(2025-09-29 설치 테스트 1행)·delay_notification_reads(0행)·delay_scheduler_logs(0행)·delay_thresholds(4행), 뷰 v_*delay* 4개, 함수 mark_delay_notification_as_read·cleanup_expired_delay_notifications·cleanup_delay_scheduler_logs·cleanup_expired_notifications·advance_task_to_next_step
+  - 근거: 앱 코드 참조 0건, pg_cron·pg_net·엣지 함수 없음, 바깥에서 거는 외래키 없음, CASCADE 없이 지워짐
+  - 되돌리기: sql/backup_dropped_2026-10-05/의 두 파일을 psql 17로 실행(삭제 → 복원 → 표 4·뷰 4·함수 5 확인 → ROLLBACK으로 시험함). 서버가 17.6이라 pg_dump는 postgresql@17 것을 써야 한다
+  - 설명 못 한 것: pg_stat_user_tables에 delay_notifications 삽입 4·삭제 1, delay_thresholds 삽입 16으로 찍혀 있었다(통계 초기화 2025-12-08 이후). 되돌린 시험도 세는 값이라 누가 넣었는지는 모른다. 남은 행은 2025-09 것뿐이었다
+- 일부러 남긴 것(쓰이는지 확인 못 했거나 범위 밖)
+  - /admin/tasks/[id]/edit: 저장(PUT /api/tasks/[id])은 옛 tasks 표만 고친다(코드로 읽음, 실행 안 함). 현재 업무를 이 화면에서 수정하면 실패할 것으로 보이나 눌러 보지 않았다
+  - app/api/notifications/history/route.ts:145의 related_url은 업무 id가 아니라 알림 id를 넣는다(코드로 읽음)
+  - 옛 tasks 표(14행)·create_task_history 트리거, components/tasks/TaskManagement·TaskComments·components/projects/*(그리는 곳 0건), lib/permission-config.ts(불러오는 곳 0건), 표에 안 붙은 트리거 함수 3개, create/update_task_assignment_notifications
