@@ -323,6 +323,7 @@ export default function DpfServiceRecordTable({
             <button
               onClick={() => onPageChange(page - 1)}
               disabled={page === 1}
+              aria-label="이전 페이지"
               className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 text-gray-500
                          hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -361,6 +362,7 @@ export default function DpfServiceRecordTable({
             <button
               onClick={() => onPageChange(page + 1)}
               disabled={page === totalPages}
+              aria-label="다음 페이지"
               className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 text-gray-500
                          hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >

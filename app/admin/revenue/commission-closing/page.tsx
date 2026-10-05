@@ -666,13 +666,13 @@ export default function CommissionClosingPage() {
         {/* 월 선택 + 탭 헤더 */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button onClick={() => setMonth(m => shiftMonth(m, -1))} className="p-1.5 rounded-md hover:bg-gray-100">
+            <button onClick={() => setMonth(m => shiftMonth(m, -1))} aria-label="이전 달" className="p-1.5 rounded-md hover:bg-gray-100">
               <ChevronLeft className="w-4 h-4 text-gray-600" />
             </button>
             <span className="text-lg font-semibold text-gray-800 min-w-[120px] text-center">
               {getMonthLabel(month)}
             </span>
-            <button onClick={() => setMonth(m => shiftMonth(m, 1))} className="p-1.5 rounded-md hover:bg-gray-100">
+            <button onClick={() => setMonth(m => shiftMonth(m, 1))} aria-label="다음 달" className="p-1.5 rounded-md hover:bg-gray-100">
               <ChevronRight className="w-4 h-4 text-gray-600" />
             </button>
           </div>
@@ -806,7 +806,7 @@ export default function CommissionClosingPage() {
                     </button>
                   </>
                 )}
-                <button onClick={fetchEligible} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+                <button onClick={fetchEligible} aria-label="새로고침" className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
@@ -1117,7 +1117,7 @@ export default function CommissionClosingPage() {
                 <button onClick={handleExport} className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-sm text-gray-700 rounded-lg hover:bg-gray-50">
                   <Download className="w-4 h-4" />Excel
                 </button>
-                <button onClick={() => { fetchSummary(); fetchTransfers(); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+                <button onClick={() => { fetchSummary(); fetchTransfers(); }} aria-label="새로고침" className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>

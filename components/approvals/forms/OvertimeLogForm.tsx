@@ -227,7 +227,7 @@ export default function OvertimeLogForm({ data, onChange, disabled = false }: Pr
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-400">항목 {idx + 1}</span>
                 {!disabled && (
-                  <button onClick={() => removeItem(idx)} disabled={data.items.length <= 1} className="text-red-400 active:text-red-600 p-1 disabled:opacity-30">
+                  <button onClick={() => removeItem(idx)} disabled={data.items.length <= 1} aria-label="항목 삭제" className="text-red-400 active:text-red-600 p-1 disabled:opacity-30">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}

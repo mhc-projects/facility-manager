@@ -282,6 +282,7 @@ function MeetingMinutesContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => setViewType('card')}
+                aria-label="카드 보기"
                 className={`p-2 rounded-lg border ${
                   viewType === 'card'
                     ? 'bg-blue-50 border-blue-600 text-blue-600'
@@ -292,6 +293,7 @@ function MeetingMinutesContent() {
               </button>
               <button
                 onClick={() => setViewType('table')}
+                aria-label="표 보기"
                 className={`p-2 rounded-lg border ${
                   viewType === 'table'
                     ? 'bg-blue-50 border-blue-600 text-blue-600'

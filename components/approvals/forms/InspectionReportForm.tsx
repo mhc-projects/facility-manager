@@ -333,7 +333,7 @@ export default function InspectionReportForm({ data, onChange, disabled = false,
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-gray-400">품목 {item.seq}</span>
                 {!disabled && (
-                  <button type="button" onClick={() => removeItem(idx)} disabled={data.items.length <= 1} className="text-red-400 active:text-red-600 p-1 disabled:opacity-30">
+                  <button type="button" onClick={() => removeItem(idx)} disabled={data.items.length <= 1} aria-label="항목 삭제" className="text-red-400 active:text-red-600 p-1 disabled:opacity-30">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}

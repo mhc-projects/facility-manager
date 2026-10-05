@@ -193,6 +193,7 @@ function MyWeeklyReportPage() {
           <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3">
             <button
               onClick={() => changeWeek('prev')}
+              aria-label="이전 주"
               className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-md transition-colors"
             >
               <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -213,6 +214,7 @@ function MyWeeklyReportPage() {
             </div>
             <button
               onClick={() => changeWeek('next')}
+              aria-label="다음 주"
               className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-md transition-colors"
             >
               <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />

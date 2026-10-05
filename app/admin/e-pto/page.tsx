@@ -323,7 +323,7 @@ function Pagination({ current, total, count, pageSize, onChange }: {
     <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
       <p className="text-xs text-gray-400">총 {count.toLocaleString()}건 · {total}페이지</p>
       <div className="flex items-center gap-1">
-        <button onClick={() => onChange(current - 1)} disabled={current <= 1}
+        <button onClick={() => onChange(current - 1)} disabled={current <= 1} aria-label="이전 페이지"
           className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -333,7 +333,7 @@ function Pagination({ current, total, count, pageSize, onChange }: {
             {p}
           </button>
         ))}
-        <button onClick={() => onChange(current + 1)} disabled={current >= total}
+        <button onClick={() => onChange(current + 1)} disabled={current >= total} aria-label="다음 페이지"
           className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
@@ -628,6 +628,7 @@ export default function EptoPage() {
                   if (activeTab === 'bids') { setBidSearchInput(''); setBidSearch(''); setBidPage(1) }
                   else { setResultSearchInput(''); setResultSearch(''); setResultPage(1) }
                 }}
+                aria-label="검색어 지우기"
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-lg border border-gray-200 transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -649,6 +650,7 @@ export default function EptoPage() {
             {(activeTab === 'bids' ? bidFilter2 : resultFilter2) && (
               <button
                 onClick={() => activeTab === 'bids' ? setBidFilter2('') : setResultFilter2('')}
+                aria-label="필터 지우기"
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-lg border border-gray-200 transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -796,6 +798,7 @@ export default function EptoPage() {
                               {bid.dtlInfoUrlAddr ? (
                                 <a href={bid.dtlInfoUrlAddr} target="_blank" rel="noopener noreferrer"
                                   onClick={e => e.stopPropagation()}
+                                  aria-label="상세 페이지 새 창으로 열기"
                                   className="text-gray-300 hover:text-blue-600 transition-colors group-hover:text-blue-400">
                                   <ExternalLink className="w-3.5 h-3.5" />
                                 </a>
@@ -882,6 +885,7 @@ export default function EptoPage() {
                             {item.dtlInfoUrlAddr ? (
                               <a href={item.dtlInfoUrlAddr} target="_blank" rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
+                                aria-label="상세 페이지 새 창으로 열기"
                                 className="text-gray-300 hover:text-blue-600 transition-colors group-hover:text-blue-400">
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>

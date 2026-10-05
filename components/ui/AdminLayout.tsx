@@ -716,7 +716,7 @@ export default function AdminLayout({ children, title, description, actions }: A
                     <ChevronRight className="w-5 h-5" />
                   </button>
                   {/* 모바일 닫기 버튼 */}
-                  <button onClick={() => setSidebarOpen(false)} className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1">
+                  <button onClick={() => setSidebarOpen(false)} aria-label="메뉴 닫기" className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1">
                     <X className="w-5 h-5" />
                   </button>
                 </>
@@ -739,7 +739,7 @@ export default function AdminLayout({ children, title, description, actions }: A
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   {/* 모바일 닫기 버튼 */}
-                  <button onClick={() => setSidebarOpen(false)} className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1">
+                  <button onClick={() => setSidebarOpen(false)} aria-label="메뉴 닫기" className="md:hidden text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1">
                     <X className="w-5 h-5" />
                   </button>
                 </>

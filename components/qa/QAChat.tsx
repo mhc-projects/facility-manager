@@ -421,6 +421,7 @@ export default function QAChat() {
           />
           <button
             type="submit"
+            aria-label="보내기"
             disabled={!input.trim() || loading}
             className="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700
                        disabled:opacity-40 disabled:cursor-not-allowed transition-colors"

@@ -32,7 +32,7 @@ function TreeNode({ node, depth = 0 }: { node: WikiNode; depth: number }) {
         style={{ paddingLeft: `${8 + depth * 12}px` }}
       >
         {hasChildren ? (
-          <button onClick={() => setOpen(!open)} className="shrink-0 p-0.5 rounded hover:bg-gray-200">
+          <button onClick={() => setOpen(!open)} aria-label={open ? '접기' : '펼치기'} className="shrink-0 p-0.5 rounded hover:bg-gray-200">
             {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </button>
         ) : (

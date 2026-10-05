@@ -242,7 +242,7 @@ function AdminWeeklyReportsPageV2() {
         <div className="bg-white rounded-md md:rounded-lg shadow-sm border border-gray-200 px-3 py-2">
           <div className="flex items-center gap-2">
             {/* 주간 날짜 선택 (최소 너비) */}
-            <button onClick={() => changeWeek('prev')} className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0">
+            <button onClick={() => changeWeek('prev')} aria-label="이전 주" className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0">
               <ChevronLeft className="w-4 h-4 text-gray-500" />
             </button>
             <input
@@ -256,7 +256,7 @@ function AdminWeeklyReportsPageV2() {
                 {weekPeriod.display}
               </span>
             )}
-            <button onClick={() => changeWeek('next')} className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0">
+            <button onClick={() => changeWeek('next')} aria-label="다음 주" className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0">
               <ChevronRight className="w-4 h-4 text-gray-500" />
             </button>
 

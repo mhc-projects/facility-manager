@@ -322,6 +322,7 @@ export default function ExpenseClaimForm({ data, onChange, disabled = false, onF
                         type="button"
                         onClick={e => { e.stopPropagation(); removeItem(idx) }}
                         disabled={data.items.length <= 1}
+                        aria-label="항목 삭제"
                         className="text-red-400 active:text-red-600 p-1 disabled:opacity-30"
                       >
                         <Trash2 className="w-4 h-4" />
