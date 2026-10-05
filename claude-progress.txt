@@ -614,3 +614,8 @@
   - 사업장 메모·사업장 수정 0건(사업장 없는 업무라 자동 메모 생략), error_logs 0건
   - 이번에 확인하지 못한 것: 진행구분별 단계 이름·머리표([자비] 등) 떼기는 '기타' 업무로는 드러나지 않는다(그 부분은 전환 때 DB 시험으로만 확인). 알림 종에서 업무 알림을 눌렀을 때의 사업장 화면 이동(기존 동작)은 누르지 않음
   - 남은 것: facility_tasks 소프트 삭제 1행(e9cf1bc7…, 기타/확인필요, 설명 "[테스트] 알림 동작 확인용 …"), task_status_history 2행(확인필요 0일 완료, 기타 진행 중으로 남음 — task_status_statistics 뷰는 삭제된 업무를 거르지 않는다), task_notifications 2행(최문호, 읽음, 11/4 만료 — 누르면 삭제된 업무라 칸반만 열림)
+
+## 2026-10-05 | 시험 업무 흔적 삭제 (사용자 "시험업무 흔적은 정리해줘")
+- 위 항목의 "남은 것" 중 시험 업무 쪽을 운영 DB에서 지움: facility_tasks 1행(e9cf1bc7…), task_status_history 2행(외래키 CASCADE), task_notifications 2행. 삭제 전에 번호 계열 컬럼 전체를 훑어 이 업무 번호가 다른 표에 없는 것을 확인했고, 행 수가 예상과 다르면 멈추는 트랜잭션을 ROLLBACK 시험 뒤 적용
+- 결과: facility_tasks 3,911 → 3,910(살아 있는 업무 680 그대로), task_status_history 6,261 → 6,259, task_notifications 3,170 → 3,168 — 시험 전 수치로 돌아옴. 최문호의 업무 알림 21건·안 읽음 0건(시험 전과 같음), error_logs 0건
+- 그대로 둔 것: (주)호성 발주의 order_management_history 2행과 updated_at(실제로 있었던 변경의 기록)
