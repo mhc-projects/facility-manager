@@ -563,3 +563,11 @@
   - /admin/tasks/[id]/edit: 저장(PUT /api/tasks/[id])은 옛 tasks 표만 고친다(코드로 읽음, 실행 안 함). 현재 업무를 이 화면에서 수정하면 실패할 것으로 보이나 눌러 보지 않았다
   - app/api/notifications/history/route.ts:145의 related_url은 업무 id가 아니라 알림 id를 넣는다(코드로 읽음)
   - 옛 tasks 표(14행)·create_task_history 트리거, components/tasks/TaskManagement·TaskComments·components/projects/*(그리는 곳 0건), lib/permission-config.ts(불러오는 곳 0건), 표에 안 붙은 트리거 함수 3개, create/update_task_assignment_notifications
+
+## 2026-10-05 | 옛 업무 상세·수정 화면 조사 (수정은 사용자 결정 대기)
+- 17:05 푸시(5360f8a), 17:06 배포 완료. 운영에서 POST /api/facility-tasks/advance가 404
+- 실제로 열어 봄(로컬 빌드 + 감사 세션, GET만, 업무 0686da4f…): 상세 화면은 열리지만 내용이 실제와 다르다 — 분류 "보조금"(실제 task_type=etc), 상태 "대기중"·진행률 0%(실제 status=self_completion_doc_done), 담당자 "미배정"(실제 assignees에 1명), 히스토리 "없습니다"(task_status_history 7건)
+  - 원인(app/api/tasks/[id]/route.ts의 facility_tasks 분기): 상태를 pending/in_progress/completed 3개로만 매핑(활성 680건 중 해당 0건), 담당자를 primary_assignee_id로 찾음(680건 전부 NULL), 분류는 self가 아니면 전부 "보조금"(etc 551건), 히스토리는 옛 task_history만 조회
+- 수정 화면: 열리지만 상태 "신규", 담당자·카테고리 빈칸. 선택지는 옛 표(task_categories 17, task_statuses 11) 것. 저장(PUT)·삭제(DELETE)는 옛 tasks 표에서만 찾는다 — tasks와 facility_tasks에 겹치는 id 0건이라 "업무를 찾을 수 없습니다"(404)가 된다(저장은 눌러 보지 않음, 코드+id 대조)
+- 사용 기록(user_access_logs, 2026-06-22~): /admin/tasks/<id> 0회, /edit 0회, /admin/tasks/create 0회, /notifications 16회(5명, 마지막 9/16), /admin/tasks 2,303회(16명)
+- 알림 종(NotificationBell)은 업무 알림을 /admin/business?business=…&focus=tasks로 보낸다. 옛 상세로 가는 길은 /notifications 화면의 업무 알림 클릭뿐. 링크는 화면에서 조립하며 DB에 저장된 것은 없다
