@@ -520,3 +520,19 @@
   - 그 밖: complete_order, import_urls_from_csv, reactivate_url, mark_delay_notification_as_read, cleanup_* 3개, save_data_history·log_contract_history_changes·validate_business_id·trigger_task_assignment_notifications(트리거로 붙어 있지 않음)
 - 고치는 방법은 같다(ALTER FUNCTION ... SET search_path = public). 다만 7개월 동안 조용히 실패하던 트리거가 되살아나면 알림·이력이 다시 쌓이기 시작하므로(동작 변화) 묶어서 적용하기 전에 사용자 확인
 - 참고: 직접 URL 크롤러 등 GitHub Actions 워크플로 4개는 전부 disabled_manually, 마지막 실행 2026-01-28(실패), direct_url_sources.last_crawled_at 최댓값 2026-01-21
+
+## 2026-10-05 | search_path가 비워진 함수 2단계 조치 (사용자 "추천해준대로 두 단계로 진행")
+- 정정: 위 항목은 트리거들이 "조용히 실패"한다고 적었는데, 시험해 보니 3개는 조용히가 아니라 원래 저장까지 막고 있었다(오류를 삼키는 것은 notify_facility_task_changes 하나뿐)
+- 확인 방법: 함수마다 운영 DB에서 트랜잭션 열기 → 고치기 → 실제 UPDATE·호출 → ROLLBACK. 저장된 것 없음(빈 search_path 함수 수 73 그대로 확인 후 진행)
+- 적용 13개(sql/fix_function_search_path_stage2.sql, 한 트랜잭션, 빈 search_path 함수 73 → 60)
+  - 저장을 막던 트리거 3개: record_order_management_changes(발주 관리 날짜 입력 — OrderDetailModal의 PUT이 3/5부터 실패, order_management 5행 전부 날짜가 비어 있고 수정된 적 없음), manage_default_delivery_address(기본 배송지 지정·기본으로 신규 등록), sync_survey_to_business_info(survey_events 직접 추가·수정 — 화면에서 이 API의 POST/PUT을 부르는 곳은 못 찾음. 사업장 정보 쪽에서 넣는 흐름은 sync_business_to_survey_events가 플래그를 세워 건너뛰므로 정상이었다)
+  - 조회·정리 5개(get_photo_counts, get_assignee_task_stats, check_facility_task_permission, cleanup_delay_scheduler_logs, cleanup_expired_delay_notifications): 부르는 곳 없음
+  - 부를 때만 쓰는 5개(record_crawl_success/failure, reactivate_url, import_urls_from_csv, complete_order)
+  - 적용 뒤 같은 세 가지 저장을 다시 시험(ROLLBACK): 전부 성공, 발주 이력 1행 생성 확인
+- 일부러 그대로 둔 12개
+  - 업무 알림 계열 4개(notify_facility_task_changes 트리거 포함): 앱이 9/4부터 task_notifications를 직접 넣으므로 되살리면 배정·상태 변경 알림이 두 번 쌓임. notifications 표에 task_created·task_status_changed 행은 지금까지 한 번도 없었음(전역 알림도 새로 생김). 사용자 결정 대기 — 그대로 두기 / 트리거 삭제 / 트리거를 살리고 앱의 직접 INSERT 제거
+  - advance_task_to_next_step: 단계표가 옛 상태값. 활성 업무 680건 중 함수가 아는 단계에 있는 것은 종착 단계(subsidy_payment) 125건뿐이라 고쳐도 전부 "다음 단계 없음". /admin/tasks의 "업무 완료"(handleCompleteTask → /api/facility-tasks/advance)는 3/5부터 오류 — task_stages 기준으로 다시 만들거나 버튼 제거 필요
+  - restore_data_from_history: 경로를 고쳐도 NULL 값이 빠져 열 수가 안 맞는 버그로 실패(INSERT has more target columns than expressions) — /admin/data-history의 복원은 별도 수정 필요
+  - mark_delay_notification_as_read(ambiguous column), cleanup_expired_notifications(user_notifications.expires_at 없음): 자체 버그, 부르는 곳 없음
+  - create_task_history(옛 tasks 표), log_contract_history_changes·save_data_history·validate_business_id(어느 표에도 안 붙은 트리거 함수)
+- 참고: 나머지 48개는 본문이 테이블을 쓰지 않아(updated_at 갱신 트리거 등) 빈 search_path로도 정상
