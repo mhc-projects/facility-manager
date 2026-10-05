@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CSRFProtection } from '@/lib/security/csrf-protection';
 
+// 요청마다 새 토큰을 발급하도록 정적 렌더링 대상에서 제외한다 (없으면 빌드 시점 토큰 하나가 다음 배포까지 모든 사용자에게 나간다)
+export const dynamic = 'force-dynamic';
+
 /**
  * CSRF 토큰 발급 API
  * GET /api/csrf-token

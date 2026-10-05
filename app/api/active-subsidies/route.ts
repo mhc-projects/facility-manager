@@ -10,6 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryAll } from '@/lib/supabase-direct'
 
+// 요청마다 DB를 다시 조회하도록 정적 렌더링 대상에서 제외한다 (없으면 빌드 시점 응답이 다음 배포까지 그대로 나간다)
+export const dynamic = 'force-dynamic'
+
 // 성공 응답 생성
 function createSuccessResponse(data: any) {
   return NextResponse.json({

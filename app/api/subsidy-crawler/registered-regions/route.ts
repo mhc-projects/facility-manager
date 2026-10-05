@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// 요청마다 DB를 다시 조회하도록 정적 렌더링 대상에서 제외한다 (없으면 빌드 시점 응답이 다음 배포까지 그대로 나간다)
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/subsidy-crawler/registered-regions
  * URL 데이터관리에 등록된 활성화된 지역 목록 조회
