@@ -47,13 +47,6 @@ export const PAGE_PERMISSIONS: PagePermission[] = [
     requiredPermission: 'canCreateTasks',
     description: '시설 업무 관리 칸반보드'
   },
-  {
-    path: '/admin/tasks/[id]/edit',
-    name: '업무 수정',
-    requiredLevel: PERMISSION_LEVELS.MANAGER,
-    requiredPermission: 'canEditTasks',
-    description: '기존 업무 수정'
-  },
 
   // === 관리자 (레벨 3) 전용 ===
   {

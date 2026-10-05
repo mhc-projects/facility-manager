@@ -571,3 +571,10 @@
 - 수정 화면: 열리지만 상태 "신규", 담당자·카테고리 빈칸. 선택지는 옛 표(task_categories 17, task_statuses 11) 것. 저장(PUT)·삭제(DELETE)는 옛 tasks 표에서만 찾는다 — tasks와 facility_tasks에 겹치는 id 0건이라 "업무를 찾을 수 없습니다"(404)가 된다(저장은 눌러 보지 않음, 코드+id 대조)
 - 사용 기록(user_access_logs, 2026-06-22~): /admin/tasks/<id> 0회, /edit 0회, /admin/tasks/create 0회, /notifications 16회(5명, 마지막 9/16), /admin/tasks 2,303회(16명)
 - 알림 종(NotificationBell)은 업무 알림을 /admin/business?business=…&focus=tasks로 보낸다. 옛 상세로 가는 길은 /notifications 화면의 업무 알림 클릭뿐. 링크는 화면에서 조립하며 DB에 저장된 것은 없다
+
+## 2026-10-05 | 업무 알림 링크를 칸반 수정 창으로 + 옛 업무 상세·수정 화면 제거 (사용자 "안쓰는 옛 화면은 정리, 업무 알림은 지금 쓰는 곳에 연결")
+- 링크: contexts/NotificationContext.tsx의 업무 알림 relatedUrl과 app/api/notifications/history의 related_url을 `/admin/tasks?openModal=<업무 id>`로(이력 API는 업무 id 대신 알림 id를 넣던 것도 같이 고침). 알림 종(NotificationBell)의 사업장 화면 이동은 그대로
+- 지운 것: app/admin/tasks/[id]/page.tsx·[id]/edit/page.tsx, app/api/tasks/ 전체(route, [id], [id]/comments, metadata, stream), lib/permission-config.ts의 '업무 수정' 항목
+- 확인(로컬 빌드 + 감사 세션, 열기만): 살아 있는 업무는 칸반이 열리고 수정 창이 실제 단계([자비]준공서류 작성완료)·담당자(최정민)로 뜸. 삭제된 업무는 칸반만 열리고 창 없음(예전엔 옛 화면에 "[삭제됨]"). 옛 주소 /admin/tasks/<id>는 404. 빌드 통과, tsc 446 → 440(줄어든 6건은 지운 파일의 것 — 지우기 전 상태에서 그 파일들 오류가 6건)
+- 확인 못 한 것: /notifications 화면에서 업무 알림을 실제로 눌러 보지는 못함(확인용 계정에 업무 알림 없음). /api/tasks를 저장소 밖에서 부르는 곳이 있는지는 알 수 없음(접속 기록은 화면만 남김) — 옛 tasks 표 최신 수정이 2025-09-16
+- 남긴 것: 옛 tasks 표(14행)·task_details 뷰·create_task_history 트리거(DB는 안 건드림), /api/tasks를 부르지만 그리는 곳이 없는 components/tasks/TaskManagement·TaskComments·components/projects/ProjectDetail·lib/api-client의 /tasks 함수들, csrf-protection의 /api/tasks 예외 항목, 없는 주소(/tasks/<id>)를 만드는 contexts/TierNotificationContext.tsx:176·app/api/organization/task-assignments(푸시 알림 url)

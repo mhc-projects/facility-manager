@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       // 기간 필터를 제거하고 모든 알림 조회 (디버깅용)
       const { data, error } = await supabaseAdmin
         .from('task_notifications')
-        .select('id, notification_type, message, business_name, priority, is_read, created_at, read_at, expires_at')
+        .select('id, task_id, notification_type, message, business_name, priority, is_read, created_at, read_at, expires_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
           message: item.message,
           type_category: item.notification_type || 'task_assigned',
           priority: item.priority === 'urgent' ? 'critical' : (item.priority || 'medium'),
-          related_url: `/admin/tasks/${item.id}`,
+          related_url: `/admin/tasks?openModal=${item.task_id}`,
           user_id: user.id,
           created_by_name: '시스템',
           notification_created_at: item.created_at,

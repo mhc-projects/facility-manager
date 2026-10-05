@@ -488,7 +488,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           priority: (notif.priority === 'urgent' ? 'critical' : notif.priority) as NotificationPriority,
           relatedResourceType: 'task',
           relatedResourceId: notif.task_id,
-          relatedUrl: `/admin/tasks/${notif.task_id}`,
+          relatedUrl: `/admin/tasks?openModal=${notif.task_id}`,
           metadata: {
             business_name: notif.business_name,
             task_id: notif.task_id,
