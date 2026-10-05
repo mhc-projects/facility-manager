@@ -152,7 +152,7 @@ export function HeroStat({
   return (
     <div className="flex-1 min-w-[160px] rounded-xl border border-gray-100 bg-white p-4 hover:border-gray-200 transition-colors">
       <p className="text-xs font-medium text-gray-500">{label}</p>
-      <div className="mt-1.5 flex items-end justify-between gap-3">
+      <div className="mt-1.5 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
         <p className={`text-xl font-semibold tracking-tight tabular-nums ${valueClassName}`}>{valueLabel}</p>
         <Sparkline values={sparkValues} />
       </div>

@@ -275,8 +275,9 @@ export default function MonitoringDashboard() {
       }
     >
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* 탭 네비게이션 */}
-      <div className="border-b border-gray-200">
+      {/* 탭 네비게이션 — 좁은 화면에서는 탭 줄 안에서 가로로 민다 */}
+      <div className="overflow-x-auto">
+      <div className="border-b border-gray-200 min-w-max">
         <nav className="-mb-px flex space-x-8">
           <TabButton
             active={activeTab === 'runs'}
@@ -297,6 +298,7 @@ export default function MonitoringDashboard() {
             label="URL 건강도"
           />
         </nav>
+      </div>
       </div>
 
       {/* 로딩 상태 */}

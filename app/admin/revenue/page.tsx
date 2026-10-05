@@ -2127,7 +2127,7 @@ function RevenueDashboard() {
             <p className="text-sm text-red-500 mt-1">페이지를 새로고침해주세요</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 md:gap-4 max-sm:overflow-x-clip">
 
           {/* Card #1: 총 매출금액 / 총 미수금액 */}
           <div className="group relative bg-white p-2 sm:p-3 md:p-4 rounded-md md:rounded-lg shadow-sm border border-gray-200">

@@ -288,8 +288,9 @@ export default function PriceListPage() {
           </label>
         </div>
 
-        {/* 탭 */}
-        <div className="flex border-b border-gray-200 mb-1">
+        {/* 탭 — 좁은 화면에서는 탭 줄 안에서 가로로 민다 */}
+        <div className="overflow-x-auto mb-1">
+        <div className="flex border-b border-gray-200 min-w-max">
           {PRICE_TYPE_TABS.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
@@ -306,6 +307,7 @@ export default function PriceListPage() {
               )}
             </button>
           ))}
+        </div>
         </div>
 
         {/* 탭 설명 */}
@@ -339,6 +341,8 @@ export default function PriceListPage() {
                   <span className="text-sm font-semibold text-gray-700">{category}</span>
                   <span className="text-xs text-gray-400 font-normal ml-0.5">({catItems.length}개)</span>
                 </div>
+                {/* 좁은 화면에서는 표가 카드 밖으로 잘리지 않고 카드 안에서 가로로 밀린다 */}
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
@@ -383,6 +387,7 @@ export default function PriceListPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             ))}
           </div>
