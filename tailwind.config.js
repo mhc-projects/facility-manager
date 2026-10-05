@@ -38,6 +38,16 @@ module.exports = {
     'bg-lime-100', 'text-lime-700', 'border-lime-300',
     'bg-rose-100', 'text-rose-700', 'border-rose-300',
     'bg-gray-100', 'text-gray-700', 'border-gray-300',
+
+    // 시설 사진 섹션(ImprovedFacilityPhotoSection)용: `bg-${colorScheme}-…`로 조립하는 클래스 중 다른 곳에 글자 그대로 쓰인 적이 없어
+    // CSS에 안 들어가던 것 — 눌림 색·선택 테두리·강조 링 (배출 orange, 방지 green, 게이트웨이 purple, 송풍팬 cyan, 기타 gray)
+    'active:bg-orange-100', 'active:bg-green-100', 'active:bg-cyan-100',
+    'active:bg-orange-800', 'active:bg-green-800', 'active:bg-purple-800', 'active:bg-cyan-800', 'active:bg-gray-800',
+    'active:border-orange-500', 'active:border-green-500', 'active:border-purple-500', 'active:border-cyan-500', 'active:border-gray-500',
+    'border-cyan-600', 'border-gray-600', 'hover:bg-cyan-700',
+    'ring-orange-200', 'ring-cyan-200',
+    'ring-orange-300', 'ring-green-300', 'ring-purple-300', 'ring-cyan-300', 'ring-gray-300',
+    'ring-orange-400', 'ring-green-400', 'ring-purple-400', 'ring-cyan-400', 'ring-gray-400',
   ],
 
   theme: {
