@@ -25,7 +25,8 @@ const MANUFACTURER_MAP: Record<string, Manufacturer> = {
   '가이아씨앤에스': 'gaia_cns',
   '크린어스': 'cleanearth',
   '이브이에스': 'evs',
-  'EVS': 'evs'
+  'EVS': 'evs',
+  '에코온': 'ecoon'
 }
 
 // 사용자 인증

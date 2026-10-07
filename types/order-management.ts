@@ -4,7 +4,7 @@
 /**
  * 제조사 타입
  */
-export type Manufacturer = 'ecosense' | 'gaia_cns' | 'cleanearth' | 'evs'
+export type Manufacturer = 'ecosense' | 'gaia_cns' | 'cleanearth' | 'evs' | 'ecoon'
 
 /**
  * VPN 타입
@@ -170,6 +170,7 @@ export interface OrderListResponse {
         gaia_cns: number
         cleanearth: number
         evs: number
+        ecoon: number
       }
     }
   }
@@ -260,7 +261,8 @@ export const MANUFACTURERS: Record<
   ecosense: { name: '에코센스', color: 'blue' },
   gaia_cns: { name: '가이아씨앤에스', color: 'green' },
   cleanearth: { name: '크린어스', color: 'purple' },
-  evs: { name: 'EVS', color: 'orange' }
+  evs: { name: 'EVS', color: 'orange' },
+  ecoon: { name: '에코온', color: 'teal' }
 }
 
 /**
@@ -335,6 +337,29 @@ export const MANUFACTURER_WORKFLOWS: Record<Manufacturer, ManufacturerWorkflow> 
     evs: {
       name: 'EVS',
       manufacturer: 'evs',
+      total_steps: 3,
+      steps: [
+        {
+          key: 'layout',
+          label: '레이아웃 작성',
+          field: 'layout_date'
+        },
+        {
+          key: 'ip_request',
+          label: 'IP 요청',
+          field: 'ip_request_date'
+        },
+        {
+          key: 'router_request',
+          label: '라우터 요청',
+          field: 'router_request_date'
+        }
+      ]
+    },
+
+    ecoon: {
+      name: '에코온',
+      manufacturer: 'ecoon',
       total_steps: 3,
       steps: [
         {

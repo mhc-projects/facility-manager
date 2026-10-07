@@ -26,7 +26,8 @@ const MANUFACTURER_MAP: Record<string, Manufacturer> = {
   '가이아씨앤에스': 'gaia_cns',
   '크린어스': 'cleanearth',
   '이브이에스': 'evs',
-  'EVS': 'evs'
+  'EVS': 'evs',
+  '에코온': 'ecoon'
 }
 
 // 영문 키 → 한글 제조사명 역매핑
@@ -34,7 +35,8 @@ const MANUFACTURER_REVERSE_MAP: Record<Manufacturer, string> = {
   'ecosense': '에코센스',
   'gaia_cns': '가이아씨앤에스',
   'cleanearth': '크린어스',
-  'evs': '이브이에스'
+  'evs': '이브이에스',
+  'ecoon': '에코온'
 }
 
 // 사용자 인증
@@ -501,7 +503,7 @@ export const GET = withApiHandler(
             total_orders: 0,
             in_progress: 0,
             completed: 0,
-            by_manufacturer: { ecosense: 0, gaia_cns: 0, cleanearth: 0, evs: 0 }
+            by_manufacturer: { ecosense: 0, gaia_cns: 0, cleanearth: 0, evs: 0, ecoon: 0 }
           }
         })
       }
@@ -589,7 +591,8 @@ export const GET = withApiHandler(
             .length,
           cleanearth: orderList.filter((o) => o.manufacturer === 'cleanearth')
             .length,
-          evs: orderList.filter((o) => o.manufacturer === 'evs').length
+          evs: orderList.filter((o) => o.manufacturer === 'evs').length,
+          ecoon: orderList.filter((o) => o.manufacturer === 'ecoon').length
         }
       }
 

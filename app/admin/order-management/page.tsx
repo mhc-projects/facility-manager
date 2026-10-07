@@ -47,7 +47,7 @@ export default function OrderManagementPage() {
     in_progress: 0,
     not_started: 0,
     completed: 0,
-    by_manufacturer: { ecosense: 0, gaia_cns: 0, cleanearth: 0, evs: 0 }
+    by_manufacturer: { ecosense: 0, gaia_cns: 0, cleanearth: 0, evs: 0, ecoon: 0 }
   })
 
   // 담당자 목록 (발주 필요 탭에서만 사용)
@@ -466,7 +466,9 @@ export default function OrderManagementPage() {
                                   ? 'bg-green-100 text-green-700'
                                   : order.manufacturer === 'cleanearth'
                                     ? 'bg-purple-100 text-purple-700'
-                                    : 'bg-orange-100 text-orange-700'
+                                    : order.manufacturer === 'ecoon'
+                                      ? 'bg-teal-100 text-teal-700'
+                                      : 'bg-orange-100 text-orange-700'
                             }`}
                           >
                             {MANUFACTURERS[order.manufacturer].name}
@@ -562,7 +564,9 @@ export default function OrderManagementPage() {
                               ? 'bg-green-100 text-green-700'
                               : order.manufacturer === 'cleanearth'
                                 ? 'bg-purple-100 text-purple-700'
-                                : 'bg-orange-100 text-orange-700'
+                                : order.manufacturer === 'ecoon'
+                                  ? 'bg-teal-100 text-teal-700'
+                                  : 'bg-orange-100 text-orange-700'
                         }`}
                       >
                         {MANUFACTURERS[order.manufacturer].name}
