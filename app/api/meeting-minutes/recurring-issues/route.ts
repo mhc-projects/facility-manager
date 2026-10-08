@@ -9,6 +9,9 @@ import { isFullAccessUser, canAccessMeetingMinute } from '@/lib/meeting-minutes-
 
 // request.headers를 읽으므로 정적 렌더링 대상에서 제외한다 (빌드 시 Dynamic server usage 오류 방지)
 export const dynamic = 'force-dynamic'
+// force-dynamic만으로는 GET 전용 라우트의 Supabase 조회(fetch)가 데이터 캐시에 영구 저장되어
+// 오래된 결과가 계속 반환되므로 fetch 캐시도 명시적으로 끈다
+export const fetchCache = 'force-no-store'
 
 // Supabase 클라이언트 설정
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
