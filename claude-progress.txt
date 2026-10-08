@@ -629,3 +629,12 @@
 - 검증: `npm run build` 통과, `npx tsc --noEmit` 439 → 438(삭제한 라우트의 기존 에러 1건만 사라짐, 새 에러 0). 브라우저 화면 확인은 못 했다(로그인 필요)
 - 이력 기능이 필요하면 새로 만들어야 한다: 이메일 로그인 성공 때 `login_attempts`(login_method CHECK는 email/kakao/naver/google만 허용)에 기록하는 코드를 로그인 API에 넣고, 그 위에 인증 있는 조회 API를 다시 만든다
 - 별건(미수정): `app/api/admin/user-social-accounts/route.ts`의 GET/DELETE/PUT에도 토큰 검사가 없다(`requireAdmin`/`verifyToken` 없음). 운영 `social_accounts`는 2행뿐이라 노출 범위는 작지만 인증 없이 연결 해제·주 계정 변경이 가능하다
+
+---
+
+## 2026-10-08 | 사용하지 않는 소셜 계정 관리(API·탭) 제거
+- 문호님이 "user-social-accounts는 사용하지 않고 있어, 정리해도 돼"라고 확인. 운영 `social_accounts`는 2행(카카오·네이버 시험 연동, 2025-09-19 이후 로그인 없음)이었다
+- 제거: `app/api/admin/user-social-accounts/route.ts`(GET/DELETE/PUT, 토큰 검사 없었음 — 7월 감사 HIGH 항목), 사용자 상세 모달의 "소셜 계정" 탭·불러오기·"주 계정으로 설정"/"연결 해제" 핸들러·타입·`getProviderLabel`·아이콘 Link/Unlink. 모달에는 "기본 정보" 탭 하나만 남는다(탭 줄 자체는 그대로 둠)
+- 소셜 로그인 라우트(`app/api/auth/social/*`)와 `social_accounts` 표는 건드리지 않았다
+- 검증: `npm run build` 통과, `npx tsc --noEmit` 438 → 437(제거한 라우트의 기존 에러 1건만 사라짐). 브라우저 화면 확인은 못 했다(로그인 필요)
+- `claudedocs/api-auth-gap-critical-findings.md`의 해당 HIGH 항목에 제거 사실을 덧붙임. 같은 문서의 b18 로그인 이력 API(fc6da4d, 푸시·배포 확인 완료: 운영에서 404)도 함께 처리됨

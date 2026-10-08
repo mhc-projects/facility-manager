@@ -38,7 +38,7 @@ POST /api/auth/social-unified
 - **`app/api/uploaded-files-supabase/route.ts` DELETE** — 인증 없이 임의 사업장 사진 삭제(Storage+DB+Drive 3중 삭제).
 
 ### 🟠 HIGH
-- `admin/user-login-history`, `admin/user-social-accounts` — 무인증, 세션/소셜계정 PII 열람 + 세션 강제종료/소셜연결 해제
+- `admin/user-login-history`, `admin/user-social-accounts` — 무인증, 세션/소셜계정 PII 열람 + 세션 강제종료/소셜연결 해제 → **2026-10-08 두 API 모두 제거**(둘 다 쓰이는 기능이 아니었음: 로그인 이력은 user_sessions·login_attempts가 0행이라 한 번도 동작한 적 없고, 소셜 계정 탭은 문호님이 미사용 확인)
 - `admin/tasks/duplicates` — 인증이 있는 척하지만 실제론 토큰 존재 여부만 확인(서명 검증 없음) → 사실상 무인증. 임의 업무 대량 삭제 가능
 - `settings/progress-categories`, `settings/task-stages` — 무인증 CRUD, 하드삭제 가능. `progress-categories/migrate`는 **business_info 대량 UPDATE**까지 함
 - `announcements`, `calendar`, `messages` (+하위 attachments) — 전부 무인증. **작성자(author_id/name)를 요청 바디에서 그대로 신뢰** — 누구나 타인 명의로 공지/일정/전달사항 위조 가능

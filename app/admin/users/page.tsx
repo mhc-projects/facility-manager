@@ -26,8 +26,6 @@ import {
   Eye,
   EyeOff,
   Activity,
-  Link,
-  Unlink,
   ArrowLeft,
   ExternalLink
 } from 'lucide-react';
@@ -48,21 +46,6 @@ interface Employee {
   created_at: string;
   last_login_at?: string;
   password_changed_at?: string;
-}
-
-// 소셜 계정 정보 타입
-interface UserSocialAccount {
-  id: string;
-  user_id: string;
-  provider: 'google' | 'kakao' | 'naver';
-  provider_user_id: string;
-  provider_email: string;
-  provider_name: string;
-  provider_picture_url?: string;
-  connected_at: string;
-  last_login_at?: string;
-  is_primary: boolean;
-  is_active: boolean;
 }
 
 // 승인 설정 폼 컴포넌트
@@ -361,8 +344,7 @@ function UsersManagementPage() {
 
   const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
   const [selectedUser, setSelectedUser] = useState<Employee | null>(null);
-  const [userDetailTab, setUserDetailTab] = useState<'info' | 'social'>('info');
-  const [userSocialAccounts, setUserSocialAccounts] = useState<UserSocialAccount[]>([]);
+  const [userDetailTab, setUserDetailTab] = useState<'info'>('info');
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
 
   // 승인 설정 상태
@@ -555,72 +537,10 @@ function UsersManagementPage() {
     try {
       setLoadingUserDetails(true);
       setSelectedUser(user);
-
-      const token = TokenManager.getToken();
-
-      // 소셜 계정 정보 로드
-      const socialResponse = await fetch(`/api/admin/user-social-accounts?userId=${user.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (socialResponse.ok) {
-        const socialData = await socialResponse.json();
-        if (socialData.success) {
-          setUserSocialAccounts(socialData.data.socialAccounts || []);
-        }
-      }
     } catch (error) {
       console.error('사용자 상세 정보 로드 오류:', error);
     } finally {
       setLoadingUserDetails(false);
-    }
-  };
-
-  // 소셜 계정 연결 해제
-  const handleDisconnectSocialAccount = async (socialAccountId: string) => {
-    if (!confirm('이 소셜 계정 연결을 해제하시겠습니까?')) return;
-
-    try {
-      const token = TokenManager.getToken();
-      const response = await fetch(`/api/admin/user-social-accounts?socialAccountId=${socialAccountId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        if (selectedUser) {
-          await loadUserDetails(selectedUser);
-        }
-        alert('소셜 계정 연결이 해제되었습니다.');
-      }
-    } catch (error) {
-      console.error('소셜 계정 연결 해제 오류:', error);
-      alert('소셜 계정 연결 해제 중 오류가 발생했습니다.');
-    }
-  };
-
-  // 주 소셜 계정 설정
-  const handleSetPrimarySocialAccount = async (socialAccountId: string) => {
-    try {
-      const token = TokenManager.getToken();
-      const response = await fetch('/api/admin/user-social-accounts', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ socialAccountId, action: 'set_primary' })
-      });
-
-      if (response.ok) {
-        if (selectedUser) {
-          await loadUserDetails(selectedUser);
-        }
-        alert('주 소셜 계정이 변경되었습니다.');
-      }
-    } catch (error) {
-      console.error('주 소셜 계정 설정 오류:', error);
-      alert('주 소셜 계정 설정 중 오류가 발생했습니다.');
     }
   };
 
@@ -837,15 +757,6 @@ function UsersManagementPage() {
       case 1: return { text: '일반', color: 'text-blue-600 bg-blue-50 border-blue-200' };
       case 0: return { text: '게스트', color: 'text-gray-600 bg-gray-50 border-gray-200' };
       default: return { text: '사용자', color: 'text-gray-600 bg-gray-50 border-gray-200' };
-    }
-  };
-
-  const getProviderLabel = (provider: string) => {
-    switch (provider) {
-      case 'kakao': return '카카오';
-      case 'naver': return '네이버';
-      case 'google': return '구글';
-      default: return provider;
     }
   };
 
@@ -1401,7 +1312,6 @@ function UsersManagementPage() {
                 <button
                   onClick={() => {
                     setSelectedUser(null);
-                    setUserSocialAccounts([]);
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -1445,17 +1355,6 @@ function UsersManagementPage() {
                 >
                   <span className="hidden sm:inline">기본 정보</span>
                   <span className="sm:hidden">기본</span>
-                </button>
-                <button
-                  onClick={() => setUserDetailTab('social')}
-                  className={`px-2 sm:px-3 md:px-6 py-2 sm:py-2.5 md:py-3 text-[9px] sm:text-[10px] md:text-sm font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${
-                    userDetailTab === 'social'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <span className="hidden sm:inline">소셜 계정 ({userSocialAccounts.length})</span>
-                  <span className="sm:hidden">소셜({userSocialAccounts.length})</span>
                 </button>
               </nav>
             </div>
@@ -1542,67 +1441,6 @@ function UsersManagementPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* 소셜 계정 탭 */}
-                {userDetailTab === 'social' && (
-                  <div>
-                    {userSocialAccounts.length === 0 ? (
-                      <div className="text-center py-6 sm:py-8 md:py-12">
-                        <Link className="w-6 h-6 sm:w-8 sm:h-8 md:w-12 md:h-12 text-gray-400 mx-auto mb-2 sm:mb-3 md:mb-4" />
-                        <h3 className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-900 mb-1">연결된 소셜 계정이 없습니다</h3>
-                        <p className="text-sm text-gray-500">사용자가 소셜 계정으로 로그인하지 않았습니다.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {userSocialAccounts.map((account) => (
-                          <div key={account.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                  <span className="text-sm font-medium text-blue-600">
-                                    {getProviderLabel(account.provider)}
-                                  </span>
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-gray-900">{account.provider_name}</span>
-                                    {account.is_primary && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                        주 계정
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-sm text-gray-500">{account.provider_email}</p>
-                                  <p className="text-xs text-gray-400">
-                                    연결일: {new Date(account.connected_at).toLocaleDateString('ko-KR')}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {!account.is_primary && (
-                                  <button
-                                    onClick={() => handleSetPrimarySocialAccount(account.id)}
-                                    className="text-blue-600 hover:text-blue-900 text-sm"
-                                  >
-                                    주 계정으로 설정
-                                  </button>
-                                )}
-                                {!account.is_primary && (
-                                  <button
-                                    onClick={() => handleDisconnectSocialAccount(account.id)}
-                                    className="text-red-600 hover:text-red-900"
-                                  >
-                                    <Unlink className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
