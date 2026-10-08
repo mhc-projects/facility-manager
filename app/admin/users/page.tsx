@@ -28,10 +28,6 @@ import {
   Activity,
   Link,
   Unlink,
-  Clock,
-  Monitor,
-  Smartphone,
-  MapPin,
   ArrowLeft,
   ExternalLink
 } from 'lucide-react';
@@ -67,21 +63,6 @@ interface UserSocialAccount {
   last_login_at?: string;
   is_primary: boolean;
   is_active: boolean;
-}
-
-// 로그인 이력 정보 타입
-interface UserLoginHistory {
-  id: string;
-  user_id: string;
-  login_method: 'google' | 'kakao' | 'naver';
-  ip_address: string;
-  user_agent: string;
-  device_info?: string;
-  location_info?: string;
-  login_at: string;
-  logout_at?: string;
-  session_duration?: number;
-  is_suspicious: boolean;
 }
 
 // 승인 설정 폼 컴포넌트
@@ -380,9 +361,8 @@ function UsersManagementPage() {
 
   const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
   const [selectedUser, setSelectedUser] = useState<Employee | null>(null);
-  const [userDetailTab, setUserDetailTab] = useState<'info' | 'social' | 'history'>('info');
+  const [userDetailTab, setUserDetailTab] = useState<'info' | 'social'>('info');
   const [userSocialAccounts, setUserSocialAccounts] = useState<UserSocialAccount[]>([]);
-  const [userLoginHistory, setUserLoginHistory] = useState<UserLoginHistory[]>([]);
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
 
   // 승인 설정 상태
@@ -589,18 +569,6 @@ function UsersManagementPage() {
           setUserSocialAccounts(socialData.data.socialAccounts || []);
         }
       }
-
-      // 로그인 이력 로드 (최근 50개)
-      const historyResponse = await fetch(`/api/admin/user-login-history?userId=${user.id}&limit=50`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (historyResponse.ok) {
-        const historyData = await historyResponse.json();
-        if (historyData.success) {
-          setUserLoginHistory(historyData.data.loginHistory || []);
-        }
-      }
     } catch (error) {
       console.error('사용자 상세 정보 로드 오류:', error);
     } finally {
@@ -653,29 +621,6 @@ function UsersManagementPage() {
     } catch (error) {
       console.error('주 소셜 계정 설정 오류:', error);
       alert('주 소셜 계정 설정 중 오류가 발생했습니다.');
-    }
-  };
-
-  // 세션 강제 종료
-  const handleTerminateSession = async (sessionId: string) => {
-    if (!confirm('이 세션을 강제로 종료하시겠습니까?')) return;
-
-    try {
-      const token = TokenManager.getToken();
-      const response = await fetch(`/api/admin/user-login-history?sessionId=${sessionId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        if (selectedUser) {
-          await loadUserDetails(selectedUser);
-        }
-        alert('세션이 강제로 종료되었습니다.');
-      }
-    } catch (error) {
-      console.error('세션 종료 오류:', error);
-      alert('세션 종료 중 오류가 발생했습니다.');
     }
   };
 
@@ -1457,7 +1402,6 @@ function UsersManagementPage() {
                   onClick={() => {
                     setSelectedUser(null);
                     setUserSocialAccounts([]);
-                    setUserLoginHistory([]);
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -1512,17 +1456,6 @@ function UsersManagementPage() {
                 >
                   <span className="hidden sm:inline">소셜 계정 ({userSocialAccounts.length})</span>
                   <span className="sm:hidden">소셜({userSocialAccounts.length})</span>
-                </button>
-                <button
-                  onClick={() => setUserDetailTab('history')}
-                  className={`px-2 sm:px-3 md:px-6 py-2 sm:py-2.5 md:py-3 text-[9px] sm:text-[10px] md:text-sm font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${
-                    userDetailTab === 'history'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <span className="hidden sm:inline">로그인 이력 ({userLoginHistory.length})</span>
-                  <span className="sm:hidden">이력({userLoginHistory.length})</span>
                 </button>
               </nav>
             </div>
@@ -1662,85 +1595,6 @@ function UsersManagementPage() {
                                     className="text-red-600 hover:text-red-900"
                                   >
                                     <Unlink className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 로그인 이력 탭 */}
-                {userDetailTab === 'history' && (
-                  <div>
-                    {userLoginHistory.length === 0 ? (
-                      <div className="text-center py-12">
-                        <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-sm font-medium text-gray-900 mb-1">로그인 이력이 없습니다</h3>
-                        <p className="text-sm text-gray-500">아직 로그인 기록이 없습니다.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {userLoginHistory.map((history) => (
-                          <div key={history.id} className={`bg-white border rounded-lg p-4 ${
-                            history.is_suspicious ? 'border-red-200 bg-red-50' : 'border-gray-200'
-                          }`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                  history.is_suspicious ? 'bg-red-100' : 'bg-blue-100'
-                                }`}>
-                                  {history.device_info?.includes('Mobile') ? (
-                                    <Smartphone className={`w-5 h-5 ${history.is_suspicious ? 'text-red-600' : 'text-blue-600'}`} />
-                                  ) : (
-                                    <Monitor className={`w-5 h-5 ${history.is_suspicious ? 'text-red-600' : 'text-blue-600'}`} />
-                                  )}
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-gray-900">
-                                      {getProviderLabel(history.login_method)} 로그인
-                                    </span>
-                                    {history.is_suspicious && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                                        의심스러움
-                                      </span>
-                                    )}
-                                    {!history.logout_at && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                        활성 세션
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-sm text-gray-500">
-                                    {new Date(history.login_at).toLocaleString('ko-KR')}
-                                  </p>
-                                  <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
-                                    <span className="flex items-center gap-1">
-                                      <MapPin className="w-3 h-3" />
-                                      {history.ip_address}
-                                    </span>
-                                    {history.device_info && (
-                                      <span>{history.device_info}</span>
-                                    )}
-                                    {history.session_duration && (
-                                      <span>
-                                        세션: {Math.floor(history.session_duration / 60)}분
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {!history.logout_at && (
-                                  <button
-                                    onClick={() => handleTerminateSession(history.id)}
-                                    className="text-red-600 hover:text-red-900 text-sm"
-                                  >
-                                    세션 종료
                                   </button>
                                 )}
                               </div>

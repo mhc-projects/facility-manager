@@ -619,3 +619,13 @@
 - 위 항목의 "남은 것" 중 시험 업무 쪽을 운영 DB에서 지움: facility_tasks 1행(e9cf1bc7…), task_status_history 2행(외래키 CASCADE), task_notifications 2행. 삭제 전에 번호 계열 컬럼 전체를 훑어 이 업무 번호가 다른 표에 없는 것을 확인했고, 행 수가 예상과 다르면 멈추는 트랜잭션을 ROLLBACK 시험 뒤 적용
 - 결과: facility_tasks 3,911 → 3,910(살아 있는 업무 680 그대로), task_status_history 6,261 → 6,259, task_notifications 3,170 → 3,168 — 시험 전 수치로 돌아옴. 최문호의 업무 알림 21건·안 읽음 0건(시험 전과 같음), error_logs 0건
 - 그대로 둔 것: (주)호성 발주의 order_management_history 2행과 updated_at(실제로 있었던 변경의 기록)
+
+---
+
+## 2026-10-08 | b18 로그인 이력 조회 오류 — 한 번도 동작한 적 없는 기능을 제거
+- 증상: 관리자 > 사용자 관리 > 사용자 상세를 열 때마다 `/api/admin/user-login-history` GET이 500(`column user_sessions.login_method does not exist`). 이 라우트는 2025-09-19(17eab57)에 만들어진 뒤 select가 한 번도 맞은 적이 없고, 화면(`page.tsx`)이 500을 조용히 삼켜 "로그인 이력이 없습니다"만 보였다
+- 운영 DB를 읽기 전용으로 조회해 갈림길을 확정: `user_sessions` 0행(컬럼도 라우트가 고르는 것과 다름), `login_attempts` 0행(컬럼 구조는 정상, created_at 있음), `social_accounts` 2행(카카오·네이버 각 1, 2025-09-19 이후 로그인 기록 없음). 이메일 로그인은 어느 표에도 기록하는 코드가 없고 `employees.last_login_at`만 갱신한다 → 어떤 원천으로도 이 탭에 보여 줄 데이터가 없다
+- 조치(분석 계획의 "대안"): 사용자 상세의 "로그인 이력" 탭·불러오기·"세션 종료" 핸들러·`UserLoginHistory` 타입·쓰지 않게 된 아이콘 4개 제거, `app/api/admin/user-login-history/route.ts`(GET/PUT/DELETE) 삭제. 이 라우트는 토큰 검사가 없어서, 고쳐서 살렸다면 아무 userId로 IP·user-agent가 조회되는 API가 될 뻔했다. 운영 DB 변경 없음
+- 검증: `npm run build` 통과, `npx tsc --noEmit` 439 → 438(삭제한 라우트의 기존 에러 1건만 사라짐, 새 에러 0). 브라우저 화면 확인은 못 했다(로그인 필요)
+- 이력 기능이 필요하면 새로 만들어야 한다: 이메일 로그인 성공 때 `login_attempts`(login_method CHECK는 email/kakao/naver/google만 허용)에 기록하는 코드를 로그인 API에 넣고, 그 위에 인증 있는 조회 API를 다시 만든다
+- 별건(미수정): `app/api/admin/user-social-accounts/route.ts`의 GET/DELETE/PUT에도 토큰 검사가 없다(`requireAdmin`/`verifyToken` 없음). 운영 `social_accounts`는 2행뿐이라 노출 범위는 작지만 인증 없이 연결 해제·주 계정 변경이 가능하다
