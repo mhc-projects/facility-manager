@@ -11,6 +11,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { verifyTokenHybrid } from '@/lib/secure-jwt'
 
 export const dynamic = 'force-dynamic'
+// force-dynamic만으로는 GET 전용 라우트의 fetch 조회가 데이터 캐시에 영구 저장되므로 명시적으로 끈다
+export const fetchCache = 'force-no-store'
 export const runtime = 'nodejs'
 
 // 사용자 인증

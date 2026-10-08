@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { requireAuth } from '@/lib/auth/require-auth';
 
 export const dynamic = 'force-dynamic';
+// force-dynamic만으로는 GET 전용 라우트의 fetch 조회가 데이터 캐시에 영구 저장되므로 명시적으로 끈다
+export const fetchCache = 'force-no-store';
 export const runtime = 'nodejs';
 
 // 크리닝 타일은 정기(clean)+경과(clean_elapsed) 합산. 분류가 여러 개인 접수는 해당하는 타일마다 1건씩 잡힌다.
