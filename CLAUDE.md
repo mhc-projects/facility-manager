@@ -44,6 +44,12 @@ DB 스키마 요약은 `.claude/skills/db-schema/SKILL.md` 참고 (DB 관련 작
 - 테이블 변경 시 types/ 폴더의 타입도 함께 업데이트
 - .env.local의 SUPABASE_URL, SUPABASE_ANON_KEY 사용
 
+### API 라우트 규칙
+- GET만 있는 API 라우트(`app/api/**/route.ts`)에 `export const dynamic = 'force-dynamic'`을 쓸 때는 바로 아래에 `export const fetchCache = 'force-no-store'`를 반드시 같이 넣는다
+- 이유: Next 14.2에서는 `force-dynamic`만으로 라우트 안의 fetch 캐시가 꺼지지 않는다. supabase-js 일반 조회(`.from().select()`)와 외부 API `fetch()`가 만료 없이 데이터 캐시에 저장되고 배포 후에도 남아서, DB는 최신인데 API가 옛 데이터를 계속 돌려준다 (2026-10-08 미해결 반복 이슈 사고, 3a44e58·f60abb7)
+- POST/PUT/PATCH/DELETE를 함께 export하는 라우트, pg 직접 쿼리(`lib/supabase-direct`)나 RPC만 쓰는 라우트는 해당 없지만, 넣어도 해가 없으니 헷갈리면 넣는다
+- 이 캐시는 `npm run dev`에서 재현되지 않는다. 확인하려면 `npm run build` 후 `NEXT_PRIVATE_DEBUG_CACHE=1 npx next start`로 띄워 같은 라우트를 두 번 호출하고 fetch 캐시 set/hit 로그를 본다
+
 ### 금지 사항
 - .env.local 파일을 git에 커밋하지 않는다
 - node_modules를 직접 수정하지 않는다
