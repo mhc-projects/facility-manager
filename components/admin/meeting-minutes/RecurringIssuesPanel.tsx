@@ -21,6 +21,9 @@ interface RecurringIssuesPanelProps {
   className?: string
 }
 
+// 이 일수 이상 지난 회의록은 "1개월 이상 지난 회의록" 묶음으로 접는다
+const OLD_GROUP_DAYS = 30
+
 function getDaysElapsedLabel(days: number): string {
   if (days === 0) return '오늘'
   if (days === 1) return '1일 전'
@@ -42,6 +45,8 @@ export default function RecurringIssuesPanel({
   const [isPanelExpanded, setIsPanelExpanded] = useState(true)
   // 각 그룹의 접기/펼치기 상태: meeting_id → boolean (true = 펼침)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  // 1개월 이상 지난 회의록 묶음의 접기/펼치기 상태 (기본 접힘)
+  const [isOldExpanded, setIsOldExpanded] = useState(false)
 
   // 추가된 이슈를 필터링한 그룹 목록
   const filteredGroups = groups
@@ -55,6 +60,11 @@ export default function RecurringIssuesPanel({
     .filter(group => group.issues.length > 0)
 
   const totalCount = filteredGroups.reduce((sum, g) => sum + g.issues.length, 0)
+
+  // 1개월 이상 지난 회의록은 한 줄로 묶어 접어둔다
+  const oldGroups = filteredGroups.filter(g => g.days_elapsed >= OLD_GROUP_DAYS)
+  const recentGroups = filteredGroups.filter(g => g.days_elapsed < OLD_GROUP_DAYS)
+  const oldIssueCount = oldGroups.reduce((sum, g) => sum + g.issues.length, 0)
 
   const fetchRecurringIssues = async () => {
     setLoading(true)
@@ -212,6 +222,56 @@ export default function RecurringIssuesPanel({
     }
   }
 
+  const renderGroup = (group: GroupedIssues) => {
+    const isGroupExpanded = expandedGroups[group.meeting_id] ?? false
+    return (
+      <div key={group.meeting_id} className="border border-blue-200 rounded-lg overflow-hidden">
+        {/* 그룹 헤더 */}
+        <button
+          className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-blue-50 transition-colors text-left"
+          onClick={() => toggleGroup(group.meeting_id)}
+        >
+          <div className="flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+            <span className="text-xs font-semibold text-gray-800">{group.meeting_title}</span>
+            <span className="text-[10px] text-gray-500">
+              • {getDaysElapsedLabel(group.days_elapsed)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded-full">
+              {group.issues.length}건
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleAddAllToMeeting(group.issues) }}
+              className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-medium rounded hover:bg-blue-700 transition-colors"
+            >
+              전체 가져오기
+            </button>
+            {isGroupExpanded
+              ? <ChevronUp className="w-3 h-3 text-gray-400" />
+              : <ChevronDown className="w-3 h-3 text-gray-400" />
+            }
+          </div>
+        </button>
+
+        {/* 그룹 이슈 목록 */}
+        {isGroupExpanded && (
+          <div className="p-2 bg-gray-50 grid gap-2 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {group.issues.map((issue) => (
+              <RecurringIssueCard
+                key={issue.id}
+                issue={issue}
+                onAddToMeeting={handleAddToMeeting}
+                onMarkComplete={handleMarkComplete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (!loading && filteredGroups.length === 0) {
     return null
   }
@@ -277,56 +337,36 @@ export default function RecurringIssuesPanel({
                 </p>
               </div>
 
-              {/* 회의록별 그룹 */}
-              {filteredGroups.map((group) => {
-                const isGroupExpanded = expandedGroups[group.meeting_id] ?? false
-                return (
-                  <div key={group.meeting_id} className="border border-blue-200 rounded-lg overflow-hidden">
-                    {/* 그룹 헤더 */}
-                    <button
-                      className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-blue-50 transition-colors text-left"
-                      onClick={() => toggleGroup(group.meeting_id)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                        <span className="text-xs font-semibold text-gray-800">{group.meeting_title}</span>
-                        <span className="text-[10px] text-gray-500">
-                          • {getDaysElapsedLabel(group.days_elapsed)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded-full">
-                          {group.issues.length}건
-                        </span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleAddAllToMeeting(group.issues) }}
-                          className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-medium rounded hover:bg-blue-700 transition-colors"
-                        >
-                          전체 가져오기
-                        </button>
-                        {isGroupExpanded
-                          ? <ChevronUp className="w-3 h-3 text-gray-400" />
-                          : <ChevronDown className="w-3 h-3 text-gray-400" />
-                        }
-                      </div>
-                    </button>
+              {/* 1개월 이상 지난 회의록 묶음 (기본 접힘) */}
+              {oldGroups.length > 0 && (
+                <div className="border border-blue-200 rounded-lg overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-100 hover:bg-gray-200 transition-colors text-left"
+                    onClick={() => setIsOldExpanded(!isOldExpanded)}
+                  >
+                    <span className="text-xs font-semibold text-gray-700">
+                      1개월 이상 지난 회의록 {oldGroups.length}개
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 bg-gray-200 text-gray-700 text-[10px] font-medium rounded-full">
+                        {oldIssueCount}건
+                      </span>
+                      {isOldExpanded
+                        ? <ChevronUp className="w-3 h-3 text-gray-400" />
+                        : <ChevronDown className="w-3 h-3 text-gray-400" />
+                      }
+                    </div>
+                  </button>
+                  {isOldExpanded && (
+                    <div className="p-2 space-y-2 bg-gray-50">
+                      {oldGroups.map(renderGroup)}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                    {/* 그룹 이슈 목록 */}
-                    {isGroupExpanded && (
-                      <div className="p-2 bg-gray-50 grid gap-2 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                        {group.issues.map((issue) => (
-                          <RecurringIssueCard
-                            key={issue.id}
-                            issue={issue}
-                            onAddToMeeting={handleAddToMeeting}
-                            onMarkComplete={handleMarkComplete}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {/* 최근 1개월 회의록별 그룹 */}
+              {recentGroups.map(renderGroup)}
             </>
           )}
         </div>
