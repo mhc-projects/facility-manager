@@ -654,3 +654,9 @@
 
 ## 2026-10-08 | 미해결 반복 이슈 패널: 1개월 이상 지난 회의록 접기
 - `RecurringIssuesPanel`에서 `days_elapsed >= 30`인 회의록 그룹을 "1개월 이상 지난 회의록 N개 · M건" 한 줄로 묶어 기본 접힘 처리(9029643). 로컬 화면에서 접힘·펼침 확인
+
+## 2026-10-08 | fetch 데이터 캐시 고정 문제 — 나머지 38개 라우트 일괄 수정
+- 위에서 재집계한 38개 라우트(supabase-js 직접 조회 36 + `cron/sync-holidays` + `test-database`)에 `export const fetchCache = 'force-no-store'` 추가(f60abb7). 로직 변경 없음
+- 검증: `npm run build` 통과. 로컬 프로덕션 모드(`next start`, NEXT_PRIVATE_DEBUG_CACHE=1)에서 21개 라우트를 두 번씩 호출해 fetch 캐시 get/set 로그 0건 확인(수정 전에는 set·hit 발생). 배포 후 운영에서 같은 21개 라우트 200 응답 확인
+- 호출로 확인하지 않은 것: 소셜 로그인 5개, cron 2개(`sync-holidays`, `weekly-reports` — 쓰기 동작이 있어 호출 안 함), 테스트·디버그 5개, 파라미터가 필요한 `business-info`·`estimates/preview`·`construction-reports/pdf`·`order-management/[businessId]/history`·`subsidy-crawler/runs/[runId]/announcements`
+- 이제 `force-dynamic` + GET 전용 라우트 중 fetch 조회가 캐시되는 것은 남아 있지 않다(87개 중 나머지 49개는 원래 해당 없음). 새 GET 전용 라우트를 만들 때 같은 줄을 넣어야 한다
